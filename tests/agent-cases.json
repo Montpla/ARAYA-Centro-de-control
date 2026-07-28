@@ -1,0 +1,22 @@
+[
+  {"input":"¿Cuál es el avance general?","mustMention":["55%","59%","28/07/2026"]},
+  {"input":"¿Cuántos días de retraso tenemos?","mustMention":["8 días","Edificio B"]},
+  {"input":"¿Qué edificio va peor?","mustMention":["Edificio B","9 días"]},
+  {"input":"Dame el estado del edificio A","mustMention":["68%","71%"]},
+  {"input":"Dame el estado del edificio B","mustMention":["54%","63%"]},
+  {"input":"¿Hay viviendas bloqueadas?","mustMention":["bloqueadas"]},
+  {"input":"¿Cuántas unidades hay?","mustMention":["48"]},
+  {"input":"¿Qué proveedores están retrasados?","mustMention":["Carpinterías Vega"]},
+  {"input":"¿Cuándo llega la carpintería?","mustMention":["2 de agosto"]},
+  {"input":"¿Cómo va Cerámicas Bahía?","mustMention":["revisión"]},
+  {"input":"¿Cuántas incidencias críticas hay?","mustMention":["2"]},
+  {"input":"¿Cuántas incidencias abiertas hay?","mustMention":["11"]},
+  {"input":"¿Qué presupuesto llevamos ejecutado?","mustMention":["47,2%"]},
+  {"input":"¿Qué pasó hoy?","mustMention":["forjado","carpintería"]},
+  {"input":"¿Cuál es la próxima entrega?","mustMention":["29 jul"]},
+  {"input":"¿Qué riesgos debo mirar?","mustMention":["Edificio B","carpintería"]},
+  {"input":"¿Estamos cumpliendo el plan?","mustMention":["55%","59%"]},
+  {"input":"¿Quién actualizó el último hito?","mustMention":["Dirección facultativa"]},
+  {"input":"Dime el estado de zonas comunes","mustMention":["31%","37%"]},
+  {"input":"¿Cuál es la fuente del dato?","mustMention":["Centro de Control ARAYA"]}
+]
