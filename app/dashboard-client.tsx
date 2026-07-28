@@ -122,8 +122,8 @@ const visualPlanCoordinates: Record<string, { x: number; y: number }> = {
 
 const urbanismMapPoints: Record<string, { x: number; y: number; short: string }> = {
   "urban-general": { x: 50.5, y: 69.5, short: "URB" },
-  "urban-roads": { x: 50.5, y: 38.5, short: "VIAL" },
-  "urban-parking": { x: 75.5, y: 43.5, short: "P" },
+  "urban-roads": { x: 87.0, y: 39.0, short: "VIAL" },
+  "urban-parking": { x: 70.0, y: 82.0, short: "P" },
   "urban-landscape": { x: 23.0, y: 89.0, short: "PAISAJISMO" },
   "urban-facilities": { x: 50.5, y: 58.5, short: "EQ" },
   "urban-access": { x: 56.5, y: 88.5, short: "ACCESO" },
@@ -131,8 +131,8 @@ const urbanismMapPoints: Record<string, { x: number; y: number; short: string }>
 
 const visualUrbanismMapPoints: Record<string, { x: number; y: number; short: string }> = {
   "urban-general": { x: 50.2, y: 71.4, short: "URB" },
-  "urban-roads": { x: 31.0, y: 36.8, short: "VIAL" },
-  "urban-parking": { x: 31.0, y: 48.7, short: "P" },
+  "urban-roads": { x: 91.0, y: 35.0, short: "VIAL" },
+  "urban-parking": { x: 70.5, y: 85.4, short: "P" },
   "urban-landscape": { x: 24.0, y: 90.0, short: "PAISAJISMO" },
   "urban-facilities": { x: 49.2, y: 58.7, short: "EQ" },
   "urban-access": { x: 51.5, y: 89.7, short: "ACCESO" },
