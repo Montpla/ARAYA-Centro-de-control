@@ -144,10 +144,13 @@ function executeTool(name: ToolName, args: Record<string, unknown>) {
 
 function fallbackAnswer(question: string) {
   const normalized = question.toLowerCase();
-  const source = `\n\nFuentes: Excel de gráficos + cronograma MPP · corte declarado ${projectSnapshot.declaredCutoff}.`;
+  const source = `\n\nFuentes: Excel de gráficos + cronograma MPP + plano general DWG · corte declarado ${projectSnapshot.declaredCutoff}.`;
 
   if (normalized.includes("calidad") || normalized.includes("fuente") || normalized.includes("inconsisten")) {
     return `Hay cuatro observaciones de calidad: (1) el Excel se llama Fase II, pero la hoja de cubicaciones dice Fase I; (2) la moneda no está identificada; (3) el MPP no tiene fecha de estado interna, por lo que se usa el corte del nombre del archivo; y (4) el 18,23% del Excel y el 17% del MPP son indicadores distintos que deben conciliarse.${source}`;
+  }
+  if (normalized.includes("plano") || normalized.includes("implantaci") || normalized.includes("urbanismo")) {
+    return `El plano general DWG identifica 77 bloques TH, además de viales, estacionamientos, zonas verdes y equipamientos. El dashboard tiene datos operativos integrados para 26 edificios (TH-01 a TH-18 y TH-70 a TH-77), que representan 156 viviendas; los otros 51 TH quedan visibles como implantación sin estado de avance. El urbanismo registra 18,28% ejecutado frente a 16,18% planificado.${source}`;
   }
   if (normalized.includes("cubic") || normalized.includes("contab") || normalized.includes("dinero") || normalized.includes("financ")) {
     return `Las cubicaciones acumuladas suman ${projectSnapshot.cubicacionesMeasured.toLocaleString("es-ES", { maximumFractionDigits: 2 })} y contabilidad suma ${projectSnapshot.cubicacionesAccounting.toLocaleString("es-ES", { maximumFractionDigits: 2 })}. La diferencia contabilidad menos cubicaciones es ${projectSnapshot.cubicacionesDifference.toLocaleString("es-ES", { maximumFractionDigits: 2 })}. La fuente no identifica la moneda, por lo que no debe etiquetarse ni convertirse todavía.${source}`;

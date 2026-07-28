@@ -71,6 +71,7 @@ export type DataSource = {
   status: "validada" | "observada";
   records: string;
   notes: string[];
+  downloadUrl?: string;
 };
 
 const buildingRows: Array<[string, number, number, string, number]> = [
@@ -276,6 +277,21 @@ export const dataSources: DataSource[] = [
       "El 17% del MPP y el 18,23% del Excel son indicadores distintos y requieren conciliación.",
     ],
   },
+  {
+    id: "source-dwg-implantacion",
+    file: "002 - IMPLANTACIÓN GENERAL.dwg",
+    kind: "Plano general de implantación",
+    declaredCutoff: "Sin fecha de corte declarada",
+    savedAt: "28/07/2026 17:26",
+    status: "validada",
+    records: "TH-01 a TH-77 · viales · estacionamientos · urbanismo",
+    notes: [
+      "La implantación se contrastó con la fotografía aportada: coinciden el perímetro, la retícula vial y la distribución general.",
+      "Sólo 26 edificios tienen datos de avance integrados; los otros 51 permanecen visibles como implantación sin estado operativo.",
+      "Se conserva el DWG original de 17,59 MB para descarga y revisión en software CAD compatible.",
+    ],
+    downloadUrl: "/data-center/002-implantacion-general.dwg",
+  },
 ];
 
 export const projectSnapshot = {
@@ -289,8 +305,12 @@ export const projectSnapshot = {
   forecastFinish: "07/06/2027",
   baselineFinish: "31/05/2027",
   deviationDays: 7,
+  masterPlanBuildingCount: 77,
   buildingCount: 26,
+  buildingsPendingIntegration: 51,
   unitCount: 156,
+  urbanismProgress: 18.28,
+  urbanismPlanned: 16.18,
   cubicacionesMeasured: 67342153.573152,
   cubicacionesAccounting: 71731477.87,
   cubicacionesDifference: 4389324.296848,

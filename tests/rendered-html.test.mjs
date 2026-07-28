@@ -11,26 +11,34 @@ test("dashboard includes the complete project-control navigation and site plan",
     "Cronología",
     "Proveedores",
     "Métricas y finanzas",
-    "Fuentes y calidad",
+    "Centro de datos",
     "Agente IA",
   ]) {
     assert.match(source, new RegExp(label));
   }
   assert.match(source, /Nuevo proveedor/);
   assert.match(source, /Añadir métrica/);
-  assert.match(source, /PLANO OPERATIVO DE OBRA/);
+  assert.match(source, /IMPLANTACIÓN GENERAL · DWG 002/);
   assert.match(source, /156 viviendas/);
-  assert.match(source, /araya-site-plan\.jpg/);
+  assert.match(source, /araya-site-plan-clean\.png/);
   assert.match(source, /planCoordinates/);
+  assert.match(source, /Descargar archivo DWG/);
+  assert.match(source, /araya-architectural-masterplan\.png/);
+  assert.match(source, /Vista arquitectónica/);
 });
 
 test("normalized source data contains 26 buildings and 156 apartments", async () => {
   const source = await readFile("app/demo-data.ts", "utf8");
   assert.match(source, /buildingCount: 26/);
   assert.match(source, /unitCount: 156/);
+  assert.match(source, /masterPlanBuildingCount: 77/);
+  assert.match(source, /buildingsPendingIntegration: 51/);
+  assert.match(source, /urbanismProgress: 18\.28/);
   assert.match(source, /overallProgress: 18\.23/);
   assert.match(source, /plannedProgress: 21\.24/);
   assert.match(source, /currency: "No indicada en la fuente"/);
+  assert.match(source, /002 - IMPLANTACIÓN GENERAL\.dwg/);
+  assert.match(source, /\/data-center\/002-implantacion-general\.dwg/);
 });
 
 test("agent is source-grounded, read-only and evaluated", async () => {

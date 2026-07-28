@@ -42,7 +42,7 @@ const navItems: Array<{ id: View; label: string; mark: string }> = [
   { id: "cronologia", label: "Cronología", mark: "04" },
   { id: "proveedores", label: "Proveedores", mark: "05" },
   { id: "metricas", label: "Métricas y finanzas", mark: "06" },
-  { id: "fuentes", label: "Fuentes y calidad", mark: "07" },
+  { id: "fuentes", label: "Centro de datos", mark: "07" },
   { id: "agente", label: "Agente IA", mark: "AI" },
 ];
 
@@ -56,32 +56,32 @@ const statusLabel = {
 const number = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 });
 
 const planCoordinates: Record<string, { x: number; y: number }> = {
-  "1": { x: 25.5, y: 72.1 },
-  "2": { x: 32.1, y: 72.3 },
-  "3": { x: 38.4, y: 72.2 },
-  "4": { x: 39.8, y: 68.5 },
-  "5": { x: 34.0, y: 68.4 },
-  "6": { x: 27.8, y: 68.3 },
-  "7": { x: 25.8, y: 62.7 },
-  "8": { x: 32.1, y: 62.8 },
-  "9": { x: 38.4, y: 62.8 },
-  "10": { x: 38.4, y: 58.9 },
-  "11": { x: 32.1, y: 58.8 },
-  "12": { x: 25.7, y: 58.8 },
-  "13": { x: 26.5, y: 52.8 },
-  "14": { x: 33.0, y: 52.8 },
-  "15": { x: 39.5, y: 52.9 },
-  "16": { x: 40.3, y: 49.0 },
-  "17": { x: 33.6, y: 48.9 },
-  "18": { x: 26.9, y: 48.8 },
-  "70": { x: 62.1, y: 48.7 },
-  "71": { x: 56.1, y: 48.6 },
-  "72": { x: 56.1, y: 52.4 },
-  "73": { x: 62.1, y: 52.5 },
-  "74": { x: 62.0, y: 59.4 },
-  "75": { x: 56.0, y: 59.3 },
-  "76": { x: 56.1, y: 63.1 },
-  "77": { x: 62.1, y: 63.1 },
+  "1": { x: 20.4, y: 74.4 },
+  "2": { x: 28.7, y: 74.6 },
+  "3": { x: 36.7, y: 74.5 },
+  "4": { x: 38.4, y: 70.7 },
+  "5": { x: 31.1, y: 70.6 },
+  "6": { x: 23.3, y: 70.5 },
+  "7": { x: 20.7, y: 64.7 },
+  "8": { x: 28.7, y: 64.8 },
+  "9": { x: 36.7, y: 64.8 },
+  "10": { x: 36.7, y: 60.8 },
+  "11": { x: 28.7, y: 60.7 },
+  "12": { x: 20.6, y: 60.7 },
+  "13": { x: 21.6, y: 54.5 },
+  "14": { x: 29.8, y: 54.5 },
+  "15": { x: 38.1, y: 54.6 },
+  "16": { x: 39.1, y: 50.6 },
+  "17": { x: 30.6, y: 50.5 },
+  "18": { x: 22.1, y: 50.4 },
+  "70": { x: 66.6, y: 50.3 },
+  "71": { x: 59.0, y: 50.2 },
+  "72": { x: 59.0, y: 54.1 },
+  "73": { x: 66.6, y: 54.2 },
+  "74": { x: 66.5, y: 61.3 },
+  "75": { x: 58.9, y: 61.2 },
+  "76": { x: 59.0, y: 65.1 },
+  "77": { x: 66.6, y: 65.1 },
 };
 
 function ProgressRing({ value }: { value: number }) {
@@ -177,65 +177,105 @@ function SitePlan({
 }) {
   const [selectedUnit, setSelectedUnit] = useState<{ building: Building; unit: Unit } | null>(null);
   const [planBuilding, setPlanBuilding] = useState<Building | null>(null);
+  const [planMode, setPlanMode] = useState<"operational" | "architectural">("operational");
   const completed = buildings.flatMap((item) => item.units).filter((unit) => unit.status === "terminada").length;
   const active = buildings.flatMap((item) => item.units).filter((unit) => unit.status === "en_curso").length;
   const pending = projectSnapshot.unitCount - completed - active;
 
   return (
     <section className="panel site-plan-panel">
-      <div className="panel-heading">
+      <div className="panel-heading site-plan-heading">
         <div>
-          <span className="section-kicker">PLANO OPERATIVO DE OBRA</span>
-          <h3>26 edificios · 156 viviendas</h3>
+          <span className="section-kicker">IMPLANTACIÓN GENERAL · DWG 002</span>
+          <h3>Edificios, viviendas y urbanismo</h3>
         </div>
-        <div className="plan-legend">
-          <span><i className="done" />Superestructura terminada · {completed}</span>
-          <span><i className="active" />En curso · {active}</span>
-          <span><i className="pending" />Pendiente · {pending}</span>
+        <div className="plan-mode-switch" aria-label="Vista del plano">
+          <button
+            className={planMode === "operational" ? "active" : ""}
+            aria-pressed={planMode === "operational"}
+            onClick={() => setPlanMode("operational")}
+          >
+            Plano operativo
+          </button>
+          <button
+            className={planMode === "architectural" ? "active" : ""}
+            aria-pressed={planMode === "architectural"}
+            onClick={() => setPlanMode("architectural")}
+          >
+            Vista arquitectónica
+          </button>
         </div>
       </div>
+      <div className="plan-data-strip">
+        <span><strong>{projectSnapshot.masterPlanBuildingCount}</strong> TH identificados en implantación</span>
+        <span><strong>{projectSnapshot.buildingCount}</strong> edificios con datos integrados</span>
+        <span><strong>{projectSnapshot.unitCount}</strong> viviendas en seguimiento</span>
+        <span><strong>{projectSnapshot.buildingsPendingIntegration}</strong> TH pendientes de integrar</span>
+      </div>
+      <div className="plan-legend">
+        <span><i className="done" />Superestructura terminada · {completed}</span>
+        <span><i className="active" />En curso · {active}</span>
+        <span><i className="pending" />Pendiente · {pending}</span>
+        <span><i className="uninformed" />Sin datos integrados · {projectSnapshot.buildingsPendingIntegration}</span>
+      </div>
       <p className="plan-disclaimer">
-        Plano real aportado el 28/07/2026. Están activados los 26 edificios del
-        cronograma MPP: TH-01 a TH-18 y TH-70 a TH-77. Los demás TH permanecen
-        visibles, pero todavía no tienen datos integrados.
+        La implantación DWG y la fotografía coinciden en la distribución general.
+        Están activados los 26 edificios del cronograma MPP: TH-01 a TH-18 y TH-70
+        a TH-77. La vista arquitectónica mejora la lectura visual; el plano operativo
+        conserva la referencia documental y las capas de datos.
       </p>
-      <div className="site-plan-image-wrap">
+      <div className={`site-plan-image-wrap ${planMode}`}>
         <Image
           className="site-plan-image"
-          src="/araya-site-plan.jpg"
-          alt="Plano general de ARAYA con edificios, viviendas, viales, estacionamientos y urbanismo"
-          width={960}
-          height={1280}
+          src={planMode === "operational" ? "/araya-site-plan-clean.png" : "/araya-architectural-masterplan.png"}
+          alt={
+            planMode === "operational"
+              ? "Plano operativo de ARAYA con edificios, viviendas, viales, estacionamientos y urbanismo"
+              : "Vista arquitectónica depurada de la implantación general de ARAYA"
+          }
+          width={1200}
+          height={1958}
           priority
         />
-        {buildings.map((building) => {
-          const point = planCoordinates[building.shortName];
-          return (
-            <button
-              key={building.id}
-              className={`plan-hotspot ${
-                building.units[0].status === "terminada"
-                  ? "done"
-                  : building.units[0].status === "en_curso"
-                    ? "active"
-                    : "pending"
-              }`}
-              style={{ left: `${point.x}%`, top: `${point.y}%` }}
-              title={`TH-${building.shortName.padStart(2, "0")} · ${number.format(building.progress)}% índice de frentes`}
-              onClick={() => {
-                setSelectedUnit(null);
-                setPlanBuilding(building);
-              }}
-            >
-              TH-{building.shortName.padStart(2, "0")}
-            </button>
-          );
-        })}
-        <div className="urbanism-overlay">
-          <span>URBANISMO</span>
-          <strong>18,28%</strong>
-          <small>Plan 16,18% · +2,10 pp</small>
-        </div>
+        {planMode === "operational" && (
+          <>
+            {buildings.map((building) => {
+              const point = planCoordinates[building.shortName];
+              return (
+                <button
+                  key={building.id}
+                  className={`plan-hotspot ${
+                    building.units[0].status === "terminada"
+                      ? "done"
+                      : building.units[0].status === "en_curso"
+                        ? "active"
+                        : "pending"
+                  }`}
+                  style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                  title={`TH-${building.shortName.padStart(2, "0")} · ${number.format(building.progress)}% índice de frentes`}
+                  onClick={() => {
+                    setSelectedUnit(null);
+                    setPlanBuilding(building);
+                  }}
+                >
+                  TH-{building.shortName.padStart(2, "0")}
+                </button>
+              );
+            })}
+            <div className="urbanism-overlay">
+              <span>URBANISMO</span>
+              <strong>{number.format(projectSnapshot.urbanismProgress)}%</strong>
+              <small>Plan {number.format(projectSnapshot.urbanismPlanned)}% · +2,10 pp</small>
+            </div>
+          </>
+        )}
+        {planMode === "architectural" && (
+          <div className="architectural-note">
+            <span>LECTURA VISUAL</span>
+            <strong>Implantación general</strong>
+            <small>Volúmenes, viales, estacionamientos, zonas verdes y equipamientos</small>
+          </div>
+        )}
       </div>
       {planBuilding && (
         <div className="plan-building-picker" role="dialog" aria-modal="true">
@@ -656,8 +696,15 @@ function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () =>
 function SourcesView() {
   return (
     <div className="view-stack">
+      <section className="panel data-center-intro">
+        <div>
+          <span className="section-kicker">GRUPO BRICKET · REPOSITORIO DOCUMENTAL</span>
+          <h2>Centro de datos del proyecto ARAYA</h2>
+          <p>Fuentes de avance, cronogramas y documentación técnica centralizadas para consulta y control.</p>
+        </div>
+      </section>
       <section className="stat-grid wide">
-        <StatCard eyebrow="Fuentes integradas" value={`${dataSources.length}`} detail="1 Excel · 1 Microsoft Project" />
+        <StatCard eyebrow="Fuentes integradas" value={`${dataSources.length}`} detail="1 Excel · 1 Microsoft Project · 1 DWG" />
         <StatCard eyebrow="Registros MPP" value="2.228" detail="2.195 asignaciones y 22 paquetes" />
         <StatCard eyebrow="Alertas de calidad" value="4" detail="Todas visibles y sin corrección silenciosa" tone="warn" />
         <StatCard eyebrow="Corte declarado" value="30/06/2026" detail="Fecha tomada de los archivos" />
@@ -677,6 +724,13 @@ function SourcesView() {
             <ul className="quality-list">
               {source.notes.map((note) => <li key={note}>{note}</li>)}
             </ul>
+            {source.downloadUrl && (
+              <div className="source-actions">
+                <a className="button secondary" href={source.downloadUrl} download={source.file}>
+                  Descargar archivo DWG
+                </a>
+              </div>
+            )}
           </article>
         ))}
       </section>
@@ -700,7 +754,7 @@ function AgentPanel({ expanded, onClose }: { expanded: boolean; onClose: () => v
     {
       id: "welcome",
       role: "assistant",
-      text: "Buenos días. Puedo consultar el corte real: avance, desviaciones, 26 edificios, 156 viviendas, paquetes, cubicaciones y calidad de fuentes. ¿Qué necesitas saber?",
+      text: "Buenos días. Puedo consultar el corte real: avance, desviaciones, implantación general, 26 edificios, 156 viviendas, urbanismo, paquetes, cubicaciones y calidad de fuentes. ¿Qué necesitas saber?",
       mode: "source-data-engine",
     },
   ]);
@@ -955,13 +1009,13 @@ export function DashboardClient() {
               }}
             >
               <i>{item.mark}</i><span>{item.label}</span>
-              {item.id === "fuentes" && <em>2</em>}
+              {item.id === "fuentes" && <em>{dataSources.length}</em>}
             </button>
           ))}
         </nav>
         <div className="sidebar-foot">
           <span><i className="live-dot" /> Fuentes integradas</span>
-          <small>Último archivo · 14/07/2026 14:39</small>
+          <small>Último archivo · 28/07/2026 17:26</small>
         </div>
       </aside>
 
