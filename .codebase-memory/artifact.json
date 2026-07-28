@@ -1,0 +1,11 @@
+{
+    "schema_version": 2,
+    "commit": "5459e738eea782049ec8a72410432966ef4feddb",
+    "indexed_at": "2026-07-28T23:58:26Z",
+    "project": "araya-centro-control",
+    "nodes": 257,
+    "edges": 388,
+    "original_size": 1900544,
+    "compressed_size": 56316,
+    "compression_level": 3
+}
