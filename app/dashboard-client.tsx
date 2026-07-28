@@ -91,6 +91,35 @@ const planCoordinates: Record<string, { x: number; y: number }> = {
   "77": { x: 66.6, y: 65.1 },
 };
 
+const visualPlanCoordinates: Record<string, { x: number; y: number }> = {
+  "1": { x: 19.0, y: 83.4 },
+  "2": { x: 28.2, y: 83.4 },
+  "3": { x: 37.2, y: 83.4 },
+  "4": { x: 37.2, y: 79.2 },
+  "5": { x: 28.2, y: 79.2 },
+  "6": { x: 19.0, y: 79.2 },
+  "7": { x: 18.8, y: 67.2 },
+  "8": { x: 27.8, y: 67.2 },
+  "9": { x: 36.9, y: 67.2 },
+  "10": { x: 36.9, y: 62.9 },
+  "11": { x: 27.8, y: 62.9 },
+  "12": { x: 18.8, y: 62.9 },
+  "13": { x: 19.4, y: 54.4 },
+  "14": { x: 28.6, y: 54.4 },
+  "15": { x: 37.8, y: 54.4 },
+  "16": { x: 37.8, y: 50.1 },
+  "17": { x: 28.6, y: 50.1 },
+  "18": { x: 19.4, y: 50.1 },
+  "70": { x: 69.5, y: 50.7 },
+  "71": { x: 60.3, y: 50.7 },
+  "72": { x: 60.3, y: 55.0 },
+  "73": { x: 69.5, y: 55.0 },
+  "74": { x: 69.3, y: 63.2 },
+  "75": { x: 60.1, y: 63.2 },
+  "76": { x: 60.1, y: 67.5 },
+  "77": { x: 69.3, y: 67.5 },
+};
+
 const urbanismMapPoints: Record<string, { x: number; y: number; short: string }> = {
   "urban-general": { x: 50.5, y: 69.5, short: "URB" },
   "urban-roads": { x: 50.5, y: 38.5, short: "VIAL" },
@@ -98,6 +127,15 @@ const urbanismMapPoints: Record<string, { x: number; y: number; short: string }>
   "urban-landscape": { x: 50.5, y: 47.5, short: "VERDE" },
   "urban-facilities": { x: 50.5, y: 58.5, short: "EQ" },
   "urban-access": { x: 56.5, y: 88.5, short: "ACCESO" },
+};
+
+const visualUrbanismMapPoints: Record<string, { x: number; y: number; short: string }> = {
+  "urban-general": { x: 50.2, y: 71.4, short: "URB" },
+  "urban-roads": { x: 49.2, y: 38.5, short: "VIAL" },
+  "urban-parking": { x: 78.6, y: 42.0, short: "P" },
+  "urban-landscape": { x: 49.2, y: 46.0, short: "VERDE" },
+  "urban-facilities": { x: 49.2, y: 58.7, short: "EQ" },
+  "urban-access": { x: 51.5, y: 89.7, short: "ACCESO" },
 };
 
 function ProgressRing({ value }: { value: number }) {
@@ -301,7 +339,7 @@ function SitePlan({
       <div className={`site-plan-image-wrap ${planMode}`}>
         <img
           className="site-plan-image"
-          src={planMode === "visual" ? "/araya-architectural-masterplan-v2.png" : "/araya-site-plan-clean.png"}
+          src={planMode === "visual" ? "/araya-visual-masterplan-v3.png" : "/araya-site-plan-clean.png"}
           alt={
             planMode === "visual"
               ? "Implantación visual de ARAYA con edificios, viviendas, viales, estacionamientos y urbanismo"
@@ -313,7 +351,10 @@ function SitePlan({
         />
         <>
             {buildings.map((building) => {
-              const point = planCoordinates[building.shortName];
+              const point =
+                planMode === "visual"
+                  ? visualPlanCoordinates[building.shortName]
+                  : planCoordinates[building.shortName];
               return (
                 <div
                   key={building.id}
@@ -356,7 +397,10 @@ function SitePlan({
               );
             })}
             {urbanismAreas.map((area) => {
-              const point = urbanismMapPoints[area.id];
+              const point =
+                planMode === "visual"
+                  ? visualUrbanismMapPoints[area.id]
+                  : urbanismMapPoints[area.id];
               return (
                 <button
                   key={area.id}
