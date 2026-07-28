@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import {
   Building,
   CustomMetric,
@@ -53,6 +54,35 @@ const statusLabel = {
 };
 
 const number = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 });
+
+const planCoordinates: Record<string, { x: number; y: number }> = {
+  "1": { x: 25.5, y: 72.1 },
+  "2": { x: 32.1, y: 72.3 },
+  "3": { x: 38.4, y: 72.2 },
+  "4": { x: 39.8, y: 68.5 },
+  "5": { x: 34.0, y: 68.4 },
+  "6": { x: 27.8, y: 68.3 },
+  "7": { x: 25.8, y: 62.7 },
+  "8": { x: 32.1, y: 62.8 },
+  "9": { x: 38.4, y: 62.8 },
+  "10": { x: 38.4, y: 58.9 },
+  "11": { x: 32.1, y: 58.8 },
+  "12": { x: 25.7, y: 58.8 },
+  "13": { x: 26.5, y: 52.8 },
+  "14": { x: 33.0, y: 52.8 },
+  "15": { x: 39.5, y: 52.9 },
+  "16": { x: 40.3, y: 49.0 },
+  "17": { x: 33.6, y: 48.9 },
+  "18": { x: 26.9, y: 48.8 },
+  "70": { x: 62.1, y: 48.7 },
+  "71": { x: 56.1, y: 48.6 },
+  "72": { x: 56.1, y: 52.4 },
+  "73": { x: 62.1, y: 52.5 },
+  "74": { x: 62.0, y: 59.4 },
+  "75": { x: 56.0, y: 59.3 },
+  "76": { x: 56.1, y: 63.1 },
+  "77": { x: 62.1, y: 63.1 },
+};
 
 function ProgressRing({ value }: { value: number }) {
   return (
@@ -146,6 +176,7 @@ function SitePlan({
   onNavigate: (view: View) => void;
 }) {
   const [selectedUnit, setSelectedUnit] = useState<{ building: Building; unit: Unit } | null>(null);
+  const [planBuilding, setPlanBuilding] = useState<Building | null>(null);
   const completed = buildings.flatMap((item) => item.units).filter((unit) => unit.status === "terminada").length;
   const active = buildings.flatMap((item) => item.units).filter((unit) => unit.status === "en_curso").length;
   const pending = projectSnapshot.unitCount - completed - active;
@@ -164,51 +195,86 @@ function SitePlan({
         </div>
       </div>
       <p className="plan-disclaimer">
-        Esquema operativo según la secuencia del MPP; no representa todavía la
-        ubicación geográfica real. Adjuntando el plano de implantación se
-        sustituirá por la distribución exacta.
+        Plano real aportado el 28/07/2026. Están activados los 26 edificios del
+        cronograma MPP: TH-01 a TH-18 y TH-70 a TH-77. Los demás TH permanecen
+        visibles, pero todavía no tienen datos integrados.
       </p>
-      <div className="site-plan">
-        <div className="urbanism-band urbanism-north">
-          <span>URBANISMO · EJECUTADO 18,28%</span>
-          <div><i style={{ width: "18.28%" }} /></div>
+      <div className="site-plan-image-wrap">
+        <Image
+          className="site-plan-image"
+          src="/araya-site-plan.jpg"
+          alt="Plano general de ARAYA con edificios, viviendas, viales, estacionamientos y urbanismo"
+          width={960}
+          height={1280}
+          priority
+        />
+        {buildings.map((building) => {
+          const point = planCoordinates[building.shortName];
+          return (
+            <button
+              key={building.id}
+              className={`plan-hotspot ${
+                building.units[0].status === "terminada"
+                  ? "done"
+                  : building.units[0].status === "en_curso"
+                    ? "active"
+                    : "pending"
+              }`}
+              style={{ left: `${point.x}%`, top: `${point.y}%` }}
+              title={`TH-${building.shortName.padStart(2, "0")} · ${number.format(building.progress)}% índice de frentes`}
+              onClick={() => {
+                setSelectedUnit(null);
+                setPlanBuilding(building);
+              }}
+            >
+              TH-{building.shortName.padStart(2, "0")}
+            </button>
+          );
+        })}
+        <div className="urbanism-overlay">
+          <span>URBANISMO</span>
+          <strong>18,28%</strong>
           <small>Plan 16,18% · +2,10 pp</small>
         </div>
-        <div className="site-buildings">
-          {buildings.map((building) => (
-            <article className="plan-building" key={building.id}>
+      </div>
+      {planBuilding && (
+        <div className="plan-building-picker" role="dialog" aria-modal="true">
+          <button className="close-button" onClick={() => setPlanBuilding(null)} aria-label="Cerrar">×</button>
+          <span className="section-kicker">TH-{planBuilding.shortName.padStart(2, "0")}</span>
+          <h3>{planBuilding.name} · selecciona vivienda</h3>
+          <div className="picker-summary">
+            <span>Índice de frentes<strong>{number.format(planBuilding.progress)}%</strong></span>
+            <span>Fin previsto<strong>{planBuilding.forecastFinish}</strong></span>
+            <span>Desvío<strong>{planBuilding.deviationDays > 0 ? `+${planBuilding.deviationDays}` : planBuilding.deviationDays} días</strong></span>
+          </div>
+          <div className="picker-units">
+            {planBuilding.units.map((unit) => (
               <button
-                className="plan-building-head"
+                key={unit.id}
+                className={`plan-unit ${unit.status}`}
                 onClick={() => {
-                  onSelectBuilding(building);
-                  onNavigate("edificios");
+                  setSelectedUnit({ building: planBuilding, unit });
+                  setPlanBuilding(null);
                 }}
               >
-                <span>EDIFICIO</span>
-                <strong>{building.shortName}</strong>
-                <small>{number.format(building.progress)}% frentes</small>
+                <span>Vivienda</span>
+                <strong>{unit.code.split("-")[1]}</strong>
+                <small>{unit.progress}% estructura</small>
               </button>
-              <div className="plan-unit-grid">
-                {building.units.map((unit) => (
-                  <button
-                    key={unit.id}
-                    className={`plan-unit ${unit.status}`}
-                    title={`${building.name} · Vivienda ${unit.code} · ${unit.progress}% de superestructura`}
-                    onClick={() => setSelectedUnit({ building, unit })}
-                  >
-                    {unit.code.split("-")[1]}
-                  </button>
-                ))}
-              </div>
-            </article>
-          ))}
+            ))}
+          </div>
+          <button
+            className="button secondary"
+            onClick={() => {
+              onSelectBuilding(planBuilding);
+              onNavigate("edificios");
+              setPlanBuilding(null);
+            }}
+          >
+            Abrir edificio completo
+          </button>
         </div>
-        <div className="urbanism-core">
-          <div><span>Viales y redes</span><strong>18,28%</strong></div>
-          <div><span>Áreas exteriores</span><strong>Dato agregado</strong></div>
-          <div><span>Plan urbanismo</span><strong>16,18%</strong></div>
-        </div>
-      </div>
+      )}
       {selectedUnit && (
         <div className="unit-inspector" role="dialog" aria-modal="true">
           <button className="close-button" onClick={() => setSelectedUnit(null)} aria-label="Cerrar">×</button>

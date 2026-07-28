@@ -20,6 +20,8 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /Añadir métrica/);
   assert.match(source, /PLANO OPERATIVO DE OBRA/);
   assert.match(source, /156 viviendas/);
+  assert.match(source, /araya-site-plan\.jpg/);
+  assert.match(source, /planCoordinates/);
 });
 
 test("normalized source data contains 26 buildings and 156 apartments", async () => {
