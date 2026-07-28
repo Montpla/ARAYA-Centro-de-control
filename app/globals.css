@@ -613,9 +613,59 @@ button {
   padding-bottom: 4px;
 }
 
-.chart.real-chart {
+.line-chart {
+  display: block;
+  width: 100%;
   min-width: 1180px;
-  grid-template-columns: repeat(27, minmax(28px, 1fr));
+  height: 190px;
+  overflow: visible;
+}
+
+.line-chart-grid {
+  stroke: #e5e2da;
+  stroke-width: 1;
+}
+
+.line-chart-axis {
+  fill: #9b998f;
+  font-size: 7px;
+  font-weight: 700;
+}
+
+.progress-line {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.progress-line.planned {
+  stroke: #777a75;
+  stroke-width: 2.5;
+}
+
+.progress-line.actual {
+  stroke: var(--orange);
+  stroke-width: 3.5;
+}
+
+.progress-point {
+  stroke: white;
+  stroke-width: 2;
+}
+
+.progress-point.planned {
+  fill: #777a75;
+}
+
+.progress-point.actual {
+  fill: var(--orange);
+}
+
+.line-chart-month {
+  fill: var(--muted);
+  font-size: 7px;
+  font-weight: 700;
+  text-anchor: middle;
 }
 
 .empty-state {
@@ -1128,11 +1178,11 @@ button {
   height: auto;
 }
 
-.site-plan-image-wrap.operational .site-plan-image {
+.site-plan-image-wrap.technical .site-plan-image {
   filter: grayscale(1) contrast(1.08) brightness(1.04);
 }
 
-.site-plan-image-wrap.architectural {
+.site-plan-image-wrap.visual {
   background: #f4f1e8;
 }
 
@@ -1479,11 +1529,11 @@ button {
 .legend {
   width: 8px;
   height: 8px;
-  border-radius: 2px;
+  border-radius: 50%;
 }
 
 .legend.plan {
-  background: #d7d6d0;
+  background: #777a75;
 }
 
 .legend.actual {

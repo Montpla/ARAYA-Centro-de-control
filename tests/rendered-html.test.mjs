@@ -27,7 +27,10 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /planCoordinates/);
   assert.match(source, /Descargar archivo DWG/);
   assert.match(source, /araya-architectural-masterplan-v2\.png/);
-  assert.match(source, /Vista arquitectónica/);
+  assert.match(source, /Plano visual interactivo/);
+  assert.match(source, /Plano técnico/);
+  assert.match(source, /progress-line planned/);
+  assert.match(source, /progress-point actual/);
   assert.match(source, /FICHA INDIVIDUAL DE VIVIENDA/);
   assert.match(source, /CAPAS OPERATIVAS DEL PLANO/);
 });

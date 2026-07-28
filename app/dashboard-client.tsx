@@ -158,23 +158,76 @@ function StatCard({
 }
 
 function ProgressChart() {
+  const width = 1180;
+  const height = 190;
+  const plotTop = 14;
+  const plotBottom = 142;
+  const sidePadding = 25;
+  const xFor = (index: number) =>
+    sidePadding + (index * (width - sidePadding * 2)) / (monthlyPlan.length - 1);
+  const yFor = (value: number) =>
+    plotBottom - (value / 100) * (plotBottom - plotTop);
+  const plannedPoints = monthlyPlan
+    .map((point, index) => `${xFor(index)},${yFor(point.planned)}`)
+    .join(" ");
+  const actualPoints = monthlyPlan
+    .map((point, index) =>
+      point.actual === null ? null : `${xFor(index)},${yFor(point.actual)}`,
+    )
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <>
       <div className="chart-scroll">
-        <div className="chart real-chart">
-          {monthlyPlan.map((point, index) => (
-            <div className="chart-column" key={`${point.month}-${index}`}>
-              <div className="bars">
-                <span className="bar plan" style={{ height: `${point.planned}%` }} />
-                <span
-                  className={`bar actual ${point.actual === null ? "future" : ""}`}
-                  style={{ height: `${point.actual ?? point.planned}%` }}
-                />
-              </div>
-              <small>{point.month}</small>
-            </div>
+        <svg
+          className="line-chart"
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label="Evolución mensual del plan operativo y del avance ejecutado"
+        >
+          {[0, 25, 50, 75, 100].map((value) => (
+            <g key={value}>
+              <line
+                className="line-chart-grid"
+                x1={sidePadding}
+                x2={width - sidePadding}
+                y1={yFor(value)}
+                y2={yFor(value)}
+              />
+              <text className="line-chart-axis" x={2} y={yFor(value) + 3}>
+                {value}%
+              </text>
+            </g>
           ))}
-        </div>
+          <polyline className="progress-line planned" points={plannedPoints} />
+          <polyline className="progress-line actual" points={actualPoints} />
+          {monthlyPlan.map((point, index) => (
+            <g key={`${point.month}-${index}`}>
+              <circle
+                className="progress-point planned"
+                cx={xFor(index)}
+                cy={yFor(point.planned)}
+                r="3.5"
+              >
+                <title>{`${point.month} · Plan ${number.format(point.planned)}%`}</title>
+              </circle>
+              {point.actual !== null && (
+                <circle
+                  className="progress-point actual"
+                  cx={xFor(index)}
+                  cy={yFor(point.actual)}
+                  r="4"
+                >
+                  <title>{`${point.month} · Ejecutado ${number.format(point.actual)}%`}</title>
+                </circle>
+              )}
+              <text className="line-chart-month" x={xFor(index)} y="166">
+                {point.month}
+              </text>
+            </g>
+          ))}
+        </svg>
       </div>
       <div className="chart-legend">
         <span><i className="legend plan" />Plan operativo</span>
@@ -193,7 +246,7 @@ function SitePlan({
 }) {
   const [selectedUnit, setSelectedUnit] = useState<{ building: Building; unit: Unit } | null>(null);
   const [planBuilding, setPlanBuilding] = useState<Building | null>(null);
-  const [planMode, setPlanMode] = useState<"operational" | "architectural">("operational");
+  const [planMode, setPlanMode] = useState<"visual" | "technical">("visual");
   const [selectedUrbanism, setSelectedUrbanism] = useState<UrbanismArea | null>(null);
   const completed = buildings.flatMap((item) => item.units).filter((unit) => unit.status === "terminada").length;
   const active = buildings.flatMap((item) => item.units).filter((unit) => unit.status === "en_curso").length;
@@ -208,18 +261,18 @@ function SitePlan({
         </div>
         <div className="plan-mode-switch" aria-label="Vista del plano">
           <button
-            className={planMode === "operational" ? "active" : ""}
-            aria-pressed={planMode === "operational"}
-            onClick={() => setPlanMode("operational")}
+            className={planMode === "visual" ? "active" : ""}
+            aria-pressed={planMode === "visual"}
+            onClick={() => setPlanMode("visual")}
           >
-            Plano interactivo
+            Plano visual interactivo
           </button>
           <button
-            className={planMode === "architectural" ? "active" : ""}
-            aria-pressed={planMode === "architectural"}
-            onClick={() => setPlanMode("architectural")}
+            className={planMode === "technical" ? "active" : ""}
+            aria-pressed={planMode === "technical"}
+            onClick={() => setPlanMode("technical")}
           >
-            Vista arquitectónica
+            Plano técnico
           </button>
         </div>
       </div>
@@ -241,26 +294,24 @@ function SitePlan({
         <span><i className="uninformed" />Sin datos integrados · {projectSnapshot.buildingsPendingIntegration}</span>
       </div>
       <p className="plan-disclaimer">
-        La implantación DWG y la fotografía coinciden en la distribución general.
-        Están activados los 26 edificios del cronograma MPP: TH-01 a TH-18 y TH-70
-        a TH-77. La vista arquitectónica mejora la lectura visual; el plano operativo
-        conserva la referencia documental y las capas de datos.
+        La implantación visual conserva la organización del plano DWG y mantiene
+        activas las capas de edificios, viviendas y urbanismo. Están integrados los
+        26 edificios del cronograma MPP: TH-01 a TH-18 y TH-70 a TH-77.
       </p>
       <div className={`site-plan-image-wrap ${planMode}`}>
         <img
           className="site-plan-image"
-          src={planMode === "operational" ? "/araya-site-plan-clean.png" : "/araya-architectural-masterplan-v2.png"}
+          src={planMode === "visual" ? "/araya-architectural-masterplan-v2.png" : "/araya-site-plan-clean.png"}
           alt={
-            planMode === "operational"
-              ? "Plano operativo de ARAYA con edificios, viviendas, viales, estacionamientos y urbanismo"
-              : "Vista arquitectónica depurada de la implantación general de ARAYA"
+            planMode === "visual"
+              ? "Implantación visual de ARAYA con edificios, viviendas, viales, estacionamientos y urbanismo"
+              : "Plano técnico de la implantación general de ARAYA"
           }
           width={1200}
           height={1958}
           loading="eager"
         />
-        {planMode === "operational" && (
-          <>
+        <>
             {buildings.map((building) => {
               const point = planCoordinates[building.shortName];
               return (
@@ -323,16 +374,7 @@ function SitePlan({
                 </button>
               );
             })}
-          </>
-        )}
-        {planMode === "architectural" && (
-          <div className="architectural-note">
-            <span>LECTURA VISUAL</span>
-            <strong>Implantación general</strong>
-            <small>Volúmenes, viales, estacionamientos, zonas verdes y equipamientos</small>
-            <button onClick={() => setPlanMode("operational")}>Activar edificios y viviendas</button>
-          </div>
-        )}
+        </>
       </div>
       {planBuilding && (
         <div className="plan-building-picker" role="dialog" aria-modal="true">
