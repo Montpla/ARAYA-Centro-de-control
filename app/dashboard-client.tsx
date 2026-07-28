@@ -1,12 +1,12 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import {
   Building,
   CustomMetric,
   Supplier,
   Unit,
+  UrbanismArea,
   buildings,
   cubicaciones,
   customMetrics as initialMetrics,
@@ -15,13 +15,17 @@ import {
   projectSnapshot,
   suppliers as initialSuppliers,
   timeline,
+  urbanismAreas,
   workPackages,
 } from "./demo-data";
 
 type View =
   | "resumen"
   | "planificacion"
+  | "implantacion"
   | "edificios"
+  | "viviendas"
+  | "urbanismo"
   | "cronologia"
   | "proveedores"
   | "metricas"
@@ -38,11 +42,14 @@ type ChatMessage = {
 const navItems: Array<{ id: View; label: string; mark: string }> = [
   { id: "resumen", label: "Resumen ejecutivo", mark: "01" },
   { id: "planificacion", label: "Planificación", mark: "02" },
-  { id: "edificios", label: "Edificios y viviendas", mark: "03" },
-  { id: "cronologia", label: "Cronología", mark: "04" },
-  { id: "proveedores", label: "Proveedores", mark: "05" },
-  { id: "metricas", label: "Métricas y finanzas", mark: "06" },
-  { id: "fuentes", label: "Centro de datos", mark: "07" },
+  { id: "implantacion", label: "Implantación general", mark: "03" },
+  { id: "edificios", label: "Edificios", mark: "04" },
+  { id: "viviendas", label: "Viviendas", mark: "05" },
+  { id: "urbanismo", label: "Urbanismo", mark: "06" },
+  { id: "cronologia", label: "Cronología", mark: "07" },
+  { id: "proveedores", label: "Proveedores", mark: "08" },
+  { id: "metricas", label: "Métricas y finanzas", mark: "09" },
+  { id: "fuentes", label: "Centro de datos", mark: "10" },
   { id: "agente", label: "Agente IA", mark: "AI" },
 ];
 
@@ -82,6 +89,15 @@ const planCoordinates: Record<string, { x: number; y: number }> = {
   "75": { x: 58.9, y: 61.2 },
   "76": { x: 59.0, y: 65.1 },
   "77": { x: 66.6, y: 65.1 },
+};
+
+const urbanismMapPoints: Record<string, { x: number; y: number; short: string }> = {
+  "urban-general": { x: 50.5, y: 69.5, short: "URB" },
+  "urban-roads": { x: 50.5, y: 38.5, short: "VIAL" },
+  "urban-parking": { x: 75.5, y: 43.5, short: "P" },
+  "urban-landscape": { x: 50.5, y: 47.5, short: "VERDE" },
+  "urban-facilities": { x: 50.5, y: 58.5, short: "EQ" },
+  "urban-access": { x: 56.5, y: 88.5, short: "ACCESO" },
 };
 
 function ProgressRing({ value }: { value: number }) {
@@ -178,6 +194,7 @@ function SitePlan({
   const [selectedUnit, setSelectedUnit] = useState<{ building: Building; unit: Unit } | null>(null);
   const [planBuilding, setPlanBuilding] = useState<Building | null>(null);
   const [planMode, setPlanMode] = useState<"operational" | "architectural">("operational");
+  const [selectedUrbanism, setSelectedUrbanism] = useState<UrbanismArea | null>(null);
   const completed = buildings.flatMap((item) => item.units).filter((unit) => unit.status === "terminada").length;
   const active = buildings.flatMap((item) => item.units).filter((unit) => unit.status === "en_curso").length;
   const pending = projectSnapshot.unitCount - completed - active;
@@ -195,7 +212,7 @@ function SitePlan({
             aria-pressed={planMode === "operational"}
             onClick={() => setPlanMode("operational")}
           >
-            Plano operativo
+            Plano interactivo
           </button>
           <button
             className={planMode === "architectural" ? "active" : ""}
@@ -212,6 +229,11 @@ function SitePlan({
         <span><strong>{projectSnapshot.unitCount}</strong> viviendas en seguimiento</span>
         <span><strong>{projectSnapshot.buildingsPendingIntegration}</strong> TH pendientes de integrar</span>
       </div>
+      <div className="plan-quick-actions" aria-label="Explorar datos de la implantación">
+        <button onClick={() => onNavigate("edificios")}><span>EDIFICIOS</span><strong>Ver conjunto y detalle</strong><i>→</i></button>
+        <button onClick={() => onNavigate("viviendas")}><span>VIVIENDAS</span><strong>Abrir 156 fichas</strong><i>→</i></button>
+        <button onClick={() => onNavigate("urbanismo")}><span>URBANISMO</span><strong>Explorar áreas y datos</strong><i>→</i></button>
+      </div>
       <div className="plan-legend">
         <span><i className="done" />Superestructura terminada · {completed}</span>
         <span><i className="active" />En curso · {active}</span>
@@ -225,9 +247,9 @@ function SitePlan({
         conserva la referencia documental y las capas de datos.
       </p>
       <div className={`site-plan-image-wrap ${planMode}`}>
-        <Image
+        <img
           className="site-plan-image"
-          src={planMode === "operational" ? "/araya-site-plan-clean.png" : "/araya-architectural-masterplan.png"}
+          src={planMode === "operational" ? "/araya-site-plan-clean.png" : "/araya-architectural-masterplan-v2.png"}
           alt={
             planMode === "operational"
               ? "Plano operativo de ARAYA con edificios, viviendas, viales, estacionamientos y urbanismo"
@@ -235,38 +257,72 @@ function SitePlan({
           }
           width={1200}
           height={1958}
-          priority
+          loading="eager"
         />
         {planMode === "operational" && (
           <>
             {buildings.map((building) => {
               const point = planCoordinates[building.shortName];
               return (
-                <button
+                <div
                   key={building.id}
-                  className={`plan-hotspot ${
+                  className="plan-building-hotspot"
+                  style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                >
+                  <button
+                    className={`plan-building-trigger ${
                     building.units[0].status === "terminada"
                       ? "done"
                       : building.units[0].status === "en_curso"
                         ? "active"
                         : "pending"
-                  }`}
+                    }`}
+                    title={`Abrir TH-${building.shortName.padStart(2, "0")} · ${number.format(building.progress)}%`}
+                    onClick={() => {
+                      setSelectedUnit(null);
+                      setSelectedUrbanism(null);
+                      setPlanBuilding(building);
+                    }}
+                  >
+                    TH-{building.shortName.padStart(2, "0")}
+                  </button>
+                  <div className="plan-home-statuses" aria-label={`Viviendas de TH-${building.shortName.padStart(2, "0")}`}>
+                    {building.units.map((unit) => (
+                      <button
+                        key={unit.id}
+                        className={unit.status}
+                        title={`${unit.code} · ${statusLabel[unit.status]} · ${unit.progress}%`}
+                        aria-label={`Abrir ${unit.code}`}
+                        onClick={() => {
+                          setPlanBuilding(null);
+                          setSelectedUrbanism(null);
+                          setSelectedUnit({ building, unit });
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {urbanismAreas.map((area) => {
+              const point = urbanismMapPoints[area.id];
+              return (
+                <button
+                  key={area.id}
+                  className={`urbanism-map-point ${area.status}`}
                   style={{ left: `${point.x}%`, top: `${point.y}%` }}
-                  title={`TH-${building.shortName.padStart(2, "0")} · ${number.format(building.progress)}% índice de frentes`}
+                  title={`Abrir ${area.name}`}
                   onClick={() => {
+                    setPlanBuilding(null);
                     setSelectedUnit(null);
-                    setPlanBuilding(building);
+                    setSelectedUrbanism(area);
                   }}
                 >
-                  TH-{building.shortName.padStart(2, "0")}
+                  <span>{point.short}</span>
+                  {area.progress !== null && <strong>{number.format(area.progress)}%</strong>}
                 </button>
               );
             })}
-            <div className="urbanism-overlay">
-              <span>URBANISMO</span>
-              <strong>{number.format(projectSnapshot.urbanismProgress)}%</strong>
-              <small>Plan {number.format(projectSnapshot.urbanismPlanned)}% · +2,10 pp</small>
-            </div>
           </>
         )}
         {planMode === "architectural" && (
@@ -274,6 +330,7 @@ function SitePlan({
             <span>LECTURA VISUAL</span>
             <strong>Implantación general</strong>
             <small>Volúmenes, viales, estacionamientos, zonas verdes y equipamientos</small>
+            <button onClick={() => setPlanMode("operational")}>Activar edificios y viviendas</button>
           </div>
         )}
       </div>
@@ -345,6 +402,23 @@ function SitePlan({
           >
             Abrir detalle del edificio
           </button>
+        </div>
+      )}
+      {selectedUrbanism && (
+        <div className="plan-urbanism-picker" role="dialog" aria-modal="true">
+          <button className="close-button" onClick={() => setSelectedUrbanism(null)} aria-label="Cerrar">×</button>
+          <span className="section-kicker">{selectedUrbanism.category}</span>
+          <h3>{selectedUrbanism.name}</h3>
+          <div className={`data-status ${selectedUrbanism.status}`}>
+            {selectedUrbanism.status === "integrado" ? "Datos integrados" : "Pendiente de datos"}
+          </div>
+          <p>{selectedUrbanism.detail}</p>
+          <div className="picker-summary">
+            <span>Ejecutado<strong>{selectedUrbanism.progress === null ? "—" : `${number.format(selectedUrbanism.progress)}%`}</strong></span>
+            <span>Plan<strong>{selectedUrbanism.planned === null ? "—" : `${number.format(selectedUrbanism.planned)}%`}</strong></span>
+            <span>Fuente<strong>{selectedUrbanism.source}</strong></span>
+          </div>
+          <button className="button primary" onClick={() => onNavigate("urbanismo")}>Abrir urbanismo completo</button>
         </div>
       )}
     </section>
@@ -478,6 +552,37 @@ function Planning() {
   );
 }
 
+function UnitDetailPanel({
+  building,
+  unit,
+  onClose,
+}: {
+  building: Building;
+  unit: Unit;
+  onClose: () => void;
+}) {
+  return (
+    <aside className="data-detail-panel" role="dialog" aria-modal="true" aria-label={`Detalle de ${unit.code}`}>
+      <button className="close-button" onClick={onClose} aria-label="Cerrar detalle">×</button>
+      <span className="section-kicker">FICHA INDIVIDUAL DE VIVIENDA</span>
+      <h3>{unit.code}</h3>
+      <div className="unit-inspector-grid">
+        <span>Edificio<strong>TH-{building.shortName.padStart(2, "0")}</strong></span>
+        <span>Planta<strong>{unit.floor}</strong></span>
+        <span>Superestructura<strong>{unit.progress}%</strong></span>
+        <span>Estado<strong>{statusLabel[unit.status]}</strong></span>
+        <span>Fase disponible<strong>{unit.phase}</strong></span>
+        <span>Desvío<strong>{unit.deviationDays > 0 ? `+${unit.deviationDays}` : unit.deviationDays} días</strong></span>
+      </div>
+      <div className="data-coverage">
+        <div><span>DATOS DISPONIBLES</span><strong>Superestructura · edificio · planta · estado</strong></div>
+        <div className="pending"><span>PENDIENTES DE INCORPORAR</span><strong>Albañilería · instalaciones · acabados · incidencias · responsable</strong></div>
+      </div>
+      <p>Esta ficha queda preparada para crecer con los próximos archivos y datos que se incorporen al centro de control.</p>
+    </aside>
+  );
+}
+
 function BuildingsView({
   selected,
   setSelected,
@@ -486,19 +591,27 @@ function BuildingsView({
   setSelected: (building: Building) => void;
 }) {
   const [statusFilter, setStatusFilter] = useState("todos");
+  const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   const units = selected.units.filter(
     (unit) => statusFilter === "todos" || unit.status === statusFilter,
   );
   return (
     <div className="view-stack">
+      <section className="data-view-intro">
+        <div><span className="section-kicker">NAVEGACIÓN INTERACTIVA</span><h2>Conjunto de edificios</h2></div>
+        <p>Selecciona cualquier TH para consultar sus indicadores y abre una vivienda para ver su ficha individual.</p>
+      </section>
       <section className="building-tabs">
         {buildings.map((building) => (
           <button
             key={building.id}
             className={building.id === selected.id ? "active" : ""}
-            onClick={() => setSelected(building)}
+            onClick={() => {
+              setSelected(building);
+              setSelectedUnit(null);
+            }}
           >
-            <span>{building.shortName}</span>
+            <span>TH-{building.shortName.padStart(2, "0")}</span>
             <strong>{number.format(building.progress)}%</strong>
           </button>
         ))}
@@ -519,8 +632,7 @@ function BuildingsView({
         </div>
         <p className="section-intro">
           El porcentaje del edificio es el promedio simple de 32 frentes del MPP.
-          Las tarjetas de viviendas muestran únicamente el avance de
-          superestructura disponible en la fuente.
+          Pulsa una vivienda para abrir su ficha y consultar los datos ya disponibles.
         </p>
         <div className="filter-row">
           {["todos", "en_curso", "pendiente", "terminada"].map((filter) => (
@@ -535,14 +647,136 @@ function BuildingsView({
         </div>
         <div className="unit-grid">
           {units.map((unit) => (
-            <article className={`unit-card ${unit.status}`} key={unit.id}>
+            <button
+              className={`unit-card interactive ${unit.status}`}
+              key={unit.id}
+              onClick={() => setSelectedUnit(unit)}
+            >
               <div><strong>{unit.code}</strong><span>Planta {unit.floor}</span></div>
               <b>{unit.progress}%</b>
               <small>{unit.phase}</small>
               <div className="unit-progress"><i style={{ width: `${unit.progress}%` }} /></div>
-            </article>
+              <em>Abrir ficha →</em>
+            </button>
           ))}
         </div>
+        {selectedUnit && <UnitDetailPanel building={selected} unit={selectedUnit} onClose={() => setSelectedUnit(null)} />}
+      </section>
+    </div>
+  );
+}
+
+function HousingView() {
+  const [buildingFilter, setBuildingFilter] = useState("todos");
+  const [statusFilter, setStatusFilter] = useState("todos");
+  const [selectedUnit, setSelectedUnit] = useState<{ building: Building; unit: Unit } | null>(null);
+  const unitRows = buildings
+    .filter((building) => buildingFilter === "todos" || building.id === buildingFilter)
+    .flatMap((building) => building.units.map((unit) => ({ building, unit })))
+    .filter(({ unit }) => statusFilter === "todos" || unit.status === statusFilter);
+
+  return (
+    <div className="view-stack">
+      <section className="data-view-intro">
+        <div><span className="section-kicker">156 FICHAS PREPARADAS</span><h2>Viviendas individuales</h2></div>
+        <p>Filtra por edificio o estado y pulsa cualquier vivienda. Las fichas se completarán progresivamente con los nuevos datos.</p>
+      </section>
+      <section className="stat-grid wide">
+        <StatCard eyebrow="Viviendas integradas" value={`${projectSnapshot.unitCount}`} detail="6 por cada edificio activo" />
+        <StatCard eyebrow="Edificios relacionados" value={`${projectSnapshot.buildingCount}`} detail="TH-01 a TH-18 y TH-70 a TH-77" />
+        <StatCard eyebrow="Dato disponible" value="Superestructura" detail="Avance y estado por vivienda" tone="good" />
+        <StatCard eyebrow="Próxima ampliación" value="5 áreas" detail="Instalaciones, acabados, incidencias y más" />
+      </section>
+      <section className="panel housing-explorer">
+        <div className="housing-controls">
+          <label>
+            Edificio
+            <select value={buildingFilter} onChange={(event) => setBuildingFilter(event.target.value)}>
+              <option value="todos">Todos los edificios</option>
+              {buildings.map((building) => (
+                <option key={building.id} value={building.id}>TH-{building.shortName.padStart(2, "0")} · {building.name}</option>
+              ))}
+            </select>
+          </label>
+          <div className="filter-row">
+            {["todos", "en_curso", "pendiente", "terminada"].map((filter) => (
+              <button key={filter} className={statusFilter === filter ? "active" : ""} onClick={() => setStatusFilter(filter)}>
+                {filter === "todos" ? "Todas" : statusLabel[filter as keyof typeof statusLabel]}
+              </button>
+            ))}
+          </div>
+          <span className="result-count">{unitRows.length} viviendas visibles</span>
+        </div>
+        <div className="housing-grid">
+          {unitRows.map(({ building, unit }) => (
+            <button
+              className={`housing-card ${unit.status}`}
+              key={unit.id}
+              onClick={() => setSelectedUnit({ building, unit })}
+            >
+              <span>TH-{building.shortName.padStart(2, "0")} · PLANTA {unit.floor}</span>
+              <strong>{unit.code}</strong>
+              <div><i style={{ width: `${unit.progress}%` }} /></div>
+              <small>{statusLabel[unit.status]} · {unit.progress}%</small>
+            </button>
+          ))}
+        </div>
+        {selectedUnit && (
+          <UnitDetailPanel
+            building={selectedUnit.building}
+            unit={selectedUnit.unit}
+            onClose={() => setSelectedUnit(null)}
+          />
+        )}
+      </section>
+    </div>
+  );
+}
+
+function UrbanismView() {
+  const [selectedArea, setSelectedArea] = useState<UrbanismArea>(urbanismAreas[0]);
+  return (
+    <div className="view-stack">
+      <section className="data-view-intro">
+        <div><span className="section-kicker">CAPAS OPERATIVAS DEL PLANO</span><h2>Urbanismo y espacios comunes</h2></div>
+        <p>Pulsa cada área para consultar la información disponible y los campos que faltan por incorporar.</p>
+      </section>
+      <section className="stat-grid wide">
+        <StatCard eyebrow="Urbanismo ejecutado" value={`${number.format(projectSnapshot.urbanismProgress)}%`} detail={`Plan ${number.format(projectSnapshot.urbanismPlanned)}%`} tone="good" />
+        <StatCard eyebrow="Áreas identificadas" value={`${urbanismAreas.length}`} detail="Plano DWG y fotografía" />
+        <StatCard eyebrow="Áreas con indicador" value="1" detail="Consolidado de urbanismo" />
+        <StatCard eyebrow="Pendientes de detalle" value={`${urbanismAreas.length - 1}`} detail="Preparadas para nuevos datos" tone="warn" />
+      </section>
+      <section className="urbanism-workspace">
+        <div className="urbanism-area-grid">
+          {urbanismAreas.map((area) => (
+            <button
+              key={area.id}
+              className={`urbanism-area-card ${area.status} ${selectedArea.id === area.id ? "active" : ""}`}
+              onClick={() => setSelectedArea(area)}
+            >
+              <span>{area.category}</span>
+              <strong>{area.name}</strong>
+              <b>{area.progress === null ? "Sin dato" : `${number.format(area.progress)}%`}</b>
+              <small>{area.source}</small>
+            </button>
+          ))}
+        </div>
+        <aside className="panel urbanism-detail">
+          <span className="section-kicker">{selectedArea.category}</span>
+          <h3>{selectedArea.name}</h3>
+          <div className={`data-status ${selectedArea.status}`}>{selectedArea.status === "integrado" ? "Datos integrados" : "Pendiente de datos"}</div>
+          <p>{selectedArea.detail}</p>
+          <div className="urbanism-values">
+            <span>Ejecutado<strong>{selectedArea.progress === null ? "—" : `${number.format(selectedArea.progress)}%`}</strong></span>
+            <span>Plan<strong>{selectedArea.planned === null ? "—" : `${number.format(selectedArea.planned)}%`}</strong></span>
+            <span>Fuente<strong>{selectedArea.source}</strong></span>
+          </div>
+          <div className="pending-fields">
+            <span>DATOS QUE PODREMOS AÑADIR</span>
+            <div>{selectedArea.pendingFields.map((field) => <i key={field}>{field}</i>)}</div>
+          </div>
+        </aside>
       </section>
     </div>
   );
@@ -966,6 +1200,14 @@ export function DashboardClient() {
       ...buildings
         .filter((item) => item.name.toLowerCase().includes(term) || item.shortName === term)
         .map((item) => ({ label: item.name, detail: `${number.format(item.progress)}% índice de frentes`, view: "edificios" as View, building: item })),
+      ...buildings.flatMap((building) =>
+        building.units
+          .filter((unit) => unit.code.toLowerCase().includes(term))
+          .map((unit) => ({ label: unit.code, detail: `${building.name} · ${unit.progress}% superestructura`, view: "viviendas" as View, building })),
+      ),
+      ...urbanismAreas
+        .filter((item) => item.name.toLowerCase().includes(term) || item.category.toLowerCase().includes(term))
+        .map((item) => ({ label: item.name, detail: item.category, view: "urbanismo" as View, building: null })),
       ...supplierRows
         .filter((item) => item.name.toLowerCase().includes(term))
         .map((item) => ({ label: item.name, detail: item.category, view: "proveedores" as View, building: null })),
@@ -978,7 +1220,10 @@ export function DashboardClient() {
   function content() {
     if (view === "resumen") return <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} />;
     if (view === "planificacion") return <Planning />;
+    if (view === "implantacion") return <div className="view-stack"><SitePlan onNavigate={setView} onSelectBuilding={setSelectedBuilding} /></div>;
     if (view === "edificios") return <BuildingsView selected={selectedBuilding} setSelected={setSelectedBuilding} />;
+    if (view === "viviendas") return <HousingView />;
+    if (view === "urbanismo") return <UrbanismView />;
     if (view === "cronologia") return <TimelineView />;
     if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => setModal("supplier")} />;
     if (view === "metricas") return <MetricsView metrics={metrics} onAdd={() => setModal("metric")} />;
@@ -1023,7 +1268,7 @@ export function DashboardClient() {
         <Header view={view} onAsk={() => setAgentOpen(true)} />
         <div className="global-search">
           <span>⌕</span>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar edificio, proveedor o métrica…" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar edificio, vivienda, urbanismo, proveedor o métrica…" />
           {searchResults.length > 0 && (
             <div className="search-results">
               {searchResults.map((result) => (

@@ -62,6 +62,18 @@ export type WorkPackage = {
   critical: boolean;
 };
 
+export type UrbanismArea = {
+  id: string;
+  name: string;
+  category: string;
+  progress: number | null;
+  planned: number | null;
+  status: "integrado" | "pendiente";
+  source: string;
+  detail: string;
+  pendingFields: string[];
+};
+
 export type DataSource = {
   id: string;
   file: string;
@@ -188,6 +200,75 @@ export const workPackages: WorkPackage[] = [
   { name: "Patios y obras exteriores", progress: 0, finish: "03/02/2027", baselineFinish: "27/01/2027", deviationDays: 7, critical: false },
   { name: "Panel solar", progress: 0, finish: "18/05/2027", baselineFinish: "11/05/2027", deviationDays: 7, critical: false },
   { name: "Remates y limpieza", progress: 0, finish: "07/06/2027", baselineFinish: "31/05/2027", deviationDays: 7, critical: true },
+];
+
+export const urbanismAreas: UrbanismArea[] = [
+  {
+    id: "urban-general",
+    name: "Urbanismo general",
+    category: "Indicador consolidado",
+    progress: 18.28,
+    planned: 16.18,
+    status: "integrado",
+    source: "Excel de avance físico",
+    detail: "Indicador global disponible para el conjunto de las obras de urbanización.",
+    pendingFields: ["Desglose por zona", "Responsable", "Coste", "Incidencias"],
+  },
+  {
+    id: "urban-roads",
+    name: "Viales y circulación",
+    category: "Infraestructura exterior",
+    progress: null,
+    planned: null,
+    status: "pendiente",
+    source: "Identificado en plano DWG",
+    detail: "Red viaria interior, accesos, glorietas y conexiones entre edificios.",
+    pendingFields: ["Avance", "Plan", "Fechas", "Contratista", "Incidencias"],
+  },
+  {
+    id: "urban-parking",
+    name: "Estacionamientos",
+    category: "Movilidad",
+    progress: null,
+    planned: null,
+    status: "pendiente",
+    source: "Identificado en plano DWG",
+    detail: "Bandas de estacionamiento distribuidas junto a los conjuntos residenciales.",
+    pendingFields: ["Cantidad", "Ejecutados", "Señalización", "Responsable"],
+  },
+  {
+    id: "urban-landscape",
+    name: "Paisajismo y áreas verdes",
+    category: "Espacio público",
+    progress: null,
+    planned: null,
+    status: "pendiente",
+    source: "Identificado en plano y fotografía",
+    detail: "Eje verde central, arbolado, jardines y espacios libres de la implantación.",
+    pendingFields: ["Avance", "Especies", "Riego", "Contratista", "Mantenimiento"],
+  },
+  {
+    id: "urban-facilities",
+    name: "Equipamientos comunes",
+    category: "Dotaciones",
+    progress: null,
+    planned: null,
+    status: "pendiente",
+    source: "Identificado en plano DWG",
+    detail: "Edificaciones y espacios comunes situados a lo largo del eje central.",
+    pendingFields: ["Uso", "Avance", "Plan", "Responsable", "Puesta en servicio"],
+  },
+  {
+    id: "urban-access",
+    name: "Acceso principal",
+    category: "Accesos y control",
+    progress: null,
+    planned: null,
+    status: "pendiente",
+    source: "Identificado en plano DWG",
+    detail: "Entrada sur, vial de aproximación y elementos de control de acceso.",
+    pendingFields: ["Avance", "Seguridad", "Señalización", "Fecha operativa"],
+  },
 ];
 
 export const timeline: TimelineEvent[] = [
@@ -320,5 +401,6 @@ export const projectSnapshot = {
   suppliers,
   metrics: customMetrics,
   workPackages,
+  urbanismAreas,
   dataSources,
 };

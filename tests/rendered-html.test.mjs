@@ -7,7 +7,10 @@ test("dashboard includes the complete project-control navigation and site plan",
   for (const label of [
     "Resumen ejecutivo",
     "Planificación",
-    "Edificios y viviendas",
+    "Implantación general",
+    "Edificios",
+    "Viviendas",
+    "Urbanismo",
     "Cronología",
     "Proveedores",
     "Métricas y finanzas",
@@ -23,8 +26,10 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /araya-site-plan-clean\.png/);
   assert.match(source, /planCoordinates/);
   assert.match(source, /Descargar archivo DWG/);
-  assert.match(source, /araya-architectural-masterplan\.png/);
+  assert.match(source, /araya-architectural-masterplan-v2\.png/);
   assert.match(source, /Vista arquitectónica/);
+  assert.match(source, /FICHA INDIVIDUAL DE VIVIENDA/);
+  assert.match(source, /CAPAS OPERATIVAS DEL PLANO/);
 });
 
 test("normalized source data contains 26 buildings and 156 apartments", async () => {
@@ -39,6 +44,7 @@ test("normalized source data contains 26 buildings and 156 apartments", async ()
   assert.match(source, /currency: "No indicada en la fuente"/);
   assert.match(source, /002 - IMPLANTACIÓN GENERAL\.dwg/);
   assert.match(source, /\/data-center\/002-implantacion-general\.dwg/);
+  assert.match(source, /urbanismAreas/);
 });
 
 test("agent is source-grounded, read-only and evaluated", async () => {

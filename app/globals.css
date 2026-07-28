@@ -157,7 +157,9 @@ button {
 
 .sidebar nav {
   flex: 1;
+  overflow-y: auto;
   padding-top: 9px;
+  scrollbar-width: thin;
 }
 
 .sidebar nav button {
@@ -814,6 +816,57 @@ button {
   font-size: 18px;
 }
 
+.plan-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.plan-quick-actions button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  padding: 12px 14px;
+  border: 1px solid #d8d4ca;
+  border-radius: 11px;
+  color: var(--ink);
+  background: white;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.plan-quick-actions button:hover,
+.plan-quick-actions button:focus-visible {
+  border-color: var(--orange);
+  outline: 0;
+  box-shadow: 0 8px 20px rgba(28, 31, 27, 0.08);
+  transform: translateY(-2px);
+}
+
+.plan-quick-actions span {
+  grid-column: 1;
+  color: var(--orange);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+}
+
+.plan-quick-actions strong {
+  grid-column: 1;
+  font-size: 10px;
+}
+
+.plan-quick-actions i {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+  color: var(--orange);
+  font-size: 18px;
+  font-style: normal;
+}
+
 .plan-legend {
   display: flex;
   flex-wrap: wrap;
@@ -1117,14 +1170,35 @@ button {
   line-height: 1.45;
 }
 
-.plan-hotspot {
+.architectural-note button {
+  margin-top: 7px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 7px;
+  color: white;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 8px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.architectural-note button:hover,
+.architectural-note button:focus-visible {
+  background: var(--orange);
+  outline: 0;
+}
+
+.plan-building-hotspot {
   position: absolute;
   z-index: 2;
-  width: 5.6%;
-  min-width: 42px;
-  height: 2.65%;
-  min-height: 22px;
+  width: 6.3%;
+  min-width: 54px;
   transform: translate(-50%, -50%);
+}
+
+.plan-building-trigger {
+  width: 100%;
+  min-height: 21px;
   border: 2px solid white;
   border-radius: 5px;
   color: white;
@@ -1134,55 +1208,110 @@ button {
   cursor: pointer;
 }
 
-.plan-hotspot.done {
+.plan-building-trigger.done {
   background: rgba(25, 128, 82, 0.92);
 }
 
-.plan-hotspot.active {
+.plan-building-trigger.active {
   background: rgba(226, 111, 28, 0.94);
 }
 
-.plan-hotspot.pending {
+.plan-building-trigger.pending {
   background: rgba(97, 101, 96, 0.88);
 }
 
-.plan-hotspot:hover,
-.plan-hotspot:focus-visible {
+.plan-building-hotspot:hover {
   z-index: 3;
-  outline: 3px solid #141a16;
-  outline-offset: 2px;
   transform: translate(-50%, -50%) scale(1.14);
 }
 
-.urbanism-overlay {
-  position: absolute;
-  z-index: 2;
-  left: 43%;
-  top: 82%;
-  display: grid;
-  gap: 1px;
-  padding: 8px 11px;
-  border: 2px solid white;
-  border-radius: 8px;
-  background: rgba(65, 104, 63, 0.92);
-  color: white;
-  box-shadow: 0 3px 12px rgba(19, 24, 20, 0.35);
+.plan-building-trigger:focus-visible,
+.plan-home-statuses button:focus-visible,
+.urbanism-map-point:focus-visible {
+  outline: 3px solid #141a16;
+  outline-offset: 2px;
 }
 
-.urbanism-overlay span {
-  font-size: 7px;
+.plan-home-statuses {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1px;
+  margin: 2px 2px 0;
+  padding: 2px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2px 7px rgba(19, 24, 20, 0.25);
+}
+
+.plan-home-statuses button {
+  min-width: 0;
+  height: clamp(5px, 0.6vw, 8px);
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.plan-home-statuses button:hover {
+  transform: scaleY(1.6);
+}
+
+.plan-home-statuses .terminada {
+  background: #198052;
+}
+
+.plan-home-statuses .en_curso {
+  background: #e26f1c;
+}
+
+.plan-home-statuses .pendiente {
+  background: #777d78;
+}
+
+.plan-home-statuses .bloqueada {
+  background: #b74536;
+}
+
+.urbanism-map-point {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 0;
+  min-width: 43px;
+  padding: 5px 7px;
+  transform: translate(-50%, -50%);
+  border: 2px solid white;
+  border-radius: 999px;
+  color: white;
+  box-shadow: 0 3px 12px rgba(19, 24, 20, 0.35);
+  cursor: pointer;
+}
+
+.urbanism-map-point.integrado {
+  background: rgba(65, 104, 63, 0.94);
+}
+
+.urbanism-map-point.pendiente {
+  background: rgba(166, 112, 38, 0.92);
+}
+
+.urbanism-map-point:hover {
+  z-index: 4;
+  transform: translate(-50%, -50%) scale(1.12);
+}
+
+.urbanism-map-point span {
+  font-size: clamp(5px, 0.62vw, 8px);
+  font-weight: 900;
   letter-spacing: 0.1em;
 }
 
-.urbanism-overlay strong {
-  font-size: 15px;
+.urbanism-map-point strong {
+  font-size: clamp(6px, 0.72vw, 9px);
 }
 
-.urbanism-overlay small {
-  font-size: 7px;
-}
-
-.plan-building-picker {
+.plan-building-picker,
+.plan-urbanism-picker {
   position: absolute;
   z-index: 5;
   top: 78px;
@@ -1195,10 +1324,19 @@ button {
   box-shadow: 0 18px 48px rgba(28, 31, 27, 0.24);
 }
 
-.plan-building-picker > .close-button {
+.plan-building-picker > .close-button,
+.plan-urbanism-picker > .close-button {
   position: absolute;
   top: 13px;
   right: 13px;
+}
+
+.plan-urbanism-picker > p {
+  max-width: 42rem;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.55;
 }
 
 .picker-summary {
@@ -1261,11 +1399,20 @@ button {
     min-width: 900px;
   }
 
-  .plan-hotspot {
-    min-width: 32px;
-    min-height: 18px;
+  .plan-building-hotspot {
+    min-width: 46px;
+  }
+
+  .plan-building-trigger {
+    min-height: 17px;
     border-width: 1px;
     font-size: 5px;
+  }
+
+  .urbanism-map-point {
+    min-width: 34px;
+    padding: 4px 5px;
+    border-width: 1px;
   }
 
   .picker-summary,
@@ -1813,6 +1960,363 @@ button {
   background: var(--orange);
 }
 
+.data-view-intro {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 4px 2px;
+}
+
+.data-view-intro h2 {
+  margin: 5px 0 0;
+  font-size: clamp(22px, 2.5vw, 34px);
+}
+
+.data-view-intro p {
+  max-width: 590px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.building-detail,
+.housing-explorer {
+  position: relative;
+}
+
+.unit-card.interactive {
+  appearance: none;
+  color: inherit;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.unit-card.interactive:hover,
+.unit-card.interactive:focus-visible {
+  border-color: var(--orange);
+  outline: 0;
+  box-shadow: 0 10px 24px rgba(28, 31, 27, 0.1);
+  transform: translateY(-2px);
+}
+
+.unit-card.interactive em {
+  top: auto;
+  right: 13px;
+  bottom: 12px;
+  color: var(--orange);
+  background: transparent;
+}
+
+.data-detail-panel {
+  position: absolute;
+  z-index: 8;
+  top: 22px;
+  right: 22px;
+  width: min(440px, calc(100% - 44px));
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  color: var(--ink);
+  background: white;
+  box-shadow: 0 24px 60px rgba(28, 31, 27, 0.22);
+}
+
+.data-detail-panel > .close-button {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+
+.data-detail-panel h3 {
+  margin: 6px 0 4px;
+  font-size: 24px;
+}
+
+.data-detail-panel > p {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.data-coverage {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.data-coverage div {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  color: #316046;
+  background: #eef6f0;
+}
+
+.data-coverage div.pending {
+  color: #8a5b00;
+  background: #fff5df;
+}
+
+.data-coverage span {
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.data-coverage strong {
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.housing-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  align-items: end;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.housing-controls label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.housing-controls select {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+  background: white;
+  font-size: 10px;
+}
+
+.housing-controls .filter-row {
+  margin: 0;
+}
+
+.result-count {
+  padding-bottom: 10px;
+  color: var(--muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.housing-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.housing-card {
+  display: grid;
+  gap: 6px;
+  min-height: 112px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  color: var(--ink);
+  background: #fbfaf7;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.housing-card:hover,
+.housing-card:focus-visible {
+  border-color: var(--orange);
+  outline: 0;
+  box-shadow: 0 9px 20px rgba(28, 31, 27, 0.1);
+  transform: translateY(-2px);
+}
+
+.housing-card > span {
+  color: var(--muted);
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.housing-card > strong {
+  font-size: 13px;
+}
+
+.housing-card > div {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #e5e3dc;
+}
+
+.housing-card > div i {
+  display: block;
+  height: 100%;
+  background: var(--orange);
+}
+
+.housing-card.terminada > div i {
+  background: var(--green);
+}
+
+.housing-card > small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.urbanism-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(320px, 0.6fr);
+  gap: 16px;
+}
+
+.urbanism-area-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.urbanism-area-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 12px;
+  min-height: 132px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: var(--ink);
+  background: white;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.urbanism-area-card:hover,
+.urbanism-area-card:focus-visible,
+.urbanism-area-card.active {
+  border-color: #718469;
+  outline: 0;
+  box-shadow: 0 10px 26px rgba(49, 73, 51, 0.12);
+  transform: translateY(-2px);
+}
+
+.urbanism-area-card.active {
+  background: #f5f8f2;
+}
+
+.urbanism-area-card > span,
+.urbanism-area-card > small {
+  grid-column: 1;
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.urbanism-area-card > strong {
+  grid-column: 1;
+  font-size: 13px;
+}
+
+.urbanism-area-card > b {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  align-self: center;
+  color: #567052;
+  font-size: 16px;
+}
+
+.urbanism-area-card.pendiente > b {
+  color: #9a7a3e;
+  font-size: 10px;
+}
+
+.urbanism-detail {
+  align-self: start;
+  position: sticky;
+  top: 90px;
+}
+
+.urbanism-detail h3 {
+  margin: 6px 0 10px;
+  font-size: 22px;
+}
+
+.urbanism-detail > p {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.data-status {
+  display: inline-flex;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #316046;
+  background: #eaf5ed;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.data-status.pendiente {
+  color: #8a5b00;
+  background: #fff2d8;
+}
+
+.urbanism-values {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.urbanism-values span {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border-radius: 9px;
+  color: var(--muted);
+  background: var(--paper);
+  font-size: 8px;
+}
+
+.urbanism-values span:last-child {
+  grid-column: 1 / -1;
+}
+
+.urbanism-values strong {
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.pending-fields > span {
+  color: var(--muted);
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.pending-fields > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pending-fields i {
+  padding: 5px 7px;
+  border: 1px dashed #c9c5bb;
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 8px;
+  font-style: normal;
+}
+
 .gantt {
   overflow-x: auto;
 }
@@ -2321,6 +2825,19 @@ button {
   .unit-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  .housing-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .housing-controls {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .urbanism-workspace {
+    grid-template-columns: 1fr;
+  }
+  .urbanism-detail {
+    position: static;
+  }
   .metric-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -2420,6 +2937,28 @@ button {
   }
   .plan-data-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .plan-quick-actions,
+  .urbanism-area-grid,
+  .housing-grid {
+    grid-template-columns: 1fr;
+  }
+  .data-view-intro {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .data-detail-panel {
+    position: fixed;
+    top: 80px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-height: calc(100vh - 96px);
+    overflow-y: auto;
+  }
+  .housing-controls .filter-row {
+    flex-wrap: wrap;
   }
 }
 
