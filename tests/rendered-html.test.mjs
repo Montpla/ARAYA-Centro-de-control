@@ -40,6 +40,35 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /INFORME FINANCIERO · JUNIO 2026/);
 });
 
+test("desktop, tablet and mobile share the requested navigation order", async () => {
+  const source = await readFile("app/dashboard-client.tsx", "utf8");
+  const navBlock = source.match(/const navItems:[\s\S]*?= \[([\s\S]*?)\n\];/)?.[1] ?? "";
+  const orderedItems = [
+    ['"resumen"', '"Resumen ejecutivo"', '"01"'],
+    ['"planificacion"', '"Planificación"', '"02"'],
+    ['"implantacion"', '"Implantación general"', '"03"'],
+    ['"edificios"', '"Edificios"', '"04"'],
+    ['"viviendas"', '"Apartamentos"', '"05"'],
+    ['"urbanismo"', '"Urbanismo"', '"06"'],
+    ['"comercial"', '"Ventas y cobranza"', '"07"'],
+    ['"metricas"', '"Finanzas"', '"08"'],
+    ['"cronologia"', '"Cronología"', '"09"'],
+    ['"proveedores"', '"Proveedores"', '"10"'],
+    ['"control"', '"Seguridad y permisos"', '"11"'],
+    ['"fuentes"', '"Centro de datos"', '"12"'],
+    ['"agente"', '"Agente IA"', '"AI"'],
+    ['"usuarios"', '"Usuarios y accesos"', '"AD"'],
+  ];
+  let previousIndex = -1;
+  for (const [id, label, mark] of orderedItems) {
+    const entry = `{ id: ${id}, label: ${label}, mark: ${mark} }`;
+    const index = navBlock.indexOf(entry);
+    assert.ok(index > previousIndex, `${entry} debe conservar el orden solicitado`);
+    previousIndex = index;
+  }
+  assert.match(source, /availableNavItems\.map/);
+});
+
 test("normalized source data contains 26 buildings and 156 apartments", async () => {
   const source = await readFile("app/demo-data.ts", "utf8");
   assert.match(source, /buildingCount: 26/);
