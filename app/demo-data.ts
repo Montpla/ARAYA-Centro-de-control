@@ -1,5 +1,19 @@
 export type UnitStatus = "terminada" | "en_curso" | "bloqueada" | "pendiente";
 
+export type UnitDiscipline = {
+  id: "superestructura" | "albanileria" | "instalaciones" | "acabados";
+  name: string;
+  progress: number | null;
+  status: "integrado" | "pendiente";
+};
+
+export type UnitIssue = {
+  id: string;
+  title: string;
+  severity: "critica" | "media" | "baja";
+  status: "abierta" | "resuelta";
+};
+
 export type Unit = {
   id: string;
   code: string;
@@ -8,6 +22,11 @@ export type Unit = {
   status: UnitStatus;
   phase: string;
   deviationDays: number;
+  responsible?: string;
+  lastUpdated?: string;
+  source?: string;
+  disciplines?: UnitDiscipline[];
+  issues?: UnitIssue[];
 };
 
 export type Building = {
@@ -139,6 +158,16 @@ function makeUnits(building: string, structureProgress: number): Unit[] {
           : "pendiente",
     phase: "Superestructura",
     deviationDays: 0,
+    responsible: "Pendiente de asignar",
+    lastUpdated: "30/06/2026",
+    source: "Informe de obra · junio 2026",
+    disciplines: [
+      { id: "superestructura", name: "Superestructura", progress: structureProgress, status: "integrado" },
+      { id: "albanileria", name: "Albañilería", progress: null, status: "pendiente" },
+      { id: "instalaciones", name: "Instalaciones", progress: null, status: "pendiente" },
+      { id: "acabados", name: "Acabados", progress: null, status: "pendiente" },
+    ],
+    issues: [],
   }));
 }
 

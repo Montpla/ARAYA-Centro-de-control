@@ -82,6 +82,10 @@ function publicFileRow(row: typeof uploadedFiles.$inferSelect) {
     declaredCutoff: row.declaredCutoff,
     classificationConfidence: row.classificationConfidence,
     classificationReason: row.classificationReason,
+    processingStage: row.processingStage,
+    processingProgress: row.processingProgress,
+    processingSummary: row.processingSummary,
+    requiresReview: row.requiresReview,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     downloadUrl: `/api/files?download=${encodeURIComponent(row.id)}`,
@@ -237,6 +241,12 @@ export async function POST(request: Request) {
         declaredCutoff,
         classificationConfidence: classification.confidence,
         classificationReason: classification.reason,
+        processingStage: "clasificado",
+        processingProgress: classification.confidence > 0 ? 25 : 10,
+        processingSummary: classification.confidence > 0
+          ? "Recepción y clasificación completadas. Pendiente de extracción, contraste y publicación."
+          : "Original recibido. Requiere asignación de área antes de normalizar sus datos.",
+        requiresReview: true,
       })
       .returning();
     await db.insert(fileActivity).values({

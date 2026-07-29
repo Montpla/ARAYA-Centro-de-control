@@ -238,6 +238,7 @@ test("financial files, live values and agent answers enforce per-user authorizat
   assert.match(liveModel, /isFinancialLiveKey/);
   assert.match(agent, /Acceso financiero no autorizado/);
   assert.match(agent, /auth\.user\.financeAccess/);
+  assert.match(agent, /rows\.filter\(\(row\) => row\.area !== "finanzas"\)/);
   assert.match(dashboardRoute, /No tienes acceso para modificar indicadores financieros/);
 });
 
@@ -317,4 +318,36 @@ test("S-curve matches the supplied executive reference without changing its data
   assert.match(styles, /\.legend\.actual\s*\{[^}]*background: #ddb45b/s);
   assert.match(data, /\{ month: "jun", planned: 23\.29, actual: 18\.23 \}/);
   assert.match(data, /\{ month: "ago", planned: 100, actual: null \}/);
+});
+
+test("operational intelligence adds complete apartment cards, role focus, processing and history", async () => {
+  const [dashboard, data, schema, historyRoute, liveRoute, filesRoute, adminRoute, migration] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/demo-data.ts", "utf8"),
+    readFile("db/schema.ts", "utf8"),
+    readFile("app/api/history/route.ts", "utf8"),
+    readFile("app/api/live-data/route.ts", "utf8"),
+    readFile("app/api/files/route.ts", "utf8"),
+    readFile("app/api/admin/users/route.ts", "utf8"),
+    readFile("drizzle/0005_dapper_silver_surfer.sql", "utf8"),
+  ]);
+  assert.match(data, /UnitDiscipline/);
+  assert.match(data, /responsible\?: string/);
+  assert.match(data, /Albañilería/);
+  assert.match(dashboard, /AVANCE POR DISCIPLINA/);
+  assert.match(dashboard, /Incidencias abiertas/);
+  assert.match(dashboard, /profileFocus/);
+  assert.match(dashboard, /ALERTAS AUTOMÁTICAS/);
+  assert.match(dashboard, /DataHistoryPanel/);
+  assert.match(dashboard, /processingStageLabels/);
+  assert.match(schema, /liveDataHistory/);
+  assert.match(schema, /processingProgress/);
+  assert.match(historyRoute, /requireApiUser/);
+  assert.match(historyRoute, /isFinancialLiveKey/);
+  assert.match(liveRoute, /datos_publicados/);
+  assert.match(filesRoute, /processingStage: "clasificado"/);
+  assert.match(adminRoute, /isUserArea/);
+  assert.match(migration, /CREATE TABLE `live_data_history`/);
+  assert.match(migration, /ALTER TABLE `app_users` ADD `area`/);
+  assert.match(migration, /processing_progress/);
 });

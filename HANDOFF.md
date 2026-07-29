@@ -62,6 +62,9 @@ contraseñas propias:
   `BOOTSTRAP_ADMIN_EMAIL`.
 - Un administrador puede crear, activar o desactivar usuarios y promoverlos a
   administrador desde `Usuarios y accesos`.
+- Cada usuario tiene un área principal. El resumen ejecutivo adapta su bloque
+  de prioridad y ordena las alertas para Dirección, Planificación, Obra,
+  Urbanismo, Comercial, Finanzas, Compras, Seguridad, Legal o Diseño.
 - El permiso `financeAccess` se concede o revoca individualmente. Los
   administradores lo reciben siempre.
 - Sin ese permiso, Finanzas muestra una pantalla de acceso restringido y las
@@ -102,6 +105,10 @@ ARAYA mediante `+ Cargar archivo` y también dentro del chat del agente:
   origen, fecha de corte, tamaño, SHA-256, versión, estado y motivo de
   clasificación.
 - Los duplicados exactos se detectan por SHA-256 y no se vuelven a almacenar.
+- Cada archivo muestra una cola de cuatro fases: recepción, clasificación,
+  normalización y sincronización. La clasificación se completa al cargar; la
+  sincronización llega al 100% únicamente cuando una revisión viva vinculada
+  publica datos, evitando afirmar que un original ya fue interpretado.
 - El registro del Centro de datos y todas las vistas se refrescan cada 5
   segundos.
 - El original de toda carga aparece inmediatamente con estado técnico
@@ -140,6 +147,8 @@ necesidad de recompilar o volver a desplegar.
   fecha de corte, moneda de origen, responsable y fecha de actualización.
 - `live_data_events`: cabecera de auditoría de cada revisión.
 - `live_data_points`: último valor vivo por clave con su procedencia.
+- `live_data_history`: conserva cada valor publicado, revisión, fuente, corte,
+  moneda, responsable y fecha; no se limita al último valor.
 - `lib/live-data.ts`: contrato, claves admitidas y aplicación de valores vivos
   sobre los modelos existentes.
 - `app/dashboard-client.tsx`: consulta `/api/live-data` y `/api/dashboard` cada
@@ -155,6 +164,8 @@ necesidad de recompilar o volver a desplegar.
 - Los nuevos edificios o puntos urbanos pueden incluir `mapCoordinates` para
   `visual` y `technical`. Sin coordenadas continúan apareciendo en sus listados
   y métricas, pero no se inventa una posición en el plano.
+- Las alertas del resumen se recalculan con los modelos vivos y se priorizan
+  por el área del usuario sin ocultar los controles transversales.
 
 Importante: almacenar un PDF, PowerPoint, DWG o Excel no interpreta por sí solo
 su contenido. El original aparece inmediatamente; las cifras se actualizan
@@ -180,6 +191,9 @@ La implantación general incluye:
 - 156 apartamentos interactivos, seis por edificio.
 - Colores de estado para terminada, en curso, pendiente y bloqueada.
 - Fichas individuales de apartamento.
+- Cada ficha admite superestructura, albañilería, instalaciones, acabados,
+  responsable, incidencias, fuente y última actualización. Los campos sin
+  evidencia se muestran como pendientes y nunca se rellenan por inferencia.
 - Fichas conjuntas de edificio.
 - Seis puntos interactivos de urbanismo.
 
@@ -305,12 +319,17 @@ Todos los puntos deben continuar abriendo sus fichas correctas.
   permisos financieros.
 - `lib/access-control.ts`: autorización común para páginas y API.
 - `app/api/live-data/route.ts`: lectura y publicación autorizada de revisiones
-  vivas, con filtrado financiero.
+  vivas, historial inmutable, cierre del procesamiento documental y filtrado
+  financiero.
+- `app/api/history/route.ts`: historial autorizado de cambios y actividad
+  documental.
 - `tests/rendered-html.test.mjs`: pruebas de navegación, fuentes, datos y
   componentes.
 - `drizzle/`: esquema y migraciones de D1.
 - `drizzle/0004_organic_krista_starr.sql`: usuarios autorizados y auditoría de
   accesos.
+- `drizzle/0005_dapper_silver_surfer.sql`: área del usuario, recorrido de
+  procesamiento del archivo e historial persistente de datos vivos.
 - `.openai/hosting.json`: identificador de Sites y bindings lógicos.
 
 ## Validación
@@ -321,7 +340,7 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 17 pruebas superadas.
+- 18 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
 - `npm run lint` termina sin errores; mantiene siete avisos conocidos por el

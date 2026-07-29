@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { accessAudit, appUsers } from "../../../../db/schema";
 import { requireApiUser } from "../../../../lib/access-control";
+import { isUserArea } from "../../../../lib/file-routing";
 
 export const runtime = "edge";
 
@@ -15,6 +16,7 @@ function publicRow(row: typeof appUsers.$inferSelect) {
     email: row.email,
     displayName: row.displayName || row.email,
     role: row.role === "admin" ? "admin" : "member",
+    area: isUserArea(row.area) ? row.area : "direccion",
     financeAccess: row.role === "admin" || row.financeAccess,
     active: row.active,
     lastLoginAt: row.lastLoginAt,
@@ -39,6 +41,7 @@ export async function POST(request: Request) {
     email?: string;
     displayName?: string;
     role?: string;
+    area?: string;
     financeAccess?: boolean;
     active?: boolean;
   };
@@ -53,6 +56,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Introduce un correo electrónico válido." }, { status: 400 });
   }
   const role = payload.role === "admin" ? "admin" : "member";
+  const area = isUserArea(String(payload.area ?? "")) ? String(payload.area) : "direccion";
   const active = payload.active !== false;
   const financeAccess = role === "admin" || Boolean(payload.financeAccess);
   if (email === auth.user.email && (!active || role !== "admin")) {
@@ -67,6 +71,7 @@ export async function POST(request: Request) {
       email,
       displayName: String(payload.displayName ?? "").trim().slice(0, 120) || email,
       role,
+      area,
       financeAccess,
       active,
       createdByEmail: auth.user.email,
@@ -77,6 +82,7 @@ export async function POST(request: Request) {
       set: {
         displayName: String(payload.displayName ?? "").trim().slice(0, 120) || email,
         role,
+        area,
         financeAccess,
         active,
         updatedAt: now,
@@ -86,7 +92,7 @@ export async function POST(request: Request) {
   await db.insert(accessAudit).values({
     targetEmail: email,
     action: "usuario_actualizado",
-    detail: JSON.stringify({ role, financeAccess, active }),
+    detail: JSON.stringify({ role, area, financeAccess, active }),
     actorEmail: auth.user.email,
     actorName: auth.identity.displayName,
   });

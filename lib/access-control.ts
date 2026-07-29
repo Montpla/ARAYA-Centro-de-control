@@ -2,12 +2,14 @@ import { eq } from "drizzle-orm";
 import { ChatGPTUser, getChatGPTUser } from "../app/chatgpt-auth";
 import { getDb } from "../db";
 import { appUsers } from "../db/schema";
+import { UserArea, isUserArea } from "./file-routing";
 
 export type AuthorizedUser = {
   id: number;
   email: string;
   displayName: string;
   role: "admin" | "member";
+  area: UserArea;
   financeAccess: boolean;
   active: boolean;
 };
@@ -22,6 +24,7 @@ function publicUser(row: typeof appUsers.$inferSelect): AuthorizedUser {
     email: row.email,
     displayName: row.displayName || row.email,
     role: row.role === "admin" ? "admin" : "member",
+    area: isUserArea(row.area) ? row.area : "direccion",
     financeAccess: row.role === "admin" || row.financeAccess,
     active: row.active,
   };
@@ -40,6 +43,7 @@ export async function resolveAuthorizedUser(identity: ChatGPTUser) {
         email,
         displayName: identity.displayName,
         role: "admin",
+        area: "direccion",
         financeAccess: true,
         active: true,
         createdByEmail: "bootstrap",

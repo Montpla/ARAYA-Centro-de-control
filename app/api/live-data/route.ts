@@ -1,6 +1,12 @@
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { liveDataEvents, liveDataPoints } from "../../../db/schema";
+import {
+  fileActivity,
+  liveDataEvents,
+  liveDataHistory,
+  liveDataPoints,
+  uploadedFiles,
+} from "../../../db/schema";
 import { requireApiUser } from "../../../lib/access-control";
 import {
   LiveDataMap,
@@ -181,6 +187,20 @@ export async function POST(request: Request) {
       .returning();
     const updatedAt = new Date().toISOString();
     for (const update of normalized) {
+      await db.insert(liveDataHistory).values({
+        eventId: event.id,
+        key: update.key,
+        valueJson: update.valueJson,
+        valueType: update.valueType,
+        area: update.area,
+        sourceFileId: update.sourceFileId,
+        sourceName: update.sourceName,
+        sourceCurrency: update.sourceCurrency,
+        cutoff: update.cutoff,
+        actorEmail: auth.user.email,
+        actorName: auth.user.displayName,
+        createdAt: updatedAt,
+      });
       await db
         .insert(liveDataPoints)
         .values({
@@ -206,6 +226,30 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
+    }
+    const linkedFileIds = [...new Set(normalized.map((update) => update.sourceFileId).filter(Boolean))];
+    for (const fileId of linkedFileIds) {
+      const [linkedFile] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, fileId)).limit(1);
+      if (!linkedFile) continue;
+      await db
+        .update(uploadedFiles)
+        .set({
+          status: "integrado",
+          processingStage: "sincronizado",
+          processingProgress: 100,
+          processingSummary: `${normalized.length} datos normalizados y publicados en la revisión ${event.id}.`,
+          requiresReview: false,
+          updatedAt,
+        })
+        .where(eq(uploadedFiles.id, fileId));
+      await db.insert(fileActivity).values({
+        fileId,
+        eventType: "datos_publicados",
+        message: `${normalized.length} datos publicados en la revisión ${event.id}; las pantallas han quedado sincronizadas.`,
+        actorEmail: auth.user.email,
+        actorName: auth.user.displayName,
+        createdAt: updatedAt,
+      });
     }
     return Response.json({
       event: publicEvent(event),

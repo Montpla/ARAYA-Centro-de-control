@@ -18,6 +18,16 @@ export type ClassifiedArea = Exclude<UploadArea, "auto">;
 
 export const areaLabels = Object.fromEntries(uploadAreas.map((area) => [area.id, area.label])) as Record<UploadArea, string>;
 
+export const userAreas = uploadAreas.filter(
+  (area) => area.id !== "auto" && area.id !== "sin_clasificar",
+) as Array<{ id: Exclude<ClassifiedArea, "sin_clasificar">; label: string }>;
+
+export type UserArea = (typeof userAreas)[number]["id"];
+
+export function isUserArea(value: string): value is UserArea {
+  return userAreas.some((area) => area.id === value);
+}
+
 export const uploadStatusLabels: Record<string, string> = {
   recibido: "Recibido",
   pendiente_revision: "En normalización",

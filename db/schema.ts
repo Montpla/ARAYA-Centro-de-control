@@ -58,6 +58,10 @@ export const uploadedFiles = sqliteTable(
     declaredCutoff: text("declared_cutoff").notNull().default(""),
     classificationConfidence: real("classification_confidence").notNull().default(0),
     classificationReason: text("classification_reason").notNull().default(""),
+    processingStage: text("processing_stage").notNull().default("recibido"),
+    processingProgress: integer("processing_progress").notNull().default(10),
+    processingSummary: text("processing_summary").notNull().default(""),
+    requiresReview: integer("requires_review", { mode: "boolean" }).notNull().default(true),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
@@ -125,6 +129,31 @@ export const liveDataPoints = sqliteTable(
   ],
 );
 
+export const liveDataHistory = sqliteTable(
+  "live_data_history",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    eventId: integer("event_id").notNull(),
+    key: text("key").notNull(),
+    valueJson: text("value_json").notNull(),
+    valueType: text("value_type").notNull(),
+    area: text("area").notNull().default("direccion"),
+    sourceFileId: text("source_file_id").notNull().default(""),
+    sourceName: text("source_name").notNull().default(""),
+    sourceCurrency: text("source_currency").notNull().default("DOP"),
+    cutoff: text("cutoff").notNull().default(""),
+    actorEmail: text("actor_email").notNull(),
+    actorName: text("actor_name").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("live_data_history_event_idx").on(table.eventId),
+    index("live_data_history_key_idx").on(table.key),
+    index("live_data_history_created_at_idx").on(table.createdAt),
+    index("live_data_history_source_file_id_idx").on(table.sourceFileId),
+  ],
+);
+
 export const appUsers = sqliteTable(
   "app_users",
   {
@@ -132,6 +161,7 @@ export const appUsers = sqliteTable(
     email: text("email").notNull(),
     displayName: text("display_name").notNull().default(""),
     role: text("role").notNull().default("member"),
+    area: text("area").notNull().default("direccion"),
     financeAccess: integer("finance_access", { mode: "boolean" }).notNull().default(false),
     active: integer("active", { mode: "boolean" }).notNull().default(true),
     createdByEmail: text("created_by_email").notNull().default(""),

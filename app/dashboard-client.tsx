@@ -56,7 +56,14 @@ import {
   formatMoney,
   formatMoneyMillions,
 } from "../lib/currency";
-import { UploadArea, areaLabels, uploadAreas, uploadStatusLabels } from "../lib/file-routing";
+import {
+  UploadArea,
+  UserArea,
+  areaLabels,
+  uploadAreas,
+  uploadStatusLabels,
+  userAreas,
+} from "../lib/file-routing";
 import { LiveDataMap, applyLiveValuesToTargets } from "../lib/live-data";
 
 type View =
@@ -80,6 +87,7 @@ type DashboardUser = {
   email: string;
   displayName: string;
   role: "admin" | "member";
+  area: UserArea;
   financeAccess: boolean;
   active: boolean;
 };
@@ -115,6 +123,10 @@ type UploadedFileRecord = {
   declaredCutoff: string;
   classificationConfidence: number;
   classificationReason: string;
+  processingStage: string;
+  processingProgress: number;
+  processingSummary: string;
+  requiresReview: boolean;
   createdAt: string;
   updatedAt: string;
   downloadUrl: string;
@@ -153,6 +165,38 @@ type LiveSyncState = {
     actorName: string;
     createdAt: string;
   } | null;
+};
+
+type HistoryChange = {
+  id: number;
+  revision: number;
+  key: string;
+  area: string;
+  sourceName: string;
+  cutoff: string;
+  actorName: string;
+  createdAt: string;
+  valuePreview: string;
+};
+
+type HistoryActivity = {
+  id: number;
+  fileId: string;
+  fileName: string;
+  eventType: string;
+  message: string;
+  actorName: string;
+  createdAt: string;
+};
+
+type OperationalAlert = {
+  id: string;
+  area: UserArea;
+  severity: "critical" | "medium" | "low";
+  label: string;
+  title: string;
+  detail: string;
+  view: View;
 };
 
 const liveDataTargets: Record<string, unknown> = {
@@ -250,6 +294,140 @@ function visualUnitStatus(unit: Unit): Unit["status"] {
   return "pendiente";
 }
 
+function unitDisciplines(unit: Unit) {
+  if (unit.disciplines?.length) return unit.disciplines;
+  return [
+    { id: "superestructura", name: "Superestructura", progress: unit.progress, status: "integrado" },
+    { id: "albanileria", name: "Albañilería", progress: null, status: "pendiente" },
+    { id: "instalaciones", name: "Instalaciones", progress: null, status: "pendiente" },
+    { id: "acabados", name: "Acabados", progress: null, status: "pendiente" },
+  ] as const;
+}
+
+const profileFocus: Record<UserArea, { title: string; detail: string; view: View }> = {
+  direccion: {
+    title: "Decisiones, desviaciones y calidad del dato",
+    detail: "Prioriza plazo, avance global, alertas críticas y conciliaciones abiertas.",
+    view: "resumen",
+  },
+  planificacion: {
+    title: "Curva S, camino crítico y previsión final",
+    detail: "Revisa la brecha física, los paquetes críticos y las fechas del cronograma.",
+    view: "planificacion",
+  },
+  obra: {
+    title: "Producción por edificio y apartamento",
+    detail: "Consulta disciplinas, responsables, incidencias y bloqueos desde las fichas operativas.",
+    view: "edificios",
+  },
+  urbanismo: {
+    title: "Obras exteriores y frentes urbanos",
+    detail: "Sigue viales, paisajismo, redes, equipamientos y retrasos de inicio.",
+    view: "urbanismo",
+  },
+  comercial: {
+    title: "Ventas, reservas y cobranza",
+    detail: "Controla actividad comercial, vinculaciones, contratos y cartera vencida.",
+    view: "comercial",
+  },
+  finanzas: {
+    title: "Presupuesto, caja y obligaciones",
+    detail: "Concentra costes, cuentas por pagar, anticipos, balance y proyección de caja.",
+    view: "metricas",
+  },
+  compras: {
+    title: "Proveedores, entregas y suministros",
+    detail: "Prioriza pedidos vencidos, próximas entregas y desempeño de proveedores.",
+    view: "proveedores",
+  },
+  seguridad: {
+    title: "Seguridad, hallazgos y acciones",
+    detail: "Consulta indicadores preventivos, incidencias y medidas pendientes.",
+    view: "control",
+  },
+  legal: {
+    title: "Permisos, licencias y trámites",
+    detail: "Revisa aprobaciones, expedientes en proceso y próximos vencimientos.",
+    view: "control",
+  },
+  diseno: {
+    title: "Planos, implantación y coordinación técnica",
+    detail: "Abre el masterplan, los edificios y las capas urbanísticas interactivas.",
+    view: "implantacion",
+  },
+};
+
+function operationalAlerts(
+  canAccessFinance: boolean,
+  userArea: UserArea,
+  currency: CurrencyCode,
+): OperationalAlert[] {
+  const mostDelayedBuilding = [...buildings].sort((a, b) => b.deviationDays - a.deviationDays)[0];
+  const alerts: OperationalAlert[] = [
+    {
+      id: "physical-gap",
+      area: "planificacion",
+      severity: "critical",
+      label: "PLAN",
+      title: `Brecha física de ${number.format(Math.abs(projectSnapshot.deviationPoints))} puntos`,
+      detail: `${number.format(projectSnapshot.overallProgress)}% real frente a ${number.format(projectSnapshot.plannedProgress)}% planificado`,
+      view: "planificacion",
+    },
+    {
+      id: "building-delay",
+      area: "obra",
+      severity: mostDelayedBuilding?.deviationDays > 7 ? "critical" : "medium",
+      label: "OBRA",
+      title: `${mostDelayedBuilding?.name ?? "Edificio"} concentra el mayor desvío`,
+      detail: `${mostDelayedBuilding?.deviationDays ?? 0} días · fin previsto ${mostDelayedBuilding?.forecastFinish ?? "pendiente"}`,
+      view: "edificios",
+    },
+    {
+      id: "urbanism-delay",
+      area: "urbanismo",
+      severity: "medium",
+      label: "URBANISMO",
+      title: `${delayedUrbanismStarts.length} inicios requieren seguimiento`,
+      detail: `Mayor retraso documentado: ${delayedUrbanismStarts[0]?.days ?? 0} días`,
+      view: "urbanismo",
+    },
+    {
+      id: "collections",
+      area: "comercial",
+      severity: "medium",
+      label: "COBRANZA",
+      title: `${juneReport.collections.overdue} clientes con importes vencidos`,
+      detail: "Corte comercial actualizado al 06/07/2026",
+      view: "comercial",
+    },
+    {
+      id: "data-quality",
+      area: "direccion",
+      severity: "low",
+      label: "DATOS",
+      title: `${juneDataQualityIssues.length} conciliaciones abiertas`,
+      detail: "Las fuentes contradictorias permanecen visibles y trazadas",
+      view: "fuentes",
+    },
+  ];
+  if (canAccessFinance) {
+    alerts.push({
+      id: "cash",
+      area: "finanzas",
+      severity: "critical",
+      label: "CAJA",
+      title: "Proyección de caja de diciembre negativa",
+      detail: `${formatMoneyMillions(juneReport.finance.projectedCashDecemberDop, "DOP", currency)} · condicionado a financiación`,
+      view: "metricas",
+    });
+  }
+  const severityOrder = { critical: 0, medium: 1, low: 2 };
+  return alerts.sort((a, b) => {
+    const areaPriority = Number(b.area === userArea) - Number(a.area === userArea);
+    return areaPriority || severityOrder[a.severity] - severityOrder[b.severity];
+  });
+}
+
 function synchronizeSpatialSummary() {
   projectSnapshot.buildingCount = buildings.length;
   projectSnapshot.unitCount = buildings.reduce((total, building) => total + building.units.length, 0);
@@ -302,6 +480,14 @@ const fileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${number.format(bytes / 1024)} KB`;
   return `${number.format(bytes / (1024 * 1024))} MB`;
+};
+
+const processingStageLabels: Record<string, string> = {
+  recibido: "Original recibido",
+  clasificado: "Clasificación completada",
+  normalizando: "Extracción y contraste",
+  sincronizado: "Datos sincronizados",
+  observado: "Revisión requerida",
 };
 
 function financialQualityIssues(currency: CurrencyCode) {
@@ -545,7 +731,7 @@ function Header({
         <div className="account-control">
           <div>
             <strong>{currentUser.displayName}</strong>
-            <span>{currentUser.role === "admin" ? "Administrador" : "Usuario autorizado"}</span>
+            <span>{currentUser.role === "admin" ? "Administrador" : "Usuario autorizado"} · {areaLabels[currentUser.area]}</span>
           </div>
           <a className="avatar" aria-label="Cerrar sesión" title="Cerrar sesión" href="/signout-with-chatgpt?return_to=/">
             {currentUser.displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "BR"}
@@ -892,11 +1078,18 @@ function SitePlan({
             <span>Índice del edificio<strong>{number.format(selectedUnit.building.progress)}%</strong></span>
             <span>Fin previsto edificio<strong>{selectedUnit.building.forecastFinish}</strong></span>
           </div>
-          <p>
-            El avance disponible a nivel apartamento corresponde únicamente a
-            superestructura. Los próximos documentos permitirán añadir
-            albañilería, instalaciones, acabados, incidencias y responsables.
-          </p>
+          <div className="unit-mini-disciplines">
+            {unitDisciplines(selectedUnit.unit).map((discipline) => (
+              <span key={discipline.id} className={discipline.progress === null ? "pending" : ""}>
+                {discipline.name}<strong>{discipline.progress === null ? "Pendiente" : `${number.format(discipline.progress)}%`}</strong>
+              </span>
+            ))}
+          </div>
+          <div className="unit-accountability-grid compact">
+            <span>Responsable<strong>{selectedUnit.unit.responsible || "Pendiente de asignar"}</strong></span>
+            <span>Incidencias abiertas<strong>{(selectedUnit.unit.issues ?? []).filter((issue) => issue.status === "abierta").length}</strong></span>
+          </div>
+          <p>La ficha se amplía automáticamente cuando el modelo vivo recibe nuevas disciplinas, responsables o incidencias.</p>
           <button
             className="button primary"
             onClick={() => {
@@ -935,14 +1128,29 @@ function Overview({
   onSelectBuilding,
   currency,
   canAccessFinance,
+  currentUser,
 }: {
   onNavigate: (view: View) => void;
   onSelectBuilding: (building: Building) => void;
   currency: CurrencyCode;
   canAccessFinance: boolean;
+  currentUser: DashboardUser;
 }) {
+  const focus = profileFocus[currentUser.area];
+  const focusView = focus.view === "metricas" && !canAccessFinance ? "fuentes" : focus.view;
+  const alerts = operationalAlerts(canAccessFinance, currentUser.area, currency);
   return (
     <div className="view-stack">
+      <section className="panel role-focus-card">
+        <div>
+          <span className="section-kicker">INICIO PERSONALIZADO · {areaLabels[currentUser.area]}</span>
+          <h3>{focus.title}</h3>
+          <p>{focus.detail}</p>
+        </div>
+        <button className="button secondary" onClick={() => onNavigate(focusView)}>
+          Abrir prioridad del área
+        </button>
+      </section>
       <section className="hero-grid">
         <article className="project-pulse panel">
           <div>
@@ -981,33 +1189,22 @@ function Overview({
         <article className="panel attention-card">
           <div className="panel-heading">
             <div>
-              <span className="section-kicker">ATENCIÓN DE DIRECCIÓN</span>
-              <h3>{canAccessFinance ? 4 : 3} controles prioritarios</h3>
+              <span className="section-kicker">ALERTAS AUTOMÁTICAS · PRIORIZADAS PARA TU PERFIL</span>
+              <h3>{alerts.length} controles operativos</h3>
             </div>
-            <span className="count-badge">{canAccessFinance ? 4 : 3}</span>
+            <span className="count-badge">{alerts.length}</span>
           </div>
-          <button className="attention-item" onClick={() => onNavigate("planificacion")}>
-            <span className="severity critical">PLAZO</span>
-            <strong>Infraestructura proyecta +58 días</strong>
-            <small>Fin 07/10/2026 · base 10/08/2026</small>
-          </button>
-          {canAccessFinance && (
-            <button className="attention-item" onClick={() => onNavigate("metricas")}>
-              <span className="severity critical">CAJA</span>
-              <strong>Proyección diciembre: {formatMoneyMillions(juneReport.finance.projectedCashDecemberDop, "DOP", currency)}</strong>
-              <small>Condicionada a desembolsos y nueva financiación</small>
+          {alerts.map((alert) => (
+            <button
+              className={`attention-item ${alert.area === currentUser.area ? "profile-priority" : ""}`}
+              key={alert.id}
+              onClick={() => onNavigate(alert.view)}
+            >
+              <span className={`severity ${alert.severity}`}>{alert.label}</span>
+              <strong>{alert.title}</strong>
+              <small>{alert.detail}</small>
             </button>
-          )}
-          <button className="attention-item" onClick={() => onNavigate("comercial")}>
-            <span className="severity medium">COBRANZA</span>
-            <strong>24 clientes con {formatMoney(juneReport.collections.overdueUsd, "USD", currency)} vencidos</strong>
-            <small>Actualizado al 06/07/2026 · menos de 1% de morosidad</small>
-          </button>
-          <button className="attention-item" onClick={() => onNavigate("fuentes")}>
-            <span className="severity low">CONCILIAR</span>
-            <strong>{juneDataQualityIssues.length} alertas de calidad visibles</strong>
-            <small>Presupuesto, plan físico, plazo, CxP, fórmulas, morosidad y versión comercial</small>
-          </button>
+          ))}
         </article>
       </section>
 
@@ -1070,6 +1267,8 @@ function UnitDetailPanel({
   unit: Unit;
   onClose: () => void;
 }) {
+  const disciplines = unitDisciplines(unit);
+  const openIssues = (unit.issues ?? []).filter((issue) => issue.status === "abierta");
   return (
     <aside className="data-detail-panel" role="dialog" aria-modal="true" aria-label={`Detalle de ${unit.code}`}>
       <button className="close-button" onClick={onClose} aria-label="Cerrar detalle">×</button>
@@ -1083,11 +1282,40 @@ function UnitDetailPanel({
         <span>Fase disponible<strong>{unit.phase}</strong></span>
         <span>Desvío<strong>{unit.deviationDays > 0 ? `+${unit.deviationDays}` : unit.deviationDays} días</strong></span>
       </div>
-      <div className="data-coverage">
-        <div><span>DATOS DISPONIBLES</span><strong>Superestructura · edificio · planta · estado</strong></div>
-        <div className="pending"><span>PENDIENTES DE INCORPORAR</span><strong>Albañilería · instalaciones · acabados · incidencias · responsable</strong></div>
+      <section className="unit-operational-section">
+        <div className="unit-section-heading">
+          <span>AVANCE POR DISCIPLINA</span>
+          <small>Los campos sin fuente permanecen pendientes</small>
+        </div>
+        <div className="unit-discipline-list">
+          {disciplines.map((discipline) => (
+            <div key={discipline.id} className={discipline.progress === null ? "pending" : ""}>
+              <span>{discipline.name}</span>
+              <i><b style={{ width: `${discipline.progress ?? 0}%` }} /></i>
+              <strong>{discipline.progress === null ? "Pendiente" : `${number.format(discipline.progress)}%`}</strong>
+            </div>
+          ))}
+        </div>
+      </section>
+      <div className="unit-accountability-grid">
+        <span>Responsable<strong>{unit.responsible || "Pendiente de asignar"}</strong></span>
+        <span>Última actualización<strong>{unit.lastUpdated || projectSnapshot.declaredCutoff}</strong></span>
+        <span>Fuente<strong>{unit.source || "Modelo vivo ARAYA"}</strong></span>
+        <span>Incidencias abiertas<strong>{openIssues.length}</strong></span>
       </div>
-      <p>Esta ficha queda preparada para crecer con los próximos archivos y datos que se incorporen al centro de control.</p>
+      <section className="unit-issues">
+        <div className="unit-section-heading"><span>INCIDENCIAS</span><small>{openIssues.length} abiertas</small></div>
+        {openIssues.length === 0 ? (
+          <p>Sin incidencias registradas para este apartamento.</p>
+        ) : (
+          openIssues.map((issue) => (
+            <div className={`unit-issue ${issue.severity}`} key={issue.id}>
+              <strong>{issue.title}</strong><span>{issue.severity}</span>
+            </div>
+          ))
+        )}
+      </section>
+      <p className="unit-live-note">Responsables, disciplinas e incidencias se actualizan desde el mismo modelo vivo que gobierna el porcentaje y el color del plano.</p>
     </aside>
   );
 }
@@ -1143,6 +1371,12 @@ function BuildingsView({
           El porcentaje del edificio es el promedio simple de 32 frentes del MPP.
           Pulsa un apartamento para abrir su ficha y consultar los datos ya disponibles.
         </p>
+        <div className="building-apartment-summary">
+          <span><strong>{selected.units.length}</strong>Apartamentos</span>
+          <span><strong>{selected.units.filter((unit) => visualUnitStatus(unit) === "en_curso").length}</strong>En curso</span>
+          <span><strong>{selected.units.filter((unit) => visualUnitStatus(unit) === "terminada").length}</strong>Terminados</span>
+          <span><strong>{selected.units.reduce((total, unit) => total + (unit.issues ?? []).filter((issue) => issue.status === "abierta").length, 0)}</strong>Incidencias</span>
+        </div>
         <div className="filter-row">
           {["todos", "en_curso", "pendiente", "terminada"].map((filter) => (
             <button
@@ -1948,6 +2182,7 @@ function UsersAdminView({ currentUser }: { currentUser: DashboardUser }) {
     email: "",
     displayName: "",
     role: "member" as "admin" | "member",
+    area: "direccion" as UserArea,
     financeAccess: false,
   });
 
@@ -1984,6 +2219,7 @@ function UsersAdminView({ currentUser }: { currentUser: DashboardUser }) {
     email: string;
     displayName: string;
     role: "admin" | "member";
+    area: UserArea;
     financeAccess: boolean;
     active: boolean;
   }) {
@@ -2012,7 +2248,7 @@ function UsersAdminView({ currentUser }: { currentUser: DashboardUser }) {
     event.preventDefault();
     const saved = await saveUser({ ...form, active: true });
     if (saved) {
-      setForm({ email: "", displayName: "", role: "member", financeAccess: false });
+      setForm({ email: "", displayName: "", role: "member", area: "direccion", financeAccess: false });
     }
   }
 
@@ -2040,6 +2276,11 @@ function UsersAdminView({ currentUser }: { currentUser: DashboardUser }) {
             <select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as "admin" | "member", financeAccess: event.target.value === "admin" ? true : current.financeAccess }))}>
               <option value="member">Usuario</option>
               <option value="admin">Administrador</option>
+            </select>
+          </label>
+          <label>Área principal
+            <select value={form.area} onChange={(event) => setForm((current) => ({ ...current, area: event.target.value as UserArea }))}>
+              {userAreas.map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
             </select>
           </label>
           <label className="permission-check">
@@ -2087,6 +2328,15 @@ function UsersAdminView({ currentUser }: { currentUser: DashboardUser }) {
                     >
                       <option value="member">Usuario</option>
                       <option value="admin">Administrador</option>
+                    </select>
+                  </label>
+                  <label>Área
+                    <select
+                      value={user.area}
+                      disabled={saving === user.email}
+                      onChange={(event) => void saveUser({ ...user, area: event.target.value as UserArea })}
+                    >
+                      {userAreas.map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
                     </select>
                   </label>
                   <button
@@ -2147,6 +2397,12 @@ function CollaborativeFileRegistry() {
     };
   }, []);
 
+  const pendingReview = files.filter((file) => file.requiresReview).length;
+  const synchronized = files.filter((file) => file.processingProgress >= 100).length;
+  const averageProgress = files.length
+    ? Math.round(files.reduce((total, file) => total + file.processingProgress, 0) / files.length)
+    : 0;
+
   return (
     <section className="panel live-file-registry" aria-live="polite">
       <div className="panel-heading">
@@ -2156,6 +2412,13 @@ function CollaborativeFileRegistry() {
         </div>
         <span className="count-badge">{files.length}</span>
       </div>
+      {files.length > 0 && (
+        <div className="processing-overview">
+          <span><strong>{pendingReview}</strong>Pendientes de revisión</span>
+          <span><strong>{synchronized}</strong>Sincronizados</span>
+          <span><strong>{averageProgress}%</strong>Progreso medio</span>
+        </div>
+      )}
       {loading ? (
         <div className="empty-state compact"><strong>Actualizando registro…</strong></div>
       ) : error ? (
@@ -2175,6 +2438,14 @@ function CollaborativeFileRegistry() {
                 <span>{file.areaLabel} · {fileSize(file.sizeBytes)} · v{file.version}</span>
                 <small>Moneda origen: {file.sourceCurrency} · visualización predeterminada: USD</small>
                 <small>{file.classificationReason}</small>
+                <div className="file-processing-track">
+                  <span>
+                    {processingStageLabels[file.processingStage] ?? file.processingStage}
+                    <strong>{file.processingProgress}%</strong>
+                  </span>
+                  <i><b style={{ width: `${file.processingProgress}%` }} /></i>
+                  <small>{file.processingSummary}</small>
+                </div>
               </div>
               <div className="uploaded-file-owner">
                 <strong>{file.uploaderName}</strong>
@@ -2182,6 +2453,106 @@ function CollaborativeFileRegistry() {
               </div>
               <span className={`upload-status ${file.status}`}>{uploadStatusLabels[file.status] ?? file.status}</span>
               <a className="button secondary" href={file.downloadUrl}>Descargar</a>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+async function fetchDataHistory() {
+  const response = await fetch("/api/history", { cache: "no-store" });
+  const payload = await response.json() as {
+    changes?: HistoryChange[];
+    activity?: HistoryActivity[];
+    error?: string;
+  };
+  if (!response.ok) throw new Error(payload.error ?? "No se pudo consultar el historial.");
+  return {
+    changes: payload.changes ?? [],
+    activity: payload.activity ?? [],
+  };
+}
+
+function DataHistoryPanel() {
+  const [tab, setTab] = useState<"changes" | "activity">("changes");
+  const [changes, setChanges] = useState<HistoryChange[]>([]);
+  const [activity, setActivity] = useState<HistoryActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void fetchDataHistory()
+        .then((payload) => {
+          if (!active) return;
+          setChanges(payload.changes);
+          setActivity(payload.activity);
+          setError("");
+        })
+        .catch((refreshError: unknown) => {
+          if (active) setError(refreshError instanceof Error ? refreshError.message : "No se pudo consultar el historial.");
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 5_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const rows = tab === "changes" ? changes : activity;
+  return (
+    <section className="panel data-history-panel">
+      <div className="panel-heading">
+        <div>
+          <span className="section-kicker">TRAZABILIDAD PERSISTENTE</span>
+          <h3>Historial de cambios y documentos</h3>
+        </div>
+        <span className="live-state"><span className="live-dot" /> Auditoría viva</span>
+      </div>
+      <div className="history-tabs" role="tablist" aria-label="Tipo de historial">
+        <button className={tab === "changes" ? "active" : ""} onClick={() => setTab("changes")}>Datos actualizados · {changes.length}</button>
+        <button className={tab === "activity" ? "active" : ""} onClick={() => setTab("activity")}>Actividad documental · {activity.length}</button>
+      </div>
+      {loading ? (
+        <div className="empty-state compact"><strong>Cargando historial…</strong></div>
+      ) : error ? (
+        <div className="callout warn"><strong>Historial no disponible</strong><p>{error}</p></div>
+      ) : rows.length === 0 ? (
+        <div className="empty-state compact">
+          <strong>Aún no hay revisiones vivas registradas.</strong>
+          <p>Las próximas normalizaciones conservarán valor, fuente, responsable, fecha y revisión.</p>
+        </div>
+      ) : tab === "changes" ? (
+        <div className="history-list">
+          {changes.slice(0, 12).map((change) => (
+            <article key={change.id}>
+              <span className="history-revision">v{change.revision}</span>
+              <div>
+                <strong>{change.key}</strong>
+                <span>{change.sourceName || "Actualización manual"} · {change.valuePreview}</span>
+              </div>
+              <small>{change.actorName}<br />{new Date(change.createdAt).toLocaleString("es-DO")}</small>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="history-list">
+          {activity.slice(0, 12).map((event) => (
+            <article key={event.id}>
+              <span className="history-revision file">DOC</span>
+              <div>
+                <strong>{event.fileName}</strong>
+                <span>{event.message}</span>
+              </div>
+              <small>{event.actorName}<br />{new Date(event.createdAt).toLocaleString("es-DO")}</small>
             </article>
           ))}
         </div>
@@ -2227,6 +2598,7 @@ function SourcesView({ onUpload, canAccessFinance }: { onUpload: () => void; can
         <p className="governance-note">La identidad procede del acceso al dashboard. Cada dato normalizado se publica con fuente, corte, moneda de origen y versión; las contradicciones quedan observadas para evitar sustituciones silenciosas.</p>
       </section>
       <CollaborativeFileRegistry />
+      <DataHistoryPanel />
       <section className="source-grid">
         {visibleSources.map((source) => (
           <article className="panel source-card" key={source.id}>
@@ -3345,7 +3717,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   function content() {
     if (view === "usuarios" && currentUser.role === "admin") return <UsersAdminView currentUser={currentUser} />;
     if (activeProjectId === "mirador") return <DemoProjectContent view={view} onNavigate={setView} />;
-    if (view === "resumen") return <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} currency={currency} canAccessFinance={currentUser.financeAccess} />;
+    if (view === "resumen") return <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} currency={currency} canAccessFinance={currentUser.financeAccess} currentUser={currentUser} />;
     if (view === "planificacion") return <Planning />;
     if (view === "implantacion") return <div className="view-stack"><SitePlan onNavigate={setView} onSelectBuilding={setSelectedBuilding} /></div>;
     if (view === "edificios") return <BuildingsView selected={selectedBuilding} setSelected={setSelectedBuilding} />;

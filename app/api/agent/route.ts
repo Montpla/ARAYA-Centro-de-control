@@ -309,8 +309,9 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
   }
   if (name === "get_uploaded_files") {
     const rows = await getDb().select().from(uploadedFiles).orderBy(desc(uploadedFiles.createdAt)).limit(20);
+    const visibleRows = canAccessFinance ? rows : rows.filter((row) => row.area !== "finanzas");
     return {
-      files: rows.map((row) => ({
+      files: visibleRows.map((row) => ({
         file: row.originalName,
         area: areaLabels[row.area as keyof typeof areaLabels] ?? row.area,
         uploader: row.uploaderName,
@@ -320,6 +321,10 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
         cutoff: row.declaredCutoff || "No declarado",
         createdAt: row.createdAt,
         classificationReason: row.classificationReason,
+        processingStage: row.processingStage,
+        processingProgress: row.processingProgress,
+        processingSummary: row.processingSummary,
+        requiresReview: row.requiresReview,
       })),
       rule: "El archivo original aparece inmediatamente. Sus datos normalizados publican una nueva versión que actualiza todas las pantallas en menos de cinco segundos; las contradicciones quedan observadas.",
     };
