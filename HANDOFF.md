@@ -23,8 +23,8 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 13.
-- Commit desplegado: `87d1db28130229f883594a0ada059986aff910cb`.
+- Última versión publicada: 14.
+- Commit desplegado: `1a32a2d57248c0e78b5f98db0c574eb01e04838e`.
 - Acceso: privado, únicamente para el propietario configurado en Sites.
 - Rama y remoto de publicación: rama `main`, remoto `sites`.
 
@@ -113,6 +113,8 @@ Activos principales:
 
 - `public/bricket-mark.png`: símbolo oficial de Bricket usado en la cabecera
   lateral del Centro de Control.
+- `public/araya-mark.png`: logotipo facilitado por el usuario que sustituye a
+  las letras `AR` en el selector del proyecto ARAYA.
 - `public/araya-site-plan-clean.png`: plano técnico exacto.
 - `public/araya-visual-masterplan-v3.png`: masterplan visual actualmente usado.
 - `public/araya-architectural-masterplan-v2.png`: versión visual anterior;
