@@ -23,13 +23,16 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 22.
-- Commit desplegado: `a0ae62953f1af61417f82219703e96ed884c2f17`.
+- Última versión publicada: 23.
+- Commit desplegado: `efafafb0f1dc69e10e8047da62a009b03dce652b`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_3f37535541c081919a09085b5c3417ce`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_4befac36b5388191a8999db7c26e5451`.
 - Despliegue:
-  `appgdep_6a6a50637bfc8191a27cec9bc4ca7497` (`succeeded`).
-- Acceso: privado, únicamente para el propietario configurado en Sites.
+  `appgdep_6a6a5806100c8191baed266aab14e3f7` (`succeeded`).
+- Acceso de infraestructura: privado, únicamente para el propietario configurado
+  en Sites. La solicitud de cambiarlo a `public` devolvió
+  `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
+  Sites hacia Internet.
 - Rama y remoto de publicación: rama `main`, remoto `sites`.
 
 ## Estado funcional
@@ -160,11 +163,14 @@ el contrato normalizado. No afirmar que un documento arbitrario se integra sin
 esta fase. Los datos ya estructurados pueden publicarse directamente y se
 propagan en menos de cinco segundos.
 
-El sitio usa acceso público de infraestructura para que cualquier persona
-autorizada pueda alcanzar el inicio de sesión. El contenido no es público: la
-aplicación exige identidad ChatGPT y pertenencia activa a `app_users` antes de
-renderizar el dashboard. No volver al allowlist de Sites como sistema principal
-de usuarios, porque la administración funcional reside en la propia aplicación.
+La aplicación ya exige identidad ChatGPT y pertenencia activa a `app_users`
+antes de renderizar el dashboard. Sin embargo, Sites conserva de momento una
+segunda barrera externa limitada al propietario porque la publicación a Internet
+está deshabilitada para el workspace. Para que los usuarios creados por el
+administrador puedan alcanzar el inicio de sesión, un administrador del espacio
+de trabajo deberá habilitar esa política; después, cambiar Sites a `public`.
+Aunque Sites sea público, el contenido seguirá cerrado por la autenticación y el
+allowlist de D1 de la propia aplicación.
 
 La implantación general incluye:
 
@@ -340,8 +346,10 @@ Cuando haya cambios de producto:
 5. Empujar `HEAD` a `sites/main` sin guardar el token.
 6. Empaquetar `dist/`, `.openai/hosting.json` y `drizzle/`.
 7. Guardar una nueva versión de Sites con el SHA exacto.
-8. Desplegar la versión guardada. El modo de acceso de Sites es `public`, pero
-   la aplicación continúa cerrada por inicio de sesión y allowlist en D1.
+8. Desplegar la versión guardada. El modo de acceso de Sites continúa `custom`
+   y limitado al propietario hasta que el workspace permita publicación a
+   Internet. Cuando se habilite, cambiarlo a `public`; la aplicación seguirá
+   cerrada por inicio de sesión y allowlist en D1.
 9. Esperar a `status: succeeded`.
 10. Abrir el mismo enlace de producción con un parámetro de actualización si
     el navegador conserva una versión anterior en caché.
