@@ -112,6 +112,16 @@ type UploadResult = {
 
 type ProjectId = "araya" | "mirador";
 
+type ReportFrequency = "weekly" | "monthly";
+
+type DirectionReportPeriod = {
+  frequency: ReportFrequency;
+  startDate: string;
+  endDate: string;
+  label: string;
+  generatedAt: string;
+};
+
 const projects: Record<ProjectId, {
   id: ProjectId;
   code: string;
@@ -162,6 +172,41 @@ const statusLabel = {
 };
 
 const number = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 });
+const REPORT_SOURCE_CUTOFF = "2026-06-30";
+
+function formatReportDate(value: string) {
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(`${value}T12:00:00`));
+}
+
+function monthReportPeriod(value: string): DirectionReportPeriod {
+  const [year, month] = value.split("-").map(Number);
+  const lastDay = new Date(year, month, 0).getDate();
+  const monthName = new Intl.DateTimeFormat("es-ES", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(year, month - 1, 1, 12));
+  return {
+    frequency: "monthly",
+    startDate: `${value}-01`,
+    endDate: `${value}-${String(lastDay).padStart(2, "0")}`,
+    label: monthName.charAt(0).toUpperCase() + monthName.slice(1),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+function weeklyReportPeriod(startDate: string, endDate: string): DirectionReportPeriod {
+  return {
+    frequency: "weekly",
+    startDate,
+    endDate,
+    label: `${formatReportDate(startDate)} — ${formatReportDate(endDate)}`,
+    generatedAt: new Date().toISOString(),
+  };
+}
 
 const fileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
@@ -332,6 +377,7 @@ function Header({
   view,
   onAsk,
   onUpload,
+  onReport,
   project,
   currency,
   onCurrencyChange,
@@ -339,6 +385,7 @@ function Header({
   view: View;
   onAsk: () => void;
   onUpload: () => void;
+  onReport: () => void;
   project: (typeof projects)[ProjectId];
   currency: CurrencyCode;
   onCurrencyChange: (currency: CurrencyCode) => void;
@@ -378,6 +425,9 @@ function Header({
         </div>
         <button className="button secondary" onClick={onAsk} disabled={project.demo}>
           Preguntar al agente
+        </button>
+        <button className="button report-button" onClick={onReport} disabled={project.demo}>
+          Crear informe
         </button>
         <button className="button primary" onClick={onUpload} disabled={project.demo}>
           + Cargar archivo
@@ -435,7 +485,7 @@ function ProgressChart() {
           className="line-chart"
           viewBox={`0 0 ${width} ${height}`}
           role="img"
-          aria-label="Evolución mensual del plan operativo y del avance ejecutado"
+          aria-label="Evolución mensual de la proyección del plan operativo en verde y de la ejecución real en rojo"
         >
           {[0, 25, 50, 75, 100].map((value) => (
             <g key={value}>
@@ -461,7 +511,7 @@ function ProgressChart() {
                 cy={yFor(point.planned)}
                 r="3.5"
               >
-                <title>{`${point.month} · Plan ${number.format(point.planned)}%`}</title>
+                <title>{`${point.month} · Proyección ${number.format(point.planned)}%`}</title>
               </circle>
               {point.actual !== null && (
                 <circle
@@ -481,8 +531,8 @@ function ProgressChart() {
         </svg>
       </div>
       <div className="chart-legend">
-        <span><i className="legend plan" />Plan operativo</span>
-        <span><i className="legend actual" />Ejecutado real</span>
+        <span><i className="legend plan" />Proyección · plan operativo</span>
+        <span><i className="legend actual" />Ejecución real</span>
       </div>
     </>
   );
@@ -2019,6 +2069,284 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
   );
 }
 
+function ReportBuilder({
+  onClose,
+  onGenerate,
+}: {
+  onClose: () => void;
+  onGenerate: (period: DirectionReportPeriod) => void;
+}) {
+  const [frequency, setFrequency] = useState<ReportFrequency>("monthly");
+  const [month, setMonth] = useState("2026-06");
+  const [startDate, setStartDate] = useState("2026-06-24");
+  const [endDate, setEndDate] = useState("2026-06-30");
+  const [error, setError] = useState("");
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    if (frequency === "monthly") {
+      if (!month) {
+        setError("Selecciona el mes que debe figurar en el informe.");
+        return;
+      }
+      onGenerate(monthReportPeriod(month));
+      return;
+    }
+    if (!startDate || !endDate) {
+      setError("Selecciona la fecha inicial y final de la semana.");
+      return;
+    }
+    if (startDate > endDate) {
+      setError("La fecha final no puede ser anterior a la fecha inicial.");
+      return;
+    }
+    onGenerate(weeklyReportPeriod(startDate, endDate));
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <form className="modal report-builder-modal" role="dialog" aria-modal="true" aria-labelledby="report-builder-title" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+        <div className="panel-heading">
+          <div>
+            <span className="section-kicker">DIRECCIÓN · INFORME DE OBRA</span>
+            <h3 id="report-builder-title">Crear informe semanal o mensual</h3>
+          </div>
+          <button className="close-button" type="button" onClick={onClose} aria-label="Cerrar">×</button>
+        </div>
+        <p className="upload-intro">
+          El documento reúne planificación, obra, urbanismo, ventas, finanzas, seguridad y decisiones pendientes. Los datos proceden del último cierre documental validado.
+        </p>
+        <div className="report-frequency" role="group" aria-label="Periodicidad del informe">
+          <button type="button" className={frequency === "weekly" ? "active" : ""} aria-pressed={frequency === "weekly"} onClick={() => setFrequency("weekly")}>
+            <strong>Informe semanal</strong>
+            <span>Selecciona un intervalo de fechas</span>
+          </button>
+          <button type="button" className={frequency === "monthly" ? "active" : ""} aria-pressed={frequency === "monthly"} onClick={() => setFrequency("monthly")}>
+            <strong>Informe mensual</strong>
+            <span>Selecciona el mes de cierre</span>
+          </button>
+        </div>
+        {frequency === "monthly" ? (
+          <label className="report-period-field">
+            Mes del informe
+            <input type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
+          </label>
+        ) : (
+          <div className="form-grid">
+            <label>
+              Desde
+              <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            </label>
+            <label>
+              Hasta
+              <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+            </label>
+          </div>
+        )}
+        <div className="report-source-note">
+          <strong>Cobertura documental</strong>
+          <span>Último cierre validado: {juneReport.cutoff}. El sistema no interpola ni inventa avances entre cortes.</span>
+        </div>
+        {error && <div className="callout warn"><strong>Revisa el periodo</strong><p>{error}</p></div>}
+        <div className="modal-actions">
+          <button className="button secondary" type="button" onClick={onClose}>Cancelar</button>
+          <button className="button primary" type="submit">Generar vista previa</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function DirectionReport({
+  period,
+  currency,
+  onClose,
+}: {
+  period: DirectionReportPeriod;
+  currency: CurrencyCode;
+  onClose: () => void;
+}) {
+  const includesSourceCutoff =
+    period.startDate <= REPORT_SOURCE_CUTOFF && period.endDate >= REPORT_SOURCE_CUTOFF;
+  const approvedPermits = permits.filter((permit) => permit.status === "Aprobado").length;
+  const criticalPackages = workPackages.filter((item) => item.critical);
+  const generatedAt = new Intl.DateTimeFormat("es-ES", {
+    dateStyle: "long",
+    timeStyle: "short",
+  }).format(new Date(period.generatedAt));
+  const reportKind = period.frequency === "weekly" ? "Informe semanal" : "Informe mensual";
+  const dop = (value: number) => formatMoneyMillions(value, "DOP", currency);
+  const overdue = formatMoney(juneReport.collections.overdueUsd, "USD", currency);
+
+  return (
+    <div className="direction-report-overlay" role="dialog" aria-modal="true" aria-labelledby="direction-report-title">
+      <div className="direction-report-toolbar">
+        <div>
+          <strong>Vista previa para Dirección</strong>
+          <span>{reportKind} · {period.label}</span>
+        </div>
+        <div>
+          <button className="button secondary" type="button" onClick={onClose}>Cerrar</button>
+          <button className="button primary" type="button" onClick={() => window.print()}>Imprimir / Guardar PDF</button>
+        </div>
+      </div>
+
+      <article className="direction-report-document">
+        <header className="direction-report-cover">
+          <div className="report-brand-row">
+            <img src="/bricket-mark.png" alt="Grupo Bricket" />
+            <div>
+              <span>GRUPO BRICKET · CENTRO DE CONTROL</span>
+              <strong>ARAYA Punta Cana</strong>
+            </div>
+            <img className="report-araya-mark" src="/araya-wordmark.jpg" alt="ARAYA Punta Cana" />
+          </div>
+          <div className="report-title-block">
+            <span>DIRECCIÓN DE PROYECTO</span>
+            <h1 id="direction-report-title">{reportKind} de obra</h1>
+            <p>{period.label}</p>
+          </div>
+          <div className="report-meta">
+            <span><b>Corte documental</b>{juneReport.cutoff}</span>
+            <span><b>Generado</b>{generatedAt}</span>
+            <span><b>Moneda visual</b>{currency}</span>
+          </div>
+        </header>
+
+        <section className={`report-coverage ${includesSourceCutoff ? "verified" : "limited"}`}>
+          <strong>{includesSourceCutoff ? "Periodo cubierto por el cierre validado" : "Periodo sin cierre documental exacto"}</strong>
+          <p>
+            {includesSourceCutoff
+              ? `Las cifras corresponden al cierre documental de ${juneReport.cutoff}; las cobranzas tienen corte específico al ${juneReport.collections.cutoff}.`
+              : `El periodo seleccionado es ${period.label}, pero el último cierre validado disponible es ${juneReport.cutoff}. Se muestran esos datos como última evidencia disponible, sin interpolaciones.`}
+          </p>
+        </section>
+
+        <section className="report-section">
+          <div className="report-section-heading">
+            <div><span>01 · RESUMEN EJECUTIVO</span><h2>Situación general del proyecto</h2></div>
+            <small>Fuente: consolidado de junio 2026</small>
+          </div>
+          <div className="report-kpi-grid">
+            <article><span>Avance real</span><strong>{number.format(juneReport.physical.actual)}%</strong><small>Ejecución física</small></article>
+            <article><span>Plan KPI</span><strong>{number.format(juneReport.physical.planned)}%</strong><small>Objetivo documentado</small></article>
+            <article className="danger"><span>Desviación</span><strong>{number.format(juneReport.physical.gap)} pp</strong><small>{juneReport.physical.efficiency}% de eficiencia</small></article>
+            <article className="warn"><span>Previsión de plazo</span><strong>+{juneReport.physical.mppDelayDays} días</strong><small>Fin previsto {projectSnapshot.forecastFinish}</small></article>
+            <article><span>Alcance integrado</span><strong>{projectSnapshot.buildingCount} / {projectSnapshot.masterPlanBuildingCount}</strong><small>Edificios en datos / plano</small></article>
+            <article><span>Viviendas</span><strong>{projectSnapshot.unitCount}</strong><small>26 edificios integrados</small></article>
+          </div>
+        </section>
+
+        <section className="report-section report-chart-section">
+          <div className="report-section-heading">
+            <div><span>02 · PLANIFICACIÓN</span><h2>Curva S · plan operativo y ejecución</h2></div>
+            <small>Proyección verde · ejecución real roja</small>
+          </div>
+          <ProgressChart />
+          <p className="report-footnote">El KPI principal de plan declara 21,24%; la serie mensual de junio marca 23,29%. Ambas referencias se conservan pendientes de conciliación.</p>
+        </section>
+
+        <section className="report-section">
+          <div className="report-section-heading">
+            <div><span>03 · PRODUCCIÓN</span><h2>Avance por disciplina y alertas de estructura</h2></div>
+            <small>Informe de obra · {juneReport.cutoff}</small>
+          </div>
+          <div className="report-two-columns">
+            <div>
+              <h3>Disciplinas</h3>
+              <div className="report-progress-list">
+                {constructionDisciplines.map((item) => (
+                  <div key={item.name}>
+                    <span>{item.name}</span>
+                    <i><b style={{ width: `${item.progress}%` }} /></i>
+                    <strong>{number.format(item.progress)}%</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <h3>Mayores retrasos de superestructura</h3>
+              <div className="report-delay-grid">
+                {structuralDelay.slice(0, 8).map((item) => (
+                  <article key={item.building}><strong>{item.building}</strong><span>{item.days} días</span></article>
+                ))}
+              </div>
+              <h3>Paquetes críticos del plan</h3>
+              <ul className="report-compact-list">
+                {criticalPackages.map((item) => <li key={item.name}><span>{item.name}</span><strong>{item.deviationDays} días</strong></li>)}
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        <section className="report-section">
+          <div className="report-section-heading">
+            <div><span>04 · URBANISMO</span><h2>Situación de las obras exteriores</h2></div>
+            <small>Real {number.format(projectSnapshot.urbanismProgress)}% · plan {number.format(projectSnapshot.urbanismPlanned)}%</small>
+          </div>
+          <div className="report-urban-grid">
+            {urbanismReportAreas.map((item) => (
+              <article key={item.name}>
+                <span>{item.name}</span>
+                <strong>{number.format(item.progress)}%</strong>
+              </article>
+            ))}
+          </div>
+          <p className="report-footnote">{delayedUrbanismStarts.length} inicios de urbanismo figuran retrasados en la fuente; el mayor retraso documentado es de {delayedUrbanismStarts[0].days} días.</p>
+        </section>
+
+        <section className="report-section">
+          <div className="report-section-heading">
+            <div><span>05 · COMERCIAL Y FINANZAS</span><h2>Ventas, cobranza y posición financiera</h2></div>
+            <small>Moneda de visualización: {currency}</small>
+          </div>
+          <div className="report-kpi-grid compact">
+            <article><span>Ventas activas</span><strong>{juneReport.sales.active}</strong><small>{juneReport.sales.juneReservations} reservas en junio</small></article>
+            <article className="warn"><span>Cartera vencida</span><strong>{overdue}</strong><small>{juneReport.collections.overdue} clientes</small></article>
+            <article><span>Presupuesto</span><strong>{dop(juneReport.finance.budgetDop)}</strong><small>Fuente original DOP</small></article>
+            <article><span>Ejecutado acumulado</span><strong>{dop(juneReport.finance.executedDop)}</strong><small>{number.format((juneReport.finance.executedDop / juneReport.finance.budgetDop) * 100)}% del presupuesto</small></article>
+            <article className="warn"><span>Cuentas por pagar</span><strong>{dop(juneReport.finance.cxpDop)}</strong><small>Control consolidado</small></article>
+            <article className="danger"><span>Caja proyectada a diciembre</span><strong>{dop(juneReport.finance.projectedCashDecemberDop)}</strong><small>Escenario de flujo</small></article>
+          </div>
+          <p className="report-footnote">{exchangeRateNote(currency)}. Los importes conservan su moneda de origen y solo cambia la presentación.</p>
+        </section>
+
+        <section className="report-section">
+          <div className="report-section-heading">
+            <div><span>06 · SEGURIDAD Y PERMISOS</span><h2>Control transversal</h2></div>
+            <small>{approvedPermits} aprobados · {permits.length - approvedPermits} en proceso</small>
+          </div>
+          <div className="report-safety-grid">
+            {safetyMetrics.map((item) => (
+              <article key={item.label}><span>{item.label}</span><strong>{item.value}</strong><small>{item.detail}</small></article>
+            ))}
+          </div>
+        </section>
+
+        <section className="report-section report-actions-section">
+          <div className="report-section-heading">
+            <div><span>07 · DECISIONES DE DIRECCIÓN</span><h2>Acciones prioritarias y calidad de datos</h2></div>
+            <small>{juneDataQualityIssues.length} conciliaciones abiertas</small>
+          </div>
+          <ol className="report-actions-list">
+            {managementActions.map((action, index) => <li key={action}><b>{String(index + 1).padStart(2, "0")}</b><span>{action}</span></li>)}
+          </ol>
+          <div className="report-quality-alert">
+            <strong>Control de calidad documental</strong>
+            <p>El informe mantiene visibles las diferencias entre fuentes; no sustituye cifras ni rellena periodos sin un nuevo archivo validado.</p>
+          </div>
+        </section>
+
+        <footer className="direction-report-footer">
+          <span>ARAYA Punta Cana · Centro de Control Grupo Bricket</span>
+          <span>{reportKind} · {period.label} · corte fuente {juneReport.cutoff}</span>
+        </footer>
+      </article>
+    </div>
+  );
+}
+
 function UploadModal({
   initialArea,
   onClose,
@@ -2527,6 +2855,8 @@ export function DashboardClient() {
   const [agentOpen, setAgentOpen] = useState(true);
   const [modal, setModal] = useState<"metric" | "supplier" | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [reportBuilderOpen, setReportBuilderOpen] = useState(false);
+  const [directionReport, setDirectionReport] = useState<DirectionReportPeriod | null>(null);
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
   const [currency, setCurrency] = useState<CurrencyCode>(DEFAULT_DISPLAY_CURRENCY);
@@ -2652,6 +2982,8 @@ export function DashboardClient() {
                     setSearch("");
                     setModal(null);
                     setUploadOpen(false);
+                    setReportBuilderOpen(false);
+                    setDirectionReport(null);
                     setAgentOpen(project.id === "araya");
                   }}
                 >
@@ -2703,6 +3035,7 @@ export function DashboardClient() {
           project={activeProject}
           onAsk={() => setAgentOpen(true)}
           onUpload={() => setUploadOpen(true)}
+          onReport={() => setReportBuilderOpen(true)}
           currency={currency}
           onCurrencyChange={setCurrency}
         />
@@ -2753,6 +3086,24 @@ export function DashboardClient() {
             setNotice(message);
             window.setTimeout(() => setNotice(""), 6000);
           }}
+        />
+      )}
+
+      {activeProjectId === "araya" && reportBuilderOpen && (
+        <ReportBuilder
+          onClose={() => setReportBuilderOpen(false)}
+          onGenerate={(period) => {
+            setReportBuilderOpen(false);
+            setDirectionReport(period);
+          }}
+        />
+      )}
+
+      {activeProjectId === "araya" && directionReport && (
+        <DirectionReport
+          period={directionReport}
+          currency={currency}
+          onClose={() => setDirectionReport(null)}
         />
       )}
 

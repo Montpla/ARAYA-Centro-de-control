@@ -184,3 +184,23 @@ test("financial presentation defaults to USD and preserves DOP source values", a
   assert.match(financeDetail, /antonelyPayableVendorsAll/);
   assert.match(financeDetail, /advancePendingDop: 9210448\.86/);
 });
+
+test("direction can generate grounded weekly or monthly reports and export them to PDF", async () => {
+  const [dashboard, styles] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/globals.css", "utf8"),
+  ]);
+  assert.match(dashboard, /Crear informe/);
+  assert.match(dashboard, /Informe semanal/);
+  assert.match(dashboard, /Informe mensual/);
+  assert.match(dashboard, /Generar vista previa/);
+  assert.match(dashboard, /Imprimir \/ Guardar PDF/);
+  assert.match(dashboard, /El sistema no interpola ni inventa avances entre cortes/);
+  assert.match(dashboard, /direction-report-document/);
+  assert.match(styles, /\.direction-report-overlay/);
+  assert.match(styles, /@media print/);
+  assert.match(styles, /\.progress-line\.planned\s*\{[^}]*stroke: var\(--green\)/s);
+  assert.match(styles, /\.progress-line\.actual\s*\{[^}]*stroke: var\(--red\)/s);
+  assert.match(styles, /\.legend\.plan\s*\{[^}]*background: var\(--green\)/s);
+  assert.match(styles, /\.legend\.actual\s*\{[^}]*background: var\(--red\)/s);
+});
