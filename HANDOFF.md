@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 21.
-- Commit desplegado: `7ced76a5682d43230358318e98c03545d4538bbb`.
+- Última versión publicada: 22.
+- Commit desplegado: `a0ae62953f1af61417f82219703e96ed884c2f17`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_c4de0a09359c8191b08d3b4875b5ea4a`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_3f37535541c081919a09085b5c3417ce`.
 - Despliegue:
-  `appgdep_6a6a4a6167e481918c152e2c4f5bebbd` (`succeeded`).
+  `appgdep_6a6a50637bfc8191a27cec9bc4ca7497` (`succeeded`).
 - Acceso: privado, únicamente para el propietario configurado en Sites.
 - Rama y remoto de publicación: rama `main`, remoto `sites`.
 
