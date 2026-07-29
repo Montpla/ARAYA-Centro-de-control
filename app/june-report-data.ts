@@ -167,6 +167,44 @@ export const cxpCategories = [
   { name: "Inspección", amount: 506964.3 },
 ] as const;
 
+export const antonelyFinanceSource = {
+  file: "Datos para Informe Jun-26.xlsx",
+  area: "Finanzas y administración",
+  owner: "Antonely",
+  cutoff: "30/06/2026",
+  previousAccumulatedDop: 663337405.87,
+  juneCostsDop: 48988755.86,
+  accumulatedCostsDop: 712326161.73,
+  payablesDetailDop: 18627534.91,
+  payablesLedgerDop: 18612245.9,
+  advancesGrantedDop: 10035120.72,
+  advancesPendingDop: 9210448.86,
+  liquidityDop: 48234289.3,
+  assetsDop: 759714674.92,
+  liabilitiesDop: 446209904.61,
+  equityDop: 313504770.31,
+  sha256: "C87ABEA3FEA21BB44D598313C2FAA8719F22FF4B265C30EBD45358897B9D590F",
+} as const;
+
+export const payablesReconciliation = [
+  { source: "Relación consolidada", amount: 18597489.63, role: "Control vigente" },
+  { source: "Balance contable", amount: 18612245.9, role: "Mayor contable" },
+  { source: "Archivo Antonely", amount: 18627534.91, role: "Detalle departamental" },
+] as const;
+
+export const antonelyPayableVendors = [
+  { name: "Blue Wave Agregados", amount: 5366258.28 },
+  { name: "Inversiones Romur", amount: 1862967.11 },
+  { name: "Técnica MMHB", amount: 1452035.32 },
+  { name: "Kiswer Investments", amount: 1333524.72 },
+  { name: "PPCRE Paradise Punta Cana Real Estate", amount: 1078306.48 },
+  { name: "Bellon", amount: 785241.67 },
+  { name: "Kinnox", amount: 715000 },
+  { name: "Inversiones Seracini", amount: 581828.5 },
+  { name: "Navia Real Estate", amount: 530812.67 },
+  { name: "Ing. Omar Cordero", amount: 506964.3 },
+] as const;
+
 export const advances = [
   { name: "Grupo Alugav", amount: 2195930.65 },
   { name: "Distrito Verón", amount: 1628532.75 },
@@ -237,7 +275,7 @@ export const juneDataQualityIssues = [
   },
   {
     title: "Cuentas por pagar",
-    detail: "El reporte detallado suma RD$18.597.489,63 y el balance registra RD$18.612.245,90: diferencia RD$14.756,27.",
+    detail: "La relación consolidada suma RD$18.597.489,63; el balance, RD$18.612.245,90; y el detalle de Antonely, RD$18.627.534,91. Se mantienen las tres cifras para conciliación.",
   },
   {
     title: "Fórmulas de intereses",
@@ -250,5 +288,13 @@ export const juneDataQualityIssues = [
   {
     title: "Versión comercial",
     detail: "El informe de ventas aislado conserva una lámina anterior de 31 clientes y USD 148.281,58; prevalece el consolidado actualizado al 06/07/2026.",
+  },
+  {
+    title: "Costes · fuente Antonely",
+    detail: "Antonely registra RD$48.988.755,86 en junio y RD$712.326.161,73 acumulados; el consolidado registra RD$48.998.910,52 y RD$712.326.162,73. Diferencias: RD$10.154,66 y RD$1,00.",
+  },
+  {
+    title: "Cabecera de periodo",
+    detail: "La hoja de costes de Antonely declara “1 June 2016 to 30 June 2026”. Por contexto y cifras se interpreta como un error de rotulación, pero el original no se altera.",
   },
 ] as const;

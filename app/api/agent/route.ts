@@ -1,17 +1,23 @@
+import { desc } from "drizzle-orm";
 import { cubicaciones, projectSnapshot } from "../../demo-data";
 import {
   advances,
+  antonelyFinanceSource,
   arrearsBreakdown,
   cxpAging,
   financingProcesses,
   juneDataQualityIssues,
   juneReport,
   permits,
+  payablesReconciliation,
   safetyFindings,
   safetyMetrics,
   salesLocations,
   salesModels,
 } from "../../june-report-data";
+import { getDb } from "../../../db";
+import { uploadedFiles } from "../../../db/schema";
+import { areaLabels, uploadStatusLabels } from "../../../lib/file-routing";
 import { AGENT_PROMPT_VERSION, AGENT_SYSTEM_PROMPT } from "../../../lib/agent-prompt";
 
 type ToolName =
@@ -23,7 +29,8 @@ type ToolName =
   | "get_commercial_status"
   | "get_financial_status"
   | "get_safety_permits"
-  | "get_data_quality";
+  | "get_data_quality"
+  | "get_uploaded_files";
 
 const tools = [
   {
@@ -110,9 +117,16 @@ const tools = [
     parameters: { type: "object", properties: {}, additionalProperties: false },
     strict: true,
   },
+  {
+    type: "function",
+    name: "get_uploaded_files",
+    description: "Devuelve los últimos archivos cargados por los equipos, con área, persona, versión y estado de validación.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+    strict: true,
+  },
 ];
 
-function executeTool(name: ToolName, args: Record<string, unknown>) {
+async function executeTool(name: ToolName, args: Record<string, unknown>) {
   if (name === "get_project_summary") {
     return {
       project: projectSnapshot.project,
@@ -185,8 +199,10 @@ function executeTool(name: ToolName, args: Record<string, unknown>) {
       finance: juneReport.finance,
       cxpAging,
       advances,
+      antonelyDepartmentalSource: antonelyFinanceSource,
+      payablesReconciliation,
       currency: "DOP / pesos dominicanos, salvo importes comerciales identificados expresamente como USD",
-      source: "INFORME_JUN_2026_ARAYA_v1_1.xlsx",
+      source: "INFORME_JUN_2026_ARAYA_v1_1.xlsx y Datos para Informe Jun-26.xlsx",
       cutoff: juneReport.cutoff,
     };
   }
@@ -198,6 +214,22 @@ function executeTool(name: ToolName, args: Record<string, unknown>) {
       financingProcesses,
       source: "Informe consolidado e Informe Obra Araya Junio 2026",
       cutoff: juneReport.cutoff,
+    };
+  }
+  if (name === "get_uploaded_files") {
+    const rows = await getDb().select().from(uploadedFiles).orderBy(desc(uploadedFiles.createdAt)).limit(20);
+    return {
+      files: rows.map((row) => ({
+        file: row.originalName,
+        area: areaLabels[row.area as keyof typeof areaLabels] ?? row.area,
+        uploader: row.uploaderName,
+        version: row.version,
+        status: uploadStatusLabels[row.status] ?? row.status,
+        cutoff: row.declaredCutoff || "No declarado",
+        createdAt: row.createdAt,
+        classificationReason: row.classificationReason,
+      })),
+      rule: "Una carga nueva queda pendiente de revisión y no sustituye cifras consolidadas automáticamente.",
     };
   }
   return {
@@ -214,10 +246,14 @@ function executeTool(name: ToolName, args: Record<string, unknown>) {
 
 function fallbackAnswer(question: string) {
   const normalized = question.toLowerCase();
-  const source = `\n\nFuentes: centro de datos ARAYA (9 archivos) · corte principal ${projectSnapshot.declaredCutoff}.`;
+  const source = `\n\nFuentes: centro de datos ARAYA (${projectSnapshot.dataSources.length} archivos integrados) · corte principal ${projectSnapshot.declaredCutoff}.`;
+
+  if (normalized.includes("archivo") || normalized.includes("adjunt") || normalized.includes("subir") || normalized.includes("cargar")) {
+    return `Puedes adjuntar el archivo en este chat o usar “+ Cargar archivo” desde cualquier pestaña. El sistema sugerirá el área, conservará el original, registrará usuario y versión y lo dejará pendiente de revisión. Si el archivo contradice una cifra consolidada, mostrará la conciliación sin reemplazarla automáticamente.${source}`;
+  }
 
   if (normalized.includes("calidad") || normalized.includes("fuente") || normalized.includes("inconsisten")) {
-    return `Hay siete conciliaciones principales de junio: presupuesto RD$3.428,5 M frente a RD$3.591,3 M; KPI plan 21,24% frente a Curva S 23,29%; retraso general de 5 frente a 7 días; diferencia de RD$14.756,27 entre dos totales de CxP; tres errores #REF! en intereses; USD 0,05 de diferencia en morosidad; y una versión comercial anterior que no debe prevalecer. Todas están visibles en Finanzas y Centro de datos.${source}`;
+    return `Hay ${juneDataQualityIssues.length} conciliaciones principales. Las nuevas incluyen el archivo de Antonely: costes de junio RD$48.988.755,86 frente a RD$48.998.910,52 del consolidado y tres totales de CxP entre RD$18.597.489,63 y RD$18.627.534,91. Todas permanecen visibles; ninguna cifra se corrige silenciosamente.${source}`;
   }
   if (normalized.includes("venta") || normalized.includes("reserva") || normalized.includes("moros") || normalized.includes("cobran")) {
     return `Hay 279 reservas históricas, 228 activas y 51 desistidas. Fase I tiene 136 activas y Fase II, 92. Al 06/07/2026, 172 contratos se distribuyen en 106 al día, 42 con cuotas pendientes y 24 vencidos por USD 136.840,39. La morosidad declarada es inferior al 1%.${source}`;
@@ -298,11 +334,11 @@ export async function POST(request: Request) {
         promptVersion: AGENT_PROMPT_VERSION,
       });
     }
-    const outputs = calls.map((call) => ({
+    const outputs = await Promise.all(calls.map(async (call) => ({
       type: "function_call_output",
       call_id: call.call_id,
-      output: JSON.stringify(executeTool(call.name as ToolName, JSON.parse(call.arguments || "{}"))),
-    }));
+      output: JSON.stringify(await executeTool(call.name as ToolName, JSON.parse(call.arguments || "{}"))),
+    })));
     response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers,

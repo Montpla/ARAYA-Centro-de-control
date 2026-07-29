@@ -432,6 +432,21 @@ export const dataSources: DataSource[] = [
     downloadUrl: "/data-center/junio-2026/informe-junio-2026-araya.xlsx",
   },
   {
+    id: "source-antonely-june-finance",
+    file: "Datos para Informe Jun-26.xlsx",
+    kind: "Soporte financiero departamental · Antonely",
+    declaredCutoff: "30/06/2026",
+    savedAt: "29/07/2026 14:33",
+    status: "observada",
+    records: "4 hojas · costes · 96 facturas · anticipos · balance",
+    notes: [
+      "Se integra como fuente de Finanzas y Administración y se conserva el original para trazabilidad.",
+      "Anticipos y balance coinciden con el control existente; costes y cuentas por pagar requieren conciliación con el consolidado.",
+      "La hoja de costes declara por error un inicio en junio de 2016; no se corrige silenciosamente.",
+    ],
+    downloadUrl: "/data-center/junio-2026/datos-para-informe-jun-26.xlsx",
+  },
+  {
     id: "source-may-cashflow",
     file: "Lamina Flujo.pptx",
     kind: "Flujo financiero histórico",

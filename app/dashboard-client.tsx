@@ -20,6 +20,8 @@ import {
 } from "./demo-data";
 import {
   advances,
+  antonelyFinanceSource,
+  antonelyPayableVendors,
   arrearsBreakdown,
   constructionDisciplines,
   costBreakdown,
@@ -31,6 +33,7 @@ import {
   juneDataQualityIssues,
   juneReport,
   managementActions,
+  payablesReconciliation,
   permits,
   safetyFindings,
   safetyMetrics,
@@ -39,6 +42,7 @@ import {
   structuralDelay,
   urbanismReportAreas,
 } from "./june-report-data";
+import { UploadArea, areaLabels, uploadAreas, uploadStatusLabels } from "../lib/file-routing";
 
 type View =
   | "resumen"
@@ -60,6 +64,35 @@ type ChatMessage = {
   role: "assistant" | "user";
   text: string;
   mode?: string;
+};
+
+type UploadedFileRecord = {
+  id: string;
+  originalName: string;
+  area: string;
+  areaLabel: string;
+  section: string;
+  description: string;
+  mimeType: string;
+  extension: string;
+  sizeBytes: number;
+  source: "dashboard" | "agent";
+  status: string;
+  uploaderName: string;
+  version: number;
+  declaredCutoff: string;
+  classificationConfidence: number;
+  classificationReason: string;
+  createdAt: string;
+  updatedAt: string;
+  downloadUrl: string;
+};
+
+type UploadResult = {
+  duplicate?: boolean;
+  message?: string;
+  error?: string;
+  file?: UploadedFileRecord;
 };
 
 type ProjectId = "araya" | "mirador";
@@ -118,6 +151,52 @@ const wholeNumber = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 })
 const rd = (value: number) => `${value < 0 ? "–" : ""}RD$${wholeNumber.format(Math.abs(value))}`;
 const rdMillions = (value: number) => `${value < 0 ? "–" : ""}RD$${number.format(Math.abs(value) / 1_000_000)} M`;
 const usd = (value: number) => `USD ${number.format(value)}`;
+
+const fileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${number.format(bytes / 1024)} KB`;
+  return `${number.format(bytes / (1024 * 1024))} MB`;
+};
+
+const defaultUploadArea: Record<View, UploadArea> = {
+  resumen: "auto",
+  planificacion: "planificacion",
+  implantacion: "diseno",
+  edificios: "obra",
+  viviendas: "obra",
+  comercial: "comercial",
+  urbanismo: "urbanismo",
+  control: "seguridad",
+  cronologia: "planificacion",
+  proveedores: "compras",
+  metricas: "finanzas",
+  fuentes: "auto",
+  agente: "auto",
+};
+
+async function uploadProjectFile(
+  file: File,
+  input: {
+    area: UploadArea;
+    description?: string;
+    declaredCutoff?: string;
+    section?: string;
+    source: "dashboard" | "agent";
+  },
+) {
+  const formData = new FormData();
+  formData.set("file", file);
+  formData.set("area", input.area);
+  formData.set("description", input.description ?? "");
+  formData.set("declaredCutoff", input.declaredCutoff ?? "");
+  formData.set("section", input.section ?? "");
+  formData.set("source", input.source);
+  const response = await fetch("/api/files", { method: "POST", body: formData });
+  const result = (await response.json()) as UploadResult;
+  if (!response.ok) throw new Error(result.error ?? "No se pudo cargar el archivo.");
+  window.dispatchEvent(new CustomEvent("araya-files-updated"));
+  return result;
+}
 
 const planCoordinates: Record<string, { x: number; y: number }> = {
   "1": { x: 20.4, y: 74.4 },
@@ -213,10 +292,12 @@ function ProgressRing({ value }: { value: number }) {
 function Header({
   view,
   onAsk,
+  onUpload,
   project,
 }: {
   view: View;
   onAsk: () => void;
+  onUpload: () => void;
   project: (typeof projects)[ProjectId];
 }) {
   const label = navItems.find((item) => item.id === view)?.label;
@@ -236,6 +317,9 @@ function Header({
         </div>
         <button className="button secondary" onClick={onAsk} disabled={project.demo}>
           Preguntar al agente
+        </button>
+        <button className="button primary" onClick={onUpload} disabled={project.demo}>
+          + Cargar archivo
         </button>
         <button className="avatar" aria-label="Perfil de Dirección">DR</button>
       </div>
@@ -654,7 +738,7 @@ function Overview({
           </button>
           <button className="attention-item" onClick={() => onNavigate("fuentes")}>
             <span className="severity low">CONCILIAR</span>
-            <strong>7 alertas de calidad visibles</strong>
+            <strong>{juneDataQualityIssues.length} alertas de calidad visibles</strong>
             <small>Presupuesto, plan físico, plazo, CxP, fórmulas, morosidad y versión comercial</small>
           </button>
         </article>
@@ -1233,10 +1317,10 @@ function SuppliersView({ suppliers, onAdd }: { suppliers: Supplier[]; onAdd: () 
   return (
     <div className="view-stack">
       <section className="stat-grid wide">
-        <StatCard eyebrow="Proveedores importados" value={`${suppliers.length}`} detail="No hay catálogo en las fuentes adjuntas" />
-        <StatCard eyebrow="Contratos" value="Sin dato" detail="Pendiente de fuente contractual" />
-        <StatCard eyebrow="Entregas" value="Sin dato" detail="Pendiente de planificación de suministro" />
-        <StatCard eyebrow="Importes" value="Sin dato" detail="No se infiere desde cubicaciones" />
+        <StatCard eyebrow="Proveedores operativos" value={`${suppliers.length}`} detail="Registros configurables del dashboard" />
+        <StatCard eyebrow="Facturas en CxP" value="96" detail="Archivo departamental de Antonely" />
+        <StatCard eyebrow="Mayor exposición" value={rdMillions(antonelyPayableVendors[0].amount)} detail={antonelyPayableVendors[0].name} tone="warn" />
+        <StatCard eyebrow="CxP departamental" value={rdMillions(antonelyFinanceSource.payablesDetailDop)} detail="Pendiente de conciliación" tone="warn" />
       </section>
       <section className="panel">
         <div className="panel-heading">
@@ -1269,6 +1353,25 @@ function SuppliersView({ suppliers, onAdd }: { suppliers: Supplier[]; onAdd: () 
             ))}
           </div>
         )}
+      </section>
+      <section className="panel">
+        <div className="panel-heading">
+          <div>
+            <span className="section-kicker">CUENTAS POR PAGAR · ANTONELY</span>
+            <h3>Principales proveedores por saldo registrado</h3>
+          </div>
+          <span className="data-note">Corte 30/06/2026 · valores RD$</span>
+        </div>
+        <div className="rank-list compact">
+          {antonelyPayableVendors.map((supplier) => (
+            <div key={supplier.name}>
+              <span><strong>{supplier.name}</strong></span>
+              <div><i style={{ width: `${(supplier.amount / antonelyPayableVendors[0].amount) * 100}%` }} /></div>
+              <b>{rdMillions(supplier.amount)}</b>
+            </div>
+          ))}
+        </div>
+        <p className="quality-note">Este ranking procede de 96 líneas de factura. Es una vista de obligaciones, no un catálogo contractual ni una evaluación del proveedor.</p>
       </section>
     </div>
   );
@@ -1346,7 +1449,27 @@ function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () =>
                 </div>
               ))}
             </div>
-            <p className="quality-note">El balance registra RD$18.612.245,90; la relación detallada suma RD$18.597.489,63.</p>
+            <p className="quality-note">La clasificación por categorías coincide con el archivo de Antonely, pero el total departamental no coincide con el consolidado.</p>
+          </article>
+          <article className="panel reconciliation-panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">CONCILIACIÓN DE FUENTES</span><h3>Tres totales de cuentas por pagar</h3></div>
+              <span className="data-note">No se sobrescribe ninguna cifra</span>
+            </div>
+            <div className="compact-table reconciliation-table">
+              <div className="compact-row head"><span>Fuente</span><span>Función</span><span>Total</span><span>Diferencia vs. consolidado</span></div>
+              {payablesReconciliation.map((item) => (
+                <div className="compact-row" key={item.source}>
+                  <strong>{item.source}</strong>
+                  <span>{item.role}</span>
+                  <span>{rd(item.amount)}</span>
+                  <span className={item.amount === juneReport.finance.cxpDop ? "good-text" : "danger-text"}>
+                    {item.amount === juneReport.finance.cxpDop ? "Base" : rd(item.amount - juneReport.finance.cxpDop)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="quality-note">El archivo de Antonely está RD$30.045,28 por encima de la relación consolidada y RD$15.289,01 por encima del balance. Requiere conciliación contable antes de cambiar el KPI principal.</p>
           </article>
         </section>
       )}
@@ -1384,6 +1507,7 @@ function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () =>
                 <div className="compact-row" key={item.name}><strong>{item.name}</strong><span>{rdMillions(item.cumulative)}</span><span>{rdMillions(item.june)}</span></div>
               ))}
             </div>
+            <p className="quality-note">Antonely registra RD$48.988.755,86 en junio y RD$712.326.161,73 acumulados. Frente al consolidado, las diferencias son RD$10.154,66 y RD$1,00 respectivamente.</p>
           </article>
           <article className="panel">
             <div className="panel-heading"><div><span className="section-kicker">BALANCE</span><h3>Posición financiera</h3></div></div>
@@ -1433,22 +1557,112 @@ function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () =>
   );
 }
 
-function SourcesView() {
+function CollaborativeFileRegistry() {
+  const [files, setFiles] = useState<UploadedFileRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    async function refresh() {
+      try {
+        const response = await fetch("/api/files", { cache: "no-store" });
+        const payload = (await response.json()) as { files?: UploadedFileRecord[]; error?: string };
+        if (!response.ok) throw new Error(payload.error ?? "No se pudo actualizar el registro.");
+        if (active) {
+          setFiles(payload.files ?? []);
+          setError("");
+        }
+      } catch (refreshError) {
+        if (active) setError(refreshError instanceof Error ? refreshError.message : "No se pudo actualizar el registro.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    const onFilesUpdated = () => void refresh();
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 10_000);
+    window.addEventListener("araya-files-updated", onFilesUpdated);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("araya-files-updated", onFilesUpdated);
+    };
+  }, []);
+
+  return (
+    <section className="panel live-file-registry" aria-live="polite">
+      <div className="panel-heading">
+        <div>
+          <span className="section-kicker">REGISTRO COLABORATIVO · ACTUALIZACIÓN CADA 10 S</span>
+          <h3>Últimos archivos recibidos</h3>
+        </div>
+        <span className="count-badge">{files.length}</span>
+      </div>
+      {loading ? (
+        <div className="empty-state compact"><strong>Actualizando registro…</strong></div>
+      ) : error ? (
+        <div className="callout warn"><strong>Registro no disponible</strong><p>{error}</p></div>
+      ) : files.length === 0 ? (
+        <div className="empty-state compact">
+          <strong>Aún no hay cargas colaborativas.</strong>
+          <p>Los archivos integrados históricamente aparecen debajo. Las nuevas cargas quedarán aquí con usuario, área, versión y estado.</p>
+        </div>
+      ) : (
+        <div className="uploaded-file-list">
+          {files.map((file) => (
+            <article key={file.id}>
+              <div className="uploaded-file-icon">{file.extension.toUpperCase()}</div>
+              <div className="uploaded-file-main">
+                <strong>{file.originalName}</strong>
+                <span>{file.areaLabel} · {fileSize(file.sizeBytes)} · v{file.version}</span>
+                <small>{file.classificationReason}</small>
+              </div>
+              <div className="uploaded-file-owner">
+                <strong>{file.uploaderName}</strong>
+                <span>{new Date(file.createdAt).toLocaleString("es-DO", { dateStyle: "short", timeStyle: "short" })}</span>
+              </div>
+              <span className={`upload-status ${file.status}`}>{uploadStatusLabels[file.status] ?? file.status}</span>
+              <a className="button secondary" href={file.downloadUrl}>Descargar</a>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SourcesView({ onUpload }: { onUpload: () => void }) {
   return (
     <div className="view-stack">
       <section className="panel data-center-intro">
         <div>
           <span className="section-kicker">GRUPO BRICKET · REPOSITORIO DOCUMENTAL</span>
           <h2>Centro de datos del proyecto ARAYA</h2>
-          <p>Fuentes de avance, cronogramas y documentación técnica centralizadas para consulta y control.</p>
+          <p>Fuentes de avance, cronogramas y documentación técnica centralizadas con trazabilidad por área, persona y versión.</p>
         </div>
+        <button className="button primary" onClick={onUpload}>+ Añadir archivo</button>
       </section>
       <section className="stat-grid wide">
-        <StatCard eyebrow="Fuentes integradas" value={`${dataSources.length}`} detail="2 Excel · 4 PowerPoint · 1 PDF · 1 MPP · 1 DWG" />
+        <StatCard eyebrow="Fuentes integradas" value={`${dataSources.length}`} detail="3 Excel · 4 PowerPoint · 1 PDF · 1 MPP · 1 DWG" />
         <StatCard eyebrow="Registros MPP" value="2.228" detail="2.195 asignaciones y 22 paquetes" />
         <StatCard eyebrow="Alertas de calidad" value={`${juneDataQualityIssues.length}`} detail="Todas visibles y sin corrección silenciosa" tone="warn" />
         <StatCard eyebrow="Corte declarado" value="30/06/2026" detail="Fecha tomada de los archivos" />
       </section>
+      <section className="panel ingestion-workflow">
+        <div className="panel-heading">
+          <div><span className="section-kicker">CARGA COLABORATIVA</span><h3>Cómo entra un archivo al Centro de Control</h3></div>
+          <span className="live-state"><span className="live-dot" /> Operativo</span>
+        </div>
+        <div className="ingestion-steps">
+          <div><b>01</b><strong>Recepción</strong><span>El original se guarda sin modificar.</span></div>
+          <div><b>02</b><strong>Clasificación</strong><span>Área sugerida por nombre y descripción.</span></div>
+          <div><b>03</b><strong>Conciliación</strong><span>Duplicados y diferencias quedan visibles.</span></div>
+          <div><b>04</b><strong>Integración</strong><span>La cifra validada actualiza su pestaña.</span></div>
+        </div>
+        <p className="governance-note">La identidad procede del acceso al dashboard. Una carga se muestra en tiempo casi real, pero no reemplaza datos consolidados hasta superar la revisión del área responsable.</p>
+      </section>
+      <CollaborativeFileRegistry />
       <section className="source-grid">
         {dataSources.map((source) => (
           <article className="panel source-card" key={source.id}>
@@ -1482,9 +1696,11 @@ function SourcesView() {
           <div><strong>Avance físico</strong><p>El informe y los Excel son la fuente del 18,23% ejecutado y del KPI planificado de 21,24%.</p></div>
           <div><strong>Avance de cronograma</strong><p>MPP es la fuente del 17%, fechas, actividades y camino crítico.</p></div>
           <div><strong>Finanzas</strong><p>El Excel de junio prevalece para presupuesto, costes, CxP, anticipos, balance y caja.</p></div>
+          <div><strong>Fuente Antonely</strong><p>Amplía el detalle de CxP y proveedores; sus diferencias permanecen abiertas hasta conciliación contable.</p></div>
           <div><strong>Versiones</strong><p>El PDF duplica el consolidado; los informes parciales amplían datos y la lámina de mayo queda como histórico.</p></div>
           <div><strong>Edificios</strong><p>El índice MPP promedia 32 frentes; las disciplinas del informe de obra son un indicador diferente.</p></div>
           <div><strong>Viviendas</strong><p>El porcentaje disponible corresponde sólo a superestructura, no a terminación total.</p></div>
+          <div><strong>Nuevas cargas</strong><p>R2 conserva el archivo y D1 registra usuario, área, hash, versión, corte y estado de validación.</p></div>
         </div>
       </section>
     </div>
@@ -1496,12 +1712,15 @@ function AgentPanel({ expanded, onClose }: { expanded: boolean; onClose: () => v
     {
       id: "welcome",
       role: "assistant",
-      text: "Buenos días. Puedo consultar el corte real: avance, desviaciones, implantación general, 26 edificios, 156 viviendas, urbanismo, paquetes, cubicaciones y calidad de fuentes. ¿Qué necesitas saber?",
+      text: "Buenos días. Puedo consultar el corte real y también recibir archivos. Si adjuntas uno, lo clasificaré por área, registraré la versión y lo dejaré preparado para revisión antes de actualizar cifras consolidadas.",
       mode: "source-data-engine",
     },
   ]);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [attachmentArea, setAttachmentArea] = useState<UploadArea>("auto");
+  const [uploading, setUploading] = useState(false);
 
   async function ask(text: string) {
     const trimmed = text.trim();
@@ -1540,11 +1759,52 @@ function AgentPanel({ expanded, onClose }: { expanded: boolean; onClose: () => v
     void ask(question);
   }
 
+  async function sendAttachment() {
+    if (!attachment || uploading) return;
+    const pendingFile = attachment;
+    setMessages((current) => [
+      ...current,
+      { id: crypto.randomUUID(), role: "user", text: `Adjunto para integrar: ${pendingFile.name}` },
+    ]);
+    setUploading(true);
+    try {
+      const result = await uploadProjectFile(pendingFile, {
+        area: attachmentArea,
+        description: "Archivo cargado mediante ARAYA Copilot.",
+        section: "Agente IA",
+        source: "agent",
+      });
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: result.message ?? `Archivo registrado en ${result.file?.areaLabel ?? "el Centro de datos"}.`,
+          mode: "file-registry",
+        },
+      ]);
+      setAttachment(null);
+      setAttachmentArea("auto");
+    } catch (uploadError) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text: uploadError instanceof Error ? uploadError.message : "No se pudo registrar el archivo.",
+          mode: "file-registry",
+        },
+      ]);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <aside className={`agent-panel ${expanded ? "expanded" : ""}`}>
       <div className="agent-header">
         <div className="agent-mark">AI</div>
-        <div><strong>ARAYA Copilot</strong><span><i /> Consulta de datos · solo lectura</span></div>
+        <div><strong>ARAYA Copilot</strong><span><i /> Consulta y carga documental</span></div>
         {!expanded && <button className="close-button" onClick={onClose} aria-label="Cerrar agente">×</button>}
       </div>
       <div className="agent-suggestions">
@@ -1552,7 +1812,7 @@ function AgentPanel({ expanded, onClose }: { expanded: boolean; onClose: () => v
           "Resume el corte para Dirección",
           "¿Qué paquete tiene mayor desviación?",
           "¿Qué problemas tienen las fuentes?",
-          "¿Cuál es la diferencia de cubicaciones?",
+          "¿Cómo se clasifica un archivo nuevo?",
         ].map((suggestion) => (
           <button key={suggestion} onClick={() => void ask(suggestion)}>{suggestion}</button>
         ))}
@@ -1562,18 +1822,120 @@ function AgentPanel({ expanded, onClose }: { expanded: boolean; onClose: () => v
           <div className={`message ${message.role}`} key={message.id}>
             <div>{message.text}</div>
             {message.role === "assistant" && (
-              <small>{message.mode === "openai-tools" ? "IA + herramientas" : "Motor de datos de fuentes"}</small>
+              <small>{message.mode === "openai-tools" ? "IA + herramientas" : message.mode === "file-registry" ? "Registro documental" : "Motor de datos de fuentes"}</small>
             )}
           </div>
         ))}
         {loading && <div className="message assistant typing">Consultando datos…</div>}
+        {uploading && <div className="message assistant typing">Guardando, clasificando y registrando…</div>}
+      </div>
+      <div className="agent-attachment">
+        <label>
+          <span>Adjuntar archivo</span>
+          <input
+            type="file"
+            accept=".xlsx,.xls,.csv,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
+            onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
+          />
+        </label>
+        {attachment && (
+          <div className="agent-attachment-ready">
+            <strong>{attachment.name}</strong>
+            <small>{fileSize(attachment.size)}</small>
+            <select value={attachmentArea} onChange={(event) => setAttachmentArea(event.target.value as UploadArea)}>
+              {uploadAreas.map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
+            </select>
+            <button type="button" onClick={() => void sendAttachment()} disabled={uploading}>Registrar archivo</button>
+          </div>
+        )}
       </div>
       <form className="agent-input" onSubmit={submit}>
         <textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Pregunta por cualquier dato del corte…" rows={2} />
         <button type="submit" disabled={loading || !question.trim()} aria-label="Enviar pregunta">↑</button>
       </form>
-      <div className="agent-foot">Cada respuesta indica la fuente y el corte usado.</div>
+      <div className="agent-foot">Las cargas quedan trazadas por usuario y no sustituyen datos validados automáticamente.</div>
     </aside>
+  );
+}
+
+function UploadModal({
+  initialArea,
+  onClose,
+  onComplete,
+}: {
+  initialArea: UploadArea;
+  onClose: () => void;
+  onComplete: (message: string) => void;
+}) {
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [area, setArea] = useState<UploadArea>(initialArea);
+  const [description, setDescription] = useState("");
+  const [declaredCutoff, setDeclaredCutoff] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedFile || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const result = await uploadProjectFile(selectedFile, {
+        area,
+        description,
+        declaredCutoff,
+        section: areaLabels[area],
+        source: "dashboard",
+      });
+      onComplete(result.message ?? "Archivo registrado correctamente.");
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : "No se pudo cargar el archivo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <form className="modal upload-modal" role="dialog" aria-modal="true" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
+        <div className="panel-heading">
+          <div><span className="section-kicker">CENTRO DE DATOS · CARGA SEGURA</span><h3>Añadir archivo al proyecto ARAYA</h3></div>
+          <button className="close-button" type="button" onClick={onClose} aria-label="Cerrar">×</button>
+        </div>
+        <p className="upload-intro">El original se conserva sin modificar. El sistema registra tu identidad, detecta duplicados y deja cualquier cambio de cifras pendiente de validación.</p>
+        <div className="upload-dropzone">
+          <input
+            type="file"
+            required
+            accept=".xlsx,.xls,.csv,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
+            onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+          />
+          <strong>{selectedFile ? selectedFile.name : "Selecciona o arrastra un archivo"}</strong>
+          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV, PowerPoint, PDF, Word, MPP, DWG, imagen o ZIP · máximo 50 MB"}</span>
+        </div>
+        <div className="form-grid">
+          <label>
+            Área de destino
+            <select value={area} onChange={(event) => setArea(event.target.value as UploadArea)}>
+              {uploadAreas.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+            </select>
+          </label>
+          <label>
+            Fecha de corte declarada
+            <input value={declaredCutoff} onChange={(event) => setDeclaredCutoff(event.target.value)} placeholder="Ej. 30/06/2026" />
+          </label>
+          <label className="wide-field">
+            Descripción o instrucciones para el agente
+            <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder="Qué contiene, qué periodo sustituye o con qué archivo debe conciliarse…" />
+          </label>
+        </div>
+        {error && <div className="callout warn"><strong>No se completó la carga</strong><p>{error}</p></div>}
+        <div className="modal-actions">
+          <button className="button secondary" type="button" onClick={onClose}>Cancelar</button>
+          <button className="button primary" type="submit" disabled={!selectedFile || saving}>{saving ? "Guardando…" : "Guardar y clasificar"}</button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -1993,11 +2355,15 @@ export function DashboardClient() {
   const [supplierRows, setSupplierRows] = useState<Supplier[]>(initialSuppliers);
   const [agentOpen, setAgentOpen] = useState(true);
   const [modal, setModal] = useState<"metric" | "supplier" | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
   const activeProject = projects[activeProjectId];
 
   useEffect(() => {
-    if (window.matchMedia("(max-width: 760px)").matches) setAgentOpen(false);
+    if (!window.matchMedia("(max-width: 760px)").matches) return;
+    const timer = window.setTimeout(() => setAgentOpen(false), 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -2062,7 +2428,7 @@ export function DashboardClient() {
     if (view === "cronologia") return <TimelineView />;
     if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => setModal("supplier")} />;
     if (view === "metricas") return <MetricsView metrics={metrics} onAdd={() => setModal("metric")} />;
-    if (view === "fuentes") return <SourcesView />;
+    if (view === "fuentes") return <SourcesView onUpload={() => setUploadOpen(true)} />;
     return <AgentPanel expanded onClose={() => setView("resumen")} />;
   }
 
@@ -2113,6 +2479,7 @@ export function DashboardClient() {
                     setView("resumen");
                     setSearch("");
                     setModal(null);
+                    setUploadOpen(false);
                     setAgentOpen(project.id === "araya");
                   }}
                 >
@@ -2159,7 +2526,12 @@ export function DashboardClient() {
       </aside>
 
       <main className={`main-area ${agentOpen && view !== "agente" ? "with-agent" : ""}`}>
-        <Header view={view} project={activeProject} onAsk={() => setAgentOpen(true)} />
+        <Header
+          view={view}
+          project={activeProject}
+          onAsk={() => setAgentOpen(true)}
+          onUpload={() => setUploadOpen(true)}
+        />
         <div className="global-search">
           <span>⌕</span>
           <input
@@ -2197,6 +2569,20 @@ export function DashboardClient() {
           onSaveSupplier={(supplier) => setSupplierRows((current) => [supplier, ...current])}
         />
       )}
+
+      {activeProjectId === "araya" && uploadOpen && (
+        <UploadModal
+          initialArea={defaultUploadArea[view]}
+          onClose={() => setUploadOpen(false)}
+          onComplete={(message) => {
+            setUploadOpen(false);
+            setNotice(message);
+            window.setTimeout(() => setNotice(""), 6000);
+          }}
+        />
+      )}
+
+      {notice && <div className="upload-toast" role="status"><strong>Archivo recibido</strong><span>{notice}</span></div>}
     </div>
   );
 }

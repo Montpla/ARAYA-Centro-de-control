@@ -82,7 +82,7 @@ test("ARAYA project selector uses the supplied Punta Cana wordmark", async () =>
   assert.ok(logo.length > 1000);
 });
 
-test("agent is source-grounded, read-only and evaluated", async () => {
+test("agent is source-grounded, guarded and evaluated", async () => {
   const [route, prompt, evalCases] = await Promise.all([
     readFile("app/api/agent/route.ts", "utf8"),
     readFile("lib/agent-prompt.ts", "utf8"),
@@ -97,6 +97,7 @@ test("agent is source-grounded, read-only and evaluated", async () => {
   assert.match(route, /get_financial_status/);
   assert.match(route, /get_safety_permits/);
   assert.match(route, /get_data_quality/);
+  assert.match(route, /get_uploaded_files/);
   assert.match(prompt, /No inventes cifras/);
   assert.match(prompt, /No modifiques datos/);
   assert.equal(JSON.parse(evalCases).length, 20);
@@ -113,6 +114,7 @@ test("June 2026 reports are integrated with traceable downloads and reconciliati
     "informe-obra-araya-junio-2026.pptx",
     "informe-ventas-araya-junio-2026.pptx",
     "informe-junio-2026-araya.xlsx",
+    "datos-para-informe-jun-26.xlsx",
     "lamina-flujo-mayo-2026.pptx",
     "presentacion-informe-araya-junio-2026.pdf",
   ]) {
@@ -123,13 +125,39 @@ test("June 2026 reports are integrated with traceable downloads and reconciliati
   assert.match(juneData, /overdueUsd: 136840\.39/);
   assert.match(juneData, /budgetDop: 3591280577\.17/);
   assert.match(juneData, /projectedCashDecemberDop: -125196511\.23/);
+  assert.match(juneData, /payablesDetailDop: 18627534\.91/);
+  assert.match(juneData, /juneCostsDop: 48988755\.86/);
   assert.match(juneData, /#REF!/);
   assert.match(dashboard, /juneDataQualityIssues/);
 });
 
-test("database migration covers extensible metrics, suppliers and agent logs", async () => {
-  const migration = await readFile("drizzle/0000_broken_vin_gonzales.sql", "utf8");
-  assert.match(migration, /CREATE TABLE `custom_metrics`/);
-  assert.match(migration, /CREATE TABLE `suppliers`/);
-  assert.match(migration, /CREATE TABLE `agent_logs`/);
+test("database migrations cover records and the collaborative file registry", async () => {
+  const [baseMigration, fileMigration] = await Promise.all([
+    readFile("drizzle/0000_broken_vin_gonzales.sql", "utf8"),
+    readFile("drizzle/0001_milky_jamie_braddock.sql", "utf8"),
+  ]);
+  assert.match(baseMigration, /CREATE TABLE `custom_metrics`/);
+  assert.match(baseMigration, /CREATE TABLE `suppliers`/);
+  assert.match(baseMigration, /CREATE TABLE `agent_logs`/);
+  assert.match(fileMigration, /CREATE TABLE `uploaded_files`/);
+  assert.match(fileMigration, /CREATE TABLE `file_activity`/);
+  assert.match(fileMigration, /uploaded_files_sha256_idx/);
+});
+
+test("collaborative uploads use authenticated identity, R2 storage and duplicate detection", async () => {
+  const [route, dashboard, routing, hosting] = await Promise.all([
+    readFile("app/api/files/route.ts", "utf8"),
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("lib/file-routing.ts", "utf8"),
+    readFile(".openai/hosting.json", "utf8"),
+  ]);
+  assert.match(route, /getChatGPTUser/);
+  assert.match(route, /crypto\.subtle\.digest\("SHA-256"/);
+  assert.match(route, /getFileBucket\(\)\.get/);
+  assert.match(route, /pendiente_revision/);
+  assert.match(dashboard, /CARGA COLABORATIVA/);
+  assert.match(dashboard, /uploadProjectFile/);
+  assert.match(dashboard, /ACTUALIZACIÓN CADA 10 S/);
+  assert.match(routing, /Clasificación automática/);
+  assert.equal(JSON.parse(hosting).r2, "FILES");
 });
