@@ -23,8 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 17.
-- Commit desplegado: `d4eac2f75e849f3189a239117857287f959fa11f`.
+- Última versión publicada: 18.
+- Commit desplegado: `2be5bc51af59d17ae86a00b503bc8f610e7e163f`.
+- Versión de Sites:
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_e9b56dbabf74819188f580fc92a66608`.
+- Despliegue:
+  `appgdep_6a6a2430e3c08191a96d26cbd4f109e7` (`succeeded`).
 - Acceso: privado, únicamente para el propietario configurado en Sites.
 - Rama y remoto de publicación: rama `main`, remoto `sites`.
 
@@ -44,7 +48,7 @@ El dashboard dispone de estas vistas:
 10. Proveedores.
 11. Finanzas.
 12. Centro de datos.
-13. Agente IA de consulta, en modo de solo lectura.
+13. Agente IA de consulta y carga documental controlada.
 
 El selector de proyecto activo permite abrir dos promociones:
 
@@ -57,6 +61,32 @@ El selector de proyecto activo permite abrir dos promociones:
 Los datos de ambos proyectos están separados. El agente IA y las altas
 persistentes de métricas o proveedores permanecen vinculados únicamente a
 ARAYA para evitar mezclar registros reales con la demostración.
+
+La carga documental colaborativa está disponible en todas las pestañas de
+ARAYA mediante `+ Cargar archivo` y también dentro del chat del agente:
+
+- El original se guarda en R2 con la vinculación lógica `FILES`.
+- D1 registra usuario autenticado, área, sección, descripción, fecha de corte,
+  tamaño, SHA-256, versión, estado y motivo de clasificación.
+- Los duplicados exactos se detectan por SHA-256 y no se vuelven a almacenar.
+- El registro del Centro de datos se refresca cada 10 segundos.
+- Toda carga nueva queda `pendiente_revision`; no cambia cifras consolidadas
+  hasta que el área responsable la concilie y valide.
+- Límite actual: 50 MB. Formatos: Excel, CSV, PowerPoint, PDF, Word, MPP, DWG,
+  imágenes y ZIP.
+
+Rutas y persistencia:
+
+- `app/api/files/route.ts`: listado, carga y descarga privada.
+- `lib/file-routing.ts`: áreas, clasificación y normalización de nombres.
+- `uploaded_files`: metadatos del archivo.
+- `file_activity`: auditoría de eventos.
+- `drizzle/0001_milky_jamie_braddock.sql`: migración correspondiente.
+
+El sitio sigue siendo privado para `enriquemontesplaza@gmail.com`. La
+infraestructura admite a cualquier usuario autenticado que reciba acceso, pero
+no se añadieron personas ni grupos porque el usuario aún no facilitó sus
+correos o un grupo de trabajo. No hacer el sitio público para resolver esto.
 
 La implantación general incluye:
 
@@ -191,9 +221,11 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 8 pruebas superadas.
+- 9 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
+- `npm run lint` termina sin errores; mantiene cuatro avisos conocidos por el
+  uso intencional de imágenes locales con `<img>`.
 
 Para cambios visuales de posición, comprobar:
 
@@ -230,6 +262,8 @@ Incorporado el 29/07/2026:
 - `Informe Ventas Araya JUN2026 2.pptx`: detalle comercial con una lámina de
   morosidad anterior.
 - `INFORME_JUN_2026_ARAYA_v1_1.xlsx`: fuente financiera detallada principal.
+- `Datos para Informe Jun-26.xlsx`: soporte departamental de Antonely para
+  costes, CxP, anticipos y balance.
 - `Lamina Flujo.pptx`: histórico rotulado mayo de 2026; no prevalece.
 - `Presentación Informe Araya Junio 2026.pdf`: versión renderizada equivalente
   al consolidado.
@@ -237,6 +271,20 @@ Incorporado el 29/07/2026:
 Copias descargables:
 
 `public/data-center/junio-2026/`
+
+Archivo de Antonely:
+
+- Origen:
+  `C:\Users\Usuario1\OneDrive\Desktop\Antonely\Datos para Informe Jun-26.xlsx`
+- Copia:
+  `public/data-center/junio-2026/datos-para-informe-jun-26.xlsx`
+- SHA-256:
+  `C87ABEA3FEA21BB44D598313C2FAA8719F22FF4B265C30EBD45358897B9D590F`
+- Hojas: costes acumulados, cuentas por pagar, anticipos y balance.
+- CxP: 96 líneas de factura; el ranking de principales proveedores se muestra
+  en la pestaña `Proveedores`.
+- Anticipos pendientes RD$9.210.448,86 y cifras de balance coinciden con el
+  control existente.
 
 Nuevas vistas interactivas:
 
@@ -252,7 +300,8 @@ Vistas ampliadas:
 - `Urbanismo`: indicador físico-financiero separado del 4% de actividades
   terminadas, avance por especialidad y retrasos de inicio.
 - `Planificación`: Curva S exacta del informe y acciones recomendadas.
-- `Centro de datos`: 9 fuentes, 7 descargas y reglas de prevalencia.
+- `Centro de datos`: 10 fuentes, 8 descargas, carga colaborativa, versiones y
+  reglas de prevalencia.
 
 Datos de control:
 
@@ -260,6 +309,8 @@ Datos de control:
 - Comercial: 228 reservas activas; 24 clientes vencidos por USD 136.840,39.
 - Presupuesto: RD$3.591.280.577,17; ejecutado RD$712.326.162,73.
 - CxP detallada: RD$18.597.489,63.
+- CxP en balance: RD$18.612.245,90.
+- CxP del archivo Antonely: RD$18.627.534,91.
 - Anticipos pendientes: RD$9.210.448,86.
 - Caja proyectada diciembre: –RD$125.196.511,23.
 
@@ -269,11 +320,18 @@ Conciliaciones que deben seguir visibles:
    la lámina 30.
 2. Plan físico de junio: KPI 21,24% frente a 23,29% en la Curva S.
 3. Retraso general de obra: 5 días en el informe y 7 días en el MPP.
-4. CxP detallada frente a balance: diferencia RD$14.756,27.
+4. CxP: consolidado RD$18.597.489,63; balance RD$18.612.245,90; Antonely
+   RD$18.627.534,91. El archivo Antonely supera el consolidado en RD$30.045,28
+   y el balance en RD$15.289,01.
 5. Tres errores `#REF!` en `Intereses 06-26!U37:W37`.
 6. El desglose de morosidad excede el total en USD 0,05.
 7. La presentación comercial aislada contiene una morosidad anterior; usar la
    actualización del consolidado al 06/07/2026.
+8. Costes de Antonely: junio RD$48.988.755,86 y acumulado
+   RD$712.326.161,73; el consolidado registra RD$48.998.910,52 y
+   RD$712.326.162,73. Diferencias: RD$10.154,66 y RD$1,00.
+9. La cabecera de la hoja de costes de Antonely indica por error un inicio en
+   junio de 2016. Se preserva el original y se marca la observación.
 
 ## Criterios de continuidad
 
