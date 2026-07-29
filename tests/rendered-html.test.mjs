@@ -50,6 +50,18 @@ test("normalized source data contains 26 buildings and 156 apartments", async ()
   assert.match(source, /urbanismAreas/);
 });
 
+test("project selector keeps ARAYA separate from the fictional demo project", async () => {
+  const source = await readFile("app/dashboard-client.tsx", "utf8");
+  assert.match(source, /type ProjectId = "araya" \| "mirador"/);
+  assert.match(source, /MIRADOR DEL PARQUE/);
+  assert.match(source, /Proyecto ficticio de demostración/);
+  assert.match(source, /Todos los nombres, cifras y documentos de Mirador del Parque son simulados/);
+  assert.match(source, /role="listbox"/);
+  assert.match(source, /setActiveProjectId/);
+  assert.match(source, /14 edificios · 84 viviendas/);
+  assert.match(source, /DemoProjectContent/);
+});
+
 test("agent is source-grounded, read-only and evaluated", async () => {
   const [route, prompt, evalCases] = await Promise.all([
     readFile("app/api/agent/route.ts", "utf8"),

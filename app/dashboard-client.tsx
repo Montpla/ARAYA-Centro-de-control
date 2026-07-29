@@ -39,6 +39,34 @@ type ChatMessage = {
   mode?: string;
 };
 
+type ProjectId = "araya" | "mirador";
+
+const projects: Record<ProjectId, {
+  id: ProjectId;
+  code: string;
+  name: string;
+  summary: string;
+  cutoff: string;
+  demo: boolean;
+}> = {
+  araya: {
+    id: "araya",
+    code: "AR",
+    name: "ARAYA",
+    summary: "26 edificios · 156 viviendas",
+    cutoff: projectSnapshot.declaredCutoff,
+    demo: false,
+  },
+  mirador: {
+    id: "mirador",
+    code: "MP",
+    name: "MIRADOR DEL PARQUE",
+    summary: "14 edificios · 84 viviendas",
+    cutoff: "15/07/2026",
+    demo: true,
+  },
+};
+
 const navItems: Array<{ id: View; label: string; mark: string }> = [
   { id: "resumen", label: "Resumen ejecutivo", mark: "01" },
   { id: "planificacion", label: "Planificación", mark: "02" },
@@ -153,20 +181,31 @@ function ProgressRing({ value }: { value: number }) {
   );
 }
 
-function Header({ view, onAsk }: { view: View; onAsk: () => void }) {
+function Header({
+  view,
+  onAsk,
+  project,
+}: {
+  view: View;
+  onAsk: () => void;
+  project: (typeof projects)[ProjectId];
+}) {
   const label = navItems.find((item) => item.id === view)?.label;
   return (
     <header className="topbar">
       <div>
-        <div className="crumb">ARAYA / CENTRO DE CONTROL</div>
+        <div className="crumb">
+          {project.name} / CENTRO DE CONTROL
+          {project.demo && <span className="demo-badge">PROYECTO DEMO</span>}
+        </div>
         <h1>{label}</h1>
       </div>
       <div className="top-actions">
         <div className="live-state">
           <span className="live-dot" />
-          Corte documental · {projectSnapshot.declaredCutoff}
+          Corte documental · {project.cutoff}
         </div>
-        <button className="button secondary" onClick={onAsk}>
+        <button className="button secondary" onClick={onAsk} disabled={project.demo}>
           Preguntar al agente
         </button>
         <button className="avatar" aria-label="Perfil de Dirección">DR</button>
@@ -1256,7 +1295,315 @@ function RecordModal({
   );
 }
 
+const demoBuildings = [
+  54, 51, 48, 45, 43, 41, 38, 36, 34, 31, 28, 25, 19, 12,
+].map((progress, index) => ({
+  id: index + 1,
+  code: `MP-${String(index + 1).padStart(2, "0")}`,
+  progress,
+  units: 6,
+  status: progress >= 45 ? "En curso" : progress >= 25 ? "Preparado" : "Pendiente",
+}));
+
+const demoUrbanism = [
+  { name: "Vial principal y accesos", progress: 42, planned: 46, owner: "Infraestructura" },
+  { name: "Redes de abastecimiento", progress: 37, planned: 40, owner: "Instalaciones" },
+  { name: "Parque central", progress: 24, planned: 28, owner: "Paisajismo" },
+  { name: "Aparcamientos exteriores", progress: 31, planned: 35, owner: "Urbanización" },
+];
+
+const demoMilestones = [
+  { date: "15 jul 2026", title: "Cierre del corte quincenal", detail: "Avance consolidado de estructura y urbanización.", type: "Corte" },
+  { date: "29 jul 2026", title: "Inicio de fachadas MP-01 a MP-04", detail: "Hito previsto; pendiente de validación de producción.", type: "Hito" },
+  { date: "12 ago 2026", title: "Prueba de la red de abastecimiento", detail: "Ensayo de presión del primer sector.", type: "Control" },
+  { date: "30 nov 2027", title: "Fin contractual", detail: "Fecha base usada en esta simulación.", type: "Entrega" },
+];
+
+function DemoMasterplan() {
+  const [selected, setSelected] = useState(demoBuildings[0]);
+  return (
+    <section className="panel demo-plan-panel">
+      <div className="panel-heading">
+        <div>
+          <span className="section-kicker">IMPLANTACIÓN INTERACTIVA · DEMOSTRACIÓN</span>
+          <h3>Mirador del Parque</h3>
+        </div>
+        <span className="data-note">Selecciona un edificio</span>
+      </div>
+      <div className="demo-plan-layout">
+        <div className="demo-masterplan" aria-label="Plano esquemático de Mirador del Parque">
+          <div className="demo-green demo-green-one">PARQUE CENTRAL</div>
+          <div className="demo-green demo-green-two">JARDINES</div>
+          <div className="demo-road demo-road-main">VIAL PRINCIPAL</div>
+          <div className="demo-road demo-road-cross">ACCESO</div>
+          {demoBuildings.map((building) => (
+            <button
+              key={building.id}
+              className={`demo-building demo-building-${building.id} ${selected.id === building.id ? "selected" : ""}`}
+              onClick={() => setSelected(building)}
+              aria-label={`Abrir ${building.code}`}
+            >
+              <strong>{building.code}</strong>
+              <span>{building.progress}%</span>
+            </button>
+          ))}
+        </div>
+        <aside className="demo-plan-detail">
+          <span className="section-kicker">EDIFICIO SELECCIONADO</span>
+          <h3>{selected.code}</h3>
+          <strong className="demo-detail-progress">{selected.progress}%</strong>
+          <p>Índice sintético de avance para mostrar el funcionamiento del segundo proyecto.</p>
+          <div className="picker-summary">
+            <span>Viviendas<strong>{selected.units}</strong></span>
+            <span>Estado<strong>{selected.status}</strong></span>
+            <span>Uso<strong>Residencial</strong></span>
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function DemoOverview({ onNavigate }: { onNavigate: (view: View) => void }) {
+  return (
+    <div className="view-stack">
+      <section className="demo-notice">
+        <strong>Proyecto ficticio de demostración.</strong>
+        <span>Todos los nombres, cifras y documentos de Mirador del Parque son simulados.</span>
+      </section>
+      <section className="hero-grid">
+        <article className="project-pulse panel demo-pulse">
+          <div>
+            <div className="section-kicker">CORTE SIMULADO 15/07/2026</div>
+            <h2>La promoción avanza al 36,8%, con una desviación de 2,7 puntos.</h2>
+            <p>
+              La estructura de los primeros cuatro edificios concentra el avance.
+              Urbanización y fachadas son los siguientes frentes de control.
+            </p>
+            <div className="project-meta">
+              <span>Fin base · 30 nov 2027</span>
+              <span>Fin previsto · 12 dic 2027</span>
+            </div>
+          </div>
+          <ProgressRing value={36.8} />
+        </article>
+        <div className="stat-grid">
+          <StatCard eyebrow="Plan simulado" value="39,5%" detail="-2,7 pp de brecha física" tone="warn" />
+          <StatCard eyebrow="Alcance residencial" value="14 edificios" detail="84 viviendas · 6 por edificio" />
+          <StatCard eyebrow="Urbanización" value="33,5%" detail="4 áreas activas" />
+          <StatCard eyebrow="Previsión final" value="+12 días" detail="12/12/2027 frente a línea base" tone="danger" />
+        </div>
+      </section>
+      <DemoMasterplan />
+      <section className="dashboard-grid">
+        <article className="panel attention-card">
+          <div className="panel-heading">
+            <div><span className="section-kicker">CONTROL DE DIRECCIÓN</span><h3>Prioridades simuladas</h3></div>
+            <span className="count-badge">3</span>
+          </div>
+          <button className="attention-item" onClick={() => onNavigate("planificacion")}>
+            <span className="severity critical">PLAZO</span><strong>Fachadas acumulan 8 días de demora</strong><small>Revisar secuencia MP-01 a MP-04</small>
+          </button>
+          <button className="attention-item" onClick={() => onNavigate("urbanismo")}>
+            <span className="severity medium">URBANISMO</span><strong>Parque central por debajo del plan</strong><small>24% real frente a 28% previsto</small>
+          </button>
+          <button className="attention-item" onClick={() => onNavigate("proveedores")}>
+            <span className="severity low">SUMINISTRO</span><strong>Confirmar entrega de carpinterías</strong><small>Fecha simulada · 29/07/2026</small>
+          </button>
+        </article>
+        <article className="panel">
+          <div className="panel-heading">
+            <div><span className="section-kicker">PROGRESO POR FASE</span><h3>Situación del proyecto</h3></div>
+          </div>
+          <div className="demo-progress-list">
+            {[
+              ["Estructura", 58],
+              ["Fachadas", 26],
+              ["Instalaciones", 19],
+              ["Urbanización", 33.5],
+            ].map(([label, value]) => (
+              <div key={String(label)}>
+                <span><strong>{label}</strong><b>{value}%</b></span>
+                <i><em style={{ width: `${value}%` }} /></i>
+              </div>
+            ))}
+          </div>
+        </article>
+      </section>
+    </div>
+  );
+}
+
+function DemoProjectContent({ view, onNavigate }: { view: View; onNavigate: (view: View) => void }) {
+  if (view === "resumen") return <DemoOverview onNavigate={onNavigate} />;
+  if (view === "implantacion") return <div className="view-stack"><section className="demo-notice"><strong>Plano esquemático de demostración.</strong><span>No corresponde a una promoción real.</span></section><DemoMasterplan /></div>;
+
+  if (view === "planificacion") {
+    return (
+      <div className="view-stack">
+        <section className="demo-notice"><strong>Planificación simulada.</strong><span>Datos creados únicamente para probar el cambio entre proyectos.</span></section>
+        <section className="stat-grid wide">
+          <StatCard eyebrow="Avance físico" value="36,8%" detail="Plan simulado 39,5%" tone="warn" />
+          <StatCard eyebrow="Fin previsto" value="12 dic 2027" detail="+12 días frente a base" tone="danger" />
+          <StatCard eyebrow="Fases activas" value="4" detail="Estructura, fachadas, instalaciones y urbanismo" />
+          <StatCard eyebrow="Hitos próximos" value="3" detail="Dentro de los próximos 30 días" />
+        </section>
+        <section className="panel">
+          <div className="panel-heading"><div><span className="section-kicker">CRONOGRAMA DEMO</span><h3>Fases principales</h3></div></div>
+          <div className="simple-table demo-table">
+            <div className="table-row table-head"><span>Fase</span><span>Avance</span><span>Fin previsto</span><span>Desviación</span></div>
+            {[
+              ["Estructura", "58%", "18/12/2026", "+3 días"],
+              ["Fachadas", "26%", "28/04/2027", "+8 días"],
+              ["Instalaciones", "19%", "16/07/2027", "+5 días"],
+              ["Urbanización", "33,5%", "30/09/2027", "+4 días"],
+            ].map((row) => <div className="table-row" key={row[0]}>{row.map((cell, index) => index === 0 ? <strong key={cell}>{cell}</strong> : <span key={cell}>{cell}</span>)}</div>)}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (view === "edificios") {
+    return (
+      <div className="view-stack">
+        <section className="demo-notice"><strong>Edificios de demostración.</strong><span>14 bloques residenciales simulados.</span></section>
+        <section className="demo-building-grid">
+          {demoBuildings.map((building) => (
+            <article className="panel demo-building-card" key={building.id}>
+              <span className="section-kicker">{building.status}</span>
+              <h3>{building.code}</h3>
+              <strong>{building.progress}%</strong>
+              <div className="demo-card-track"><i style={{ width: `${building.progress}%` }} /></div>
+              <small>{building.units} viviendas · dato simulado</small>
+            </article>
+          ))}
+        </section>
+      </div>
+    );
+  }
+
+  if (view === "viviendas") {
+    return (
+      <div className="view-stack">
+        <section className="stat-grid wide">
+          <StatCard eyebrow="Viviendas totales" value="84" detail="14 edificios · 6 por edificio" />
+          <StatCard eyebrow="En ejecución" value="36" detail="Estructura o cerramientos" />
+          <StatCard eyebrow="Preparadas" value="30" detail="Pendientes de inicio interior" />
+          <StatCard eyebrow="Pendientes" value="18" detail="Sin actividad registrada" tone="warn" />
+        </section>
+        <section className="panel">
+          <div className="panel-heading"><div><span className="section-kicker">INVENTARIO DEMO</span><h3>Viviendas por edificio</h3></div></div>
+          <div className="demo-unit-grid">
+            {demoBuildings.map((building) => (
+              <article key={building.id}><strong>{building.code}</strong><span>{Array.from({ length: 6 }, (_, index) => <i key={index} title={`${building.code}-${index + 1}`} className={index < Math.ceil(building.progress / 17) ? "active" : ""} />)}</span><small>6 viviendas · {building.progress}%</small></article>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (view === "urbanismo") {
+    return (
+      <div className="view-stack">
+        <section className="demo-notice"><strong>Urbanismo simulado.</strong><span>Cuatro áreas configuradas para la demostración.</span></section>
+        <section className="demo-urban-grid">
+          {demoUrbanism.map((area) => (
+            <article className="panel" key={area.name}>
+              <span className="section-kicker">{area.owner}</span><h3>{area.name}</h3>
+              <strong className="demo-detail-progress">{area.progress}%</strong>
+              <div className="demo-card-track"><i style={{ width: `${area.progress}%` }} /></div>
+              <small>Plan {area.planned}% · Brecha {number.format(area.progress - area.planned)} pp</small>
+            </article>
+          ))}
+        </section>
+      </div>
+    );
+  }
+
+  if (view === "cronologia") {
+    return (
+      <section className="panel timeline-panel">
+        <div className="panel-heading"><div><span className="section-kicker">TRAZABILIDAD DEMO</span><h3>Hitos y controles simulados</h3></div></div>
+        <div className="timeline">
+          {demoMilestones.map((event) => (
+            <article className="timeline-event" key={event.title}>
+              <div className="timeline-marker hito" /><div className="timeline-date"><strong>{event.date}</strong><span>Demo</span></div>
+              <div className="timeline-copy"><span className="event-type">{event.type}</span><h4>{event.title}</h4><p>{event.detail}</p><small>Mirador del Parque · Sistema</small></div>
+            </article>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (view === "proveedores") {
+    return (
+      <div className="view-stack">
+        <section className="demo-notice"><strong>Proveedores ficticios.</strong><span>No representan empresas reales ni contratos existentes.</span></section>
+        <section className="supplier-grid">
+          {[
+            ["Hormigones Central", "Estructura", "22/07/2026", "En plazo"],
+            ["Aluminios Horizonte", "Carpinterías", "29/07/2026", "Revisión"],
+            ["Jardines del Este", "Paisajismo", "12/08/2026", "En plazo"],
+          ].map((supplier) => (
+            <article className="supplier-card panel" key={supplier[0]}>
+              <div className="supplier-head"><div className="supplier-logo">{supplier[0].slice(0, 2).toUpperCase()}</div><div><strong>{supplier[0]}</strong><span>{supplier[1]}</span></div></div>
+              <div className="supplier-details"><span>Próxima entrega<strong>{supplier[2]}</strong></span><span>Estado<strong>{supplier[3]}</strong></span><span>Origen<strong>Dato demo</strong></span></div>
+            </article>
+          ))}
+        </section>
+      </div>
+    );
+  }
+
+  if (view === "metricas") {
+    return (
+      <div className="view-stack">
+        <section className="demo-notice"><strong>Métricas simuladas.</strong><span>No deben utilizarse para decisiones económicas o contractuales.</span></section>
+        <section className="metric-grid">
+          {[
+            ["Avance físico", "36,8", "%", "39,5"],
+            ["Desviación de plazo", "12", "días", "0"],
+            ["Viviendas activas", "36", "ud.", "42"],
+            ["Urbanización", "33,5", "%", "37"],
+          ].map((metric) => (
+            <article className="metric-card panel" key={metric[0]}><div className="metric-card-head"><span>MIRADOR · DEMO</span></div><h4>{metric[0]}</h4><strong>{metric[1]} <small>{metric[2]}</small></strong><div className="metric-target"><span>Referencia {metric[3]} {metric[2]}</span></div></article>
+          ))}
+        </section>
+      </div>
+    );
+  }
+
+  if (view === "fuentes") {
+    return (
+      <div className="view-stack">
+        <section className="demo-notice"><strong>Centro de datos ficticio.</strong><span>Los documentos siguientes son referencias visuales y no existen como archivos descargables.</span></section>
+        <section className="source-grid">
+          {[
+            ["XLSX", "Avance_Mirador_Demo.xlsx", "15/07/2026", "168 registros simulados"],
+            ["MPP", "Plan_Maestro_Mirador_Demo.mpp", "14/07/2026", "642 tareas simuladas"],
+            ["PDF", "Implantacion_Mirador_Demo.pdf", "10/07/2026", "Plano conceptual"],
+          ].map((source) => (
+            <article className="panel source-card" key={source[1]}><div className="panel-heading"><div><span className="section-kicker">{source[0]}</span><h3>{source[1]}</h3></div><span className="source-status">DEMO</span></div><div className="source-meta"><span>Corte<strong>{source[2]}</strong></span><span>Contenido<strong>{source[3]}</strong></span><span>Estado<strong>Simulado</strong></span></div></article>
+          ))}
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <section className="panel empty-state">
+      <strong>El agente IA permanece vinculado únicamente a los datos reales de ARAYA.</strong>
+      <p>Cambia a ARAYA desde el selector de proyecto para realizar consultas documentales.</p>
+    </section>
+  );
+}
+
 export function DashboardClient() {
+  const [activeProjectId, setActiveProjectId] = useState<ProjectId>("araya");
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [view, setView] = useState<View>("resumen");
   const [selectedBuilding, setSelectedBuilding] = useState(buildings[0]);
   const [metrics, setMetrics] = useState<CustomMetric[]>(initialMetrics);
@@ -1264,6 +1611,7 @@ export function DashboardClient() {
   const [agentOpen, setAgentOpen] = useState(true);
   const [modal, setModal] = useState<"metric" | "supplier" | null>(null);
   const [search, setSearch] = useState("");
+  const activeProject = projects[activeProjectId];
 
   useEffect(() => {
     fetch("/api/dashboard")
@@ -1282,6 +1630,17 @@ export function DashboardClient() {
   const searchResults = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return [];
+    if (activeProjectId === "mirador") {
+      return demoBuildings
+        .filter((item) => item.code.toLowerCase().includes(term))
+        .map((item) => ({
+          label: item.code,
+          detail: `${item.progress}% de avance · ${item.units} viviendas · demo`,
+          view: "edificios" as View,
+          building: null,
+        }))
+        .slice(0, 8);
+    }
     return [
       ...buildings
         .filter((item) => item.name.toLowerCase().includes(term) || item.shortName === term)
@@ -1301,9 +1660,10 @@ export function DashboardClient() {
         .filter((item) => item.name.toLowerCase().includes(term))
         .map((item) => ({ label: item.name, detail: `${item.value} ${item.unit}`, view: "metricas" as View, building: null })),
     ].slice(0, 8);
-  }, [search, supplierRows, metrics]);
+  }, [activeProjectId, search, supplierRows, metrics]);
 
   function content() {
+    if (activeProjectId === "mirador") return <DemoProjectContent view={view} onNavigate={setView} />;
     if (view === "resumen") return <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} />;
     if (view === "planificacion") return <Planning />;
     if (view === "implantacion") return <div className="view-stack"><SitePlan onNavigate={setView} onSelectBuilding={setSelectedBuilding} /></div>;
@@ -1326,7 +1686,46 @@ export function DashboardClient() {
         </div>
         <div className="project-selector">
           <span>PROYECTO ACTIVO</span>
-          <button><b>AR</b><div><strong>ARAYA</strong><small>26 edificios · 156 viviendas</small></div><i>⌄</i></button>
+          <button
+            className="project-selector-trigger"
+            onClick={() => setProjectMenuOpen((open) => !open)}
+            aria-expanded={projectMenuOpen}
+            aria-haspopup="listbox"
+          >
+            <b>{activeProject.code}</b>
+            <div>
+              <strong>{activeProject.name}</strong>
+              <small>{activeProject.summary}</small>
+            </div>
+            <i>{projectMenuOpen ? "⌃" : "⌄"}</i>
+          </button>
+          {projectMenuOpen && (
+            <div className="project-menu" role="listbox" aria-label="Seleccionar proyecto activo">
+              {(Object.values(projects) as Array<(typeof projects)[ProjectId]>).map((project) => (
+                <button
+                  key={project.id}
+                  className={activeProjectId === project.id ? "selected" : ""}
+                  role="option"
+                  aria-selected={activeProjectId === project.id}
+                  onClick={() => {
+                    setActiveProjectId(project.id);
+                    setProjectMenuOpen(false);
+                    setView("resumen");
+                    setSearch("");
+                    setModal(null);
+                    setAgentOpen(project.id === "araya");
+                  }}
+                >
+                  <b>{project.code}</b>
+                  <div>
+                    <strong>{project.name}</strong>
+                    <small>{project.demo ? "Proyecto ficticio · demostración" : project.summary}</small>
+                  </div>
+                  <i>{activeProjectId === project.id ? "✓" : ""}</i>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <nav>
           <span className="nav-label">NAVEGACIÓN</span>
@@ -1340,21 +1739,25 @@ export function DashboardClient() {
               }}
             >
               <i>{item.mark}</i><span>{item.label}</span>
-              {item.id === "fuentes" && <em>{dataSources.length}</em>}
+              {item.id === "fuentes" && <em>{activeProjectId === "araya" ? dataSources.length : 3}</em>}
             </button>
           ))}
         </nav>
         <div className="sidebar-foot">
           <span><i className="live-dot" /> Fuentes integradas</span>
-          <small>Último archivo · 28/07/2026 17:26</small>
+          <small>{activeProjectId === "araya" ? "Último archivo · 28/07/2026 17:26" : "Proyecto demo · datos simulados"}</small>
         </div>
       </aside>
 
       <main className={`main-area ${agentOpen && view !== "agente" ? "with-agent" : ""}`}>
-        <Header view={view} onAsk={() => setAgentOpen(true)} />
+        <Header view={view} project={activeProject} onAsk={() => setAgentOpen(true)} />
         <div className="global-search">
           <span>⌕</span>
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar edificio, vivienda, urbanismo, proveedor o métrica…" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={activeProjectId === "araya" ? "Buscar edificio, vivienda, urbanismo, proveedor o métrica…" : "Buscar edificio demo (ej. MP-04)…"}
+          />
           {searchResults.length > 0 && (
             <div className="search-results">
               {searchResults.map((result) => (
@@ -1375,9 +1778,9 @@ export function DashboardClient() {
         <div className="content">{content()}</div>
       </main>
 
-      {agentOpen && view !== "agente" && <AgentPanel expanded={false} onClose={() => setAgentOpen(false)} />}
+      {activeProjectId === "araya" && agentOpen && view !== "agente" && <AgentPanel expanded={false} onClose={() => setAgentOpen(false)} />}
 
-      {modal && (
+      {activeProjectId === "araya" && modal && (
         <RecordModal
           type={modal}
           onClose={() => setModal(null)}
