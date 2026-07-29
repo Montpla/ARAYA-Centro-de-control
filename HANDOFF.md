@@ -23,8 +23,8 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 16.
-- Commit desplegado: `2804cefc87394f274b6c365120b8fb5d21028fa8`.
+- Última versión publicada: 17.
+- Commit desplegado: `d4eac2f75e849f3189a239117857287f959fa11f`.
 - Acceso: privado, únicamente para el propietario configurado en Sites.
 - Rama y remoto de publicación: rama `main`, remoto `sites`.
 
@@ -37,12 +37,14 @@ El dashboard dispone de estas vistas:
 3. Implantación general.
 4. Edificios.
 5. Viviendas.
-6. Urbanismo.
-7. Cronología.
-8. Proveedores.
-9. Métricas y finanzas.
-10. Centro de datos.
-11. Agente IA de consulta, en modo de solo lectura.
+6. Ventas y cobranza.
+7. Urbanismo.
+8. Seguridad y permisos.
+9. Cronología.
+10. Proveedores.
+11. Finanzas.
+12. Centro de datos.
+13. Agente IA de consulta, en modo de solo lectura.
 
 El selector de proyecto activo permite abrir dos promociones:
 
