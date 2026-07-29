@@ -1694,7 +1694,9 @@ export function DashboardClient() {
             aria-expanded={projectMenuOpen}
             aria-haspopup="listbox"
           >
-            <b>{activeProject.code}</b>
+            <b className={activeProject.id === "araya" ? "project-logo-mark" : ""}>
+              {activeProject.id === "araya" ? <img src="/araya-mark.png" alt="" /> : activeProject.code}
+            </b>
             <div>
               <strong>{activeProject.name}</strong>
               <small>{activeProject.summary}</small>
@@ -1718,7 +1720,9 @@ export function DashboardClient() {
                     setAgentOpen(project.id === "araya");
                   }}
                 >
-                  <b>{project.code}</b>
+                  <b className={project.id === "araya" ? "project-logo-mark" : ""}>
+                    {project.id === "araya" ? <img src="/araya-mark.png" alt="" /> : project.code}
+                  </b>
                   <div>
                     <strong>{project.name}</strong>
                     <small>{project.demo ? "Proyecto ficticio · demostración" : project.summary}</small>

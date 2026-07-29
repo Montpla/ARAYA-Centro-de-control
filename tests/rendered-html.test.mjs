@@ -69,6 +69,14 @@ test("sidebar uses the official Bricket brand mark", async () => {
   assert.ok(logo.length > 1000);
 });
 
+test("ARAYA project selector uses the supplied project logo", async () => {
+  const source = await readFile("app/dashboard-client.tsx", "utf8");
+  const logo = await readFile("public/araya-mark.png");
+  assert.match(source, /activeProject\.id === "araya" \? <img src="\/araya-mark\.png"/);
+  assert.match(source, /project\.id === "araya" \? <img src="\/araya-mark\.png"/);
+  assert.ok(logo.length > 1000);
+});
+
 test("agent is source-grounded, read-only and evaluated", async () => {
   const [route, prompt, evalCases] = await Promise.all([
     readFile("app/api/agent/route.ts", "utf8"),
