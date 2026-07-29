@@ -18,6 +18,27 @@ import {
   urbanismAreas,
   workPackages,
 } from "./demo-data";
+import {
+  advances,
+  arrearsBreakdown,
+  constructionDisciplines,
+  costBreakdown,
+  cxpAging,
+  cxpCategories,
+  delayedUrbanismStarts,
+  financialProjection,
+  financingProcesses,
+  juneDataQualityIssues,
+  juneReport,
+  managementActions,
+  permits,
+  safetyFindings,
+  safetyMetrics,
+  salesLocations,
+  salesModels,
+  structuralDelay,
+  urbanismReportAreas,
+} from "./june-report-data";
 
 type View =
   | "resumen"
@@ -25,7 +46,9 @@ type View =
   | "implantacion"
   | "edificios"
   | "viviendas"
+  | "comercial"
   | "urbanismo"
+  | "control"
   | "cronologia"
   | "proveedores"
   | "metricas"
@@ -73,11 +96,13 @@ const navItems: Array<{ id: View; label: string; mark: string }> = [
   { id: "implantacion", label: "Implantación general", mark: "03" },
   { id: "edificios", label: "Edificios", mark: "04" },
   { id: "viviendas", label: "Viviendas", mark: "05" },
-  { id: "urbanismo", label: "Urbanismo", mark: "06" },
-  { id: "cronologia", label: "Cronología", mark: "07" },
-  { id: "proveedores", label: "Proveedores", mark: "08" },
-  { id: "metricas", label: "Métricas y finanzas", mark: "09" },
-  { id: "fuentes", label: "Centro de datos", mark: "10" },
+  { id: "comercial", label: "Ventas y cobranza", mark: "06" },
+  { id: "urbanismo", label: "Urbanismo", mark: "07" },
+  { id: "control", label: "Seguridad y permisos", mark: "08" },
+  { id: "cronologia", label: "Cronología", mark: "09" },
+  { id: "proveedores", label: "Proveedores", mark: "10" },
+  { id: "metricas", label: "Finanzas", mark: "11" },
+  { id: "fuentes", label: "Centro de datos", mark: "12" },
   { id: "agente", label: "Agente IA", mark: "AI" },
 ];
 
@@ -89,6 +114,10 @@ const statusLabel = {
 };
 
 const number = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 });
+const wholeNumber = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
+const rd = (value: number) => `${value < 0 ? "–" : ""}RD$${wholeNumber.format(Math.abs(value))}`;
+const rdMillions = (value: number) => `${value < 0 ? "–" : ""}RD$${number.format(Math.abs(value) / 1_000_000)} M`;
+const usd = (value: number) => `USD ${number.format(value)}`;
 
 const planCoordinates: Record<string, { x: number; y: number }> = {
   "1": { x: 20.4, y: 74.4 },
@@ -565,9 +594,9 @@ function Overview({
             <div className="section-kicker">CORTE 30/06/2026</div>
             <h2>El avance físico está 3,00 puntos por debajo del plan.</h2>
             <p>
-              Excel registra 18,23% ejecutado frente a 21,24% previsto. El
-              cronograma MPP marca 17% y proyecta el cierre siete días después
-              de la línea base.
+              El informe de junio integra obra, ventas y finanzas. Excel registra
+              18,23% ejecutado frente a 21,24% previsto; el informe de obra
+              declara cinco días de retraso y el MPP proyecta siete.
             </p>
             <div className="project-meta">
               <span>Fin base · 31 may 2027</span>
@@ -580,7 +609,7 @@ function Overview({
           <StatCard eyebrow="Plan operativo" value="21,24%" detail="-3,00 pp de brecha física" tone="warn" />
           <StatCard eyebrow="Cronograma MPP" value="17%" detail="Indicador pendiente de conciliación" tone="warn" />
           <StatCard eyebrow="Alcance residencial" value="26 edificios" detail="156 apartamentos · 6 por edificio" />
-          <StatCard eyebrow="Previsión final" value="+7 días" detail="07/06/2027 frente a línea base" tone="danger" />
+          <StatCard eyebrow="Previsión final" value="+7 días" detail="MPP · informe de obra: +5 días" tone="danger" />
         </div>
       </section>
 
@@ -604,24 +633,29 @@ function Overview({
           <div className="panel-heading">
             <div>
               <span className="section-kicker">ATENCIÓN DE DIRECCIÓN</span>
-              <h3>3 controles prioritarios</h3>
+              <h3>4 controles prioritarios</h3>
             </div>
-            <span className="count-badge">3</span>
+            <span className="count-badge">4</span>
           </div>
           <button className="attention-item" onClick={() => onNavigate("planificacion")}>
             <span className="severity critical">PLAZO</span>
             <strong>Infraestructura proyecta +58 días</strong>
             <small>Fin 07/10/2026 · base 10/08/2026</small>
           </button>
-          <button className="attention-item" onClick={() => onNavigate("fuentes")}>
-            <span className="severity medium">CONCILIAR</span>
-            <strong>Excel 18,23% frente a MPP 17%</strong>
-            <small>Son indicadores distintos; falta regla formal de conciliación</small>
-          </button>
           <button className="attention-item" onClick={() => onNavigate("metricas")}>
-            <span className="severity low">VALIDAR</span>
-            <strong>Moneda de cubicaciones no identificada</strong>
-            <small>No se convierte ni se etiqueta como USD hasta confirmación</small>
+            <span className="severity critical">CAJA</span>
+            <strong>Proyección diciembre: –RD$125,20 M</strong>
+            <small>Condicionada a desembolsos y nueva financiación</small>
+          </button>
+          <button className="attention-item" onClick={() => onNavigate("comercial")}>
+            <span className="severity medium">COBRANZA</span>
+            <strong>24 clientes con USD 136.840,39 vencidos</strong>
+            <small>Actualizado al 06/07/2026 · menos de 1% de morosidad</small>
+          </button>
+          <button className="attention-item" onClick={() => onNavigate("fuentes")}>
+            <span className="severity low">CONCILIAR</span>
+            <strong>7 alertas de calidad visibles</strong>
+            <small>Presupuesto, plan físico, plazo, CxP, fórmulas, morosidad y versión comercial</small>
           </button>
         </article>
       </section>
@@ -648,6 +682,7 @@ function Planning() {
           <span className="data-note">Excel · corte 30/06/2026</span>
         </div>
         <ProgressChart />
+        <p className="quality-note">La serie mensual de la Curva S muestra 23,29% planificado en junio, mientras el KPI principal del mismo informe declara 21,24%. Se mantienen ambas cifras para conciliación.</p>
       </section>
       <section className="panel">
         <div className="panel-heading">
@@ -671,6 +706,12 @@ function Planning() {
               </span>
             </div>
           ))}
+        </div>
+      </section>
+      <section className="panel">
+        <div className="panel-heading"><div><span className="section-kicker">RECOMENDACIONES DEL INFORME</span><h3>Acciones de recuperación propuestas</h3></div><span className="data-note">No son compromisos confirmados</span></div>
+        <div className="action-grid">
+          {managementActions.map((action, index) => <article key={action}><span>{String(index + 1).padStart(2, "0")}</span><p>{action}</p></article>)}
         </div>
       </section>
     </div>
@@ -787,6 +828,30 @@ function BuildingsView({
         </div>
         {selectedUnit && <UnitDetailPanel building={selected} unit={selectedUnit} onClose={() => setSelectedUnit(null)} />}
       </section>
+      <section className="report-grid">
+        <article className="panel">
+          <div className="panel-heading"><div><span className="section-kicker">CONJUNTO DE 26 EDIFICIOS</span><h3>Avance por disciplina</h3></div></div>
+          <div className="rank-list compact">
+            {constructionDisciplines.map((item) => (
+              <div key={item.name}>
+                <span><strong>{item.name}</strong></span>
+                <div><i style={{ width: `${item.progress}%` }} /></div><b>{number.format(item.progress)}%</b>
+              </div>
+            ))}
+          </div>
+        </article>
+        <article className="panel">
+          <div className="panel-heading"><div><span className="section-kicker">SUPERSTRUCTURA</span><h3>Demora proyectada por edificio</h3></div><span className="data-note">Informe de obra</span></div>
+          <div className="delay-chip-grid">
+            {structuralDelay.map((item) => (
+              <span key={item.building} className={item.days >= 15 ? "critical" : item.days >= 8 ? "warn" : ""}>
+                <strong>{item.building}</strong><b>+{item.days} d</b>
+              </span>
+            ))}
+          </div>
+          <p className="quality-note">14 edificios tienen pedidos de materiales vencidos. Carpintería, ventanas y piezas sanitarias permanecen en 0% en los 26 edificios.</p>
+        </article>
+      </section>
     </div>
   );
 }
@@ -858,19 +923,157 @@ function HousingView() {
   );
 }
 
+function CommercialView() {
+  const [section, setSection] = useState<"reservas" | "vinculacion" | "cobranza">("reservas");
+  return (
+    <div className="view-stack">
+      <section className="data-view-intro">
+        <div><span className="section-kicker">INFORME COMERCIAL · JUNIO 2026</span><h2>Ventas, vinculación y cobranza</h2></div>
+        <p>Selecciona un bloque para abrir su detalle. Los datos de morosidad están actualizados al 06/07/2026.</p>
+      </section>
+      <section className="stat-grid wide">
+        <StatCard eyebrow="Reservas activas" value={`${juneReport.sales.active}`} detail={`${juneReport.sales.reservations} históricas · ${juneReport.sales.withdrawn} desistidas`} />
+        <StatCard eyebrow="Fase I" value={`${juneReport.sales.phaseOneActive}`} detail={`${juneReport.sales.phaseOneSales}% del objetivo comercial`} tone="good" />
+        <StatCard eyebrow="Fase II" value={`${juneReport.sales.phaseTwoActive}`} detail={`${juneReport.sales.phaseTwoSales}% del objetivo comercial`} />
+        <StatCard eyebrow="Cartera vencida" value={usd(juneReport.collections.overdueUsd)} detail={`${juneReport.collections.overdue} clientes · menos de 1%`} tone="warn" />
+      </section>
+      <section className="report-tabs" aria-label="Secciones del informe comercial">
+        {[
+          { id: "reservas", label: "Reservas y producto", detail: "279 reservas" },
+          { id: "vinculacion", label: "Vinculación", detail: "198 depurados" },
+          { id: "cobranza", label: "Cobranza", detail: "172 contratos" },
+        ].map((item) => (
+          <button
+            key={item.id}
+            className={section === item.id ? "active" : ""}
+            onClick={() => setSection(item.id as typeof section)}
+          >
+            <span>{item.label}</span><strong>{item.detail}</strong>
+          </button>
+        ))}
+      </section>
+
+      {section === "reservas" && (
+        <section className="report-grid">
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">FASE II</span><h3>Mix de producto</h3></div><span className="data-note">Junio: 18 reservas</span></div>
+            <div className="rank-list">
+              {salesModels.map((model) => (
+                <div key={model.name}>
+                  <span><strong>{model.name}</strong><small>{model.june} en junio</small></span>
+                  <div><i style={{ width: `${(model.value / 32) * 100}%` }} /></div>
+                  <b>{model.value}</b>
+                </div>
+              ))}
+            </div>
+          </article>
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">UBICACIÓN</span><h3>Reservas activas por frente</h3></div></div>
+            <div className="compact-table commercial-table">
+              <div className="compact-row head"><span>Ubicación</span><span>Garden</span><span>Sunset</span><span>Balcony</span><span>Total</span></div>
+              {salesLocations.map((row) => (
+                <div className="compact-row" key={row.name}>
+                  <strong>{row.name}</strong><span>{row.garden}</span><span>{row.sunset}</span><span>{row.balcony}</span><b>{row.total}</b>
+                </div>
+              ))}
+            </div>
+          </article>
+        </section>
+      )}
+
+      {section === "vinculacion" && (
+        <section className="report-grid">
+          <article className="panel pipeline-panel">
+            <div className="panel-heading"><div><span className="section-kicker">DEPURACIÓN</span><h3>Estado documental de clientes</h3></div></div>
+            <div className="pipeline">
+              <div><strong>{juneReport.contracts.reviewed}</strong><span>Depurados</span><i style={{ width: "86.8%" }} /></div>
+              <div><strong>{juneReport.contracts.pendingReview}</strong><span>Pendientes</span><i style={{ width: "13.2%" }} /></div>
+            </div>
+            <p className="section-intro">De los pendientes, {juneReport.contracts.inReview} están en depuración y {juneReport.contracts.awaitingDocuments} esperan documentos.</p>
+          </article>
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">FORMALIZACIÓN</span><h3>Expedientes depurados</h3></div></div>
+            <div className="status-matrix">
+              <div className="good"><strong>{juneReport.contracts.linked}</strong><span>Vinculados</span></div>
+              <div><strong>{juneReport.contracts.linking}</strong><span>En vinculación</span></div>
+              <div className="warn"><strong>{juneReport.contracts.signing}</strong><span>En firma</span></div>
+            </div>
+            <p className="section-intro">La fuente registra 164 unidades vinculadas y 3 desistimientos posteriores; el control financiero usa 161 vigentes.</p>
+          </article>
+        </section>
+      )}
+
+      {section === "cobranza" && (
+        <section className="report-grid">
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">172 CONTRATOS</span><h3>Estado de cobro</h3></div><span className="data-note">Corte 06/07/2026</span></div>
+            <div className="collection-bar" aria-label="106 al día, 42 con cuotas pendientes y 24 vencidos">
+              <i className="current" style={{ width: `${(106 / 172) * 100}%` }} />
+              <i className="pending" style={{ width: `${(42 / 172) * 100}%` }} />
+              <i className="overdue" style={{ width: `${(24 / 172) * 100}%` }} />
+            </div>
+            <div className="collection-legend">
+              <span><i className="current" />Al día <strong>106</strong></span>
+              <span><i className="pending" />Cuotas pendientes <strong>42</strong></span>
+              <span><i className="overdue" />Vencidos <strong>24</strong></span>
+            </div>
+          </article>
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">MOROSIDAD</span><h3>Composición de la cartera vencida</h3></div><strong>{usd(juneReport.collections.overdueUsd)}</strong></div>
+            <div className="rank-list compact">
+              {arrearsBreakdown.map((item) => (
+                <div key={item.name}>
+                  <span><strong>{item.name}</strong><small>{item.clients} clientes</small></span>
+                  <div><i style={{ width: `${(item.amountUsd / juneReport.collections.overdueUsd) * 100}%` }} /></div>
+                  <b>{usd(item.amountUsd)}</b>
+                </div>
+              ))}
+            </div>
+            <p className="quality-note">El desglose excede el total declarado en USD 0,05; se conserva la cifra total de la fuente.</p>
+          </article>
+        </section>
+      )}
+    </div>
+  );
+}
+
 function UrbanismView() {
   const [selectedArea, setSelectedArea] = useState<UrbanismArea>(urbanismAreas[0]);
+  const [selectedReportArea, setSelectedReportArea] = useState(urbanismReportAreas[0]);
   return (
     <div className="view-stack">
       <section className="data-view-intro">
         <div><span className="section-kicker">CAPAS OPERATIVAS DEL PLANO</span><h2>Urbanismo y espacios comunes</h2></div>
-        <p>Pulsa cada área para consultar la información disponible y los campos que faltan por incorporar.</p>
+        <p>Pulsa cada especialidad o cada área del plano para consultar sus indicadores y fuentes.</p>
       </section>
       <section className="stat-grid wide">
-        <StatCard eyebrow="Urbanismo ejecutado" value={`${number.format(projectSnapshot.urbanismProgress)}%`} detail={`Plan ${number.format(projectSnapshot.urbanismPlanned)}%`} tone="good" />
-        <StatCard eyebrow="Áreas identificadas" value={`${urbanismAreas.length}`} detail="Plano DWG y fotografía" />
-        <StatCard eyebrow="Áreas con indicador" value="1" detail="Consolidado de urbanismo" />
-        <StatCard eyebrow="Pendientes de detalle" value={`${urbanismAreas.length - 1}`} detail="Preparadas para nuevos datos" tone="warn" />
+        <StatCard eyebrow="Medición físico-financiera" value={`${number.format(projectSnapshot.urbanismProgress)}%`} detail={`Plan ${number.format(projectSnapshot.urbanismPlanned)}% · Excel`} tone="good" />
+        <StatCard eyebrow="Actividades terminadas" value="4%" detail="16 de 315 · informe de obra" tone="warn" />
+        <StatCard eyebrow="Mayor avance" value="72,76%" detail="Movimiento de tierra" />
+        <StatCard eyebrow="Arranques demorados" value={`${delayedUrbanismStarts.length}`} detail="10 a 70 días de retraso" tone="danger" />
+      </section>
+      <section className="report-grid">
+        <article className="panel">
+          <div className="panel-heading"><div><span className="section-kicker">INFORME DE OBRA</span><h3>Avance por especialidad</h3></div></div>
+          <div className="discipline-grid">
+            {urbanismReportAreas.map((area) => (
+              <button key={area.name} className={selectedReportArea.name === area.name ? "active" : ""} onClick={() => setSelectedReportArea(area)}>
+                <span>{area.name}</span><strong>{number.format(area.progress)}%</strong>
+                <i><b style={{ width: `${area.progress}%` }} /></i>
+              </button>
+            ))}
+          </div>
+        </article>
+        <article className="panel selected-report">
+          <span className="section-kicker">ESPECIALIDAD SELECCIONADA</span>
+          <h3>{selectedReportArea.name}</h3>
+          <strong>{number.format(selectedReportArea.progress)}%</strong>
+          <p>Progreso de actividades reportado en el informe de obra. Es distinto del indicador físico-financiero consolidado de 18,28%.</p>
+          <div className="delay-preview">
+            <span>Mayor demora de inicio<strong>70 días</strong></span>
+            <span>Última demora registrada<strong>10 días</strong></span>
+          </div>
+        </article>
       </section>
       <section className="urbanism-workspace">
         <div className="urbanism-area-grid">
@@ -903,6 +1106,89 @@ function UrbanismView() {
           </div>
         </aside>
       </section>
+    </div>
+  );
+}
+
+function ControlView() {
+  const [section, setSection] = useState<"seguridad" | "permisos" | "financiacion">("seguridad");
+  return (
+    <div className="view-stack">
+      <section className="data-view-intro">
+        <div><span className="section-kicker">CONTROL TRANSVERSAL · JUNIO 2026</span><h2>Seguridad, permisos y gestiones</h2></div>
+        <p>Abre cada bloque para consultar indicadores, trámites y procesos de financiación.</p>
+      </section>
+      <section className="report-tabs">
+        {[
+          { id: "seguridad", label: "Seguridad y salud", detail: "0 accidentes" },
+          { id: "permisos", label: "Permisos", detail: "8 aprobados · 1 en proceso" },
+          { id: "financiacion", label: "Financiación", detail: "6 procesos" },
+        ].map((item) => (
+          <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => setSection(item.id as typeof section)}>
+            <span>{item.label}</span><strong>{item.detail}</strong>
+          </button>
+        ))}
+      </section>
+
+      {section === "seguridad" && (
+        <>
+          <section className="safety-grid">
+            {safetyMetrics.map((metric) => (
+              <article className="panel safety-card" key={metric.label}>
+                <span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.detail}</small>
+              </article>
+            ))}
+          </section>
+          <section className="report-grid">
+            <article className="panel">
+              <div className="panel-heading"><div><span className="section-kicker">HALLAZGOS</span><h3>Observaciones del corte</h3></div></div>
+              <ul className="quality-list control-list">{safetyFindings.map((item) => <li key={item}>{item}</li>)}</ul>
+            </article>
+            <article className="panel">
+              <div className="panel-heading"><div><span className="section-kicker">SEGUIMIENTO</span><h3>Lectura operativa</h3></div><span className="source-status observada">Observada</span></div>
+              <div className="callout good"><strong>Cero accidentes reportados</strong><p>El dato está disponible para las semanas 3 y 4.</p></div>
+              <div className="callout warn"><strong>Semana 2 sin reporte</strong><p>La ausencia se mantiene como brecha documental y no se interpreta como cero incidentes.</p></div>
+              <div className="callout"><strong>Sin auditorías ni formaciones</strong><p>No se registraron auditorías o capacitaciones formales en la fuente.</p></div>
+            </article>
+          </section>
+        </>
+      )}
+
+      {section === "permisos" && (
+        <section className="panel">
+          <div className="panel-heading"><div><span className="section-kicker">MATRIZ DE TRÁMITES</span><h3>Permisos y no objeciones</h3></div><span className="data-note">8 aprobados · 1 en proceso</span></div>
+          <div className="compact-table permit-table">
+            <div className="compact-row head"><span>Entidad</span><span>Referencia</span><span>Estado</span><span>Fecha / siguiente paso</span></div>
+            {permits.map((permit) => (
+              <div className="compact-row" key={`${permit.entity}-${permit.reference}`}>
+                <strong>{permit.entity}</strong><span>{permit.reference}</span>
+                <b className={permit.status === "Aprobado" ? "good-text" : "warn-text"}>{permit.status}</b><span>{permit.date}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {section === "financiacion" && (
+        <section className="report-grid">
+          <article className="panel finance-processes">
+            <div className="panel-heading"><div><span className="section-kicker">GESTIONES FINANCIERAS</span><h3>Procesos activos</h3></div></div>
+            {financingProcesses.map((process) => (
+              <div className="finance-process" key={process.entity}>
+                <span><strong>{process.entity}</strong><small>{process.detail}</small></span>
+                <b>{process.amount}</b><i>{process.status}</i>
+              </div>
+            ))}
+          </article>
+          <article className="panel decision-panel">
+            <span className="section-kicker">SOLICITUD DE APROBACIÓN</span>
+            <h3>Línea de crédito AFI</h3>
+            <strong>RD$100 M</strong>
+            <p>Solicitud incluida en el informe de junio. Se presenta como decisión pendiente, no como financiación confirmada.</p>
+            <div className="callout warn"><strong>Condición de caja</strong><p>La proyección financiera cierra diciembre en –RD$125,20 M si no se materializan los flujos previstos.</p></div>
+          </article>
+        </section>
+      )}
     </div>
   );
 }
@@ -989,65 +1275,160 @@ function SuppliersView({ suppliers, onAdd }: { suppliers: Supplier[]; onAdd: () 
 }
 
 function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () => void }) {
+  const [section, setSection] = useState<"flujo" | "cxp" | "anticipos" | "control">("flujo");
   return (
     <div className="view-stack">
-      <section className="panel metric-library">
-        <div className="panel-heading">
-          <div>
-            <span className="section-kicker">INDICADORES CONFIGURABLES</span>
-            <h3>Métricas físicas, temporales y financieras</h3>
-          </div>
-          <button className="button primary" onClick={onAdd}>Añadir métrica</button>
-        </div>
-        <p className="section-intro">
-          Los importes se mantienen en la moneda original porque el Excel no
-          identifica la divisa. No se ha realizado ninguna conversión.
-        </p>
-        <div className="metric-grid">
-          {metrics.map((metric) => (
-            <article className="metric-card" key={metric.id}>
-              <div className="metric-card-head">
-                <span>{metric.owner}</span>
-                <i className={`trend ${metric.trend}`}>{metric.trend === "up" ? "↗" : metric.trend === "down" ? "↘" : "→"}</i>
-              </div>
-              <h4>{metric.name}</h4>
-              <strong>{metric.value} <small>{metric.unit}</small></strong>
-              <div className="metric-target"><span>Referencia {metric.target} {metric.unit}</span></div>
-            </article>
-          ))}
-          <button className="metric-add-card" onClick={onAdd}>
-            <span>+</span><strong>Nueva métrica</strong><small>Nombre, unidad, objetivo y responsable</small>
+      <section className="data-view-intro">
+        <div><span className="section-kicker">INFORME FINANCIERO · JUNIO 2026</span><h2>Presupuesto, caja y obligaciones</h2></div>
+        <p>Importes del Excel financiero en pesos dominicanos. Selecciona un bloque para abrir el detalle.</p>
+      </section>
+      <section className="stat-grid wide">
+        <StatCard eyebrow="Presupuesto de control" value={rdMillions(juneReport.finance.budgetDop)} detail={`${number.format((juneReport.finance.executedDop / juneReport.finance.budgetDop) * 100)}% ejecutado`} />
+        <StatCard eyebrow="Coste acumulado" value={rdMillions(juneReport.finance.executedDop)} detail={`${rdMillions(juneReport.finance.juneExecutedDop)} en junio`} />
+        <StatCard eyebrow="Cuentas por pagar" value={rdMillions(juneReport.finance.cxpDop)} detail="60,13% corriente" tone="warn" />
+        <StatCard eyebrow="Caja proyectada · dic" value={rdMillions(juneReport.finance.projectedCashDecemberDop)} detail="Requiere materializar financiación" tone="danger" />
+      </section>
+      <section className="report-tabs finance-tabs">
+        {[
+          { id: "flujo", label: "Flujo de caja", detail: "Jul–Dic 2026" },
+          { id: "cxp", label: "Cuentas por pagar", detail: rdMillions(juneReport.finance.cxpDop) },
+          { id: "anticipos", label: "Anticipos", detail: rdMillions(juneReport.finance.advancesPendingDop) },
+          { id: "control", label: "Control y balance", detail: rdMillions(juneReport.finance.assetsDop) },
+        ].map((item) => (
+          <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => setSection(item.id as typeof section)}>
+            <span>{item.label}</span><strong>{item.detail}</strong>
           </button>
-        </div>
+        ))}
       </section>
-      <section className="panel">
-        <div className="panel-heading">
-          <div>
-            <span className="section-kicker">CUBICACIONES</span>
-            <h3>Medición frente a contabilidad</h3>
+
+      {section === "flujo" && (
+        <section className="panel">
+          <div className="panel-heading">
+            <div><span className="section-kicker">PROYECCIÓN DE LIQUIDEZ</span><h3>Ingresos, costes y caja acumulada</h3></div>
+            <span className="data-note">Valores en RD$</span>
           </div>
-          <span className="data-note">Moneda no indicada en la fuente</span>
-        </div>
-        <div className="simple-table finance-table">
-          <div className="table-row table-head">
-            <span>Periodo</span><span>Cubicación</span><span>Contabilidad</span><span>Diferencia</span>
+          <div className="projection-chart">
+            {financialProjection.map((month) => (
+              <div className="projection-month" key={month.month}>
+                <div className="projection-bars">
+                  <i className="income" style={{ height: `${Math.max(4, (month.income / 180000000) * 100)}%` }} title={`Ingresos ${rd(month.income)}`} />
+                  <i className="cost" style={{ height: `${Math.max(4, (month.costs / 180000000) * 100)}%` }} title={`Costes ${rd(month.costs)}`} />
+                </div>
+                <strong>{month.month}</strong>
+                <small className={month.cumulative < 0 ? "danger-text" : "good-text"}>{rdMillions(month.cumulative)}</small>
+              </div>
+            ))}
           </div>
-          {cubicaciones.map((item) => (
-            <div className="table-row" key={item.period}>
-              <strong>{item.period}</strong>
-              <span>{number.format(item.measured)}</span>
-              <span>{number.format(item.accounting)}</span>
-              <span>{number.format(item.accounting - item.measured)}</span>
+          <div className="chart-legend"><span><i className="income" />Ingresos</span><span><i className="cost" />Costes</span><span>La cifra bajo cada mes es la caja acumulada.</span></div>
+        </section>
+      )}
+
+      {section === "cxp" && (
+        <section className="report-grid">
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">ANTIGÜEDAD</span><h3>Cuentas por pagar</h3></div><strong>{rd(juneReport.finance.cxpDop)}</strong></div>
+            <div className="rank-list">
+              {cxpAging.map((item) => (
+                <div key={item.name}>
+                  <span><strong>{item.name}</strong><small>{number.format(item.percent)}%</small></span>
+                  <div><i style={{ width: `${item.percent}%` }} /></div><b>{rdMillions(item.amount)}</b>
+                </div>
+              ))}
             </div>
-          ))}
-          <div className="table-row total-row">
-            <strong>Total</strong>
-            <span>{number.format(projectSnapshot.cubicacionesMeasured)}</span>
-            <span>{number.format(projectSnapshot.cubicacionesAccounting)}</span>
-            <span>{number.format(projectSnapshot.cubicacionesDifference)}</span>
-          </div>
+          </article>
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">CONCENTRACIÓN</span><h3>Principales categorías</h3></div></div>
+            <div className="rank-list compact">
+              {cxpCategories.map((item) => (
+                <div key={item.name}>
+                  <span><strong>{item.name}</strong></span>
+                  <div><i style={{ width: `${(item.amount / cxpCategories[0].amount) * 100}%` }} /></div><b>{rdMillions(item.amount)}</b>
+                </div>
+              ))}
+            </div>
+            <p className="quality-note">El balance registra RD$18.612.245,90; la relación detallada suma RD$18.597.489,63.</p>
+          </article>
+        </section>
+      )}
+
+      {section === "anticipos" && (
+        <section className="report-grid">
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">SALDO PENDIENTE</span><h3>Anticipos por amortizar</h3></div><strong>{rd(juneReport.finance.advancesPendingDop)}</strong></div>
+            <div className="rank-list">
+              {advances.map((item) => (
+                <div key={item.name}>
+                  <span><strong>{item.name}</strong></span>
+                  <div><i style={{ width: `${(item.amount / advances[0].amount) * 100}%` }} /></div><b>{rdMillions(item.amount)}</b>
+                </div>
+              ))}
+            </div>
+          </article>
+          <article className="panel decision-panel">
+            <span className="section-kicker">CONTROL DE ANTICIPOS</span>
+            <h3>27 registros</h3>
+            <strong>{rdMillions(10035120.72)}</strong>
+            <p>Total concedido. El saldo pendiente de amortización es {rdMillions(juneReport.finance.advancesPendingDop)}.</p>
+            <div className="callout"><strong>Lectura correcta</strong><p>Los importes “concedido” y “pendiente” no son equivalentes; el dashboard muestra ambos por separado.</p></div>
+          </article>
+        </section>
+      )}
+
+      {section === "control" && (
+        <section className="report-grid">
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">COSTES</span><h3>Acumulado y ejecución de junio</h3></div></div>
+            <div className="compact-table cost-table">
+              <div className="compact-row head"><span>Bloque</span><span>Acumulado</span><span>Junio</span></div>
+              {costBreakdown.map((item) => (
+                <div className="compact-row" key={item.name}><strong>{item.name}</strong><span>{rdMillions(item.cumulative)}</span><span>{rdMillions(item.june)}</span></div>
+              ))}
+            </div>
+          </article>
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">BALANCE</span><h3>Posición financiera</h3></div></div>
+            <div className="balance-grid">
+              <div><span>Activos</span><strong>{rdMillions(juneReport.finance.assetsDop)}</strong></div>
+              <div><span>Pasivos</span><strong>{rdMillions(juneReport.finance.liabilitiesDop)}</strong></div>
+              <div><span>Patrimonio</span><strong>{rdMillions(juneReport.finance.equityDop)}</strong></div>
+              <div><span>Disponibilidad</span><strong>{rdMillions(juneReport.finance.liquidityDop)}</strong></div>
+              <div><span>Depósitos clientes</span><strong>{rdMillions(juneReport.finance.clientDepositsDop)}</strong></div>
+              <div><span>Por ejecutar</span><strong>{rdMillions(juneReport.finance.remainingDop)}</strong></div>
+            </div>
+          </article>
+        </section>
+      )}
+
+      <section className="panel">
+        <div className="panel-heading"><div><span className="section-kicker">CALIDAD DEL DATO</span><h3>Conciliaciones abiertas</h3></div><span className="count-badge">{juneDataQualityIssues.length}</span></div>
+        <div className="quality-grid">
+          {juneDataQualityIssues.map((issue) => <article key={issue.title}><strong>{issue.title}</strong><p>{issue.detail}</p></article>)}
         </div>
       </section>
+
+      <details className="panel expandable-library">
+        <summary><span><small>INDICADORES ANTERIORES</small><strong>Métricas configurables y cubicaciones</strong></span><b>Abrir</b></summary>
+        <div className="metric-library">
+          <div className="panel-heading"><div><h3>Métricas físicas, temporales y financieras</h3></div><button className="button primary" onClick={onAdd}>Añadir métrica</button></div>
+          <div className="metric-grid">
+            {metrics.map((metric) => (
+              <article className="metric-card" key={metric.id}>
+                <div className="metric-card-head"><span>{metric.owner}</span><i className={`trend ${metric.trend}`}>{metric.trend === "up" ? "↗" : metric.trend === "down" ? "↘" : "→"}</i></div>
+                <h4>{metric.name}</h4><strong>{metric.value} <small>{metric.unit}</small></strong>
+                <div className="metric-target"><span>Referencia {metric.target} {metric.unit}</span></div>
+              </article>
+            ))}
+          </div>
+          <div className="panel-heading subsection-heading"><div><span className="section-kicker">CUBICACIONES</span><h3>Medición frente a contabilidad</h3></div><span className="data-note">Moneda no indicada en la fuente</span></div>
+          <div className="simple-table finance-table">
+            <div className="table-row table-head"><span>Periodo</span><span>Cubicación</span><span>Contabilidad</span><span>Diferencia</span></div>
+            {cubicaciones.map((item) => (
+              <div className="table-row" key={item.period}><strong>{item.period}</strong><span>{number.format(item.measured)}</span><span>{number.format(item.accounting)}</span><span>{number.format(item.accounting - item.measured)}</span></div>
+            ))}
+            <div className="table-row total-row"><strong>Total</strong><span>{number.format(projectSnapshot.cubicacionesMeasured)}</span><span>{number.format(projectSnapshot.cubicacionesAccounting)}</span><span>{number.format(projectSnapshot.cubicacionesDifference)}</span></div>
+          </div>
+        </div>
+      </details>
     </div>
   );
 }
@@ -1063,9 +1444,9 @@ function SourcesView() {
         </div>
       </section>
       <section className="stat-grid wide">
-        <StatCard eyebrow="Fuentes integradas" value={`${dataSources.length}`} detail="1 Excel · 1 Microsoft Project · 1 DWG" />
+        <StatCard eyebrow="Fuentes integradas" value={`${dataSources.length}`} detail="2 Excel · 4 PowerPoint · 1 PDF · 1 MPP · 1 DWG" />
         <StatCard eyebrow="Registros MPP" value="2.228" detail="2.195 asignaciones y 22 paquetes" />
-        <StatCard eyebrow="Alertas de calidad" value="4" detail="Todas visibles y sin corrección silenciosa" tone="warn" />
+        <StatCard eyebrow="Alertas de calidad" value={`${juneDataQualityIssues.length}`} detail="Todas visibles y sin corrección silenciosa" tone="warn" />
         <StatCard eyebrow="Corte declarado" value="30/06/2026" detail="Fecha tomada de los archivos" />
       </section>
       <section className="source-grid">
@@ -1086,7 +1467,7 @@ function SourcesView() {
             {source.downloadUrl && (
               <div className="source-actions">
                 <a className="button secondary" href={source.downloadUrl} download={source.file}>
-                  Descargar archivo DWG
+                  Descargar archivo
                 </a>
               </div>
             )}
@@ -1098,9 +1479,11 @@ function SourcesView() {
           <div><span className="section-kicker">CRITERIOS DE GOBIERNO DEL DATO</span><h3>Cómo se interpreta este corte</h3></div>
         </div>
         <div className="governance-grid">
-          <div><strong>Avance físico</strong><p>Excel es la fuente del 18,23% ejecutado y 21,24% planificado.</p></div>
+          <div><strong>Avance físico</strong><p>El informe y los Excel son la fuente del 18,23% ejecutado y del KPI planificado de 21,24%.</p></div>
           <div><strong>Avance de cronograma</strong><p>MPP es la fuente del 17%, fechas, actividades y camino crítico.</p></div>
-          <div><strong>Edificios</strong><p>El índice mostrado promedia 32 frentes por edificio; no sustituye una ponderación económica.</p></div>
+          <div><strong>Finanzas</strong><p>El Excel de junio prevalece para presupuesto, costes, CxP, anticipos, balance y caja.</p></div>
+          <div><strong>Versiones</strong><p>El PDF duplica el consolidado; los informes parciales amplían datos y la lámina de mayo queda como histórico.</p></div>
+          <div><strong>Edificios</strong><p>El índice MPP promedia 32 frentes; las disciplinas del informe de obra son un indicador diferente.</p></div>
           <div><strong>Viviendas</strong><p>El porcentaje disponible corresponde sólo a superestructura, no a terminación total.</p></div>
         </div>
       </section>
@@ -1614,6 +1997,10 @@ export function DashboardClient() {
   const activeProject = projects[activeProjectId];
 
   useEffect(() => {
+    if (window.matchMedia("(max-width: 760px)").matches) setAgentOpen(false);
+  }, []);
+
+  useEffect(() => {
     fetch("/api/dashboard")
       .then((response) => response.json())
       .then((data) => {
@@ -1669,7 +2056,9 @@ export function DashboardClient() {
     if (view === "implantacion") return <div className="view-stack"><SitePlan onNavigate={setView} onSelectBuilding={setSelectedBuilding} /></div>;
     if (view === "edificios") return <BuildingsView selected={selectedBuilding} setSelected={setSelectedBuilding} />;
     if (view === "viviendas") return <HousingView />;
+    if (view === "comercial") return <CommercialView />;
     if (view === "urbanismo") return <UrbanismView />;
+    if (view === "control") return <ControlView />;
     if (view === "cronologia") return <TimelineView />;
     if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => setModal("supplier")} />;
     if (view === "metricas") return <MetricsView metrics={metrics} onAdd={() => setModal("metric")} />;
@@ -1765,7 +2154,7 @@ export function DashboardClient() {
         </nav>
         <div className="sidebar-foot">
           <span><i className="live-dot" /> Fuentes integradas</span>
-          <small>{activeProjectId === "araya" ? "Último archivo · 28/07/2026 17:26" : "Proyecto demo · datos simulados"}</small>
+          <small>{activeProjectId === "araya" ? "Últimos archivos · 29/07/2026 14:33" : "Proyecto demo · datos simulados"}</small>
         </div>
       </aside>
 

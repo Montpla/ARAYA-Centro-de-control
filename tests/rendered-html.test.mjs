@@ -10,10 +10,12 @@ test("dashboard includes the complete project-control navigation and site plan",
     "Implantación general",
     "Edificios",
     "Viviendas",
+    "Ventas y cobranza",
     "Urbanismo",
+    "Seguridad y permisos",
     "Cronología",
     "Proveedores",
-    "Métricas y finanzas",
+    "Finanzas",
     "Centro de datos",
     "Agente IA",
   ]) {
@@ -25,7 +27,7 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /156 viviendas/);
   assert.match(source, /araya-site-plan-clean\.png/);
   assert.match(source, /planCoordinates/);
-  assert.match(source, /Descargar archivo DWG/);
+  assert.match(source, /Descargar archivo/);
   assert.match(source, /araya-visual-masterplan-v3\.png/);
   assert.match(source, /Plano visual interactivo/);
   assert.match(source, /Plano técnico/);
@@ -33,6 +35,9 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /progress-point actual/);
   assert.match(source, /FICHA INDIVIDUAL DE VIVIENDA/);
   assert.match(source, /CAPAS OPERATIVAS DEL PLANO/);
+  assert.match(source, /INFORME COMERCIAL · JUNIO 2026/);
+  assert.match(source, /CONTROL TRANSVERSAL · JUNIO 2026/);
+  assert.match(source, /INFORME FINANCIERO · JUNIO 2026/);
 });
 
 test("normalized source data contains 26 buildings and 156 apartments", async () => {
@@ -88,10 +93,38 @@ test("agent is source-grounded, read-only and evaluated", async () => {
   assert.match(route, /get_building_units/);
   assert.match(route, /get_work_packages/);
   assert.match(route, /get_financial_measurements/);
+  assert.match(route, /get_commercial_status/);
+  assert.match(route, /get_financial_status/);
+  assert.match(route, /get_safety_permits/);
   assert.match(route, /get_data_quality/);
   assert.match(prompt, /No inventes cifras/);
   assert.match(prompt, /No modifiques datos/);
   assert.equal(JSON.parse(evalCases).length, 20);
+});
+
+test("June 2026 reports are integrated with traceable downloads and reconciliations", async () => {
+  const [dashboard, data, juneData] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/demo-data.ts", "utf8"),
+    readFile("app/june-report-data.ts", "utf8"),
+  ]);
+  for (const filename of [
+    "araya-informe-junio-2026.pptx",
+    "informe-obra-araya-junio-2026.pptx",
+    "informe-ventas-araya-junio-2026.pptx",
+    "informe-junio-2026-araya.xlsx",
+    "lamina-flujo-mayo-2026.pptx",
+    "presentacion-informe-araya-junio-2026.pdf",
+  ]) {
+    const file = await readFile(`public/data-center/junio-2026/${filename}`);
+    assert.ok(file.length > 1000);
+    assert.match(data, new RegExp(filename.replaceAll(".", "\\.")));
+  }
+  assert.match(juneData, /overdueUsd: 136840\.39/);
+  assert.match(juneData, /budgetDop: 3591280577\.17/);
+  assert.match(juneData, /projectedCashDecemberDop: -125196511\.23/);
+  assert.match(juneData, /#REF!/);
+  assert.match(dashboard, /juneDataQualityIssues/);
 });
 
 test("database migration covers extensible metrics, suppliers and agent logs", async () => {

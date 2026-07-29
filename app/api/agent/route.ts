@@ -1,4 +1,17 @@
 import { cubicaciones, projectSnapshot } from "../../demo-data";
+import {
+  advances,
+  arrearsBreakdown,
+  cxpAging,
+  financingProcesses,
+  juneDataQualityIssues,
+  juneReport,
+  permits,
+  safetyFindings,
+  safetyMetrics,
+  salesLocations,
+  salesModels,
+} from "../../june-report-data";
 import { AGENT_PROMPT_VERSION, AGENT_SYSTEM_PROMPT } from "../../../lib/agent-prompt";
 
 type ToolName =
@@ -7,6 +20,9 @@ type ToolName =
   | "get_building_units"
   | "get_work_packages"
   | "get_financial_measurements"
+  | "get_commercial_status"
+  | "get_financial_status"
+  | "get_safety_permits"
   | "get_data_quality";
 
 const tools = [
@@ -63,6 +79,27 @@ const tools = [
     type: "function",
     name: "get_financial_measurements",
     description: "Consulta cubicaciones y contabilidad. La moneda no está identificada en la fuente.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "get_commercial_status",
+    description: "Consulta reservas, fases, modelos, ubicaciones, vinculación, cobranza y morosidad de junio.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "get_financial_status",
+    description: "Consulta presupuesto, costes, caja, cuentas por pagar, anticipos y posición financiera de junio.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+    strict: true,
+  },
+  {
+    type: "function",
+    name: "get_safety_permits",
+    description: "Consulta seguridad, hallazgos, permisos y gestiones de financiación del informe de junio.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
     strict: true,
   },
@@ -131,8 +168,41 @@ function executeTool(name: ToolName, args: Record<string, unknown>) {
       warning: "No convertir ni denominar como USD, EUR o VES hasta identificar la moneda de la fuente.",
     };
   }
+  if (name === "get_commercial_status") {
+    return {
+      sales: juneReport.sales,
+      contracts: juneReport.contracts,
+      collections: juneReport.collections,
+      models: salesModels,
+      locations: salesLocations,
+      arrears: arrearsBreakdown,
+      source: "Informe consolidado de junio y Excel financiero",
+      cutoff: "30/06/2026; morosidad actualizada al 06/07/2026",
+    };
+  }
+  if (name === "get_financial_status") {
+    return {
+      finance: juneReport.finance,
+      cxpAging,
+      advances,
+      currency: "DOP / pesos dominicanos, salvo importes comerciales identificados expresamente como USD",
+      source: "INFORME_JUN_2026_ARAYA_v1_1.xlsx",
+      cutoff: juneReport.cutoff,
+    };
+  }
+  if (name === "get_safety_permits") {
+    return {
+      safetyMetrics,
+      safetyFindings,
+      permits,
+      financingProcesses,
+      source: "Informe consolidado e Informe Obra Araya Junio 2026",
+      cutoff: juneReport.cutoff,
+    };
+  }
   return {
     sources: projectSnapshot.dataSources,
+    juneIssues: juneDataQualityIssues,
     interpretation: {
       physicalProgress: "Excel: 18,23% ejecutado frente a 21,24% planificado.",
       scheduleProgress: "MPP: 17%. Es un indicador distinto y no se sustituye por el del Excel.",
@@ -144,16 +214,22 @@ function executeTool(name: ToolName, args: Record<string, unknown>) {
 
 function fallbackAnswer(question: string) {
   const normalized = question.toLowerCase();
-  const source = `\n\nFuentes: Excel de gráficos + cronograma MPP + plano general DWG · corte declarado ${projectSnapshot.declaredCutoff}.`;
+  const source = `\n\nFuentes: centro de datos ARAYA (9 archivos) · corte principal ${projectSnapshot.declaredCutoff}.`;
 
   if (normalized.includes("calidad") || normalized.includes("fuente") || normalized.includes("inconsisten")) {
-    return `Hay cuatro observaciones de calidad: (1) el Excel se llama Fase II, pero la hoja de cubicaciones dice Fase I; (2) la moneda no está identificada; (3) el MPP no tiene fecha de estado interna, por lo que se usa el corte del nombre del archivo; y (4) el 18,23% del Excel y el 17% del MPP son indicadores distintos que deben conciliarse.${source}`;
+    return `Hay siete conciliaciones principales de junio: presupuesto RD$3.428,5 M frente a RD$3.591,3 M; KPI plan 21,24% frente a Curva S 23,29%; retraso general de 5 frente a 7 días; diferencia de RD$14.756,27 entre dos totales de CxP; tres errores #REF! en intereses; USD 0,05 de diferencia en morosidad; y una versión comercial anterior que no debe prevalecer. Todas están visibles en Finanzas y Centro de datos.${source}`;
+  }
+  if (normalized.includes("venta") || normalized.includes("reserva") || normalized.includes("moros") || normalized.includes("cobran")) {
+    return `Hay 279 reservas históricas, 228 activas y 51 desistidas. Fase I tiene 136 activas y Fase II, 92. Al 06/07/2026, 172 contratos se distribuyen en 106 al día, 42 con cuotas pendientes y 24 vencidos por USD 136.840,39. La morosidad declarada es inferior al 1%.${source}`;
+  }
+  if (normalized.includes("seguridad") || normalized.includes("accidente") || normalized.includes("permiso") || normalized.includes("confotur")) {
+    return `Seguridad reporta 0 accidentes en las semanas 3 y 4, 22 observaciones, 21 reuniones, 12 inspecciones y 3 acciones correctivas en proceso. Falta el reporte de la semana 2. Hay 8 permisos aprobados y el CONFOTUR definitivo permanece en proceso, pendiente de consejo.${source}`;
   }
   if (normalized.includes("plano") || normalized.includes("implantaci") || normalized.includes("urbanismo")) {
     return `El plano general DWG identifica 77 bloques TH, además de viales, estacionamientos, zonas verdes y equipamientos. El dashboard tiene datos operativos integrados para 26 edificios (TH-01 a TH-18 y TH-70 a TH-77), que representan 156 viviendas; los otros 51 TH quedan visibles como implantación sin estado de avance. El urbanismo registra 18,28% ejecutado frente a 16,18% planificado.${source}`;
   }
   if (normalized.includes("cubic") || normalized.includes("contab") || normalized.includes("dinero") || normalized.includes("financ")) {
-    return `Las cubicaciones acumuladas suman ${projectSnapshot.cubicacionesMeasured.toLocaleString("es-ES", { maximumFractionDigits: 2 })} y contabilidad suma ${projectSnapshot.cubicacionesAccounting.toLocaleString("es-ES", { maximumFractionDigits: 2 })}. La diferencia contabilidad menos cubicaciones es ${projectSnapshot.cubicacionesDifference.toLocaleString("es-ES", { maximumFractionDigits: 2 })}. La fuente no identifica la moneda, por lo que no debe etiquetarse ni convertirse todavía.${source}`;
+    return `El presupuesto financiero de control es RD$3.591,28 M; se han ejecutado RD$712,33 M, incluyendo RD$49,00 M en junio. Las cuentas por pagar detalladas suman RD$18,60 M y los anticipos pendientes RD$9,21 M. La caja proyectada cierra diciembre en –RD$125,20 M. Las cubicaciones anteriores conservan moneda no identificada y se muestran aparte.${source}`;
   }
   if (normalized.includes("paquete") || normalized.includes("infraestructura") || normalized.includes("crític") || normalized.includes("critic")) {
     const mostDelayed = [...projectSnapshot.workPackages].sort((a, b) => b.deviationDays - a.deviationDays)[0];

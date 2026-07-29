@@ -171,6 +171,8 @@ Todos los puntos deben continuar abriendo sus fichas correctas.
   interacciones.
 - `app/demo-data.ts`: modelo de datos normalizado y registros de ejemplo
   derivados de las fuentes.
+- `app/june-report-data.ts`: datos reconciliados de ventas, obra, urbanismo,
+  finanzas, seguridad, permisos y gestiones del informe de junio de 2026.
 - `app/globals.css`: sistema visual y diseño responsive.
 - `app/api/agent/route.ts`: consultas del agente.
 - `app/api/dashboard/route.ts`: lectura y creación de métricas/proveedores.
@@ -187,7 +189,7 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 4 pruebas superadas.
+- 8 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
 
@@ -216,6 +218,60 @@ Cuando haya cambios de producto:
     el navegador conserva una versión anterior en caché.
 
 Nunca registrar credenciales, tokens ni enlaces con autenticación incrustada.
+
+## Lote integrado · informe de junio de 2026
+
+Incorporado el 29/07/2026:
+
+- `Araya_Informe_Junio_2026.pptx`: consolidado de 37 láminas.
+- `Informe Obra Araya Junio 2026.pptx`: detalle de obra y seguridad.
+- `Informe Ventas Araya JUN2026 2.pptx`: detalle comercial con una lámina de
+  morosidad anterior.
+- `INFORME_JUN_2026_ARAYA_v1_1.xlsx`: fuente financiera detallada principal.
+- `Lamina Flujo.pptx`: histórico rotulado mayo de 2026; no prevalece.
+- `Presentación Informe Araya Junio 2026.pdf`: versión renderizada equivalente
+  al consolidado.
+
+Copias descargables:
+
+`public/data-center/junio-2026/`
+
+Nuevas vistas interactivas:
+
+- `Ventas y cobranza`: reservas, fases, producto, ubicación, vinculación,
+  contratos y morosidad.
+- `Finanzas`: presupuesto, costes, flujo, CxP, anticipos, balance y
+  conciliaciones.
+- `Seguridad y permisos`: seguridad, trámites y financiación.
+
+Vistas ampliadas:
+
+- `Edificios`: disciplinas, retrasos de superestructura y pedidos vencidos.
+- `Urbanismo`: indicador físico-financiero separado del 4% de actividades
+  terminadas, avance por especialidad y retrasos de inicio.
+- `Planificación`: Curva S exacta del informe y acciones recomendadas.
+- `Centro de datos`: 9 fuentes, 7 descargas y reglas de prevalencia.
+
+Datos de control:
+
+- Físico: 18,23% ejecutado; KPI plan 21,24%; Curva S plan junio 23,29%.
+- Comercial: 228 reservas activas; 24 clientes vencidos por USD 136.840,39.
+- Presupuesto: RD$3.591.280.577,17; ejecutado RD$712.326.162,73.
+- CxP detallada: RD$18.597.489,63.
+- Anticipos pendientes: RD$9.210.448,86.
+- Caja proyectada diciembre: –RD$125.196.511,23.
+
+Conciliaciones que deben seguir visibles:
+
+1. Presupuesto de lámina 29: RD$3.428,5 M frente a RD$3.591,3 M del Excel y
+   la lámina 30.
+2. Plan físico de junio: KPI 21,24% frente a 23,29% en la Curva S.
+3. Retraso general de obra: 5 días en el informe y 7 días en el MPP.
+4. CxP detallada frente a balance: diferencia RD$14.756,27.
+5. Tres errores `#REF!` en `Intereses 06-26!U37:W37`.
+6. El desglose de morosidad excede el total en USD 0,05.
+7. La presentación comercial aislada contiene una morosidad anterior; usar la
+   actualización del consolidado al 06/07/2026.
 
 ## Criterios de continuidad
 
