@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 26.
-- Commit desplegado: `b2ffc699ef16078bd3c2d57c923583165739af54`.
+- Última versión publicada: 27.
+- Commit desplegado: `af0c42fddf9a8bb668c7edb232b1583e41962aaf`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_9ac1b4a8a2dc8191aa9a9a60b5192455`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_844f489963ac8191941291354d14e614`.
 - Despliegue:
-  `appgdep_6a6a6b4178d0819183a08ee516164b57` (`succeeded`).
+  `appgdep_6a6a6db004588191943c2b2a794f1ed2` (`succeeded`).
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
   en Sites. La solicitud de cambiarlo a `public` devolvió
   `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
@@ -44,15 +44,19 @@ El dashboard dispone de estas vistas:
 3. Implantación general.
 4. Edificios.
 5. Apartamentos.
-6. Ventas y cobranza.
-7. Urbanismo.
-8. Seguridad y permisos.
+6. Urbanismo.
+7. Ventas y cobranza.
+8. Finanzas.
 9. Cronología.
 10. Proveedores.
-11. Finanzas.
+11. Seguridad y permisos.
 12. Centro de datos.
 13. Agente IA de consulta y carga documental controlada.
 14. Usuarios y accesos, visible únicamente para administradores.
+
+`navItems` es la única fuente de este orden. Alimenta tanto la barra lateral de
+ordenador como el panel completo de navegación de tablet y móvil. No mantener
+listas duplicadas con orden diferente.
 
 El acceso al Centro de Control requiere una identidad verificada de ChatGPT y
 un alta activa en la tabla `app_users`. Bricket no almacena ni gestiona
@@ -366,7 +370,7 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 19 pruebas superadas.
+- 20 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
 - `npm run lint` termina sin errores; mantiene ocho avisos conocidos por el
