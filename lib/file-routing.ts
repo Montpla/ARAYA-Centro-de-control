@@ -28,7 +28,7 @@ export const uploadStatusLabels: Record<string, string> = {
 const areaKeywords: Record<Exclude<ClassifiedArea, "sin_clasificar">, string[]> = {
   direccion: ["direccion", "directivo", "comite", "resumen ejecutivo", "consolidado"],
   planificacion: ["cronograma", "planificacion", "programacion", "mpp", "project", "linea base", "curva s"],
-  obra: ["obra", "edificio", "vivienda", "avance", "cubicacion", "superestructura", "hormigon", "encofrado"],
+  obra: ["obra", "edificio", "apartamento", "vivienda", "avance", "cubicacion", "superestructura", "hormigon", "encofrado"],
   urbanismo: ["urbanismo", "vial", "paisajismo", "jardineria", "infraestructura", "alcantarillado"],
   comercial: ["venta", "reserva", "cliente", "cobranza", "morosidad", "comercial", "desistimiento"],
   finanzas: ["finanza", "financiero", "costos", "costes", "cuentas por pagar", "cxp", "balance", "flujo", "anticipo", "datos para informe"],

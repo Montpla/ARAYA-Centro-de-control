@@ -4,7 +4,7 @@
   {"input":"¿Qué edificio va peor?","mustMention":["Edificio B","9 días"]},
   {"input":"Dame el estado del edificio A","mustMention":["68%","71%"]},
   {"input":"Dame el estado del edificio B","mustMention":["54%","63%"]},
-  {"input":"¿Hay viviendas bloqueadas?","mustMention":["bloqueadas"]},
+  {"input":"¿Hay apartamentos bloqueados?","mustMention":["bloqueadas"]},
   {"input":"¿Cuántas unidades hay?","mustMention":["48"]},
   {"input":"¿Qué proveedores están retrasados?","mustMention":["Carpinterías Vega"]},
   {"input":"¿Cuándo llega la carpintería?","mustMention":["2 de agosto"]},

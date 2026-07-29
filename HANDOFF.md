@@ -43,7 +43,7 @@ El dashboard dispone de estas vistas:
 2. Planificación.
 3. Implantación general.
 4. Edificios.
-5. Viviendas.
+5. Apartamentos.
 6. Ventas y cobranza.
 7. Urbanismo.
 8. Seguridad y permisos.
@@ -87,7 +87,7 @@ El selector de proyecto activo permite abrir dos promociones:
 - `ARAYA`: proyecto real, con sus datos documentales y todas las funciones
   existentes.
 - `MIRADOR DEL PARQUE`: proyecto ficticio de demostración, con 14 edificios,
-  84 viviendas, urbanismo, planificación, cronología, proveedores, métricas y
+  84 apartamentos, urbanismo, planificación, cronología, proveedores, métricas y
   fuentes simuladas. Toda la interfaz lo identifica como `PROYECTO DEMO`.
 
 Los datos de ambos proyectos están separados. El agente IA y las altas
@@ -147,9 +147,9 @@ necesidad de recompilar o volver a desplegar.
 - `app/api/agent/route.ts`: materializa la misma versión viva antes de
   responder, incluso cuando funciona con el motor local sin clave de OpenAI.
 - La cinta global muestra conexión, revisión y última fuente aplicada.
-- El mismo contrato gobierna la implantación: edificios, viviendas y áreas de
+- El mismo contrato gobierna la implantación: edificios, apartamentos y áreas de
   urbanismo se crean o actualizan desde sus colecciones vivas. El estado visual
-  de cada vivienda se deriva de su avance (`100%` terminada, `>0%` en curso,
+  de cada apartamento se deriva de su avance (`100%` terminado, `>0%` en curso,
   `0%` pendiente, salvo bloqueo explícito) y actualiza color, contadores y
   fichas.
 - Los nuevos edificios o puntos urbanos pueden incluir `mapCoordinates` para
@@ -177,9 +177,9 @@ La implantación general incluye:
 - Plano visual arquitectónico como vista predeterminada.
 - Plano técnico original como vista alternativa.
 - 26 edificios interactivos.
-- 156 viviendas interactivas, seis por edificio.
+- 156 apartamentos interactivos, seis por edificio.
 - Colores de estado para terminada, en curso, pendiente y bloqueada.
-- Fichas individuales de vivienda.
+- Fichas individuales de apartamento.
 - Fichas conjuntas de edificio.
 - Seis puntos interactivos de urbanismo.
 
@@ -207,7 +207,7 @@ El cronograma se representa con líneas:
 - 77 TH identificados en el plano general.
 - 26 edificios con datos operativos.
 - 51 TH pendientes de integrar.
-- 156 viviendas en seguimiento.
+- 156 apartamentos en seguimiento.
 - Urbanismo ejecutado: 18,28%.
 - Urbanismo planificado: 16,18%.
 - Regla monetaria: cualquier importe sin moneda explícita se interpreta como
@@ -267,7 +267,7 @@ Constantes relevantes:
 
 Las 26 posiciones de `visualPlanCoordinates` fueron calibradas contra el centro
 real de cada cubierta de la imagen de 982 × 1602 píxeles. No volver a desplazar
-las viviendas sin una captura anotada del usuario.
+los apartamentos sin una captura anotada del usuario.
 
 Última indicación visual del usuario:
 
@@ -462,7 +462,7 @@ Conciliaciones que deben seguir visibles:
 
 El usuario seguirá entregando datos para completar:
 
-- Avance por vivienda.
+- Avance por apartamento.
 - Albañilería, instalaciones y acabados.
 - Responsables e incidencias.
 - Desglose de urbanismo.

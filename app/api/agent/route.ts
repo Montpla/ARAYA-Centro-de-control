@@ -368,7 +368,7 @@ async function fallbackAnswer(question: string, currency: CurrencyCode) {
     return `Seguridad reporta ${safety("Accidentes")} accidentes, ${safety("Observaciones")} observaciones, ${safety("Reuniones")} reuniones, ${safety("Inspecciones")} inspecciones y ${safety("Acciones")} acciones correctivas. Consulta Seguridad y permisos para ver cada hallazgo y gestión con su versión actual.${source}`;
   }
   if (normalized.includes("plano") || normalized.includes("implantaci") || normalized.includes("urbanismo")) {
-    return `El plano general identifica ${currentProjectSnapshot.masterPlanBuildingCount} bloques TH, además de viales, estacionamientos, paisajismo y equipamientos. Hay datos operativos para ${currentProjectSnapshot.buildingCount} edificios y ${currentProjectSnapshot.unitCount} viviendas; ${currentProjectSnapshot.buildingsPendingIntegration} bloques siguen visibles como implantación sin avance informado. El urbanismo registra ${numberForAgent(currentProjectSnapshot.urbanismProgress)}% ejecutado frente a ${numberForAgent(currentProjectSnapshot.urbanismPlanned)}% planificado.${source}`;
+    return `El plano general identifica ${currentProjectSnapshot.masterPlanBuildingCount} bloques TH, además de viales, estacionamientos, paisajismo y equipamientos. Hay datos operativos para ${currentProjectSnapshot.buildingCount} edificios y ${currentProjectSnapshot.unitCount} apartamentos; ${currentProjectSnapshot.buildingsPendingIntegration} bloques siguen visibles como implantación sin avance informado. El urbanismo registra ${numberForAgent(currentProjectSnapshot.urbanismProgress)}% ejecutado frente a ${numberForAgent(currentProjectSnapshot.urbanismPlanned)}% planificado.${source}`;
   }
   if (normalized.includes("cubic") || normalized.includes("contab") || normalized.includes("dinero") || normalized.includes("financ")) {
     const finance = currentJuneReport.finance;
@@ -384,7 +384,7 @@ async function fallbackAnswer(question: string, currency: CurrencyCode) {
     if (match) {
       const building = currentProjectSnapshot.buildings.find((item) => item.shortName === match[1]);
       if (!building) return `No encuentro el edificio ${match[1]} en el cronograma.${source}`;
-      return `El Edificio ${building.shortName} tiene un índice de frentes de ${building.progress.toLocaleString("es-ES")}% y fin previsto ${building.forecastFinish}, con ${building.deviationDays >= 0 ? `+${building.deviationDays}` : building.deviationDays} días frente a su línea base. Sus seis apartamentos muestran ${building.units[0].progress}% de superestructura. Este último dato no representa la terminación total de las viviendas.${source}`;
+      return `El Edificio ${building.shortName} tiene un índice de frentes de ${building.progress.toLocaleString("es-ES")}% y fin previsto ${building.forecastFinish}, con ${building.deviationDays >= 0 ? `+${building.deviationDays}` : building.deviationDays} días frente a su línea base. Sus seis apartamentos muestran ${building.units[0].progress}% de superestructura. Este último dato no representa la terminación total de los apartamentos.${source}`;
     }
     return `El cronograma contiene ${currentProjectSnapshot.buildingCount} edificios y ${currentProjectSnapshot.unitCount} apartamentos. El detalle de apartamento disponible corresponde sólo a superestructura.${source}`;
   }

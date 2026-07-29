@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const protocol = requestHeaders.get("x-forwarded-proto") ?? "https";
   const imageUrl = new URL("/og.png", `${protocol}://${host}`).toString();
   const description =
-    "Avance, implantación, edificios, viviendas, urbanismo y agente de datos de la obra ARAYA.";
+    "Avance, implantación, edificios, apartamentos, urbanismo y agente de datos de la obra ARAYA.";
 
   return {
     title: "Centro de Control ARAYA",

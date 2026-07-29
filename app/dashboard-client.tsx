@@ -205,7 +205,7 @@ const projects: Record<ProjectId, {
     id: "araya",
     code: "AR",
     name: "ARAYA",
-    summary: "26 edificios · 156 viviendas",
+    summary: "26 edificios · 156 apartamentos",
     cutoff: projectSnapshot.declaredCutoff,
     demo: false,
   },
@@ -213,7 +213,7 @@ const projects: Record<ProjectId, {
     id: "mirador",
     code: "MP",
     name: "MIRADOR DEL PARQUE",
-    summary: "14 edificios · 84 viviendas",
+    summary: "14 edificios · 84 apartamentos",
     cutoff: "15/07/2026",
     demo: true,
   },
@@ -224,7 +224,7 @@ const navItems: Array<{ id: View; label: string; mark: string }> = [
   { id: "planificacion", label: "Planificación", mark: "02" },
   { id: "implantacion", label: "Implantación general", mark: "03" },
   { id: "edificios", label: "Edificios", mark: "04" },
-  { id: "viviendas", label: "Viviendas", mark: "05" },
+  { id: "viviendas", label: "Apartamentos", mark: "05" },
   { id: "comercial", label: "Ventas y cobranza", mark: "06" },
   { id: "urbanismo", label: "Urbanismo", mark: "07" },
   { id: "control", label: "Seguridad y permisos", mark: "08" },
@@ -713,7 +713,7 @@ function SitePlan({
       <div className="panel-heading site-plan-heading">
         <div>
           <span className="section-kicker">IMPLANTACIÓN GENERAL · DWG 002</span>
-          <h3>Edificios, viviendas y urbanismo</h3>
+          <h3>Edificios, apartamentos y urbanismo</h3>
         </div>
         <div className="plan-mode-switch" aria-label="Vista del plano">
           <button
@@ -735,12 +735,12 @@ function SitePlan({
       <div className="plan-data-strip">
         <span><strong>{projectSnapshot.masterPlanBuildingCount}</strong> TH identificados en implantación</span>
         <span><strong>{projectSnapshot.buildingCount}</strong> edificios con datos integrados</span>
-        <span><strong>{projectSnapshot.unitCount}</strong> viviendas en seguimiento</span>
+        <span><strong>{projectSnapshot.unitCount}</strong> apartamentos en seguimiento</span>
         <span><strong>{projectSnapshot.buildingsPendingIntegration}</strong> TH pendientes de integrar</span>
       </div>
       <div className="plan-quick-actions" aria-label="Explorar datos de la implantación">
         <button onClick={() => onNavigate("edificios")}><span>EDIFICIOS</span><strong>Ver conjunto y detalle</strong><i>→</i></button>
-        <button onClick={() => onNavigate("viviendas")}><span>VIVIENDAS</span><strong>Abrir {allUnits.length} fichas</strong><i>→</i></button>
+        <button onClick={() => onNavigate("viviendas")}><span>APARTAMENTOS</span><strong>Abrir {allUnits.length} fichas</strong><i>→</i></button>
         <button onClick={() => onNavigate("urbanismo")}><span>URBANISMO</span><strong>Explorar áreas y datos</strong><i>→</i></button>
       </div>
       <div className="plan-legend">
@@ -751,8 +751,8 @@ function SitePlan({
       </div>
       <p className="plan-disclaimer">
         La implantación visual conserva la organización del plano DWG y mantiene
-        activas las capas de edificios, viviendas y urbanismo. Están integrados los
-        {buildings.length} edificios y {allUnits.length} viviendas del modelo vivo.
+        activas las capas de edificios, apartamentos y urbanismo. Están integrados los
+        {buildings.length} edificios y {allUnits.length} apartamentos del modelo vivo.
         Los porcentajes, estados y colores cambian con cada nueva revisión.
       </p>
       <div className={`site-plan-image-wrap ${planMode}`}>
@@ -761,7 +761,7 @@ function SitePlan({
           src={planMode === "visual" ? "/araya-visual-masterplan-v3.png" : "/araya-site-plan-clean.png"}
           alt={
             planMode === "visual"
-              ? "Implantación visual de ARAYA con edificios, viviendas, viales, estacionamientos y urbanismo"
+              ? "Implantación visual de ARAYA con edificios, apartamentos, viales, estacionamientos y urbanismo"
               : "Plano técnico de la implantación general de ARAYA"
           }
           width={1200}
@@ -795,7 +795,7 @@ function SitePlan({
                   >
                     TH-{building.shortName.padStart(2, "0")}
                   </button>
-                  <div className="plan-home-statuses" aria-label={`Viviendas de TH-${building.shortName.padStart(2, "0")}`}>
+                  <div className="plan-home-statuses" aria-label={`Apartamentos de TH-${building.shortName.padStart(2, "0")}`}>
                     {building.units.map((unit) => (
                       <button
                         key={unit.id}
@@ -843,7 +843,7 @@ function SitePlan({
         <div className="plan-building-picker" role="dialog" aria-modal="true">
           <button className="close-button" onClick={() => setPlanBuilding(null)} aria-label="Cerrar">×</button>
           <span className="section-kicker">TH-{planBuilding.shortName.padStart(2, "0")}</span>
-          <h3>{planBuilding.name} · selecciona vivienda</h3>
+          <h3>{planBuilding.name} · selecciona apartamento</h3>
           <div className="picker-summary">
             <span>Índice de frentes<strong>{number.format(planBuilding.progress)}%</strong></span>
             <span>Fin previsto<strong>{planBuilding.forecastFinish}</strong></span>
@@ -859,7 +859,7 @@ function SitePlan({
                   setPlanBuilding(null);
                 }}
               >
-                <span>Vivienda</span>
+                <span>Apartamento</span>
                 <strong>{unit.code.split("-")[1]}</strong>
                 <small>{unit.progress}% estructura</small>
               </button>
@@ -881,8 +881,8 @@ function SitePlan({
         <div className="unit-inspector" role="dialog" aria-modal="true">
           <button className="close-button" onClick={() => setSelectedUnit(null)} aria-label="Cerrar">×</button>
           <div>
-            <span className="section-kicker">FICHA DE VIVIENDA</span>
-            <h3>Vivienda {selectedUnit.unit.code}</h3>
+            <span className="section-kicker">FICHA DE APARTAMENTO</span>
+            <h3>Apartamento {selectedUnit.unit.code}</h3>
           </div>
           <div className="unit-inspector-grid">
             <span>Edificio<strong>{selectedUnit.building.shortName}</strong></span>
@@ -893,7 +893,7 @@ function SitePlan({
             <span>Fin previsto edificio<strong>{selectedUnit.building.forecastFinish}</strong></span>
           </div>
           <p>
-            El avance disponible a nivel vivienda corresponde únicamente a
+            El avance disponible a nivel apartamento corresponde únicamente a
             superestructura. Los próximos documentos permitirán añadir
             albañilería, instalaciones, acabados, incidencias y responsables.
           </p>
@@ -963,7 +963,7 @@ function Overview({
         <div className="stat-grid">
           <StatCard eyebrow="Plan operativo" value={`${number.format(projectSnapshot.plannedProgress)}%`} detail={`${number.format(projectSnapshot.deviationPoints)} pp de brecha física`} tone="warn" />
           <StatCard eyebrow="Cronograma MPP" value={`${number.format(projectSnapshot.scheduleProgress)}%`} detail="Indicador diferenciado del avance físico" tone="warn" />
-          <StatCard eyebrow="Alcance residencial" value={`${buildings.length} edificios`} detail={`${buildings.reduce((total, building) => total + building.units.length, 0)} viviendas en el modelo vivo`} />
+          <StatCard eyebrow="Alcance residencial" value={`${buildings.length} edificios`} detail={`${buildings.reduce((total, building) => total + building.units.length, 0)} apartamentos en el modelo vivo`} />
           <StatCard eyebrow="Previsión final" value={`${projectSnapshot.deviationDays >= 0 ? "+" : ""}${projectSnapshot.deviationDays} días`} detail={`${projectSnapshot.forecastFinish} frente a ${projectSnapshot.baselineFinish}`} tone="danger" />
         </div>
       </section>
@@ -1073,7 +1073,7 @@ function UnitDetailPanel({
   return (
     <aside className="data-detail-panel" role="dialog" aria-modal="true" aria-label={`Detalle de ${unit.code}`}>
       <button className="close-button" onClick={onClose} aria-label="Cerrar detalle">×</button>
-      <span className="section-kicker">FICHA INDIVIDUAL DE VIVIENDA</span>
+      <span className="section-kicker">FICHA INDIVIDUAL DE APARTAMENTO</span>
       <h3>{unit.code}</h3>
       <div className="unit-inspector-grid">
         <span>Edificio<strong>TH-{building.shortName.padStart(2, "0")}</strong></span>
@@ -1108,7 +1108,7 @@ function BuildingsView({
     <div className="view-stack">
       <section className="data-view-intro">
         <div><span className="section-kicker">NAVEGACIÓN INTERACTIVA</span><h2>Conjunto de edificios</h2></div>
-        <p>Selecciona cualquier TH para consultar sus indicadores y abre una vivienda para ver su ficha individual.</p>
+        <p>Selecciona cualquier TH para consultar sus indicadores y abre un apartamento para ver su ficha individual.</p>
       </section>
       <section className="building-tabs">
         {buildings.map((building) => (
@@ -1141,7 +1141,7 @@ function BuildingsView({
         </div>
         <p className="section-intro">
           El porcentaje del edificio es el promedio simple de 32 frentes del MPP.
-          Pulsa una vivienda para abrir su ficha y consultar los datos ya disponibles.
+          Pulsa un apartamento para abrir su ficha y consultar los datos ya disponibles.
         </p>
         <div className="filter-row">
           {["todos", "en_curso", "pendiente", "terminada"].map((filter) => (
@@ -1213,13 +1213,13 @@ function HousingView() {
   return (
     <div className="view-stack">
       <section className="data-view-intro">
-        <div><span className="section-kicker">{totalUnits} FICHAS VIVAS</span><h2>Viviendas individuales</h2></div>
-        <p>Cada vivienda se crea o actualiza desde el modelo vivo. Su porcentaje determina automáticamente el estado y el color, salvo que exista un bloqueo explícito.</p>
+        <div><span className="section-kicker">{totalUnits} FICHAS VIVAS</span><h2>Apartamentos individuales</h2></div>
+        <p>Cada apartamento se crea o actualiza desde el modelo vivo. Su porcentaje determina automáticamente el estado y el color, salvo que exista un bloqueo explícito.</p>
       </section>
       <section className="stat-grid wide">
-        <StatCard eyebrow="Viviendas integradas" value={`${totalUnits}`} detail={`${unitsPerBuilding} de media por edificio`} />
+        <StatCard eyebrow="Apartamentos integrados" value={`${totalUnits}`} detail={`${unitsPerBuilding} de media por edificio`} />
         <StatCard eyebrow="Edificios relacionados" value={`${buildings.length}`} detail="Inventario generado desde datos vivos" />
-        <StatCard eyebrow="Dato disponible" value="Superestructura" detail="Avance y estado por vivienda" tone="good" />
+        <StatCard eyebrow="Dato disponible" value="Superestructura" detail="Avance y estado por apartamento" tone="good" />
         <StatCard eyebrow="Próxima ampliación" value="5 áreas" detail="Instalaciones, acabados, incidencias y más" />
       </section>
       <section className="panel housing-explorer">
@@ -1240,7 +1240,7 @@ function HousingView() {
               </button>
             ))}
           </div>
-          <span className="result-count">{unitRows.length} viviendas visibles</span>
+          <span className="result-count">{unitRows.length} apartamentos visibles</span>
         </div>
         <div className="housing-grid">
           {unitRows.map(({ building, unit }) => (
@@ -1924,7 +1924,7 @@ function FinanceLockedView() {
       <span className="section-kicker">ÁREA RESTRINGIDA</span>
       <h2>Finanzas requiere autorización individual.</h2>
       <p>
-        Tu usuario puede trabajar con obra, viviendas, edificios, urbanismo y documentación,
+        Tu usuario puede trabajar con obra, apartamentos, edificios, urbanismo y documentación,
         pero no tiene permiso para consultar cifras financieras. El administrador puede
         conceder o retirar este acceso desde Usuarios y accesos.
       </p>
@@ -2263,7 +2263,7 @@ function SourcesView({ onUpload, canAccessFinance }: { onUpload: () => void; can
           {canAccessFinance && <div><strong>Fuente Antonely</strong><p>Amplía el detalle de CxP y proveedores; sus diferencias permanecen abiertas hasta conciliación contable.</p></div>}
           <div><strong>Versiones</strong><p>El PDF duplica el consolidado; los informes parciales amplían datos y la lámina de mayo queda como histórico.</p></div>
           <div><strong>Edificios</strong><p>El índice MPP promedia 32 frentes; las disciplinas del informe de obra son un indicador diferente.</p></div>
-          <div><strong>Viviendas</strong><p>El porcentaje disponible corresponde sólo a superestructura, no a terminación total.</p></div>
+          <div><strong>Apartamentos</strong><p>El porcentaje disponible corresponde sólo a superestructura, no a terminación total.</p></div>
           <div><strong>Nuevas cargas</strong><p>R2 conserva el original y D1 registra archivo, usuario, área, moneda, versión y corte. Los datos normalizados se reflejan en todas las vistas en menos de cinco segundos; sin moneda declarada se aplica DOP.</p></div>
         </div>
       </section>
@@ -2595,7 +2595,7 @@ function DirectionReport({
             <article className="danger"><span>Desviación</span><strong>{number.format(juneReport.physical.gap)} pp</strong><small>{juneReport.physical.efficiency}% de eficiencia</small></article>
             <article className="warn"><span>Previsión de plazo</span><strong>+{juneReport.physical.mppDelayDays} días</strong><small>Fin previsto {projectSnapshot.forecastFinish}</small></article>
             <article><span>Alcance integrado</span><strong>{projectSnapshot.buildingCount} / {projectSnapshot.masterPlanBuildingCount}</strong><small>Edificios en datos / plano</small></article>
-            <article><span>Viviendas</span><strong>{projectSnapshot.unitCount}</strong><small>26 edificios integrados</small></article>
+            <article><span>Apartamentos</span><strong>{projectSnapshot.unitCount}</strong><small>26 edificios integrados</small></article>
           </div>
         </section>
 
@@ -2963,7 +2963,7 @@ function DemoMasterplan() {
           <strong className="demo-detail-progress">{selected.progress}%</strong>
           <p>Índice sintético de avance para mostrar el funcionamiento del segundo proyecto.</p>
           <div className="picker-summary">
-            <span>Viviendas<strong>{selected.units}</strong></span>
+            <span>Apartamentos<strong>{selected.units}</strong></span>
             <span>Estado<strong>{selected.status}</strong></span>
             <span>Uso<strong>Residencial</strong></span>
           </div>
@@ -2998,7 +2998,7 @@ function DemoOverview({ onNavigate }: { onNavigate: (view: View) => void }) {
         </article>
         <div className="stat-grid">
           <StatCard eyebrow="Plan simulado" value="39,5%" detail="-2,7 pp de brecha física" tone="warn" />
-          <StatCard eyebrow="Alcance residencial" value="14 edificios" detail="84 viviendas · 6 por edificio" />
+          <StatCard eyebrow="Alcance residencial" value="14 edificios" detail="84 apartamentos · 6 por edificio" />
           <StatCard eyebrow="Urbanización" value="33,5%" detail="4 áreas activas" />
           <StatCard eyebrow="Previsión final" value="+12 días" detail="12/12/2027 frente a línea base" tone="danger" />
         </div>
@@ -3084,7 +3084,7 @@ function DemoProjectContent({ view, onNavigate }: { view: View; onNavigate: (vie
               <h3>{building.code}</h3>
               <strong>{building.progress}%</strong>
               <div className="demo-card-track"><i style={{ width: `${building.progress}%` }} /></div>
-              <small>{building.units} viviendas · dato simulado</small>
+              <small>{building.units} apartamentos · dato simulado</small>
             </article>
           ))}
         </section>
@@ -3096,16 +3096,16 @@ function DemoProjectContent({ view, onNavigate }: { view: View; onNavigate: (vie
     return (
       <div className="view-stack">
         <section className="stat-grid wide">
-          <StatCard eyebrow="Viviendas totales" value="84" detail="14 edificios · 6 por edificio" />
+          <StatCard eyebrow="Apartamentos totales" value="84" detail="14 edificios · 6 por edificio" />
           <StatCard eyebrow="En ejecución" value="36" detail="Estructura o cerramientos" />
           <StatCard eyebrow="Preparadas" value="30" detail="Pendientes de inicio interior" />
           <StatCard eyebrow="Pendientes" value="18" detail="Sin actividad registrada" tone="warn" />
         </section>
         <section className="panel">
-          <div className="panel-heading"><div><span className="section-kicker">INVENTARIO DEMO</span><h3>Viviendas por edificio</h3></div></div>
+          <div className="panel-heading"><div><span className="section-kicker">INVENTARIO DEMO</span><h3>Apartamentos por edificio</h3></div></div>
           <div className="demo-unit-grid">
             {demoBuildings.map((building) => (
-              <article key={building.id}><strong>{building.code}</strong><span>{Array.from({ length: 6 }, (_, index) => <i key={index} title={`${building.code}-${index + 1}`} className={index < Math.ceil(building.progress / 17) ? "active" : ""} />)}</span><small>6 viviendas · {building.progress}%</small></article>
+              <article key={building.id}><strong>{building.code}</strong><span>{Array.from({ length: 6 }, (_, index) => <i key={index} title={`${building.code}-${index + 1}`} className={index < Math.ceil(building.progress / 17) ? "active" : ""} />)}</span><small>6 apartamentos · {building.progress}%</small></article>
             ))}
           </div>
         </section>
@@ -3175,7 +3175,7 @@ function DemoProjectContent({ view, onNavigate }: { view: View; onNavigate: (vie
           {[
             ["Avance físico", "36,8", "%", "39,5"],
             ["Desviación de plazo", "12", "días", "0"],
-            ["Viviendas activas", "36", "ud.", "42"],
+            ["Apartamentos activos", "36", "ud.", "42"],
             ["Urbanización", "33,5", "%", "37"],
           ].map((metric) => (
             <article className="metric-card panel" key={metric[0]}><div className="metric-card-head"><span>MIRADOR · DEMO</span></div><h4>{metric[0]}</h4><strong>{metric[1]} <small>{metric[2]}</small></strong><div className="metric-target"><span>Referencia {metric[3]} {metric[2]}</span></div></article>
@@ -3233,7 +3233,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   });
   const activeProject = projects[activeProjectId];
   const availableNavItems = navItems.filter((item) => item.id !== "usuarios" || currentUser.role === "admin");
-  const arayaLiveSummary = `${buildings.length} edificios · ${buildings.reduce((total, building) => total + building.units.length, 0)} viviendas`;
+  const arayaLiveSummary = `${buildings.length} edificios · ${buildings.reduce((total, building) => total + building.units.length, 0)} apartamentos`;
 
   useEffect(() => {
     if (!window.matchMedia("(max-width: 760px)").matches) return;
@@ -3313,7 +3313,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
         .filter((item) => item.code.toLowerCase().includes(term))
         .map((item) => ({
           label: item.code,
-          detail: `${item.progress}% de avance · ${item.units} viviendas · demo`,
+          detail: `${item.progress}% de avance · ${item.units} apartamentos · demo`,
           view: "edificios" as View,
           building: null,
         }))
@@ -3484,7 +3484,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder={activeProjectId === "araya" ? "Buscar edificio, vivienda, urbanismo, proveedor o métrica…" : "Buscar edificio demo (ej. MP-04)…"}
+            placeholder={activeProjectId === "araya" ? "Buscar edificio, apartamento, urbanismo, proveedor o métrica…" : "Buscar edificio demo (ej. MP-04)…"}
           />
           {searchResults.length > 0 && (
             <div className="search-results">

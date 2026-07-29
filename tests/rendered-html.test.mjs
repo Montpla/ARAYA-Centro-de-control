@@ -9,7 +9,7 @@ test("dashboard includes the complete project-control navigation and site plan",
     "Planificación",
     "Implantación general",
     "Edificios",
-    "Viviendas",
+    "Apartamentos",
     "Ventas y cobranza",
     "Urbanismo",
     "Seguridad y permisos",
@@ -24,7 +24,7 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /Nuevo proveedor/);
   assert.match(source, /Añadir métrica/);
   assert.match(source, /IMPLANTACIÓN GENERAL · DWG 002/);
-  assert.match(source, /156 viviendas/);
+  assert.match(source, /156 apartamentos/);
   assert.match(source, /araya-site-plan-clean\.png/);
   assert.match(source, /planCoordinates/);
   assert.match(source, /Descargar archivo/);
@@ -33,7 +33,7 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /Plano técnico/);
   assert.match(source, /progress-line planned/);
   assert.match(source, /progress-point actual/);
-  assert.match(source, /FICHA INDIVIDUAL DE VIVIENDA/);
+  assert.match(source, /FICHA INDIVIDUAL DE APARTAMENTO/);
   assert.match(source, /CAPAS OPERATIVAS DEL PLANO/);
   assert.match(source, /INFORME COMERCIAL · JUNIO 2026/);
   assert.match(source, /CONTROL TRANSVERSAL · JUNIO 2026/);
@@ -63,7 +63,7 @@ test("project selector keeps ARAYA separate from the fictional demo project", as
   assert.match(source, /Todos los nombres, cifras y documentos de Mirador del Parque son simulados/);
   assert.match(source, /role="listbox"/);
   assert.match(source, /setActiveProjectId/);
-  assert.match(source, /14 edificios · 84 viviendas/);
+  assert.match(source, /14 edificios · 84 apartamentos/);
   assert.match(source, /DemoProjectContent/);
 });
 

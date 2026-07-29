@@ -328,7 +328,7 @@ export const customMetrics: CustomMetric[] = [
   { id: "metric-physical", name: "Avance físico acumulado", value: "18,23", target: "21,24", trend: "down", unit: "%", owner: "Producción · Excel" },
   { id: "metric-schedule", name: "Avance del cronograma", value: "17", target: "21,24", trend: "down", unit: "%", owner: "Planificación · MPP" },
   { id: "metric-urban", name: "Urbanismo ejecutado", value: "18,28", target: "16,18", trend: "up", unit: "%", owner: "Producción · Excel" },
-  { id: "metric-housing", name: "Vivienda ejecutada", value: "18,21", target: "23,55", trend: "down", unit: "%", owner: "Producción · Excel" },
+  { id: "metric-housing", name: "Apartamento ejecutado", value: "18,21", target: "23,55", trend: "down", unit: "%", owner: "Producción · Excel" },
   { id: "metric-cubicacion", name: "Cubicaciones acumuladas", value: "67.342.153,57", target: "71.731.477,87", trend: "down", unit: "DOP", owner: "Finanzas · Excel" },
 ];
 
