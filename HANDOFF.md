@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 25.
-- Commit desplegado: `86864a8509ae0b9d2dec25ea0f7c7811d31caf23`.
+- Última versión publicada: 26.
+- Commit desplegado: `b2ffc699ef16078bd3c2d57c923583165739af54`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_53751cb7e2bc8191abce68ed4a347092`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_9ac1b4a8a2dc8191aa9a9a60b5192455`.
 - Despliegue:
-  `appgdep_6a6a6406f5608191a555b923fe08a4df` (`succeeded`).
+  `appgdep_6a6a6b4178d0819183a08ee516164b57` (`succeeded`).
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
   en Sites. La solicitud de cambiarlo a `public` devolvió
   `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
@@ -208,6 +208,32 @@ El cronograma se representa con líneas:
 - Cada punto muestra su valor y el bloque inferior resume el corte de junio.
 - No extender ni inventar valores ejecutados futuros.
 
+### Experiencia tablet, móvil y aplicación instalable
+
+La versión 26 mantiene el escritorio sin cambios estructurales y añade una capa
+específica para pantallas de hasta 1.100 px:
+
+- El menú lateral se sustituye por una barra inferior táctil con Inicio, Plano,
+  Apartamentos, Datos y Más.
+- `Más` abre un panel con selector de proyecto, todas las secciones, usuario,
+  cierre de sesión y acciones rápidas para cargar archivos, consultar al agente
+  y crear informes.
+- La implantación dispone de zoom de 100% a 225%, desplazamiento táctil y modo
+  de pantalla completa. Los puntos de edificios, apartamentos y urbanismo
+  conservan las coordenadas del mismo plano y abren sus fichas.
+- El agente, las fichas, los formularios y los modales funcionan como paneles
+  adaptados a la altura disponible y respetan las zonas seguras del dispositivo.
+- Las tablas, gráficos, pestañas y filtros extensos se desplazan horizontalmente
+  cuando no caben; los controles principales tienen objetivos táctiles.
+- La carga normal y la carga mediante el agente permiten tomar una foto con la
+  cámara trasera del móvil.
+- `public/manifest.webmanifest` y `public/sw.js` permiten instalar el Centro de
+  Control desde el navegador compatible. El service worker sólo conserva el
+  manifiesto y activos de marca: no cachea HTML, API, cifras, archivos privados
+  ni respuestas del agente.
+- `app/layout.tsx` declara el manifiesto, icono Bricket, modo Apple web app,
+  color de interfaz y `viewport-fit=cover`.
+
 ## Datos actualmente integrados
 
 - Corte documental: 30/06/2026.
@@ -340,10 +366,10 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 18 pruebas superadas.
+- 19 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
-- `npm run lint` termina sin errores; mantiene siete avisos conocidos por el
+- `npm run lint` termina sin errores; mantiene ocho avisos conocidos por el
   uso intencional de imágenes locales con `<img>`.
 
 Para cambios visuales de posición, comprobar:
@@ -363,7 +389,10 @@ Cuando haya cambios de producto:
 3. Crear un commit específico.
 4. Obtener una credencial temporal de escritura de Sites.
 5. Empujar `HEAD` a `sites/main` sin guardar el token.
-6. Empaquetar `dist/`, `.openai/hosting.json` y `drizzle/`.
+6. Empaquetar `dist/`, `.openai/hosting.json` y `drizzle/`. Si el archivo supera
+   el tiempo de transferencia, guardar la versión sin `archive` para que Sites
+   compile el commit ya empujado; no retirar originales descargables para
+   reducir peso.
 7. Guardar una nueva versión de Sites con el SHA exacto.
 8. Desplegar la versión guardada. El modo de acceso de Sites continúa `custom`
    y limitado al propietario hasta que el workspace permita publicación a
