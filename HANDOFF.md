@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 20.
-- Commit desplegado: `48dfb11a53ca334538b407c9ae28998d4b467423`.
+- Última versión publicada: 21.
+- Commit desplegado: `7ced76a5682d43230358318e98c03545d4538bbb`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_3bc6026761188191ad86155bb68fb612`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_c4de0a09359c8191b08d3b4875b5ea4a`.
 - Despliegue:
-  `appgdep_6a6a323b5ad08191b91769f7f1c81bb4` (`succeeded`).
+  `appgdep_6a6a4a6167e481918c152e2c4f5bebbd` (`succeeded`).
 - Acceso: privado, únicamente para el propietario configurado en Sites.
 - Rama y remoto de publicación: rama `main`, remoto `sites`.
 
@@ -116,10 +116,13 @@ La implantación general incluye:
 
 El cronograma se representa con líneas:
 
-- Línea verde para la proyección del plan operativo.
-- Línea roja para el avance ejecutado real.
+- Línea cian para el plan operativo y línea dorada para el ejecutado real,
+  siguiendo la última captura de referencia aportada por el usuario.
 - Un punto por cada mes del plan.
 - Puntos ejecutados únicamente en meses con datos reales.
+- Eje vertical de 0% a 100% con divisiones de 10 puntos.
+- Fechas completas `YYYY-MM` inclinadas desde 2025-06 hasta 2027-08.
+- Cada punto muestra su valor y el bloque inferior resume el corte de junio.
 - No extender ni inventar valores ejecutados futuros.
 
 ## Datos actualmente integrados
@@ -240,7 +243,7 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 11 pruebas superadas.
+- 12 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
 - `npm run lint` termina sin errores; mantiene seis avisos conocidos por el
