@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 19.
-- Commit desplegado: `2e8de745fd8837f0929b29d60782772299246f9e`.
+- Última versión publicada: 20.
+- Commit desplegado: `48dfb11a53ca334538b407c9ae28998d4b467423`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_2d4dd716e83081919f7cac60535734c6`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_3bc6026761188191ad86155bb68fb612`.
 - Despliegue:
-  `appgdep_6a6a2c0e18408191a6ed7d93248dfd73` (`succeeded`).
+  `appgdep_6a6a323b5ad08191b91769f7f1c81bb4` (`succeeded`).
 - Acceso: privado, únicamente para el propietario configurado en Sites.
 - Rama y remoto de publicación: rama `main`, remoto `sites`.
 
@@ -49,6 +49,18 @@ El dashboard dispone de estas vistas:
 11. Finanzas.
 12. Centro de datos.
 13. Agente IA de consulta y carga documental controlada.
+
+Dirección dispone además de un botón global `Crear informe`:
+
+- Permite elegir `Informe semanal` con fecha inicial y final o `Informe
+  mensual` mediante selector de mes.
+- Genera una vista previa que reúne resumen ejecutivo, Curva S, producción,
+  urbanismo, comercial, finanzas, seguridad, permisos y acciones prioritarias.
+- Respeta el selector global USD/DOP.
+- Se puede imprimir o guardar como PDF desde el navegador.
+- El último corte validado continúa siendo 30/06/2026. Si el periodo elegido no
+  está cubierto por ese corte, el informe muestra una advertencia y usa la
+  última evidencia disponible sin interpolar ni inventar cifras.
 
 El selector de proyecto activo permite abrir dos promociones:
 
@@ -104,8 +116,8 @@ La implantación general incluye:
 
 El cronograma se representa con líneas:
 
-- Línea gris para el plan operativo.
-- Línea naranja para el avance ejecutado.
+- Línea verde para la proyección del plan operativo.
+- Línea roja para el avance ejecutado real.
 - Un punto por cada mes del plan.
 - Puntos ejecutados únicamente en meses con datos reales.
 - No extender ni inventar valores ejecutados futuros.
@@ -228,10 +240,10 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 9 pruebas superadas.
+- 11 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
-- `npm run lint` termina sin errores; mantiene cuatro avisos conocidos por el
+- `npm run lint` termina sin errores; mantiene seis avisos conocidos por el
   uso intencional de imágenes locales con `<img>`.
 
 Para cambios visuales de posición, comprobar:
