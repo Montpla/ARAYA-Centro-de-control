@@ -1,6 +1,6 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 28/07/2026
+Actualizado: 29/07/2026
 Zona horaria del usuario: America/La_Paz
 Idioma de trabajo: español
 
@@ -23,8 +23,8 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 11.
-- Commit desplegado: `5459e738eea782049ec8a72410432966ef4feddb`.
+- Última versión publicada: 12.
+- Commit desplegado: `7b50141efac4a79de308b8ce0cad8a431cdea9a4`.
 - Acceso: privado, únicamente para el propietario configurado en Sites.
 - Rama y remoto de publicación: rama `main`, remoto `sites`.
 
@@ -43,6 +43,18 @@ El dashboard dispone de estas vistas:
 9. Métricas y finanzas.
 10. Centro de datos.
 11. Agente IA de consulta, en modo de solo lectura.
+
+El selector de proyecto activo permite abrir dos promociones:
+
+- `ARAYA`: proyecto real, con sus datos documentales y todas las funciones
+  existentes.
+- `MIRADOR DEL PARQUE`: proyecto ficticio de demostración, con 14 edificios,
+  84 viviendas, urbanismo, planificación, cronología, proveedores, métricas y
+  fuentes simuladas. Toda la interfaz lo identifica como `PROYECTO DEMO`.
+
+Los datos de ambos proyectos están separados. El agente IA y las altas
+persistentes de métricas o proveedores permanecen vinculados únicamente a
+ARAYA para evitar mezclar registros reales con la demostración.
 
 La implantación general incluye:
 
