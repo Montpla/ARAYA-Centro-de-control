@@ -57,6 +57,7 @@ import {
   formatMoneyMillions,
 } from "../lib/currency";
 import { UploadArea, areaLabels, uploadAreas, uploadStatusLabels } from "../lib/file-routing";
+import { LiveDataMap, applyLiveValuesToTargets } from "../lib/live-data";
 
 type View =
   | "resumen"
@@ -120,6 +121,60 @@ type DirectionReportPeriod = {
   endDate: string;
   label: string;
   generatedAt: string;
+};
+
+type LiveSyncState = {
+  status: "syncing" | "connected" | "offline";
+  revision: number;
+  refreshedAt: string;
+  latestEvent: {
+    revision: number;
+    sourceName: string;
+    area: string;
+    cutoff: string;
+    changeCount: number;
+    message: string;
+    actorName: string;
+    createdAt: string;
+  } | null;
+};
+
+const liveDataTargets: Record<string, unknown> = {
+  advances,
+  antonelyAdvances,
+  antonelyBalanceLines,
+  antonelyCostAccounts,
+  antonelyDetailTotals,
+  antonelyFinanceSource,
+  antonelyPayableCategories,
+  antonelyPayableVendorsAll,
+  arrearsBreakdown,
+  buildings,
+  constructionDisciplines,
+  costBreakdown,
+  cubicaciones,
+  cxpAging,
+  cxpCategories,
+  dataSources,
+  delayedUrbanismStarts,
+  financialProjection,
+  financingProcesses,
+  juneDataQualityIssues,
+  juneReport,
+  managementActions,
+  monthlyPlan,
+  payablesReconciliation,
+  permits,
+  projectSnapshot,
+  safetyFindings,
+  safetyMetrics,
+  salesLocations,
+  salesModels,
+  structuralDelay,
+  timeline,
+  urbanismAreas,
+  urbanismReportAreas,
+  workPackages,
 };
 
 const projects: Record<ProjectId, {
@@ -381,6 +436,7 @@ function Header({
   project,
   currency,
   onCurrencyChange,
+  liveSync,
 }: {
   view: View;
   onAsk: () => void;
@@ -389,6 +445,7 @@ function Header({
   project: (typeof projects)[ProjectId];
   currency: CurrencyCode;
   onCurrencyChange: (currency: CurrencyCode) => void;
+  liveSync: LiveSyncState;
 }) {
   const label = navItems.find((item) => item.id === view)?.label;
   return (
@@ -419,9 +476,22 @@ function Header({
             </div>
           </div>
         )}
-        <div className="live-state">
+        <div
+          className={`live-state live-sync ${project.demo ? "demo" : liveSync.status}`}
+          title={
+            project.demo
+              ? `Corte documental ${project.cutoff}`
+              : liveSync.latestEvent?.message ?? "Sincronización automática de todas las cifras y gráficas"
+          }
+        >
           <span className="live-dot" />
-          Corte documental · {project.cutoff}
+          {project.demo
+            ? `Corte documental · ${project.cutoff}`
+            : liveSync.status === "connected"
+              ? `Tiempo real · v${liveSync.revision || "base"} · 5 s`
+              : liveSync.status === "syncing"
+                ? "Sincronizando datos…"
+                : "Reconectando datos…"}
         </div>
         <button className="button secondary" onClick={onAsk} disabled={project.demo}>
           Preguntar al agente
@@ -1805,7 +1875,7 @@ function CollaborativeFileRegistry() {
     }
     const onFilesUpdated = () => void refresh();
     void refresh();
-    const interval = window.setInterval(() => void refresh(), 10_000);
+    const interval = window.setInterval(() => void refresh(), 5_000);
     window.addEventListener("araya-files-updated", onFilesUpdated);
     return () => {
       active = false;
@@ -1818,7 +1888,7 @@ function CollaborativeFileRegistry() {
     <section className="panel live-file-registry" aria-live="polite">
       <div className="panel-heading">
         <div>
-          <span className="section-kicker">REGISTRO COLABORATIVO · ACTUALIZACIÓN CADA 10 S</span>
+          <span className="section-kicker">REGISTRO COLABORATIVO · ACTUALIZACIÓN CADA 5 S</span>
           <h3>Últimos archivos recibidos</h3>
         </div>
         <span className="count-badge">{files.length}</span>
@@ -1877,15 +1947,15 @@ function SourcesView({ onUpload }: { onUpload: () => void }) {
       <section className="panel ingestion-workflow">
         <div className="panel-heading">
           <div><span className="section-kicker">CARGA COLABORATIVA</span><h3>Cómo entra un archivo al Centro de Control</h3></div>
-          <span className="live-state"><span className="live-dot" /> Operativo</span>
+          <span className="live-state"><span className="live-dot" /> Actualización cada 5 s</span>
         </div>
         <div className="ingestion-steps">
           <div><b>01</b><strong>Recepción</strong><span>El original se guarda sin modificar.</span></div>
           <div><b>02</b><strong>Clasificación</strong><span>Área sugerida por nombre y descripción.</span></div>
-          <div><b>03</b><strong>Conciliación</strong><span>Duplicados y diferencias quedan visibles.</span></div>
-          <div><b>04</b><strong>Integración</strong><span>La cifra validada actualiza su pestaña.</span></div>
+          <div><b>03</b><strong>Normalización</strong><span>Los datos se convierten al modelo único del proyecto.</span></div>
+          <div><b>04</b><strong>Sincronización</strong><span>La nueva versión actualiza todas las pantallas.</span></div>
         </div>
-        <p className="governance-note">La identidad procede del acceso al dashboard. Una carga se muestra en tiempo casi real, pero no reemplaza datos consolidados hasta superar la revisión del área responsable.</p>
+        <p className="governance-note">La identidad procede del acceso al dashboard. Cada dato normalizado se publica con fuente, corte, moneda de origen y versión; las contradicciones quedan observadas para evitar sustituciones silenciosas.</p>
       </section>
       <CollaborativeFileRegistry />
       <section className="source-grid">
@@ -1925,7 +1995,7 @@ function SourcesView({ onUpload }: { onUpload: () => void }) {
           <div><strong>Versiones</strong><p>El PDF duplica el consolidado; los informes parciales amplían datos y la lámina de mayo queda como histórico.</p></div>
           <div><strong>Edificios</strong><p>El índice MPP promedia 32 frentes; las disciplinas del informe de obra son un indicador diferente.</p></div>
           <div><strong>Viviendas</strong><p>El porcentaje disponible corresponde sólo a superestructura, no a terminación total.</p></div>
-          <div><strong>Nuevas cargas</strong><p>R2 conserva el archivo y D1 registra usuario, área, moneda origen, hash, versión, corte y estado de validación. Sin moneda declarada se aplica DOP.</p></div>
+          <div><strong>Nuevas cargas</strong><p>R2 conserva el original y D1 registra archivo, usuario, área, moneda, versión y corte. Los datos normalizados se reflejan en todas las vistas en menos de cinco segundos; sin moneda declarada se aplica DOP.</p></div>
         </div>
       </section>
     </div>
@@ -1937,7 +2007,7 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
     {
       id: "welcome",
       role: "assistant",
-      text: "Buenos días. Puedo consultar el corte real y recibir archivos. Los importes se responden en USD por defecto; si una fuente no indica moneda, se registra como DOP. Cada archivo queda clasificado y pendiente de revisión antes de actualizar cifras consolidadas.",
+      text: "Buenos días. Puedo consultar la versión viva y recibir archivos. Los importes se responden en USD por defecto; si una fuente no indica moneda, se registra como DOP. Los datos normalizados actualizan todas las pantallas en menos de cinco segundos y cualquier contradicción queda visible para conciliación.",
       mode: "source-data-engine",
     },
   ]);
@@ -2086,7 +2156,7 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
         <textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Pregunta por cualquier dato del corte…" rows={2} />
         <button type="submit" disabled={loading || !question.trim()} aria-label="Enviar pregunta">↑</button>
       </form>
-      <div className="agent-foot">Las cargas quedan trazadas por usuario y no sustituyen datos validados automáticamente.</div>
+      <div className="agent-foot">Cada respuesta consulta la versión viva. Las cargas conservan usuario, fuente y corte; las contradicciones quedan observadas.</div>
     </aside>
   );
 }
@@ -2356,7 +2426,7 @@ function DirectionReport({
           </ol>
           <div className="report-quality-alert">
             <strong>Control de calidad documental</strong>
-            <p>El informe mantiene visibles las diferencias entre fuentes; no sustituye cifras ni rellena periodos sin un nuevo archivo validado.</p>
+            <p>El informe toma la versión viva al generarse y mantiene visibles las diferencias entre fuentes; no rellena periodos sin datos normalizados.</p>
           </div>
         </section>
 
@@ -2415,7 +2485,7 @@ function UploadModal({
           <div><span className="section-kicker">CENTRO DE DATOS · CARGA SEGURA</span><h3>Añadir archivo al proyecto ARAYA</h3></div>
           <button className="close-button" type="button" onClick={onClose} aria-label="Cerrar">×</button>
         </div>
-        <p className="upload-intro">El original se conserva sin modificar. El sistema registra tu identidad, detecta duplicados y deja cualquier cambio de cifras pendiente de validación.</p>
+        <p className="upload-intro">El original se conserva sin modificar. El sistema registra tu identidad y detecta duplicados; al normalizarse, sus datos actualizan todas las pantallas y cualquier contradicción queda observada.</p>
         <div className="upload-dropzone">
           <input
             type="file"
@@ -2882,6 +2952,12 @@ export function DashboardClient() {
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
   const [currency, setCurrency] = useState<CurrencyCode>(DEFAULT_DISPLAY_CURRENCY);
+  const [liveSync, setLiveSync] = useState<LiveSyncState>({
+    status: "syncing",
+    revision: 0,
+    refreshedAt: "",
+    latestEvent: null,
+  });
   const activeProject = projects[activeProjectId];
 
   useEffect(() => {
@@ -2891,17 +2967,64 @@ export function DashboardClient() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then((response) => response.json())
-      .then((data) => {
-        if (Array.isArray(data.metrics) && data.metrics.length) {
-          setMetrics((current) => [...data.metrics, ...current]);
+    let active = true;
+    let refreshing = false;
+
+    async function refreshLiveData() {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        const [liveResponse, dashboardResponse] = await Promise.all([
+          fetch("/api/live-data", { cache: "no-store" }),
+          fetch("/api/dashboard", { cache: "no-store" }),
+        ]);
+        if (!liveResponse.ok || !dashboardResponse.ok) throw new Error("Sincronización no disponible");
+        const [liveData, dashboardData] = await Promise.all([
+          liveResponse.json() as Promise<{
+            values?: LiveDataMap;
+            revision?: number;
+            refreshedAt?: string;
+            latestEvent?: LiveSyncState["latestEvent"];
+          }>,
+          dashboardResponse.json() as Promise<{
+            metrics?: CustomMetric[];
+            suppliers?: Supplier[];
+          }>,
+        ]);
+        if (!active) return;
+        applyLiveValuesToTargets(liveData.values ?? {}, liveDataTargets);
+        setMetrics([
+          ...(Array.isArray(dashboardData.metrics) ? dashboardData.metrics : []),
+          ...initialMetrics,
+        ]);
+        setSupplierRows([
+          ...(Array.isArray(dashboardData.suppliers) ? dashboardData.suppliers : []),
+          ...initialSuppliers,
+        ]);
+        setLiveSync({
+          status: "connected",
+          revision: liveData.revision ?? 0,
+          refreshedAt: liveData.refreshedAt ?? new Date().toISOString(),
+          latestEvent: liveData.latestEvent ?? null,
+        });
+      } catch {
+        if (active) {
+          setLiveSync((current) => ({ ...current, status: "offline" }));
         }
-        if (Array.isArray(data.suppliers) && data.suppliers.length) {
-          setSupplierRows((current) => [...data.suppliers, ...current]);
-        }
-      })
-      .catch(() => undefined);
+      } finally {
+        refreshing = false;
+      }
+    }
+
+    void refreshLiveData();
+    const interval = window.setInterval(() => void refreshLiveData(), 5_000);
+    const handleFileUpdate = () => void refreshLiveData();
+    window.addEventListener("araya-files-updated", handleFileUpdate);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("araya-files-updated", handleFileUpdate);
+    };
   }, []);
 
   const searchResults = useMemo(() => {
@@ -3046,8 +3169,14 @@ export function DashboardClient() {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <span><i className="live-dot" /> Fuentes integradas</span>
-          <small>{activeProjectId === "araya" ? "Últimos archivos · 29/07/2026 14:33" : "Proyecto demo · datos simulados"}</small>
+          <span><i className="live-dot" /> {activeProjectId === "araya" ? "Datos vivos conectados" : "Fuentes integradas"}</span>
+          <small>
+            {activeProjectId === "araya"
+              ? liveSync.status === "connected"
+                ? `Versión ${liveSync.revision || "base"} · refresco cada 5 s`
+                : "Reconectando sincronización…"
+              : "Proyecto demo · datos simulados"}
+          </small>
         </div>
       </aside>
 
@@ -3060,6 +3189,7 @@ export function DashboardClient() {
           onReport={() => setReportBuilderOpen(true)}
           currency={currency}
           onCurrencyChange={setCurrency}
+          liveSync={liveSync}
         />
         <div className="global-search">
           <span>⌕</span>
@@ -3085,6 +3215,18 @@ export function DashboardClient() {
             </div>
           )}
         </div>
+        {activeProjectId === "araya" && (
+          <div className={`live-data-ribbon ${liveSync.status}`} role="status" aria-live="polite">
+            <span className="live-dot" />
+            <strong>Centro de Control sincronizado</strong>
+            <span>Gráficas, cifras, porcentajes, cronograma y avance se actualizan automáticamente cada 5 segundos.</span>
+            <em>
+              {liveSync.latestEvent?.sourceName
+                ? `Última fuente: ${liveSync.latestEvent.sourceName}${liveSync.latestEvent.cutoff ? ` · corte ${liveSync.latestEvent.cutoff}` : ""}`
+                : "Base consolidada con trazabilidad por fuente, fecha y versión"}
+            </em>
+          </div>
+        )}
         <div className="content">{content()}</div>
       </main>
 

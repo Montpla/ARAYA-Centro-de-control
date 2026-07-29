@@ -242,14 +242,14 @@ export async function POST(request: Request) {
     await db.insert(fileActivity).values({
       fileId: id,
       eventType: "archivo_recibido",
-      message: `Archivo dirigido a ${areaLabels[classification.area]}. Pendiente de validación antes de actualizar datos consolidados.`,
+      message: `Archivo dirigido a ${areaLabels[classification.area]}. En cola de normalización; todo dato publicado conservará fuente, corte, moneda y versión.`,
       actorEmail: auth.user.email,
       actorName: auth.user.displayName,
     });
     return Response.json(
       {
         file: publicFileRow(row),
-        message: `Archivo registrado en ${areaLabels[classification.area]}. El Centro de Control lo muestra de inmediato y queda pendiente de validación.`,
+        message: `Archivo registrado en ${areaLabels[classification.area]}. El original aparece de inmediato; sus datos normalizados actualizarán todas las pantallas automáticamente y las contradicciones quedarán observadas.`,
       },
       { status: 201 },
     );

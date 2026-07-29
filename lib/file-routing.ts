@@ -20,7 +20,7 @@ export const areaLabels = Object.fromEntries(uploadAreas.map((area) => [area.id,
 
 export const uploadStatusLabels: Record<string, string> = {
   recibido: "Recibido",
-  pendiente_revision: "Pendiente de revisión",
+  pendiente_revision: "En normalización",
   integrado: "Integrado",
   observado: "Observado",
 };

@@ -82,3 +82,46 @@ export const fileActivity = sqliteTable(
   (table) => [index("file_activity_file_id_idx").on(table.fileId)],
 );
 
+export const liveDataEvents = sqliteTable(
+  "live_data_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    sourceFileId: text("source_file_id").notNull().default(""),
+    sourceName: text("source_name").notNull().default(""),
+    area: text("area").notNull().default("direccion"),
+    cutoff: text("cutoff").notNull().default(""),
+    changeCount: integer("change_count").notNull().default(0),
+    message: text("message").notNull().default(""),
+    actorEmail: text("actor_email").notNull(),
+    actorName: text("actor_name").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("live_data_events_created_at_idx").on(table.createdAt),
+    index("live_data_events_source_file_id_idx").on(table.sourceFileId),
+  ],
+);
+
+export const liveDataPoints = sqliteTable(
+  "live_data_points",
+  {
+    key: text("key").primaryKey(),
+    valueJson: text("value_json").notNull(),
+    valueType: text("value_type").notNull(),
+    area: text("area").notNull().default("direccion"),
+    sourceFileId: text("source_file_id").notNull().default(""),
+    sourceName: text("source_name").notNull().default(""),
+    sourceCurrency: text("source_currency").notNull().default("DOP"),
+    cutoff: text("cutoff").notNull().default(""),
+    revision: integer("revision").notNull(),
+    updatedByEmail: text("updated_by_email").notNull(),
+    updatedByName: text("updated_by_name").notNull(),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("live_data_points_revision_idx").on(table.revision),
+    index("live_data_points_area_idx").on(table.area),
+    index("live_data_points_source_file_id_idx").on(table.sourceFileId),
+  ],
+);
+

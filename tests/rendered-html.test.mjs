@@ -98,8 +98,10 @@ test("agent is source-grounded, guarded and evaluated", async () => {
   assert.match(route, /get_safety_permits/);
   assert.match(route, /get_data_quality/);
   assert.match(route, /get_uploaded_files/);
+  assert.match(route, /get_live_data_status/);
+  assert.match(route, /materializeLiveRoot/);
   assert.match(prompt, /No inventes cifras/);
-  assert.match(prompt, /No modifiques datos/);
+  assert.match(prompt, /Consulta siempre las herramientas/);
   assert.equal(JSON.parse(evalCases).length, 20);
 });
 
@@ -131,11 +133,12 @@ test("June 2026 reports are integrated with traceable downloads and reconciliati
   assert.match(dashboard, /juneDataQualityIssues/);
 });
 
-test("database migrations cover records, file registry and source currency", async () => {
-  const [baseMigration, fileMigration, currencyMigration] = await Promise.all([
+test("database migrations cover records, file registry, source currency and live versions", async () => {
+  const [baseMigration, fileMigration, currencyMigration, liveMigration] = await Promise.all([
     readFile("drizzle/0000_broken_vin_gonzales.sql", "utf8"),
     readFile("drizzle/0001_milky_jamie_braddock.sql", "utf8"),
     readFile("drizzle/0002_dry_black_knight.sql", "utf8"),
+    readFile("drizzle/0003_luxuriant_thaddeus_ross.sql", "utf8"),
   ]);
   assert.match(baseMigration, /CREATE TABLE `custom_metrics`/);
   assert.match(baseMigration, /CREATE TABLE `suppliers`/);
@@ -145,6 +148,9 @@ test("database migrations cover records, file registry and source currency", asy
   assert.match(fileMigration, /uploaded_files_sha256_idx/);
   assert.match(currencyMigration, /source_currency/);
   assert.match(currencyMigration, /DEFAULT 'DOP'/);
+  assert.match(liveMigration, /CREATE TABLE `live_data_events`/);
+  assert.match(liveMigration, /CREATE TABLE `live_data_points`/);
+  assert.match(liveMigration, /live_data_points_revision_idx/);
 });
 
 test("collaborative uploads use authenticated identity, R2 storage and duplicate detection", async () => {
@@ -161,9 +167,31 @@ test("collaborative uploads use authenticated identity, R2 storage and duplicate
   assert.match(route, /resolveSourceCurrency/);
   assert.match(dashboard, /CARGA COLABORATIVA/);
   assert.match(dashboard, /uploadProjectFile/);
-  assert.match(dashboard, /ACTUALIZACIÓN CADA 10 S/);
+  assert.match(dashboard, /ACTUALIZACIÓN CADA 5 S/);
   assert.match(routing, /Clasificación automática/);
   assert.equal(JSON.parse(hosting).r2, "FILES");
+});
+
+test("all variable dashboard values use a versioned live-data layer with five-second refresh", async () => {
+  const [dashboard, route, liveData, styles] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/api/live-data/route.ts", "utf8"),
+    readFile("lib/live-data.ts", "utf8"),
+    readFile("app/globals.css", "utf8"),
+  ]);
+  assert.match(dashboard, /fetch\("\/api\/live-data"/);
+  assert.match(dashboard, /applyLiveValuesToTargets/);
+  assert.match(dashboard, /setInterval\(\(\) => void refreshLiveData\(\), 5_000\)/);
+  assert.match(dashboard, /Gráficas, cifras, porcentajes, cronograma y avance/);
+  assert.match(dashboard, /Tiempo real/);
+  assert.match(route, /onConflictDoUpdate/);
+  assert.match(route, /provenance/);
+  assert.match(route, /refreshIntervalMs: 5_000/);
+  assert.match(liveData, /LIVE_DATA_ROOTS/);
+  assert.match(liveData, /projectSnapshot/);
+  assert.match(liveData, /monthlyPlan/);
+  assert.match(liveData, /financialProjection/);
+  assert.match(styles, /\.live-data-ribbon/);
 });
 
 test("financial presentation defaults to USD and preserves DOP source values", async () => {

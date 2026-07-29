@@ -58,9 +58,10 @@ Dirección dispone además de un botón global `Crear informe`:
   urbanismo, comercial, finanzas, seguridad, permisos y acciones prioritarias.
 - Respeta el selector global USD/DOP.
 - Se puede imprimir o guardar como PDF desde el navegador.
-- El último corte validado continúa siendo 30/06/2026. Si el periodo elegido no
-  está cubierto por ese corte, el informe muestra una advertencia y usa la
-  última evidencia disponible sin interpolar ni inventar cifras.
+- El corte consolidado de arranque continúa siendo 30/06/2026. Cada informe
+  toma la versión viva disponible al generarse; si el periodo elegido no está
+  cubierto, muestra una advertencia y usa la última evidencia disponible sin
+  interpolar ni inventar cifras.
 
 El selector de proyecto activo permite abrir dos promociones:
 
@@ -82,9 +83,15 @@ ARAYA mediante `+ Cargar archivo` y también dentro del chat del agente:
   origen, fecha de corte, tamaño, SHA-256, versión, estado y motivo de
   clasificación.
 - Los duplicados exactos se detectan por SHA-256 y no se vuelven a almacenar.
-- El registro del Centro de datos se refresca cada 10 segundos.
-- Toda carga nueva queda `pendiente_revision`; no cambia cifras consolidadas
-  hasta que el área responsable la concilie y valide.
+- El registro del Centro de datos y todas las vistas se refrescan cada 5
+  segundos.
+- El original de toda carga aparece inmediatamente con estado técnico
+  `pendiente_revision`, mostrado como `En normalización`.
+- Cuando el contenido se normaliza mediante el contrato de datos vivos, se
+  publica una revisión que actualiza automáticamente gráficas, cifras,
+  porcentajes, cronograma, avance, informes y respuestas del agente.
+- Las contradicciones no se sustituyen silenciosamente: conservan la
+  procedencia y quedan observadas para conciliación.
 - Límite actual: 50 MB. Formatos: Excel, CSV, PowerPoint, PDF, Word, MPP, DWG,
   imágenes y ZIP.
 
@@ -97,6 +104,37 @@ Rutas y persistencia:
 - `drizzle/0001_milky_jamie_braddock.sql`: migración correspondiente.
 - `drizzle/0002_dry_black_knight.sql`: añade `source_currency`; los registros
   previos y las cargas sin moneda explícita quedan como `DOP`.
+- `drizzle/0003_luxuriant_thaddeus_ross.sql`: añade las revisiones y puntos de
+  datos vivos.
+
+### Capa de datos vivos
+
+Regla permanente del producto: todo valor variable se lee desde un único
+contrato versionado. La base documental integrada sigue siendo el valor de
+respaldo; cualquier actualización normalizada prevalece en pantalla sin
+necesidad de recompilar o volver a desplegar.
+
+- `GET /api/live-data`: devuelve valores, procedencia por clave, revisión,
+  último evento y frecuencia de refresco.
+- `POST /api/live-data`: publica hasta 250 cambios normalizados por revisión.
+  Cada cambio exige una clave permitida y conserva área, archivo fuente,
+  fecha de corte, moneda de origen, responsable y fecha de actualización.
+- `live_data_events`: cabecera de auditoría de cada revisión.
+- `live_data_points`: último valor vivo por clave con su procedencia.
+- `lib/live-data.ts`: contrato, claves admitidas y aplicación de valores vivos
+  sobre los modelos existentes.
+- `app/dashboard-client.tsx`: consulta `/api/live-data` y `/api/dashboard` cada
+  5 segundos y vuelve a renderizar todas las vistas.
+- `app/api/agent/route.ts`: materializa la misma versión viva antes de
+  responder, incluso cuando funciona con el motor local sin clave de OpenAI.
+- La cinta global muestra conexión, revisión y última fuente aplicada.
+
+Importante: almacenar un PDF, PowerPoint, DWG o Excel no interpreta por sí solo
+su contenido. El original aparece inmediatamente; las cifras se actualizan
+cuando el agente o un importador confiable extrae y publica los datos mediante
+el contrato normalizado. No afirmar que un documento arbitrario se integra sin
+esta fase. Los datos ya estructurados pueden publicarse directamente y se
+propagan en menos de cinco segundos.
 
 El sitio sigue siendo privado para `enriquemontesplaza@gmail.com`. La
 infraestructura admite a cualquier usuario autenticado que reciba acceso, pero
@@ -243,7 +281,7 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 12 pruebas superadas.
+- 13 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
 - `npm run lint` termina sin errores; mantiene seis avisos conocidos por el
