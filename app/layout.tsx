@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
 
@@ -16,6 +16,20 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Centro de Control ARAYA",
     description,
+    applicationName: "ARAYA Control",
+    manifest: "/manifest.webmanifest",
+    icons: {
+      icon: [{ url: "/bricket-mark.png", type: "image/png", sizes: "225x225" }],
+      apple: [{ url: "/bricket-mark.png", type: "image/png", sizes: "225x225" }],
+    },
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "black-translucent",
+      title: "ARAYA Control",
+    },
+    formatDetection: {
+      telephone: false,
+    },
     openGraph: {
       title: "Centro de Control ARAYA",
       description,
@@ -29,6 +43,13 @@ export async function generateMetadata(): Promise<Metadata> {
     },
   };
 }
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#232420",
+};
 
 export default function RootLayout({
   children,

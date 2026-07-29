@@ -1,0 +1,21 @@
+{
+  "name": "Centro de Control ARAYA",
+  "short_name": "ARAYA Control",
+  "description": "Centro de Control del proyecto ARAYA del Grupo Bricket.",
+  "lang": "es",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f4ef",
+  "theme_color": "#232420",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/bricket-mark.png",
+      "sizes": "225x225",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

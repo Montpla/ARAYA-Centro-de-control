@@ -167,6 +167,11 @@ type LiveSyncState = {
   } | null;
 };
 
+type InstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
 type HistoryChange = {
   id: number;
   revision: number;
@@ -278,6 +283,13 @@ const navItems: Array<{ id: View; label: string; mark: string }> = [
   { id: "fuentes", label: "Centro de datos", mark: "12" },
   { id: "agente", label: "Agente IA", mark: "AI" },
   { id: "usuarios", label: "Usuarios y accesos", mark: "AD" },
+];
+
+const mobilePrimaryNav: Array<{ id: View; label: string; mark: string }> = [
+  { id: "resumen", label: "Inicio", mark: "IN" },
+  { id: "implantacion", label: "Plano", mark: "PL" },
+  { id: "viviendas", label: "Apartamentos", mark: "AP" },
+  { id: "fuentes", label: "Datos", mark: "DT" },
 ];
 
 const statusLabel = {
@@ -889,10 +901,21 @@ function SitePlan({
   const [planBuilding, setPlanBuilding] = useState<Building | null>(null);
   const [planMode, setPlanMode] = useState<"visual" | "technical">("visual");
   const [selectedUrbanism, setSelectedUrbanism] = useState<UrbanismArea | null>(null);
+  const [planZoom, setPlanZoom] = useState(100);
+  const [planExpanded, setPlanExpanded] = useState(false);
   const allUnits = buildings.flatMap((item) => item.units);
   const completed = allUnits.filter((unit) => visualUnitStatus(unit) === "terminada").length;
   const active = allUnits.filter((unit) => visualUnitStatus(unit) === "en_curso").length;
   const pending = allUnits.filter((unit) => ["pendiente", "bloqueada"].includes(visualUnitStatus(unit))).length;
+
+  useEffect(() => {
+    if (!planExpanded) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [planExpanded]);
 
   return (
     <section className="panel site-plan-panel">
@@ -941,20 +964,78 @@ function SitePlan({
         {buildings.length} edificios y {allUnits.length} apartamentos del modelo vivo.
         Los porcentajes, estados y colores cambian con cada nueva revisión.
       </p>
-      <div className={`site-plan-image-wrap ${planMode}`}>
-        <img
-          className="site-plan-image"
-          src={planMode === "visual" ? "/araya-visual-masterplan-v3.png" : "/araya-site-plan-clean.png"}
-          alt={
-            planMode === "visual"
-              ? "Implantación visual de ARAYA con edificios, apartamentos, viales, estacionamientos y urbanismo"
-              : "Plano técnico de la implantación general de ARAYA"
-          }
-          width={1200}
-          height={1958}
-          loading="eager"
-        />
-        <>
+      <div className="plan-touch-toolbar" aria-label="Controles táctiles del plano">
+        <button
+          type="button"
+          onClick={() => setPlanZoom((current) => Math.max(100, current - 25))}
+          disabled={planZoom === 100}
+          aria-label="Alejar plano"
+        >
+          −
+        </button>
+        <button type="button" onClick={() => setPlanZoom(100)} aria-label="Restablecer zoom">
+          {planZoom}%
+        </button>
+        <button
+          type="button"
+          onClick={() => setPlanZoom((current) => Math.min(225, current + 25))}
+          disabled={planZoom === 225}
+          aria-label="Acercar plano"
+        >
+          +
+        </button>
+        <button className="expand-plan-button" type="button" onClick={() => setPlanExpanded(true)}>
+          Pantalla completa
+        </button>
+      </div>
+      <div className={`site-plan-canvas-scroll ${planExpanded ? "expanded" : ""}`}>
+        {planExpanded && (
+          <div className="expanded-plan-bar">
+            <div className="expanded-plan-copy">
+              <strong>Implantación ARAYA</strong>
+              <span>Desliza para recorrer · toca un elemento para abrir su ficha</span>
+            </div>
+            <div className="expanded-plan-controls">
+              <button
+                type="button"
+                onClick={() => setPlanZoom((current) => Math.max(100, current - 25))}
+                disabled={planZoom === 100}
+                aria-label="Alejar plano"
+              >
+                −
+              </button>
+              <span>{planZoom}%</span>
+              <button
+                type="button"
+                onClick={() => setPlanZoom((current) => Math.min(225, current + 25))}
+                disabled={planZoom === 225}
+                aria-label="Acercar plano"
+              >
+                +
+              </button>
+              <button type="button" onClick={() => setPlanExpanded(false)} aria-label="Cerrar plano a pantalla completa">×</button>
+            </div>
+          </div>
+        )}
+        <div
+          className="site-plan-zoom-stage"
+          style={{ width: `${planZoom}%`, maxWidth: `${Math.round(820 * planZoom / 100)}px` }}
+        >
+          <div className={`site-plan-image-wrap ${planMode}`}>
+            <img
+              className="site-plan-image"
+              src={planMode === "visual" ? "/araya-visual-masterplan-v3.png" : "/araya-site-plan-clean.png"}
+              alt={
+                planMode === "visual"
+                  ? "Implantación visual de ARAYA con edificios, apartamentos, viales, estacionamientos y urbanismo"
+                  : "Plano técnico de la implantación general de ARAYA"
+              }
+              width={1200}
+              height={1958}
+              loading="eager"
+              decoding="async"
+            />
+            <>
             {buildings.map((building) => {
               const point =
                 building.mapCoordinates?.[planMode] ??
@@ -974,6 +1055,7 @@ function SitePlan({
                     className={`plan-building-trigger ${buildingVisualStatus}`}
                     title={`Abrir TH-${building.shortName.padStart(2, "0")} · ${number.format(building.progress)}%`}
                     onClick={() => {
+                      setPlanExpanded(false);
                       setSelectedUnit(null);
                       setSelectedUrbanism(null);
                       setPlanBuilding(building);
@@ -989,6 +1071,7 @@ function SitePlan({
                         title={`${unit.code} · ${statusLabel[visualUnitStatus(unit)]} · ${unit.progress}%`}
                         aria-label={`Abrir ${unit.code}`}
                         onClick={() => {
+                          setPlanExpanded(false);
                           setPlanBuilding(null);
                           setSelectedUrbanism(null);
                           setSelectedUnit({ building, unit });
@@ -1013,6 +1096,7 @@ function SitePlan({
                   style={{ left: `${point.x}%`, top: `${point.y}%` }}
                   title={`Abrir ${area.name}`}
                   onClick={() => {
+                    setPlanExpanded(false);
                     setPlanBuilding(null);
                     setSelectedUnit(null);
                     setSelectedUrbanism(area);
@@ -1023,7 +1107,9 @@ function SitePlan({
                 </button>
               );
             })}
-        </>
+            </>
+          </div>
+        </div>
       </div>
       {planBuilding && (
         <div className="plan-building-picker" role="dialog" aria-modal="true">
@@ -2769,14 +2855,25 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
         {uploading && <div className="message assistant typing">Guardando, clasificando y registrando…</div>}
       </div>
       <div className="agent-attachment">
-        <label>
-          <span>Adjuntar archivo</span>
-          <input
-            type="file"
-            accept=".xlsx,.xls,.csv,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
-            onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
-          />
-        </label>
+        <div className="agent-attachment-options">
+          <label>
+            <span>Adjuntar archivo</span>
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
+              onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
+            />
+          </label>
+          <label>
+            <span>Tomar foto</span>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
+            />
+          </label>
+        </div>
         {attachment && (
           <div className="agent-attachment-ready">
             <strong>{attachment.name}</strong>
@@ -3138,6 +3235,18 @@ function UploadModal({
           />
           <strong>{selectedFile ? selectedFile.name : "Selecciona o arrastra un archivo"}</strong>
           <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV, PowerPoint, PDF, Word, MPP, DWG, imagen o ZIP · máximo 50 MB"}</span>
+        </div>
+        <div className="upload-source-actions" aria-label="Opciones de carga en móvil">
+          <label>
+            <span>Tomar foto con la cámara</span>
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+            />
+          </label>
+          <small>Ideal para avance de obra, incidencias, albaranes y evidencias de campo.</small>
         </div>
         <div className="form-grid">
           <label>
@@ -3594,6 +3703,8 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   const [uploadOpen, setUploadOpen] = useState(false);
   const [reportBuilderOpen, setReportBuilderOpen] = useState(false);
   const [directionReport, setDirectionReport] = useState<DirectionReportPeriod | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
   const [currency, setCurrency] = useState<CurrencyCode>(DEFAULT_DISPLAY_CURRENCY);
@@ -3611,6 +3722,24 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     if (!window.matchMedia("(max-width: 760px)").matches) return;
     const timer = window.setTimeout(() => setAgentOpen(false), 0);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+    }
+
+    const handleInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as InstallPromptEvent);
+    };
+    const handleInstalled = () => setInstallPrompt(null);
+    window.addEventListener("beforeinstallprompt", handleInstallPrompt);
+    window.addEventListener("appinstalled", handleInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleInstallPrompt);
+      window.removeEventListener("appinstalled", handleInstalled);
+    };
   }, []);
 
   useEffect(() => {
@@ -3714,6 +3843,32 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     ].slice(0, 8);
   }, [activeProjectId, search, supplierRows, metrics, currentUser.financeAccess]);
 
+  function navigate(viewId: View) {
+    setView(viewId);
+    setMobileMenuOpen(false);
+    if (viewId === "agente") setAgentOpen(false);
+  }
+
+  function selectProject(projectId: ProjectId) {
+    setActiveProjectId(projectId);
+    setProjectMenuOpen(false);
+    setMobileMenuOpen(false);
+    setView("resumen");
+    setSearch("");
+    setModal(null);
+    setUploadOpen(false);
+    setReportBuilderOpen(false);
+    setDirectionReport(null);
+    setAgentOpen(projectId === "araya" && !window.matchMedia("(max-width: 1100px)").matches);
+  }
+
+  async function installApp() {
+    if (!installPrompt) return;
+    await installPrompt.prompt();
+    await installPrompt.userChoice;
+    setInstallPrompt(null);
+  }
+
   function content() {
     if (view === "usuarios" && currentUser.role === "admin") return <UsersAdminView currentUser={currentUser} />;
     if (activeProjectId === "mirador") return <DemoProjectContent view={view} onNavigate={setView} />;
@@ -3773,17 +3928,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
                   className={activeProjectId === project.id ? "selected" : ""}
                   role="option"
                   aria-selected={activeProjectId === project.id}
-                  onClick={() => {
-                    setActiveProjectId(project.id);
-                    setProjectMenuOpen(false);
-                    setView("resumen");
-                    setSearch("");
-                    setModal(null);
-                    setUploadOpen(false);
-                    setReportBuilderOpen(false);
-                    setDirectionReport(null);
-                    setAgentOpen(project.id === "araya");
-                  }}
+                  onClick={() => selectProject(project.id)}
                 >
                   {project.id === "araya" ? (
                     <div className="project-wordmark">
@@ -3811,10 +3956,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
             <button
               key={item.id}
               className={view === item.id ? "active" : ""}
-              onClick={() => {
-                setView(item.id);
-                if (item.id === "agente") setAgentOpen(false);
-              }}
+              onClick={() => navigate(item.id)}
             >
               <i>{item.mark}</i><span>{item.label}</span>
               {item.id === "fuentes" && <em>{activeProjectId === "araya"
@@ -3837,6 +3979,30 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
           </small>
         </div>
       </aside>
+
+      <nav className="mobile-bottom-nav" aria-label="Navegación principal móvil">
+        {mobilePrimaryNav.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={view === item.id ? "active" : ""}
+            aria-current={view === item.id ? "page" : undefined}
+            onClick={() => navigate(item.id)}
+          >
+            <i>{item.mark}</i>
+            <span>{item.label}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          className={mobileMenuOpen || !mobilePrimaryNav.some((item) => item.id === view) ? "active" : ""}
+          aria-expanded={mobileMenuOpen}
+          onClick={() => setMobileMenuOpen((open) => !open)}
+        >
+          <i>•••</i>
+          <span>Más</span>
+        </button>
+      </nav>
 
       <main className={`main-area ${agentOpen && view !== "agente" ? "with-agent" : ""}`}>
         <Header
@@ -3889,6 +4055,101 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
         )}
         <div className="content">{content()}</div>
       </main>
+
+      {mobileMenuOpen && (
+        <>
+          <button className="mobile-menu-backdrop" type="button" aria-label="Cerrar menú" onClick={() => setMobileMenuOpen(false)} />
+          <aside className="mobile-menu-sheet" role="dialog" aria-modal="true" aria-label="Menú del Centro de Control">
+            <div className="mobile-menu-head">
+              <div className="mobile-menu-brand">
+                <img src="/bricket-mark.png" alt="" />
+                <div><strong>BRICKET</strong><span>Centro de Control</span></div>
+              </div>
+              <button type="button" onClick={() => setMobileMenuOpen(false)} aria-label="Cerrar menú">×</button>
+            </div>
+            <div className="mobile-project-switch">
+              <span>Proyecto activo</span>
+              <div>
+                {(Object.values(projects) as Array<(typeof projects)[ProjectId]>).map((project) => (
+                  <button
+                    key={project.id}
+                    type="button"
+                    className={activeProjectId === project.id ? "active" : ""}
+                    onClick={() => selectProject(project.id)}
+                  >
+                    <strong>{project.name}</strong>
+                    <small>{project.id === "araya" ? arayaLiveSummary : "Proyecto demo"}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mobile-quick-actions">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setUploadOpen(true);
+                }}
+                disabled={activeProject.demo}
+              >
+                <i>＋</i><span><strong>Cargar archivo</strong><small>Documento, plano o foto</small></span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setAgentOpen(true);
+                }}
+                disabled={activeProject.demo}
+              >
+                <i>AI</i><span><strong>Preguntar al agente</strong><small>Consulta los datos vivos</small></span>
+              </button>
+              {currentUser.financeAccess && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setReportBuilderOpen(true);
+                  }}
+                  disabled={activeProject.demo}
+                >
+                  <i>↗</i><span><strong>Crear informe</strong><small>Semanal o mensual</small></span>
+                </button>
+              )}
+              {installPrompt && (
+                <button type="button" onClick={() => void installApp()}>
+                  <i>↓</i><span><strong>Instalar aplicación</strong><small>Abrir desde la pantalla de inicio</small></span>
+                </button>
+              )}
+            </div>
+            <nav className="mobile-menu-links" aria-label="Todas las secciones">
+              {availableNavItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={view === item.id ? "active" : ""}
+                  onClick={() => navigate(item.id)}
+                >
+                  <i>{item.mark}</i>
+                  <span>{item.label}</span>
+                  {item.id === "metricas" && !currentUser.financeAccess && <em>Bloqueado</em>}
+                  <b>›</b>
+                </button>
+              ))}
+            </nav>
+            <div className="mobile-account">
+              <div className="avatar" aria-hidden="true">
+                {currentUser.displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "BR"}
+              </div>
+              <div>
+                <strong>{currentUser.displayName}</strong>
+                <span>{areaLabels[currentUser.area]} · {currentUser.role === "admin" ? "Administrador" : "Usuario autorizado"}</span>
+              </div>
+              <a href="/signout-with-chatgpt?return_to=/">Salir</a>
+            </div>
+          </aside>
+        </>
+      )}
 
       {activeProjectId === "araya" && agentOpen && view !== "agente" && <AgentPanel expanded={false} onClose={() => setAgentOpen(false)} currency={currency} />}
 
