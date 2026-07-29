@@ -460,14 +460,18 @@ function StatCard({
 
 function ProgressChart() {
   const width = 1180;
-  const height = 190;
-  const plotTop = 14;
-  const plotBottom = 142;
-  const sidePadding = 25;
+  const height = 410;
+  const plotTop = 22;
+  const plotBottom = 292;
+  const sidePadding = 70;
   const xFor = (index: number) =>
     sidePadding + (index * (width - sidePadding * 2)) / (monthlyPlan.length - 1);
   const yFor = (value: number) =>
     plotBottom - (value / 100) * (plotBottom - plotTop);
+  const monthLabel = (index: number) => {
+    const date = new Date(2025, 5 + index, 1);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  };
   const plannedPoints = monthlyPlan
     .map((point, index) => `${xFor(index)},${yFor(point.planned)}`)
     .join(" ");
@@ -479,62 +483,94 @@ function ProgressChart() {
     .join(" ");
 
   return (
-    <>
-      <div className="chart-scroll">
-        <svg
-          className="line-chart"
-          viewBox={`0 0 ${width} ${height}`}
-          role="img"
-          aria-label="Evolución mensual de la proyección del plan operativo en verde y de la ejecución real en rojo"
-        >
-          {[0, 25, 50, 75, 100].map((value) => (
-            <g key={value}>
-              <line
-                className="line-chart-grid"
-                x1={sidePadding}
-                x2={width - sidePadding}
-                y1={yFor(value)}
-                y2={yFor(value)}
-              />
-              <text className="line-chart-axis" x={2} y={yFor(value) + 3}>
-                {value}%
-              </text>
-            </g>
-          ))}
-          <polyline className="progress-line planned" points={plannedPoints} />
-          <polyline className="progress-line actual" points={actualPoints} />
-          {monthlyPlan.map((point, index) => (
-            <g key={`${point.month}-${index}`}>
-              <circle
-                className="progress-point planned"
-                cx={xFor(index)}
-                cy={yFor(point.planned)}
-                r="3.5"
-              >
-                <title>{`${point.month} · Proyección ${number.format(point.planned)}%`}</title>
-              </circle>
-              {point.actual !== null && (
+    <div className="s-curve">
+      <div className="s-curve-heading">
+        <h3>Curva S — Plan vs. Ejecutado</h3>
+        <p>Avance físico acumulado del proyecto (% del monto total) · jun-2025 a ago-2027</p>
+      </div>
+      <div className="s-curve-plot">
+        <div className="chart-scroll">
+          <svg
+            className="line-chart"
+            viewBox={`0 0 ${width} ${height}`}
+            role="img"
+            aria-label="Curva S mensual del plan operativo y la ejecución real desde junio de 2025 hasta agosto de 2027"
+          >
+            {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((value) => (
+              <g key={value}>
+                <line
+                  className="line-chart-grid"
+                  x1={sidePadding}
+                  x2={width - sidePadding}
+                  y1={yFor(value)}
+                  y2={yFor(value)}
+                />
+                <text className="line-chart-axis" x={sidePadding - 17} y={yFor(value) + 4}>
+                  {value}
+                </text>
+              </g>
+            ))}
+            <line className="line-chart-y-axis" x1={sidePadding} x2={sidePadding} y1={plotTop} y2={plotBottom} />
+            <text className="line-chart-y-title" transform={`translate(18 ${plotTop + (plotBottom - plotTop) / 2}) rotate(-90)`}>
+              % acumulado
+            </text>
+            <polyline className="progress-line planned" points={plannedPoints} />
+            <polyline className="progress-line actual" points={actualPoints} />
+            {monthlyPlan.map((point, index) => (
+              <g key={`${point.month}-${index}`}>
                 <circle
-                  className="progress-point actual"
+                  className="progress-point planned"
                   cx={xFor(index)}
-                  cy={yFor(point.actual)}
-                  r="4"
+                  cy={yFor(point.planned)}
+                  r="3.6"
                 >
-                  <title>{`${point.month} · Ejecutado ${number.format(point.actual)}%`}</title>
+                  <title>{`${monthLabel(index)} · Plan operativo ${number.format(point.planned)}%`}</title>
                 </circle>
-              )}
-              <text className="line-chart-month" x={xFor(index)} y="166">
-                {point.month}
-              </text>
-            </g>
-          ))}
-        </svg>
+                {point.planned > 0 && (
+                  <text className="line-chart-value planned" x={xFor(index)} y={Math.max(plotTop - 3, yFor(point.planned) - 11)}>
+                    {number.format(point.planned)}
+                  </text>
+                )}
+                {point.actual !== null && (
+                  <>
+                    <circle
+                      className="progress-point actual"
+                      cx={xFor(index)}
+                      cy={yFor(point.actual)}
+                      r="3.8"
+                    >
+                      <title>{`${monthLabel(index)} · Ejecutado real ${number.format(point.actual)}%`}</title>
+                    </circle>
+                    {point.actual > 0 && (
+                      <text className="line-chart-value actual" x={xFor(index)} y={Math.min(plotBottom + 21, yFor(point.actual) + 18)}>
+                        {number.format(point.actual)}
+                      </text>
+                    )}
+                  </>
+                )}
+                <line className="line-chart-tick" x1={xFor(index)} x2={xFor(index)} y1={plotBottom} y2={plotBottom + 6} />
+                <text
+                  className="line-chart-month"
+                  x={xFor(index)}
+                  y={plotBottom + 22}
+                  transform={`rotate(42 ${xFor(index)} ${plotBottom + 22})`}
+                >
+                  {monthLabel(index)}
+                </text>
+              </g>
+            ))}
+          </svg>
+        </div>
+        <div className="chart-legend">
+          <span><i className="legend plan" />Plan Operativo</span>
+          <span><i className="legend actual" />Ejecutado Real</span>
+        </div>
       </div>
-      <div className="chart-legend">
-        <span><i className="legend plan" />Proyección · plan operativo</span>
-        <span><i className="legend actual" />Ejecución real</span>
+      <div className="s-curve-insight">
+        <strong>Al corte (jun-2026):</strong>
+        <span>Ejecutado 18,23% vs. Plan 21,24% → brecha de 3,0 puntos porcentuales. El plan proyecta cierre en agosto-2027; sin corrección, la brecha actual se traduce en un desplazamiento equivalente en el cierre.</span>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -814,16 +850,10 @@ function Overview({
 
       <section className="dashboard-grid">
         <article className="panel schedule-card">
-          <div className="panel-heading">
-            <div>
-              <span className="section-kicker">CURVA DE AVANCE</span>
-              <h3>Plan frente a ejecución</h3>
-            </div>
-            <button className="text-button" onClick={() => onNavigate("planificacion")}>
-              Abrir planificación
-            </button>
-          </div>
           <ProgressChart />
+          <button className="text-button s-curve-nav" onClick={() => onNavigate("planificacion")}>
+            Abrir planificación
+          </button>
         </article>
 
         <article className="panel attention-card">
@@ -871,15 +901,7 @@ function Planning() {
         <StatCard eyebrow="Camino crítico" value="5 paquetes" detail="Marcados como críticos en el MPP" tone="warn" />
       </section>
       <section className="panel schedule-card">
-        <div className="panel-heading">
-          <div>
-            <span className="section-kicker">CURVA S</span>
-            <h3>Plan operativo completo</h3>
-          </div>
-          <span className="data-note">Excel · corte 30/06/2026</span>
-        </div>
         <ProgressChart />
-        <p className="quality-note">La serie mensual de la Curva S muestra 23,29% planificado en junio, mientras el KPI principal del mismo informe declara 21,24%. Se mantienen ambas cifras para conciliación.</p>
       </section>
       <section className="panel">
         <div className="panel-heading">

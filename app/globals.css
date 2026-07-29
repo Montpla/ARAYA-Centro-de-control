@@ -733,28 +733,72 @@ button {
   vertical-align: middle;
 }
 
+.schedule-card {
+  position: relative;
+}
+
+.s-curve-heading {
+  margin: 0 8px 10px;
+}
+
+.s-curve-heading h3 {
+  margin: 0;
+  color: #0d1018;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(25px, 3vw, 38px);
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+
+.s-curve-heading p {
+  margin: 14px 0 0;
+  color: #8a96aa;
+  font-size: 12px;
+}
+
+.s-curve-plot {
+  overflow: hidden;
+  padding: 8px 14px 14px;
+  border-radius: 17px;
+  background: #142b48;
+}
+
 .chart-scroll {
   overflow-x: auto;
-  padding-bottom: 4px;
+  padding-bottom: 2px;
+  scrollbar-color: #58708a #142b48;
 }
 
 .line-chart {
   display: block;
   width: 100%;
-  min-width: 1180px;
-  height: 190px;
+  min-width: 920px;
+  height: auto;
   overflow: visible;
 }
 
 .line-chart-grid {
-  stroke: #e5e2da;
+  stroke: #3a638c;
   stroke-width: 1;
 }
 
-.line-chart-axis {
-  fill: #9b998f;
-  font-size: 7px;
-  font-weight: 700;
+.line-chart-y-axis,
+.line-chart-tick {
+  stroke: #9fb1c6;
+  stroke-width: 1;
+}
+
+.line-chart-axis,
+.line-chart-y-title {
+  fill: #c5d1df;
+  font-size: 14px;
+  font-weight: 600;
+  text-anchor: end;
+}
+
+.line-chart-y-title {
+  font-size: 15px;
+  text-anchor: middle;
 }
 
 .progress-line {
@@ -764,33 +808,93 @@ button {
 }
 
 .progress-line.planned {
-  stroke: var(--green);
-  stroke-width: 3;
+  stroke: #28d4ed;
+  stroke-width: 3.4;
 }
 
 .progress-line.actual {
-  stroke: var(--red);
-  stroke-width: 3.5;
+  stroke: #ddb45b;
+  stroke-width: 3.4;
 }
 
 .progress-point {
-  stroke: white;
-  stroke-width: 2;
+  stroke: none;
 }
 
 .progress-point.planned {
-  fill: var(--green);
+  fill: #28d4ed;
 }
 
 .progress-point.actual {
-  fill: var(--red);
+  fill: #ddb45b;
+}
+
+.line-chart-value {
+  fill: #c6d2e0;
+  font-size: 12px;
+  text-anchor: middle;
+}
+
+.line-chart-value.actual {
+  fill: #aebdd0;
 }
 
 .line-chart-month {
-  fill: var(--muted);
-  font-size: 7px;
-  font-weight: 700;
-  text-anchor: middle;
+  fill: #c8d3e1;
+  font-size: 14px;
+  text-anchor: start;
+}
+
+.s-curve-plot .chart-legend {
+  justify-content: center;
+  margin: -5px 0 0;
+  color: #cbd5e2;
+  font-size: 14px;
+}
+
+.s-curve-plot .chart-legend span {
+  gap: 8px;
+}
+
+.s-curve-plot .legend {
+  position: relative;
+  width: 32px;
+  height: 3px;
+  border-radius: 0;
+}
+
+.s-curve-plot .legend::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  content: "";
+  transform: translate(-50%, -50%);
+  background: inherit;
+}
+
+.s-curve-insight {
+  display: block;
+  margin: 16px 18px 0;
+  padding: 12px 16px;
+  border: 2px solid #4e91d7;
+  border-radius: 5px;
+  color: #aebcd0;
+  background: #142b48;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.s-curve-insight strong {
+  margin-right: 4px;
+  color: white;
+}
+
+.s-curve-nav {
+  display: block;
+  margin: 12px 8px 0 auto;
 }
 
 .empty-state {
@@ -1779,11 +1883,11 @@ button {
 }
 
 .legend.plan {
-  background: var(--green);
+  background: #28d4ed;
 }
 
 .legend.actual {
-  background: var(--red);
+  background: #ddb45b;
 }
 
 .count-badge {

@@ -199,8 +199,25 @@ test("direction can generate grounded weekly or monthly reports and export them 
   assert.match(dashboard, /direction-report-document/);
   assert.match(styles, /\.direction-report-overlay/);
   assert.match(styles, /@media print/);
-  assert.match(styles, /\.progress-line\.planned\s*\{[^}]*stroke: var\(--green\)/s);
-  assert.match(styles, /\.progress-line\.actual\s*\{[^}]*stroke: var\(--red\)/s);
-  assert.match(styles, /\.legend\.plan\s*\{[^}]*background: var\(--green\)/s);
-  assert.match(styles, /\.legend\.actual\s*\{[^}]*background: var\(--red\)/s);
+});
+
+test("S-curve matches the supplied executive reference without changing its data series", async () => {
+  const [dashboard, styles, data] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/globals.css", "utf8"),
+    readFile("app/demo-data.ts", "utf8"),
+  ]);
+  assert.match(dashboard, /Curva S — Plan vs\. Ejecutado/);
+  assert.match(dashboard, /jun-2025 a ago-2027/);
+  assert.match(dashboard, /Plan Operativo/);
+  assert.match(dashboard, /Ejecutado Real/);
+  assert.match(dashboard, /Al corte \(jun-2026\):/);
+  assert.match(dashboard, /monthLabel/);
+  assert.match(styles, /\.progress-line\.planned\s*\{[^}]*stroke: #28d4ed/s);
+  assert.match(styles, /\.progress-line\.actual\s*\{[^}]*stroke: #ddb45b/s);
+  assert.match(styles, /\.s-curve-plot\s*\{[^}]*background: #142b48/s);
+  assert.match(styles, /\.legend\.plan\s*\{[^}]*background: #28d4ed/s);
+  assert.match(styles, /\.legend\.actual\s*\{[^}]*background: #ddb45b/s);
+  assert.match(data, /\{ month: "jun", planned: 23\.29, actual: 18\.23 \}/);
+  assert.match(data, /\{ month: "ago", planned: 100, actual: null \}/);
 });
