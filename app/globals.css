@@ -135,21 +135,30 @@ button {
   font-size: 12px;
 }
 
-.project-selector button > b.project-logo-mark {
-  overflow: hidden;
-  padding: 0;
-  background: #ad645d;
-}
-
-.project-logo-mark img {
-  width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
-}
-
 .project-selector button div {
   flex: 1;
+}
+
+.project-selector button .project-wordmark {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.project-wordmark img {
+  width: 100%;
+  max-width: 148px;
+  height: 46px;
+  display: block;
+  object-fit: contain;
+  border-radius: 6px;
+  background: white;
+}
+
+.project-selector button .project-wordmark small {
+  margin: 0;
+  color: #aeb3c2;
+  text-align: center;
 }
 
 .project-selector button strong,
@@ -180,7 +189,7 @@ button {
 .project-menu {
   position: absolute;
   z-index: 80;
-  top: 103px;
+  top: calc(100% - 12px);
   left: 6px;
   right: 6px;
   display: grid;

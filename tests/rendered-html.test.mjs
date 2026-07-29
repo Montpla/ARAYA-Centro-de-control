@@ -69,11 +69,11 @@ test("sidebar uses the official Bricket brand mark", async () => {
   assert.ok(logo.length > 1000);
 });
 
-test("ARAYA project selector uses the supplied project logo", async () => {
+test("ARAYA project selector uses the supplied Punta Cana wordmark", async () => {
   const source = await readFile("app/dashboard-client.tsx", "utf8");
-  const logo = await readFile("public/araya-mark.png");
-  assert.match(source, /activeProject\.id === "araya" \? <img src="\/araya-mark\.png"/);
-  assert.match(source, /project\.id === "araya" \? <img src="\/araya-mark\.png"/);
+  const logo = await readFile("public/araya-wordmark.jpg");
+  assert.match(source, /src="\/araya-wordmark\.jpg" alt="ARAYA Punta Cana"/);
+  assert.match(source, /className="project-wordmark"/);
   assert.ok(logo.length > 1000);
 });
 

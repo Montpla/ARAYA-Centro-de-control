@@ -1694,13 +1694,20 @@ export function DashboardClient() {
             aria-expanded={projectMenuOpen}
             aria-haspopup="listbox"
           >
-            <b className={activeProject.id === "araya" ? "project-logo-mark" : ""}>
-              {activeProject.id === "araya" ? <img src="/araya-mark.png" alt="" /> : activeProject.code}
-            </b>
-            <div>
-              <strong>{activeProject.name}</strong>
-              <small>{activeProject.summary}</small>
-            </div>
+            {activeProject.id === "araya" ? (
+              <div className="project-wordmark">
+                <img src="/araya-wordmark.jpg" alt="ARAYA Punta Cana" />
+                <small>{activeProject.summary}</small>
+              </div>
+            ) : (
+              <>
+                <b>{activeProject.code}</b>
+                <div>
+                  <strong>{activeProject.name}</strong>
+                  <small>{activeProject.summary}</small>
+                </div>
+              </>
+            )}
             <i>{projectMenuOpen ? "⌃" : "⌄"}</i>
           </button>
           {projectMenuOpen && (
@@ -1720,13 +1727,20 @@ export function DashboardClient() {
                     setAgentOpen(project.id === "araya");
                   }}
                 >
-                  <b className={project.id === "araya" ? "project-logo-mark" : ""}>
-                    {project.id === "araya" ? <img src="/araya-mark.png" alt="" /> : project.code}
-                  </b>
-                  <div>
-                    <strong>{project.name}</strong>
-                    <small>{project.demo ? "Proyecto ficticio · demostración" : project.summary}</small>
-                  </div>
+                  {project.id === "araya" ? (
+                    <div className="project-wordmark">
+                      <img src="/araya-wordmark.jpg" alt="ARAYA Punta Cana" />
+                      <small>{project.summary}</small>
+                    </div>
+                  ) : (
+                    <>
+                      <b>{project.code}</b>
+                      <div>
+                        <strong>{project.name}</strong>
+                        <small>Proyecto ficticio · demostración</small>
+                      </div>
+                    </>
+                  )}
                   <i>{activeProjectId === project.id ? "✓" : ""}</i>
                 </button>
               ))}
