@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 18.
-- Commit desplegado: `2be5bc51af59d17ae86a00b503bc8f610e7e163f`.
+- Última versión publicada: 19.
+- Commit desplegado: `2e8de745fd8837f0929b29d60782772299246f9e`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_e9b56dbabf74819188f580fc92a66608`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_2d4dd716e83081919f7cac60535734c6`.
 - Despliegue:
-  `appgdep_6a6a2430e3c08191a96d26cbd4f109e7` (`succeeded`).
+  `appgdep_6a6a2c0e18408191a6ed7d93248dfd73` (`succeeded`).
 - Acceso: privado, únicamente para el propietario configurado en Sites.
 - Rama y remoto de publicación: rama `main`, remoto `sites`.
 
@@ -66,8 +66,9 @@ La carga documental colaborativa está disponible en todas las pestañas de
 ARAYA mediante `+ Cargar archivo` y también dentro del chat del agente:
 
 - El original se guarda en R2 con la vinculación lógica `FILES`.
-- D1 registra usuario autenticado, área, sección, descripción, fecha de corte,
-  tamaño, SHA-256, versión, estado y motivo de clasificación.
+- D1 registra usuario autenticado, área, sección, descripción, moneda de
+  origen, fecha de corte, tamaño, SHA-256, versión, estado y motivo de
+  clasificación.
 - Los duplicados exactos se detectan por SHA-256 y no se vuelven a almacenar.
 - El registro del Centro de datos se refresca cada 10 segundos.
 - Toda carga nueva queda `pendiente_revision`; no cambia cifras consolidadas
@@ -82,6 +83,8 @@ Rutas y persistencia:
 - `uploaded_files`: metadatos del archivo.
 - `file_activity`: auditoría de eventos.
 - `drizzle/0001_milky_jamie_braddock.sql`: migración correspondiente.
+- `drizzle/0002_dry_black_knight.sql`: añade `source_currency`; los registros
+  previos y las cargas sin moneda explícita quedan como `DOP`.
 
 El sitio sigue siendo privado para `enriquemontesplaza@gmail.com`. La
 infraestructura admite a cualquier usuario autenticado que reciba acceso, pero
@@ -123,8 +126,12 @@ El cronograma se representa con líneas:
 - 156 viviendas en seguimiento.
 - Urbanismo ejecutado: 18,28%.
 - Urbanismo planificado: 16,18%.
-- La moneda de cubicaciones no está identificada en la fuente y no debe
-  presentarse como USD ni convertirse sin confirmación.
+- Regla monetaria: cualquier importe sin moneda explícita se interpreta como
+  DOP. Las cubicaciones se registran por tanto con moneda fuente DOP.
+- La visualización predeterminada es USD. El selector global permite cambiar
+  entre USD y DOP sin modificar los valores fuente.
+- Tipo de cambio documental: `1 DOP = 0,016788 USD`, corte 30/06/2026
+  (`BCE-06-26`). No sustituirlo por una tasa en vivo para este cierre.
 
 Edificios con datos:
 
@@ -281,10 +288,14 @@ Archivo de Antonely:
 - SHA-256:
   `C87ABEA3FEA21BB44D598313C2FAA8719F22FF4B265C30EBD45358897B9D590F`
 - Hojas: costes acumulados, cuentas por pagar, anticipos y balance.
-- CxP: 96 líneas de factura; el ranking de principales proveedores se muestra
-  en la pestaña `Proveedores`.
-- Anticipos pendientes RD$9.210.448,86 y cifras de balance coinciden con el
-  control existente.
+- CxP: 96 líneas de factura, 15 categorías y 43 proveedores; el ranking
+  completo se muestra en `Proveedores`.
+- Finanzas incorpora un `Detalle completo` con 29 cuentas de coste, 15
+  categorías de CxP, 26 anticipos y 41 líneas de balance.
+- Anticipos pendientes: DOP 9.210.448,86 en el detalle y DOP 9.210.448,94 en
+  el balance. La diferencia de DOP 0,08 queda visible.
+- El balance cuadra exactamente: activos DOP 759.714.674,92 = pasivos
+  DOP 446.209.904,61 + patrimonio DOP 313.504.770,31.
 
 Nuevas vistas interactivas:
 
@@ -305,6 +316,8 @@ Vistas ampliadas:
 
 Datos de control:
 
+- Los siguientes importes son valores fuente. La interfaz los muestra en USD
+  por defecto y permite verlos en DOP.
 - Físico: 18,23% ejecutado; KPI plan 21,24%; Curva S plan junio 23,29%.
 - Comercial: 228 reservas activas; 24 clientes vencidos por USD 136.840,39.
 - Presupuesto: RD$3.591.280.577,17; ejecutado RD$712.326.162,73.
@@ -332,6 +345,8 @@ Conciliaciones que deben seguir visibles:
    RD$712.326.162,73. Diferencias: RD$10.154,66 y RD$1,00.
 9. La cabecera de la hoja de costes de Antonely indica por error un inicio en
    junio de 2016. Se preserva el original y se marca la observación.
+10. Anticipos: balance DOP 9.210.448,94 frente a detalle DOP 9.210.448,86;
+    diferencia DOP 0,08.
 
 ## Criterios de continuidad
 
@@ -342,6 +357,9 @@ Conciliaciones que deben seguir visibles:
 - No cambiar la geometría visual para resolver un problema de coordenadas.
 - Mantener accesibilidad mediante títulos y etiquetas `aria`.
 - Conservar el dashboard privado salvo instrucción explícita del usuario.
+- Mantener USD como moneda de visualización inicial y DOP como regla de
+  origen cuando un archivo no indique moneda. Cada nueva carga debe persistir
+  `source_currency`.
 - No borrar archivos históricos ni cambios ajenos.
 
 ## Próximos pasos probables
