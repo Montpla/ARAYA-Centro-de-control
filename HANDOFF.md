@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 23.
-- Commit desplegado: `efafafb0f1dc69e10e8047da62a009b03dce652b`.
+- Última versión publicada: 24.
+- Commit desplegado: `9b6d463ae432b53144ae93f0467e2ea245ea6d6e`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_4befac36b5388191a8999db7c26e5451`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_2b5e2e1ac5b88191a60dabb46f814a7f`.
 - Despliegue:
-  `appgdep_6a6a5806100c8191baed266aab14e3f7` (`succeeded`).
+  `appgdep_6a6a5a3cbb248191874cd079273f766e` (`succeeded`).
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
   en Sites. La solicitud de cambiarlo a `public` devolvió
   `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
@@ -452,6 +452,9 @@ Conciliaciones que deben seguir visibles:
 - Mantener el masterplan visual y el plano técnico.
 - No cambiar la geometría visual para resolver un problema de coordenadas.
 - Mantener accesibilidad mediante títulos y etiquetas `aria`.
+- Usar siempre `apartamento` y `apartamentos` en la interfaz, los informes y
+  las respuestas del agente. `vivienda` se conserva únicamente como alias
+  técnico interno para clasificar documentos o reconocer consultas antiguas.
 - Conservar el dashboard privado salvo instrucción explícita del usuario.
 - Mantener USD como moneda de visualización inicial y DOP como regla de
   origen cuando un archivo no indique moneda. Cada nueva carga debe persistir
