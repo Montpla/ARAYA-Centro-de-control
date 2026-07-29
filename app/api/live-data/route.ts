@@ -1,12 +1,14 @@
 import { desc } from "drizzle-orm";
-import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
 import { liveDataEvents, liveDataPoints } from "../../../db/schema";
+import { requireApiUser } from "../../../lib/access-control";
 import {
   LiveDataMap,
   LiveDataUpdate,
   isLiveDataKey,
+  isFinancialLiveKey,
   liveValueType,
+  redactFinancialFields,
 } from "../../../lib/live-data";
 
 export const runtime = "edge";
@@ -15,17 +17,8 @@ const MAX_UPDATES = 250;
 const MAX_VALUE_SIZE = 250_000;
 
 async function authenticatedUser() {
-  const user = await getChatGPTUser();
-  if (!user) {
-    return {
-      response: Response.json(
-        { error: "Debes iniciar sesión para consultar o actualizar los datos vivos." },
-        { status: 401 },
-      ),
-      user: null,
-    };
-  }
-  return { response: null, user };
+  const auth = await requireApiUser();
+  return { response: auth.response, user: auth.user };
 }
 
 function publicEvent(row: typeof liveDataEvents.$inferSelect | undefined) {
@@ -66,7 +59,12 @@ export async function GET() {
     }> = {};
     rows.forEach((row) => {
       try {
-        values[row.key] = JSON.parse(row.valueJson);
+        const parsed = JSON.parse(row.valueJson);
+        const visibleValue = auth.user.financeAccess
+          ? parsed
+          : redactFinancialFields(row.key, parsed);
+        if (visibleValue === undefined) return;
+        values[row.key] = visibleValue;
         provenance[row.key] = {
           area: row.area,
           cutoff: row.cutoff,
@@ -127,6 +125,9 @@ export async function POST(request: Request) {
   }
   if (payload.updates.length > MAX_UPDATES) {
     return Response.json({ error: `Una actualización admite como máximo ${MAX_UPDATES} datos.` }, { status: 413 });
+  }
+  if (!auth.user.financeAccess && payload.updates.some((update) => isFinancialLiveKey(String(update?.key ?? "")))) {
+    return Response.json({ error: "No tienes permiso para publicar datos financieros." }, { status: 403 });
   }
 
   let normalized: Array<{

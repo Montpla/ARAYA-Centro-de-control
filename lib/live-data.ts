@@ -57,11 +57,52 @@ export const LIVE_DATA_ROOTS = [
 ] as const;
 
 const liveRootSet = new Set<string>(LIVE_DATA_ROOTS);
+const financialRootSet = new Set([
+  "advances",
+  "antonelyAdvances",
+  "antonelyBalanceLines",
+  "antonelyCostAccounts",
+  "antonelyDetailTotals",
+  "antonelyFinanceSource",
+  "antonelyPayableCategories",
+  "antonelyPayableVendorsAll",
+  "costBreakdown",
+  "cubicaciones",
+  "cxpAging",
+  "cxpCategories",
+  "financialProjection",
+  "financingProcesses",
+  "payablesReconciliation",
+]);
 const keyPattern = /^[A-Za-z][A-Za-z0-9]*(?:\.(?:[A-Za-z][A-Za-z0-9]*|\d+))*$/;
 
 export function isLiveDataKey(key: string) {
   if (!keyPattern.test(key)) return false;
   return liveRootSet.has(key.split(".")[0]);
+}
+
+export function isFinancialLiveKey(key: string) {
+  const root = key.split(".")[0];
+  if (financialRootSet.has(root)) return true;
+  if (key === "juneReport.finance" || key.startsWith("juneReport.finance.")) return true;
+  return /^projectSnapshot\.cubicaciones/.test(key);
+}
+
+export function redactFinancialFields(key: string, value: LiveDataValue) {
+  if (isFinancialLiveKey(key)) return undefined;
+  if (key === "juneReport" && value && typeof value === "object" && !Array.isArray(value)) {
+    const next = cloneValue(value);
+    delete (next as Record<string, LiveDataValue>).finance;
+    return next;
+  }
+  if (key === "projectSnapshot" && value && typeof value === "object" && !Array.isArray(value)) {
+    const next = cloneValue(value) as Record<string, LiveDataValue>;
+    Object.keys(next).forEach((field) => {
+      if (field.startsWith("cubicaciones")) delete next[field];
+    });
+    return next;
+  }
+  return value;
 }
 
 export function liveValueType(value: LiveDataValue) {

@@ -1,8 +1,8 @@
 import { env } from "cloudflare:workers";
 import { and, desc, eq } from "drizzle-orm";
-import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
 import { fileActivity, uploadedFiles } from "../../../db/schema";
+import { requireApiUser } from "../../../lib/access-control";
 import { resolveSourceCurrency } from "../../../lib/currency";
 import { areaLabels, classifyUpload, safeFileName } from "../../../lib/file-routing";
 
@@ -89,14 +89,8 @@ function publicFileRow(row: typeof uploadedFiles.$inferSelect) {
 }
 
 async function authenticatedUser() {
-  const user = await getChatGPTUser();
-  if (!user) {
-    return {
-      response: Response.json({ error: "Debes iniciar sesión para consultar o cargar archivos." }, { status: 401 }),
-      user: null,
-    };
-  }
-  return { response: null, user };
+  const auth = await requireApiUser();
+  return { response: auth.response, user: auth.user };
 }
 
 export async function GET(request: Request) {
@@ -108,6 +102,9 @@ export async function GET(request: Request) {
   if (downloadId) {
     const [row] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, downloadId)).limit(1);
     if (!row) return Response.json({ error: "Archivo no encontrado." }, { status: 404 });
+    if (row.area === "finanzas" && !auth.user.financeAccess) {
+      return Response.json({ error: "No tienes acceso a documentos financieros." }, { status: 403 });
+    }
 
     const object = await getFileBucket().get(row.storageKey);
     if (!object) return Response.json({ error: "El original no está disponible en el almacenamiento." }, { status: 404 });
@@ -122,7 +119,7 @@ export async function GET(request: Request) {
 
   const rows = await db.select().from(uploadedFiles).orderBy(desc(uploadedFiles.createdAt)).limit(60);
   return Response.json({
-    files: rows.map(publicFileRow),
+    files: rows.filter((row) => auth.user.financeAccess || row.area !== "finanzas").map(publicFileRow),
     refreshedAt: new Date().toISOString(),
   });
 }
@@ -171,6 +168,9 @@ export async function POST(request: Request) {
     description,
     declaredArea: String(formData.get("area") ?? "auto"),
   });
+  if (classification.area === "finanzas" && !auth.user.financeAccess) {
+    return Response.json({ error: "No tienes permiso para cargar documentos financieros." }, { status: 403 });
+  }
   const safeName = safeFileName(candidate.name);
   const bytes = await candidate.arrayBuffer();
   const sha256 = hexDigest(await crypto.subtle.digest("SHA-256", bytes));

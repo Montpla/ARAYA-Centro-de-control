@@ -160,7 +160,7 @@ test("collaborative uploads use authenticated identity, R2 storage and duplicate
     readFile("lib/file-routing.ts", "utf8"),
     readFile(".openai/hosting.json", "utf8"),
   ]);
-  assert.match(route, /getChatGPTUser/);
+  assert.match(route, /requireApiUser/);
   assert.match(route, /crypto\.subtle\.digest\("SHA-256"/);
   assert.match(route, /getFileBucket\(\)\.get/);
   assert.match(route, /pendiente_revision/);
@@ -170,6 +170,75 @@ test("collaborative uploads use authenticated identity, R2 storage and duplicate
   assert.match(dashboard, /ACTUALIZACIÓN CADA 5 S/);
   assert.match(routing, /Clasificación automática/);
   assert.equal(JSON.parse(hosting).r2, "FILES");
+});
+
+test("dashboard requires verified membership and provides administrator-managed access", async () => {
+  const [page, access, adminRoute, dashboard, schema, migration] = await Promise.all([
+    readFile("app/page.tsx", "utf8"),
+    readFile("lib/access-control.ts", "utf8"),
+    readFile("app/api/admin/users/route.ts", "utf8"),
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("db/schema.ts", "utf8"),
+    readFile("drizzle/0004_organic_krista_starr.sql", "utf8"),
+  ]);
+  assert.match(page, /requireChatGPTUser/);
+  assert.match(page, /resolveAuthorizedUser/);
+  assert.match(access, /BOOTSTRAP_ADMIN_EMAIL/);
+  assert.match(access, /requireApiUser/);
+  assert.match(adminRoute, /requireApiUser\(\{ admin: true \}\)/);
+  assert.match(adminRoute, /financeAccess/);
+  assert.match(adminRoute, /accessAudit/);
+  assert.match(dashboard, /Usuarios y accesos/);
+  assert.match(dashboard, /Bricket no almacena/);
+  assert.match(dashboard, /FinanceLockedView/);
+  assert.match(schema, /appUsers/);
+  assert.match(schema, /accessAudit/);
+  assert.match(migration, /CREATE TABLE `app_users`/);
+  assert.match(migration, /CREATE TABLE `access_audit`/);
+});
+
+test("spatial views derive live colors and accept new mapped buildings and urbanism areas", async () => {
+  const [dashboard, data] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/demo-data.ts", "utf8"),
+  ]);
+  assert.match(dashboard, /function visualUnitStatus/);
+  assert.match(dashboard, /unit\.progress >= 100/);
+  assert.match(dashboard, /unit\.progress > 0/);
+  assert.match(dashboard, /building\.mapCoordinates\?\.\[planMode\]/);
+  assert.match(dashboard, /area\.mapCoordinates\?\.\[planMode\]/);
+  assert.match(dashboard, /synchronizeSpatialSummary/);
+  assert.match(dashboard, /Los porcentajes, estados y colores cambian/);
+  assert.match(data, /mapCoordinates\?:/);
+});
+
+test("premium visual refinement uses an editorial hierarchy and readable controls", async () => {
+  const styles = await readFile("app/globals.css", "utf8");
+  assert.doesNotMatch(styles, /font-family:\s*Inter/);
+  assert.match(styles, /--font-editorial/);
+  assert.match(styles, /Premium editorial refinement/);
+  assert.match(styles, /\.report-tabs button::before/);
+  assert.match(styles, /\.account-control/);
+  assert.match(styles, /\.access-user-list/);
+  assert.match(styles, /\.finance-locked/);
+});
+
+test("financial files, live values and agent answers enforce per-user authorization", async () => {
+  const [files, liveRoute, liveModel, agent, dashboardRoute] = await Promise.all([
+    readFile("app/api/files/route.ts", "utf8"),
+    readFile("app/api/live-data/route.ts", "utf8"),
+    readFile("lib/live-data.ts", "utf8"),
+    readFile("app/api/agent/route.ts", "utf8"),
+    readFile("app/api/dashboard/route.ts", "utf8"),
+  ]);
+  assert.match(files, /No tienes acceso a documentos financieros/);
+  assert.match(files, /row\.area !== "finanzas"/);
+  assert.match(liveRoute, /redactFinancialFields/);
+  assert.match(liveRoute, /No tienes permiso para publicar datos financieros/);
+  assert.match(liveModel, /isFinancialLiveKey/);
+  assert.match(agent, /Acceso financiero no autorizado/);
+  assert.match(agent, /auth\.user\.financeAccess/);
+  assert.match(dashboardRoute, /No tienes acceso para modificar indicadores financieros/);
 });
 
 test("all variable dashboard values use a versioned live-data layer with five-second refresh", async () => {

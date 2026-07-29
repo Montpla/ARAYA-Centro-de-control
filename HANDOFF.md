@@ -49,6 +49,22 @@ El dashboard dispone de estas vistas:
 11. Finanzas.
 12. Centro de datos.
 13. Agente IA de consulta y carga documental controlada.
+14. Usuarios y accesos, visible únicamente para administradores.
+
+El acceso al Centro de Control requiere una identidad verificada de ChatGPT y
+un alta activa en la tabla `app_users`. Bricket no almacena ni gestiona
+contraseñas propias:
+
+- El administrador inicial se aprovisiona desde la variable de producción
+  `BOOTSTRAP_ADMIN_EMAIL`.
+- Un administrador puede crear, activar o desactivar usuarios y promoverlos a
+  administrador desde `Usuarios y accesos`.
+- El permiso `financeAccess` se concede o revoca individualmente. Los
+  administradores lo reciben siempre.
+- Sin ese permiso, Finanzas muestra una pantalla de acceso restringido y las
+  API de cifras, archivos y respuestas financieras devuelven `403`; no es sólo
+  una pestaña ocultada en el navegador.
+- `access_audit` conserva cada alta y cambio de perfil, estado o permiso.
 
 Dirección dispone además de un botón global `Crear informe`:
 
@@ -128,6 +144,14 @@ necesidad de recompilar o volver a desplegar.
 - `app/api/agent/route.ts`: materializa la misma versión viva antes de
   responder, incluso cuando funciona con el motor local sin clave de OpenAI.
 - La cinta global muestra conexión, revisión y última fuente aplicada.
+- El mismo contrato gobierna la implantación: edificios, viviendas y áreas de
+  urbanismo se crean o actualizan desde sus colecciones vivas. El estado visual
+  de cada vivienda se deriva de su avance (`100%` terminada, `>0%` en curso,
+  `0%` pendiente, salvo bloqueo explícito) y actualiza color, contadores y
+  fichas.
+- Los nuevos edificios o puntos urbanos pueden incluir `mapCoordinates` para
+  `visual` y `technical`. Sin coordenadas continúan apareciendo en sus listados
+  y métricas, pero no se inventa una posición en el plano.
 
 Importante: almacenar un PDF, PowerPoint, DWG o Excel no interpreta por sí solo
 su contenido. El original aparece inmediatamente; las cifras se actualizan
@@ -136,10 +160,11 @@ el contrato normalizado. No afirmar que un documento arbitrario se integra sin
 esta fase. Los datos ya estructurados pueden publicarse directamente y se
 propagan en menos de cinco segundos.
 
-El sitio sigue siendo privado para `enriquemontesplaza@gmail.com`. La
-infraestructura admite a cualquier usuario autenticado que reciba acceso, pero
-no se añadieron personas ni grupos porque el usuario aún no facilitó sus
-correos o un grupo de trabajo. No hacer el sitio público para resolver esto.
+El sitio usa acceso público de infraestructura para que cualquier persona
+autorizada pueda alcanzar el inicio de sesión. El contenido no es público: la
+aplicación exige identidad ChatGPT y pertenencia activa a `app_users` antes de
+renderizar el dashboard. No volver al allowlist de Sites como sistema principal
+de usuarios, porque la administración funcional reside en la propia aplicación.
 
 La implantación general incluye:
 
@@ -231,6 +256,8 @@ Constantes relevantes:
 - `visualPlanCoordinates`: posiciones calibradas sobre el masterplan visual.
 - `urbanismMapPoints`: posiciones urbanísticas en el plano técnico.
 - `visualUrbanismMapPoints`: posiciones urbanísticas en el masterplan visual.
+- `mapCoordinates` en los datos vivos: ubicación opcional de nuevos edificios
+  y áreas urbanas sin necesidad de recompilar las constantes históricas.
 
 Las 26 posiciones de `visualPlanCoordinates` fueron calibradas contra el centro
 real de cada cubierta de la imagen de 982 × 1602 píxeles. No volver a desplazar
@@ -268,9 +295,16 @@ Todos los puntos deben continuar abriendo sus fichas correctas.
 - `app/globals.css`: sistema visual y diseño responsive.
 - `app/api/agent/route.ts`: consultas del agente.
 - `app/api/dashboard/route.ts`: lectura y creación de métricas/proveedores.
+- `app/api/admin/users/route.ts`: administración de usuarios, perfiles y
+  permisos financieros.
+- `lib/access-control.ts`: autorización común para páginas y API.
+- `app/api/live-data/route.ts`: lectura y publicación autorizada de revisiones
+  vivas, con filtrado financiero.
 - `tests/rendered-html.test.mjs`: pruebas de navegación, fuentes, datos y
   componentes.
 - `drizzle/`: esquema y migraciones de D1.
+- `drizzle/0004_organic_krista_starr.sql`: usuarios autorizados y auditoría de
+  accesos.
 - `.openai/hosting.json`: identificador de Sites y bindings lógicos.
 
 ## Validación
@@ -281,10 +315,10 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 13 pruebas superadas.
+- 17 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
-- `npm run lint` termina sin errores; mantiene seis avisos conocidos por el
+- `npm run lint` termina sin errores; mantiene siete avisos conocidos por el
   uso intencional de imágenes locales con `<img>`.
 
 Para cambios visuales de posición, comprobar:
@@ -306,7 +340,8 @@ Cuando haya cambios de producto:
 5. Empujar `HEAD` a `sites/main` sin guardar el token.
 6. Empaquetar `dist/`, `.openai/hosting.json` y `drizzle/`.
 7. Guardar una nueva versión de Sites con el SHA exacto.
-8. Desplegar de forma privada.
+8. Desplegar la versión guardada. El modo de acceso de Sites es `public`, pero
+   la aplicación continúa cerrada por inicio de sesión y allowlist en D1.
 9. Esperar a `status: succeeded`.
 10. Abrir el mismo enlace de producción con un parámetro de actualización si
     el navegador conserva una versión anterior en caché.

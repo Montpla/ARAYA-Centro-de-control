@@ -72,7 +72,23 @@ type View =
   | "proveedores"
   | "metricas"
   | "fuentes"
-  | "agente";
+  | "agente"
+  | "usuarios";
+
+type DashboardUser = {
+  id: number;
+  email: string;
+  displayName: string;
+  role: "admin" | "member";
+  financeAccess: boolean;
+  active: boolean;
+};
+
+type ManagedUser = DashboardUser & {
+  lastLoginAt: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 type ChatMessage = {
   id: string;
@@ -217,6 +233,7 @@ const navItems: Array<{ id: View; label: string; mark: string }> = [
   { id: "metricas", label: "Finanzas", mark: "11" },
   { id: "fuentes", label: "Centro de datos", mark: "12" },
   { id: "agente", label: "Agente IA", mark: "AI" },
+  { id: "usuarios", label: "Usuarios y accesos", mark: "AD" },
 ];
 
 const statusLabel = {
@@ -225,6 +242,24 @@ const statusLabel = {
   bloqueada: "Bloqueada",
   pendiente: "Pendiente",
 };
+
+function visualUnitStatus(unit: Unit): Unit["status"] {
+  if (unit.status === "bloqueada") return "bloqueada";
+  if (unit.progress >= 100) return "terminada";
+  if (unit.progress > 0) return "en_curso";
+  return "pendiente";
+}
+
+function synchronizeSpatialSummary() {
+  projectSnapshot.buildingCount = buildings.length;
+  projectSnapshot.unitCount = buildings.reduce((total, building) => total + building.units.length, 0);
+  projectSnapshot.buildingsPendingIntegration = Math.max(
+    0,
+    projectSnapshot.masterPlanBuildingCount - buildings.length,
+  );
+  projectSnapshot.buildings = buildings;
+  projectSnapshot.urbanismAreas = urbanismAreas;
+}
 
 const number = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 });
 const REPORT_SOURCE_CUTOFF = "2026-06-30";
@@ -309,6 +344,7 @@ const defaultUploadArea: Record<View, UploadArea> = {
   metricas: "finanzas",
   fuentes: "auto",
   agente: "auto",
+  usuarios: "direccion",
 };
 
 async function uploadProjectFile(
@@ -437,6 +473,8 @@ function Header({
   currency,
   onCurrencyChange,
   liveSync,
+  currentUser,
+  canAccessFinance,
 }: {
   view: View;
   onAsk: () => void;
@@ -446,6 +484,8 @@ function Header({
   currency: CurrencyCode;
   onCurrencyChange: (currency: CurrencyCode) => void;
   liveSync: LiveSyncState;
+  currentUser: DashboardUser;
+  canAccessFinance: boolean;
 }) {
   const label = navItems.find((item) => item.id === view)?.label;
   return (
@@ -496,13 +536,21 @@ function Header({
         <button className="button secondary" onClick={onAsk} disabled={project.demo}>
           Preguntar al agente
         </button>
-        <button className="button report-button" onClick={onReport} disabled={project.demo}>
+        <button className="button report-button" onClick={onReport} disabled={project.demo || !canAccessFinance} title={!canAccessFinance ? "Requiere acceso financiero" : undefined}>
           Crear informe
         </button>
         <button className="button primary" onClick={onUpload} disabled={project.demo}>
           + Cargar archivo
         </button>
-        <button className="avatar" aria-label="Perfil de Dirección">DR</button>
+        <div className="account-control">
+          <div>
+            <strong>{currentUser.displayName}</strong>
+            <span>{currentUser.role === "admin" ? "Administrador" : "Usuario autorizado"}</span>
+          </div>
+          <a className="avatar" aria-label="Cerrar sesión" title="Cerrar sesión" href="/signout-with-chatgpt?return_to=/">
+            {currentUser.displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "BR"}
+          </a>
+        </div>
       </div>
     </header>
   );
@@ -655,9 +703,10 @@ function SitePlan({
   const [planBuilding, setPlanBuilding] = useState<Building | null>(null);
   const [planMode, setPlanMode] = useState<"visual" | "technical">("visual");
   const [selectedUrbanism, setSelectedUrbanism] = useState<UrbanismArea | null>(null);
-  const completed = buildings.flatMap((item) => item.units).filter((unit) => unit.status === "terminada").length;
-  const active = buildings.flatMap((item) => item.units).filter((unit) => unit.status === "en_curso").length;
-  const pending = projectSnapshot.unitCount - completed - active;
+  const allUnits = buildings.flatMap((item) => item.units);
+  const completed = allUnits.filter((unit) => visualUnitStatus(unit) === "terminada").length;
+  const active = allUnits.filter((unit) => visualUnitStatus(unit) === "en_curso").length;
+  const pending = allUnits.filter((unit) => ["pendiente", "bloqueada"].includes(visualUnitStatus(unit))).length;
 
   return (
     <section className="panel site-plan-panel">
@@ -691,7 +740,7 @@ function SitePlan({
       </div>
       <div className="plan-quick-actions" aria-label="Explorar datos de la implantación">
         <button onClick={() => onNavigate("edificios")}><span>EDIFICIOS</span><strong>Ver conjunto y detalle</strong><i>→</i></button>
-        <button onClick={() => onNavigate("viviendas")}><span>VIVIENDAS</span><strong>Abrir 156 fichas</strong><i>→</i></button>
+        <button onClick={() => onNavigate("viviendas")}><span>VIVIENDAS</span><strong>Abrir {allUnits.length} fichas</strong><i>→</i></button>
         <button onClick={() => onNavigate("urbanismo")}><span>URBANISMO</span><strong>Explorar áreas y datos</strong><i>→</i></button>
       </div>
       <div className="plan-legend">
@@ -703,7 +752,8 @@ function SitePlan({
       <p className="plan-disclaimer">
         La implantación visual conserva la organización del plano DWG y mantiene
         activas las capas de edificios, viviendas y urbanismo. Están integrados los
-        26 edificios del cronograma MPP: TH-01 a TH-18 y TH-70 a TH-77.
+        {buildings.length} edificios y {allUnits.length} viviendas del modelo vivo.
+        Los porcentajes, estados y colores cambian con cada nueva revisión.
       </p>
       <div className={`site-plan-image-wrap ${planMode}`}>
         <img
@@ -721,9 +771,13 @@ function SitePlan({
         <>
             {buildings.map((building) => {
               const point =
-                planMode === "visual"
+                building.mapCoordinates?.[planMode] ??
+                (planMode === "visual"
                   ? visualPlanCoordinates[building.shortName]
-                  : planCoordinates[building.shortName];
+                  : planCoordinates[building.shortName]);
+              if (!point) return null;
+              const buildingVisualStatus =
+                building.progress >= 100 ? "done" : building.progress > 0 ? "active" : "pending";
               return (
                 <div
                   key={building.id}
@@ -731,13 +785,7 @@ function SitePlan({
                   style={{ left: `${point.x}%`, top: `${point.y}%` }}
                 >
                   <button
-                    className={`plan-building-trigger ${
-                    building.units[0].status === "terminada"
-                      ? "done"
-                      : building.units[0].status === "en_curso"
-                        ? "active"
-                        : "pending"
-                    }`}
+                    className={`plan-building-trigger ${buildingVisualStatus}`}
                     title={`Abrir TH-${building.shortName.padStart(2, "0")} · ${number.format(building.progress)}%`}
                     onClick={() => {
                       setSelectedUnit(null);
@@ -751,8 +799,8 @@ function SitePlan({
                     {building.units.map((unit) => (
                       <button
                         key={unit.id}
-                        className={unit.status}
-                        title={`${unit.code} · ${statusLabel[unit.status]} · ${unit.progress}%`}
+                        className={visualUnitStatus(unit)}
+                        title={`${unit.code} · ${statusLabel[visualUnitStatus(unit)]} · ${unit.progress}%`}
                         aria-label={`Abrir ${unit.code}`}
                         onClick={() => {
                           setPlanBuilding(null);
@@ -767,13 +815,15 @@ function SitePlan({
             })}
             {urbanismAreas.map((area) => {
               const point =
-                planMode === "visual"
+                area.mapCoordinates?.[planMode] ??
+                (planMode === "visual"
                   ? visualUrbanismMapPoints[area.id]
-                  : urbanismMapPoints[area.id];
+                  : urbanismMapPoints[area.id]);
+              if (!point) return null;
               return (
                 <button
                   key={area.id}
-                  className={`urbanism-map-point ${area.status}`}
+                className={`urbanism-map-point ${area.status} ${area.progress !== null && area.progress >= 100 ? "complete" : ""}`}
                   style={{ left: `${point.x}%`, top: `${point.y}%` }}
                   title={`Abrir ${area.name}`}
                   onClick={() => {
@@ -803,7 +853,7 @@ function SitePlan({
             {planBuilding.units.map((unit) => (
               <button
                 key={unit.id}
-                className={`plan-unit ${unit.status}`}
+                className={`plan-unit ${visualUnitStatus(unit)}`}
                 onClick={() => {
                   setSelectedUnit({ building: planBuilding, unit });
                   setPlanBuilding(null);
@@ -838,7 +888,7 @@ function SitePlan({
             <span>Edificio<strong>{selectedUnit.building.shortName}</strong></span>
             <span>Planta<strong>{selectedUnit.unit.floor}</strong></span>
             <span>Superestructura<strong>{selectedUnit.unit.progress}%</strong></span>
-            <span>Estado<strong>{statusLabel[selectedUnit.unit.status]}</strong></span>
+            <span>Estado<strong>{statusLabel[visualUnitStatus(selectedUnit.unit)]}</strong></span>
             <span>Índice del edificio<strong>{number.format(selectedUnit.building.progress)}%</strong></span>
             <span>Fin previsto edificio<strong>{selectedUnit.building.forecastFinish}</strong></span>
           </div>
@@ -884,35 +934,37 @@ function Overview({
   onNavigate,
   onSelectBuilding,
   currency,
+  canAccessFinance,
 }: {
   onNavigate: (view: View) => void;
   onSelectBuilding: (building: Building) => void;
   currency: CurrencyCode;
+  canAccessFinance: boolean;
 }) {
   return (
     <div className="view-stack">
       <section className="hero-grid">
         <article className="project-pulse panel">
           <div>
-            <div className="section-kicker">CORTE 30/06/2026</div>
-            <h2>El avance físico está 3,00 puntos por debajo del plan.</h2>
+            <div className="section-kicker">CORTE {projectSnapshot.declaredCutoff}</div>
+            <h2>El avance físico está {number.format(Math.abs(projectSnapshot.deviationPoints))} puntos {projectSnapshot.deviationPoints < 0 ? "por debajo" : "por encima"} del plan.</h2>
             <p>
-              El informe de junio integra obra, ventas y finanzas. Excel registra
-              18,23% ejecutado frente a 21,24% previsto; el informe de obra
-              declara cinco días de retraso y el MPP proyecta siete.
+              El Centro de Control registra {number.format(projectSnapshot.overallProgress)}%
+              ejecutado frente a {number.format(projectSnapshot.plannedProgress)}% previsto.
+              El cronograma y cada ficha espacial usan la misma revisión viva.
             </p>
             <div className="project-meta">
-              <span>Fin base · 31 may 2027</span>
-              <span>Fin previsto · 07 jun 2027</span>
+              <span>Fin base · {projectSnapshot.baselineFinish}</span>
+              <span>Fin previsto · {projectSnapshot.forecastFinish}</span>
             </div>
           </div>
           <ProgressRing value={projectSnapshot.overallProgress} />
         </article>
         <div className="stat-grid">
-          <StatCard eyebrow="Plan operativo" value="21,24%" detail="-3,00 pp de brecha física" tone="warn" />
-          <StatCard eyebrow="Cronograma MPP" value="17%" detail="Indicador pendiente de conciliación" tone="warn" />
-          <StatCard eyebrow="Alcance residencial" value="26 edificios" detail="156 apartamentos · 6 por edificio" />
-          <StatCard eyebrow="Previsión final" value="+7 días" detail="MPP · informe de obra: +5 días" tone="danger" />
+          <StatCard eyebrow="Plan operativo" value={`${number.format(projectSnapshot.plannedProgress)}%`} detail={`${number.format(projectSnapshot.deviationPoints)} pp de brecha física`} tone="warn" />
+          <StatCard eyebrow="Cronograma MPP" value={`${number.format(projectSnapshot.scheduleProgress)}%`} detail="Indicador diferenciado del avance físico" tone="warn" />
+          <StatCard eyebrow="Alcance residencial" value={`${buildings.length} edificios`} detail={`${buildings.reduce((total, building) => total + building.units.length, 0)} viviendas en el modelo vivo`} />
+          <StatCard eyebrow="Previsión final" value={`${projectSnapshot.deviationDays >= 0 ? "+" : ""}${projectSnapshot.deviationDays} días`} detail={`${projectSnapshot.forecastFinish} frente a ${projectSnapshot.baselineFinish}`} tone="danger" />
         </div>
       </section>
 
@@ -930,20 +982,22 @@ function Overview({
           <div className="panel-heading">
             <div>
               <span className="section-kicker">ATENCIÓN DE DIRECCIÓN</span>
-              <h3>4 controles prioritarios</h3>
+              <h3>{canAccessFinance ? 4 : 3} controles prioritarios</h3>
             </div>
-            <span className="count-badge">4</span>
+            <span className="count-badge">{canAccessFinance ? 4 : 3}</span>
           </div>
           <button className="attention-item" onClick={() => onNavigate("planificacion")}>
             <span className="severity critical">PLAZO</span>
             <strong>Infraestructura proyecta +58 días</strong>
             <small>Fin 07/10/2026 · base 10/08/2026</small>
           </button>
-          <button className="attention-item" onClick={() => onNavigate("metricas")}>
-            <span className="severity critical">CAJA</span>
-            <strong>Proyección diciembre: {formatMoneyMillions(juneReport.finance.projectedCashDecemberDop, "DOP", currency)}</strong>
-            <small>Condicionada a desembolsos y nueva financiación</small>
-          </button>
+          {canAccessFinance && (
+            <button className="attention-item" onClick={() => onNavigate("metricas")}>
+              <span className="severity critical">CAJA</span>
+              <strong>Proyección diciembre: {formatMoneyMillions(juneReport.finance.projectedCashDecemberDop, "DOP", currency)}</strong>
+              <small>Condicionada a desembolsos y nueva financiación</small>
+            </button>
+          )}
           <button className="attention-item" onClick={() => onNavigate("comercial")}>
             <span className="severity medium">COBRANZA</span>
             <strong>24 clientes con {formatMoney(juneReport.collections.overdueUsd, "USD", currency)} vencidos</strong>
@@ -965,10 +1019,10 @@ function Planning() {
   return (
     <div className="view-stack">
       <section className="stat-grid wide">
-        <StatCard eyebrow="Avance físico" value="18,23%" detail="Plan 21,24% · Excel" tone="warn" />
-        <StatCard eyebrow="Fin previsto" value="07 jun 2027" detail="+7 días naturales frente a base" tone="danger" />
+        <StatCard eyebrow="Avance físico" value={`${number.format(projectSnapshot.overallProgress)}%`} detail={`Plan ${number.format(projectSnapshot.plannedProgress)}% · fuente viva`} tone="warn" />
+        <StatCard eyebrow="Fin previsto" value={projectSnapshot.forecastFinish} detail={`${projectSnapshot.deviationDays >= 0 ? "+" : ""}${projectSnapshot.deviationDays} días frente a base`} tone="danger" />
         <StatCard eyebrow="Paquetes" value={`${workPackages.length}`} detail="6 con avance registrado" />
-        <StatCard eyebrow="Camino crítico" value="5 paquetes" detail="Marcados como críticos en el MPP" tone="warn" />
+        <StatCard eyebrow="Camino crítico" value={`${workPackages.filter((item) => item.critical).length} paquetes`} detail="Marcados como críticos en el MPP" tone="warn" />
       </section>
       <section className="panel schedule-card">
         <ProgressChart />
@@ -1025,7 +1079,7 @@ function UnitDetailPanel({
         <span>Edificio<strong>TH-{building.shortName.padStart(2, "0")}</strong></span>
         <span>Planta<strong>{unit.floor}</strong></span>
         <span>Superestructura<strong>{unit.progress}%</strong></span>
-        <span>Estado<strong>{statusLabel[unit.status]}</strong></span>
+        <span>Estado<strong>{statusLabel[visualUnitStatus(unit)]}</strong></span>
         <span>Fase disponible<strong>{unit.phase}</strong></span>
         <span>Desvío<strong>{unit.deviationDays > 0 ? `+${unit.deviationDays}` : unit.deviationDays} días</strong></span>
       </div>
@@ -1048,7 +1102,7 @@ function BuildingsView({
   const [statusFilter, setStatusFilter] = useState("todos");
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
   const units = selected.units.filter(
-    (unit) => statusFilter === "todos" || unit.status === statusFilter,
+    (unit) => statusFilter === "todos" || visualUnitStatus(unit) === statusFilter,
   );
   return (
     <div className="view-stack">
@@ -1103,7 +1157,7 @@ function BuildingsView({
         <div className="unit-grid">
           {units.map((unit) => (
             <button
-              className={`unit-card interactive ${unit.status}`}
+              className={`unit-card interactive ${visualUnitStatus(unit)}`}
               key={unit.id}
               onClick={() => setSelectedUnit(unit)}
             >
@@ -1152,17 +1206,19 @@ function HousingView() {
   const unitRows = buildings
     .filter((building) => buildingFilter === "todos" || building.id === buildingFilter)
     .flatMap((building) => building.units.map((unit) => ({ building, unit })))
-    .filter(({ unit }) => statusFilter === "todos" || unit.status === statusFilter);
+    .filter(({ unit }) => statusFilter === "todos" || visualUnitStatus(unit) === statusFilter);
+  const totalUnits = buildings.reduce((total, building) => total + building.units.length, 0);
+  const unitsPerBuilding = buildings.length ? number.format(totalUnits / buildings.length) : "0";
 
   return (
     <div className="view-stack">
       <section className="data-view-intro">
-        <div><span className="section-kicker">156 FICHAS PREPARADAS</span><h2>Viviendas individuales</h2></div>
-        <p>Filtra por edificio o estado y pulsa cualquier vivienda. Las fichas se completarán progresivamente con los nuevos datos.</p>
+        <div><span className="section-kicker">{totalUnits} FICHAS VIVAS</span><h2>Viviendas individuales</h2></div>
+        <p>Cada vivienda se crea o actualiza desde el modelo vivo. Su porcentaje determina automáticamente el estado y el color, salvo que exista un bloqueo explícito.</p>
       </section>
       <section className="stat-grid wide">
-        <StatCard eyebrow="Viviendas integradas" value={`${projectSnapshot.unitCount}`} detail="6 por cada edificio activo" />
-        <StatCard eyebrow="Edificios relacionados" value={`${projectSnapshot.buildingCount}`} detail="TH-01 a TH-18 y TH-70 a TH-77" />
+        <StatCard eyebrow="Viviendas integradas" value={`${totalUnits}`} detail={`${unitsPerBuilding} de media por edificio`} />
+        <StatCard eyebrow="Edificios relacionados" value={`${buildings.length}`} detail="Inventario generado desde datos vivos" />
         <StatCard eyebrow="Dato disponible" value="Superestructura" detail="Avance y estado por vivienda" tone="good" />
         <StatCard eyebrow="Próxima ampliación" value="5 áreas" detail="Instalaciones, acabados, incidencias y más" />
       </section>
@@ -1189,14 +1245,14 @@ function HousingView() {
         <div className="housing-grid">
           {unitRows.map(({ building, unit }) => (
             <button
-              className={`housing-card ${unit.status}`}
+              className={`housing-card ${visualUnitStatus(unit)}`}
               key={unit.id}
               onClick={() => setSelectedUnit({ building, unit })}
             >
               <span>TH-{building.shortName.padStart(2, "0")} · PLANTA {unit.floor}</span>
               <strong>{unit.code}</strong>
               <div><i style={{ width: `${unit.progress}%` }} /></div>
-              <small>{statusLabel[unit.status]} · {unit.progress}%</small>
+              <small>{statusLabel[visualUnitStatus(unit)]} · {unit.progress}%</small>
             </button>
           ))}
         </div>
@@ -1399,7 +1455,7 @@ function UrbanismView() {
   );
 }
 
-function ControlView({ currency }: { currency: CurrencyCode }) {
+function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; canAccessFinance: boolean }) {
   const [section, setSection] = useState<"seguridad" | "permisos" | "financiacion">("seguridad");
   return (
     <div className="view-stack">
@@ -1411,7 +1467,7 @@ function ControlView({ currency }: { currency: CurrencyCode }) {
         {[
           { id: "seguridad", label: "Seguridad y salud", detail: "0 accidentes" },
           { id: "permisos", label: "Permisos", detail: "8 aprobados · 1 en proceso" },
-          { id: "financiacion", label: "Financiación", detail: "6 procesos" },
+          ...(canAccessFinance ? [{ id: "financiacion", label: "Financiación", detail: "6 procesos" }] : []),
         ].map((item) => (
           <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => setSection(item.id as typeof section)}>
             <span>{item.label}</span><strong>{item.detail}</strong>
@@ -1458,7 +1514,7 @@ function ControlView({ currency }: { currency: CurrencyCode }) {
         </section>
       )}
 
-      {section === "financiacion" && (
+      {canAccessFinance && section === "financiacion" && (
         <section className="report-grid">
           <article className="panel finance-processes">
             <div className="panel-heading"><div><span className="section-kicker">GESTIONES FINANCIERAS</span><h3>Procesos activos</h3></div></div>
@@ -1518,14 +1574,24 @@ function TimelineView() {
   );
 }
 
-function SuppliersView({ suppliers, onAdd, currency }: { suppliers: Supplier[]; onAdd: () => void; currency: CurrencyCode }) {
+function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppliers: Supplier[]; onAdd: () => void; currency: CurrencyCode; canAccessFinance: boolean }) {
   return (
     <div className="view-stack">
       <section className="stat-grid wide">
         <StatCard eyebrow="Proveedores operativos" value={`${suppliers.length}`} detail="Registros configurables del dashboard" />
-        <StatCard eyebrow="Facturas en CxP" value="96" detail="Archivo departamental de Antonely" />
-        <StatCard eyebrow="Mayor exposición" value={formatMoneyMillions(antonelyPayableVendorsAll[0].amount, "DOP", currency)} detail={antonelyPayableVendorsAll[0].name} tone="warn" />
-        <StatCard eyebrow="CxP departamental" value={formatMoneyMillions(antonelyFinanceSource.payablesDetailDop, "DOP", currency)} detail="Pendiente de conciliación" tone="warn" />
+        {canAccessFinance ? (
+          <>
+            <StatCard eyebrow="Facturas en CxP" value="96" detail="Archivo departamental de Antonely" />
+            <StatCard eyebrow="Mayor exposición" value={formatMoneyMillions(antonelyPayableVendorsAll[0].amount, "DOP", currency)} detail={antonelyPayableVendorsAll[0].name} tone="warn" />
+            <StatCard eyebrow="CxP departamental" value={formatMoneyMillions(antonelyFinanceSource.payablesDetailDop, "DOP", currency)} detail="Pendiente de conciliación" tone="warn" />
+          </>
+        ) : (
+          <>
+            <StatCard eyebrow="En plazo" value={`${suppliers.filter((item) => item.status === "al_dia").length}`} detail="Entregas sin alerta registrada" tone="good" />
+            <StatCard eyebrow="En revisión" value={`${suppliers.filter((item) => item.status === "revision").length}`} detail="Seguimiento operativo" tone="warn" />
+            <StatCard eyebrow="Con retraso" value={`${suppliers.filter((item) => item.status === "retraso").length}`} detail="Requiere gestión de entrega" tone="danger" />
+          </>
+        )}
       </section>
       <section className="panel">
         <div className="panel-heading">
@@ -1552,14 +1618,14 @@ function SuppliersView({ suppliers, onAdd, currency }: { suppliers: Supplier[]; 
                 <div className="supplier-details">
                   <span>Contacto<strong>{supplier.contact || "Sin dato"}</strong></span>
                   <span>Próxima entrega<strong>{supplier.nextDelivery || "Sin dato"}</strong></span>
-                  <span>Contratado<strong>{supplier.amount || "Sin dato"}</strong></span>
+                  {canAccessFinance && <span>Contratado<strong>{supplier.amount || "Sin dato"}</strong></span>}
                 </div>
               </article>
             ))}
           </div>
         )}
       </section>
-      <section className="panel">
+      {canAccessFinance && <section className="panel">
         <div className="panel-heading">
           <div>
             <span className="section-kicker">CUENTAS POR PAGAR · ANTONELY</span>
@@ -1577,7 +1643,7 @@ function SuppliersView({ suppliers, onAdd, currency }: { suppliers: Supplier[]; 
           ))}
         </div>
         <p className="quality-note">Este ranking procede de 96 líneas de factura. Es una vista de obligaciones, no un catálogo contractual ni una evaluación del proveedor.</p>
-      </section>
+      </section>}
     </div>
   );
 }
@@ -1851,6 +1917,203 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
   );
 }
 
+function FinanceLockedView() {
+  return (
+    <section className="panel finance-locked">
+      <div className="finance-lock-mark" aria-hidden="true">F</div>
+      <span className="section-kicker">ÁREA RESTRINGIDA</span>
+      <h2>Finanzas requiere autorización individual.</h2>
+      <p>
+        Tu usuario puede trabajar con obra, viviendas, edificios, urbanismo y documentación,
+        pero no tiene permiso para consultar cifras financieras. El administrador puede
+        conceder o retirar este acceso desde Usuarios y accesos.
+      </p>
+    </section>
+  );
+}
+
+async function fetchManagedUsers() {
+  const response = await fetch("/api/admin/users", { cache: "no-store" });
+  const payload = await response.json() as { users?: ManagedUser[]; error?: string };
+  if (!response.ok) throw new Error(payload.error ?? "No se pudo consultar los accesos.");
+  return payload.users ?? [];
+}
+
+function UsersAdminView({ currentUser }: { currentUser: DashboardUser }) {
+  const [users, setUsers] = useState<ManagedUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState("");
+  const [message, setMessage] = useState("");
+  const [form, setForm] = useState({
+    email: "",
+    displayName: "",
+    role: "member" as "admin" | "member",
+    financeAccess: false,
+  });
+
+  async function refreshUsers() {
+    try {
+      setUsers(await fetchManagedUsers());
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo consultar los accesos.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    let active = true;
+    fetchManagedUsers()
+      .then((loadedUsers) => {
+        if (active) setUsers(loadedUsers);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setMessage(error instanceof Error ? error.message : "No se pudo consultar los accesos.");
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function saveUser(input: {
+    email: string;
+    displayName: string;
+    role: "admin" | "member";
+    financeAccess: boolean;
+    active: boolean;
+  }) {
+    setSaving(input.email);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const payload = await response.json() as { user?: ManagedUser; message?: string; error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "No se pudo guardar el acceso.");
+      setMessage(payload.message ?? "Acceso actualizado.");
+      await refreshUsers();
+      return true;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo guardar el acceso.");
+      return false;
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function submitNewUser(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const saved = await saveUser({ ...form, active: true });
+    if (saved) {
+      setForm({ email: "", displayName: "", role: "member", financeAccess: false });
+    }
+  }
+
+  return (
+    <div className="view-stack">
+      <section className="data-view-intro admin-intro">
+        <div>
+          <span className="section-kicker">ADMINISTRACIÓN DE ACCESO</span>
+          <h2>Usuarios y permisos</h2>
+        </div>
+        <p>
+          Cada persona inicia sesión con su cuenta de ChatGPT. Bricket no almacena
+          contraseñas; aquí se autoriza el correo y se decide si puede abrir Finanzas.
+        </p>
+      </section>
+
+      <section className="admin-access-grid">
+        <form className="panel access-create-card" onSubmit={submitNewUser}>
+          <div className="panel-heading">
+            <div><span className="section-kicker">NUEVO ACCESO</span><h3>Autorizar una persona</h3></div>
+          </div>
+          <label>Nombre<input value={form.displayName} onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))} placeholder="Nombre y apellidos" /></label>
+          <label>Correo de acceso<input type="email" required value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="persona@empresa.com" /></label>
+          <label>Perfil
+            <select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as "admin" | "member", financeAccess: event.target.value === "admin" ? true : current.financeAccess }))}>
+              <option value="member">Usuario</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </label>
+          <label className="permission-check">
+            <input type="checkbox" checked={form.financeAccess} disabled={form.role === "admin"} onChange={(event) => setForm((current) => ({ ...current, financeAccess: event.target.checked }))} />
+            <span><strong>Acceso a Finanzas</strong><small>Permite consultar cifras, documentos e informes financieros.</small></span>
+          </label>
+          <button className="button primary" type="submit" disabled={Boolean(saving)}>Crear acceso</button>
+        </form>
+
+        <section className="panel access-policy-card">
+          <span className="section-kicker">MODELO DE SEGURIDAD</span>
+          <h3>Acceso por identidad y mínimo privilegio</h3>
+          <div className="policy-list">
+            <div><b>01</b><span><strong>Inicio de sesión obligatorio</strong><small>La identidad se verifica antes de cargar el dashboard.</small></span></div>
+            <div><b>02</b><span><strong>Lista autorizada</strong><small>Sólo los correos dados de alta pueden entrar.</small></span></div>
+            <div><b>03</b><span><strong>Finanzas independiente</strong><small>El permiso se concede y retira por persona.</small></span></div>
+            <div><b>04</b><span><strong>Auditoría</strong><small>Cada cambio conserva administrador, fecha y detalle.</small></span></div>
+          </div>
+        </section>
+      </section>
+
+      <section className="panel access-directory">
+        <div className="panel-heading">
+          <div><span className="section-kicker">DIRECTORIO AUTORIZADO</span><h3>{users.length} usuarios configurados</h3></div>
+          <span className="data-note">{currentUser.email}</span>
+        </div>
+        {message && <div className="access-message" role="status">{message}</div>}
+        {loading ? (
+          <div className="empty-state compact"><strong>Cargando usuarios…</strong></div>
+        ) : (
+          <div className="access-user-list">
+            {users.map((user) => {
+              const isSelf = user.email === currentUser.email;
+              return (
+                <article key={user.email} className={!user.active ? "disabled" : ""}>
+                  <div className="user-identity">
+                    <span>{user.displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</span>
+                    <div><strong>{user.displayName}</strong><small>{user.email}</small></div>
+                  </div>
+                  <label>Perfil
+                    <select
+                      value={user.role}
+                      disabled={isSelf || saving === user.email}
+                      onChange={(event) => void saveUser({ ...user, role: event.target.value as "admin" | "member", financeAccess: event.target.value === "admin" ? true : user.financeAccess })}
+                    >
+                      <option value="member">Usuario</option>
+                      <option value="admin">Administrador</option>
+                    </select>
+                  </label>
+                  <button
+                    className={`permission-toggle ${user.financeAccess ? "granted" : ""}`}
+                    disabled={user.role === "admin" || saving === user.email}
+                    onClick={() => void saveUser({ ...user, financeAccess: !user.financeAccess })}
+                  >
+                    <span>Finanzas</span><strong>{user.financeAccess ? "Permitido" : "Bloqueado"}</strong>
+                  </button>
+                  <button
+                    className={`permission-toggle ${user.active ? "granted" : "revoked"}`}
+                    disabled={isSelf || saving === user.email}
+                    onClick={() => void saveUser({ ...user, active: !user.active })}
+                  >
+                    <span>Acceso general</span><strong>{user.active ? "Activo" : "Desactivado"}</strong>
+                  </button>
+                  <small className="last-access">{user.lastLoginAt ? `Último acceso ${new Date(user.lastLoginAt).toLocaleString("es-DO")}` : "Aún no ha iniciado sesión"}</small>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function CollaborativeFileRegistry() {
   const [files, setFiles] = useState<UploadedFileRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1927,7 +2190,13 @@ function CollaborativeFileRegistry() {
   );
 }
 
-function SourcesView({ onUpload }: { onUpload: () => void }) {
+function SourcesView({ onUpload, canAccessFinance }: { onUpload: () => void; canAccessFinance: boolean }) {
+  const visibleSources = canAccessFinance
+    ? dataSources
+    : dataSources.filter((source) => !/financ|balance|flujo|cxp|antonely/i.test(`${source.kind} ${source.file}`));
+  const visibleIssues = canAccessFinance
+    ? juneDataQualityIssues
+    : juneDataQualityIssues.filter((issue) => !/presupuesto|pagar|coste|anticipo|inter[eé]s/i.test(issue.title));
   return (
     <div className="view-stack">
       <section className="panel data-center-intro">
@@ -1939,9 +2208,9 @@ function SourcesView({ onUpload }: { onUpload: () => void }) {
         <button className="button primary" onClick={onUpload}>+ Añadir archivo</button>
       </section>
       <section className="stat-grid wide">
-        <StatCard eyebrow="Fuentes integradas" value={`${dataSources.length}`} detail="3 Excel · 4 PowerPoint · 1 PDF · 1 MPP · 1 DWG" />
+        <StatCard eyebrow="Fuentes visibles" value={`${visibleSources.length}`} detail={canAccessFinance ? "Repositorio completo autorizado" : "Documentación operativa autorizada"} />
         <StatCard eyebrow="Registros MPP" value="2.228" detail="2.195 asignaciones y 22 paquetes" />
-        <StatCard eyebrow="Alertas de calidad" value={`${juneDataQualityIssues.length}`} detail="Todas visibles y sin corrección silenciosa" tone="warn" />
+        <StatCard eyebrow="Alertas de calidad" value={`${visibleIssues.length}`} detail="Visibles según permisos y sin corrección silenciosa" tone="warn" />
         <StatCard eyebrow="Corte declarado" value="30/06/2026" detail="Fecha tomada de los archivos" />
       </section>
       <section className="panel ingestion-workflow">
@@ -1959,7 +2228,7 @@ function SourcesView({ onUpload }: { onUpload: () => void }) {
       </section>
       <CollaborativeFileRegistry />
       <section className="source-grid">
-        {dataSources.map((source) => (
+        {visibleSources.map((source) => (
           <article className="panel source-card" key={source.id}>
             <div className="panel-heading">
               <div><span className="section-kicker">{source.kind}</span><h3>{source.file}</h3></div>
@@ -1990,8 +2259,8 @@ function SourcesView({ onUpload }: { onUpload: () => void }) {
         <div className="governance-grid">
           <div><strong>Avance físico</strong><p>El informe y los Excel son la fuente del 18,23% ejecutado y del KPI planificado de 21,24%.</p></div>
           <div><strong>Avance de cronograma</strong><p>MPP es la fuente del 17%, fechas, actividades y camino crítico.</p></div>
-          <div><strong>Finanzas</strong><p>El Excel de junio prevalece para presupuesto, costes, CxP, anticipos, balance y caja.</p></div>
-          <div><strong>Fuente Antonely</strong><p>Amplía el detalle de CxP y proveedores; sus diferencias permanecen abiertas hasta conciliación contable.</p></div>
+          {canAccessFinance && <div><strong>Finanzas</strong><p>El Excel de junio prevalece para presupuesto, costes, CxP, anticipos, balance y caja.</p></div>}
+          {canAccessFinance && <div><strong>Fuente Antonely</strong><p>Amplía el detalle de CxP y proveedores; sus diferencias permanecen abiertas hasta conciliación contable.</p></div>}
           <div><strong>Versiones</strong><p>El PDF duplica el consolidado; los informes parciales amplían datos y la lámina de mayo queda como histórico.</p></div>
           <div><strong>Edificios</strong><p>El índice MPP promedia 32 frentes; las disciplinas del informe de obra son un indicador diferente.</p></div>
           <div><strong>Viviendas</strong><p>El porcentaje disponible corresponde sólo a superestructura, no a terminación total.</p></div>
@@ -2441,10 +2710,12 @@ function DirectionReport({
 
 function UploadModal({
   initialArea,
+  canAccessFinance,
   onClose,
   onComplete,
 }: {
   initialArea: UploadArea;
+  canAccessFinance: boolean;
   onClose: () => void;
   onComplete: (message: string) => void;
 }) {
@@ -2500,7 +2771,9 @@ function UploadModal({
           <label>
             Área de destino
             <select value={area} onChange={(event) => setArea(event.target.value as UploadArea)}>
-              {uploadAreas.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+              {uploadAreas
+                .filter((option) => canAccessFinance || option.id !== "finanzas")
+                .map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
             </select>
           </label>
           <label>
@@ -2937,12 +3210,12 @@ function DemoProjectContent({ view, onNavigate }: { view: View; onNavigate: (vie
   );
 }
 
-export function DashboardClient() {
+export function DashboardClient({ currentUser }: { currentUser: DashboardUser }) {
   const [activeProjectId, setActiveProjectId] = useState<ProjectId>("araya");
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [view, setView] = useState<View>("resumen");
   const [selectedBuilding, setSelectedBuilding] = useState(buildings[0]);
-  const [metrics, setMetrics] = useState<CustomMetric[]>(initialMetrics);
+  const [metrics, setMetrics] = useState<CustomMetric[]>(currentUser.financeAccess ? initialMetrics : []);
   const [supplierRows, setSupplierRows] = useState<Supplier[]>(initialSuppliers);
   const [agentOpen, setAgentOpen] = useState(true);
   const [modal, setModal] = useState<"metric" | "supplier" | null>(null);
@@ -2959,6 +3232,8 @@ export function DashboardClient() {
     latestEvent: null,
   });
   const activeProject = projects[activeProjectId];
+  const availableNavItems = navItems.filter((item) => item.id !== "usuarios" || currentUser.role === "admin");
+  const arayaLiveSummary = `${buildings.length} edificios · ${buildings.reduce((total, building) => total + building.units.length, 0)} viviendas`;
 
   useEffect(() => {
     if (!window.matchMedia("(max-width: 760px)").matches) return;
@@ -2993,10 +3268,13 @@ export function DashboardClient() {
         ]);
         if (!active) return;
         applyLiveValuesToTargets(liveData.values ?? {}, liveDataTargets);
-        setMetrics([
-          ...(Array.isArray(dashboardData.metrics) ? dashboardData.metrics : []),
-          ...initialMetrics,
-        ]);
+        synchronizeSpatialSummary();
+        setMetrics(currentUser.financeAccess
+          ? [
+            ...(Array.isArray(dashboardData.metrics) ? dashboardData.metrics : []),
+            ...initialMetrics,
+          ]
+          : []);
         setSupplierRows([
           ...(Array.isArray(dashboardData.suppliers) ? dashboardData.suppliers : []),
           ...initialSuppliers,
@@ -3025,7 +3303,7 @@ export function DashboardClient() {
       window.clearInterval(interval);
       window.removeEventListener("araya-files-updated", handleFileUpdate);
     };
-  }, []);
+  }, [currentUser.financeAccess]);
 
   const searchResults = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -3056,26 +3334,29 @@ export function DashboardClient() {
       ...supplierRows
         .filter((item) => item.name.toLowerCase().includes(term))
         .map((item) => ({ label: item.name, detail: item.category, view: "proveedores" as View, building: null })),
-      ...metrics
-        .filter((item) => item.name.toLowerCase().includes(term))
-        .map((item) => ({ label: item.name, detail: `${item.value} ${item.unit}`, view: "metricas" as View, building: null })),
+      ...(currentUser.financeAccess
+        ? metrics
+          .filter((item) => item.name.toLowerCase().includes(term))
+          .map((item) => ({ label: item.name, detail: `${item.value} ${item.unit}`, view: "metricas" as View, building: null }))
+        : []),
     ].slice(0, 8);
-  }, [activeProjectId, search, supplierRows, metrics]);
+  }, [activeProjectId, search, supplierRows, metrics, currentUser.financeAccess]);
 
   function content() {
+    if (view === "usuarios" && currentUser.role === "admin") return <UsersAdminView currentUser={currentUser} />;
     if (activeProjectId === "mirador") return <DemoProjectContent view={view} onNavigate={setView} />;
-    if (view === "resumen") return <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} currency={currency} />;
+    if (view === "resumen") return <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} currency={currency} canAccessFinance={currentUser.financeAccess} />;
     if (view === "planificacion") return <Planning />;
     if (view === "implantacion") return <div className="view-stack"><SitePlan onNavigate={setView} onSelectBuilding={setSelectedBuilding} /></div>;
     if (view === "edificios") return <BuildingsView selected={selectedBuilding} setSelected={setSelectedBuilding} />;
     if (view === "viviendas") return <HousingView />;
     if (view === "comercial") return <CommercialView currency={currency} />;
     if (view === "urbanismo") return <UrbanismView />;
-    if (view === "control") return <ControlView currency={currency} />;
+    if (view === "control") return <ControlView currency={currency} canAccessFinance={currentUser.financeAccess} />;
     if (view === "cronologia") return <TimelineView />;
-    if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => setModal("supplier")} currency={currency} />;
-    if (view === "metricas") return <MetricsView metrics={metrics} onAdd={() => setModal("metric")} currency={currency} />;
-    if (view === "fuentes") return <SourcesView onUpload={() => setUploadOpen(true)} />;
+    if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => setModal("supplier")} currency={currency} canAccessFinance={currentUser.financeAccess} />;
+    if (view === "metricas") return currentUser.financeAccess ? <MetricsView metrics={metrics} onAdd={() => setModal("metric")} currency={currency} /> : <FinanceLockedView />;
+    if (view === "fuentes") return <SourcesView onUpload={() => setUploadOpen(true)} canAccessFinance={currentUser.financeAccess} />;
     return <AgentPanel expanded onClose={() => setView("resumen")} currency={currency} />;
   }
 
@@ -3099,7 +3380,7 @@ export function DashboardClient() {
             {activeProject.id === "araya" ? (
               <div className="project-wordmark">
                 <img src="/araya-wordmark.jpg" alt="ARAYA Punta Cana" />
-                <small>{activeProject.summary}</small>
+                <small>{arayaLiveSummary}</small>
               </div>
             ) : (
               <>
@@ -3135,7 +3416,7 @@ export function DashboardClient() {
                   {project.id === "araya" ? (
                     <div className="project-wordmark">
                       <img src="/araya-wordmark.jpg" alt="ARAYA Punta Cana" />
-                      <small>{project.summary}</small>
+                      <small>{arayaLiveSummary}</small>
                     </div>
                   ) : (
                     <>
@@ -3154,7 +3435,7 @@ export function DashboardClient() {
         </div>
         <nav>
           <span className="nav-label">NAVEGACIÓN</span>
-          {navItems.map((item) => (
+          {availableNavItems.map((item) => (
             <button
               key={item.id}
               className={view === item.id ? "active" : ""}
@@ -3164,7 +3445,12 @@ export function DashboardClient() {
               }}
             >
               <i>{item.mark}</i><span>{item.label}</span>
-              {item.id === "fuentes" && <em>{activeProjectId === "araya" ? dataSources.length : 3}</em>}
+              {item.id === "fuentes" && <em>{activeProjectId === "araya"
+                ? currentUser.financeAccess
+                  ? dataSources.length
+                  : dataSources.filter((source) => !/financ|balance|flujo|cxp|antonely/i.test(`${source.kind} ${source.file}`)).length
+                : 3}</em>}
+              {item.id === "metricas" && !currentUser.financeAccess && <em className="restricted">BLOQUEADO</em>}
             </button>
           ))}
         </nav>
@@ -3190,6 +3476,8 @@ export function DashboardClient() {
           currency={currency}
           onCurrencyChange={setCurrency}
           liveSync={liveSync}
+          currentUser={currentUser}
+          canAccessFinance={currentUser.financeAccess}
         />
         <div className="global-search">
           <span>⌕</span>
@@ -3243,7 +3531,8 @@ export function DashboardClient() {
 
       {activeProjectId === "araya" && uploadOpen && (
         <UploadModal
-          initialArea={defaultUploadArea[view]}
+          initialArea={!currentUser.financeAccess && defaultUploadArea[view] === "finanzas" ? "auto" : defaultUploadArea[view]}
+          canAccessFinance={currentUser.financeAccess}
           onClose={() => setUploadOpen(false)}
           onComplete={(message) => {
             setUploadOpen(false);

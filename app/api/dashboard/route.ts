@@ -1,12 +1,17 @@
 import { desc } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { customMetrics, suppliers } from "../../../db/schema";
+import { requireApiUser } from "../../../lib/access-control";
 
 export async function GET() {
+  const auth = await requireApiUser();
+  if (!auth.user) return auth.response;
   try {
     const db = getDb();
     const [metricsRows, supplierRows] = await Promise.all([
-      db.select().from(customMetrics).orderBy(desc(customMetrics.id)).limit(50),
+      auth.user.financeAccess
+        ? db.select().from(customMetrics).orderBy(desc(customMetrics.id)).limit(50)
+        : Promise.resolve([]),
       db.select().from(suppliers).orderBy(desc(suppliers.id)).limit(50),
     ]);
     return Response.json({ metrics: metricsRows, suppliers: supplierRows });
@@ -16,11 +21,16 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireApiUser();
+  if (!auth.user) return auth.response;
   const payload = (await request.json()) as Record<string, unknown>;
   const kind = String(payload.kind ?? "");
   const db = getDb();
 
   if (kind === "metric") {
+    if (!auth.user.financeAccess) {
+      return Response.json({ error: "No tienes acceso para modificar indicadores financieros." }, { status: 403 });
+    }
     const name = String(payload.name ?? "").trim();
     const value = String(payload.value ?? "").trim();
     if (!name || !value) {

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const customMetrics = sqliteTable("custom_metrics", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -122,6 +122,44 @@ export const liveDataPoints = sqliteTable(
     index("live_data_points_revision_idx").on(table.revision),
     index("live_data_points_area_idx").on(table.area),
     index("live_data_points_source_file_id_idx").on(table.sourceFileId),
+  ],
+);
+
+export const appUsers = sqliteTable(
+  "app_users",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    email: text("email").notNull(),
+    displayName: text("display_name").notNull().default(""),
+    role: text("role").notNull().default("member"),
+    financeAccess: integer("finance_access", { mode: "boolean" }).notNull().default(false),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    createdByEmail: text("created_by_email").notNull().default(""),
+    lastLoginAt: text("last_login_at").notNull().default(""),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("app_users_email_idx").on(table.email),
+    index("app_users_active_idx").on(table.active),
+    index("app_users_role_idx").on(table.role),
+  ],
+);
+
+export const accessAudit = sqliteTable(
+  "access_audit",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    targetEmail: text("target_email").notNull(),
+    action: text("action").notNull(),
+    detail: text("detail").notNull().default(""),
+    actorEmail: text("actor_email").notNull(),
+    actorName: text("actor_name").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("access_audit_target_email_idx").on(table.targetEmail),
+    index("access_audit_created_at_idx").on(table.createdAt),
   ],
 );
 

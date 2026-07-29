@@ -26,6 +26,7 @@ import { getDb } from "../../../db";
 import { liveDataEvents, liveDataPoints, uploadedFiles } from "../../../db/schema";
 import { areaLabels, uploadStatusLabels } from "../../../lib/file-routing";
 import { AGENT_PROMPT_VERSION, AGENT_SYSTEM_PROMPT } from "../../../lib/agent-prompt";
+import { requireApiUser } from "../../../lib/access-control";
 import { CurrencyCode, DOP_TO_USD, FX_RATE_CUTOFF, formatMoney, formatMoneyMillions } from "../../../lib/currency";
 import { LiveDataMap, materializeLiveRoot } from "../../../lib/live-data";
 
@@ -168,7 +169,7 @@ async function getLiveDataSnapshot() {
   }
 }
 
-async function executeTool(name: ToolName, args: Record<string, unknown>) {
+async function executeTool(name: ToolName, args: Record<string, unknown>, canAccessFinance: boolean) {
   const live = await getLiveDataSnapshot();
   const currentProjectSnapshot = materializeLiveRoot("projectSnapshot", projectSnapshot, live.values);
   const currentCubicaciones = materializeLiveRoot("cubicaciones", cubicaciones, live.values);
@@ -255,6 +256,7 @@ async function executeTool(name: ToolName, args: Record<string, unknown>) {
     };
   }
   if (name === "get_financial_measurements") {
+    if (!canAccessFinance) return { error: "Acceso financiero no autorizado." };
     return {
       periods: currentCubicaciones,
       totalMeasured: currentProjectSnapshot.cubicacionesMeasured,
@@ -277,6 +279,7 @@ async function executeTool(name: ToolName, args: Record<string, unknown>) {
     };
   }
   if (name === "get_financial_status") {
+    if (!canAccessFinance) return { error: "Acceso financiero no autorizado." };
     return {
       finance: currentJuneReport.finance,
       cxpAging: currentCxpAging,
@@ -299,7 +302,7 @@ async function executeTool(name: ToolName, args: Record<string, unknown>) {
       safetyMetrics: currentSafetyMetrics,
       safetyFindings: currentSafetyFindings,
       permits: currentPermits,
-      financingProcesses: currentFinancingProcesses,
+      financingProcesses: canAccessFinance ? currentFinancingProcesses : [],
       source: "Informe consolidado e Informe Obra Araya Junio 2026",
       cutoff: currentJuneReport.cutoff,
     };
@@ -322,8 +325,12 @@ async function executeTool(name: ToolName, args: Record<string, unknown>) {
     };
   }
   return {
-    sources: currentProjectSnapshot.dataSources,
-    juneIssues: currentJuneDataQualityIssues,
+    sources: canAccessFinance
+      ? currentProjectSnapshot.dataSources
+      : currentProjectSnapshot.dataSources.filter((source) => !/financ|balance|flujo|cxp|antonely/i.test(`${source.kind} ${source.file}`)),
+    juneIssues: canAccessFinance
+      ? currentJuneDataQualityIssues
+      : currentJuneDataQualityIssues.filter((issue) => !/presupuesto|pagar|coste|anticipo|inter[eé]s/i.test(issue.title)),
     interpretation: {
       physicalProgress: "Excel: 18,23% ejecutado frente a 21,24% planificado.",
       scheduleProgress: "MPP: 17%. Es un indicador distinto y no se sustituye por el del Excel.",
@@ -389,10 +396,20 @@ async function fallbackAnswer(question: string, currency: CurrencyCode) {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireApiUser();
+  if (!auth.user) return auth.response;
   const payload = (await request.json()) as { question?: string; currency?: string };
   const question = payload.question?.trim() ?? "";
   const currency: CurrencyCode = payload.currency === "DOP" ? "DOP" : "USD";
   if (!question) return Response.json({ error: "Escribe una pregunta." }, { status: 400 });
+  const asksForFinance = /finanz|presupuesto|costo|coste|caja|balance|cuentas por pagar|cxp|anticipo|cr[eé]dito|cubicaci[oó]n/i.test(question);
+  if (asksForFinance && !auth.user.financeAccess) {
+    return Response.json({
+      answer: "La información financiera está restringida para tu usuario. Un administrador puede concederte acceso desde la pestaña Usuarios y accesos.",
+      mode: "access-control",
+      promptVersion: AGENT_PROMPT_VERSION,
+    });
+  }
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -439,7 +456,7 @@ export async function POST(request: Request) {
     const outputs = await Promise.all(calls.map(async (call) => ({
       type: "function_call_output",
       call_id: call.call_id,
-      output: JSON.stringify(await executeTool(call.name as ToolName, JSON.parse(call.arguments || "{}"))),
+      output: JSON.stringify(await executeTool(call.name as ToolName, JSON.parse(call.arguments || "{}"), auth.user.financeAccess)),
     })));
     response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",

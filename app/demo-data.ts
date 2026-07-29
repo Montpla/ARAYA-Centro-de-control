@@ -19,6 +19,10 @@ export type Building = {
   deviationDays: number;
   forecastFinish: string;
   units: Unit[];
+  mapCoordinates?: {
+    visual: { x: number; y: number };
+    technical: { x: number; y: number };
+  };
 };
 
 export type TimelineEvent = {
@@ -72,6 +76,10 @@ export type UrbanismArea = {
   source: string;
   detail: string;
   pendingFields: string[];
+  mapCoordinates?: {
+    visual: { x: number; y: number; short: string };
+    technical: { x: number; y: number; short: string };
+  };
 };
 
 export type DataSource = {
