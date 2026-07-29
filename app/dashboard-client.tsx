@@ -1681,7 +1681,9 @@ export function DashboardClient() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark">B</div>
+          <div className="brand-mark" aria-hidden="true">
+            <img src="/bricket-mark.png" alt="" />
+          </div>
           <div><strong>BRICKET</strong><span>Centro de Control</span></div>
         </div>
         <div className="project-selector">

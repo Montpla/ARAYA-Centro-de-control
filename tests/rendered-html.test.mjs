@@ -62,6 +62,13 @@ test("project selector keeps ARAYA separate from the fictional demo project", as
   assert.match(source, /DemoProjectContent/);
 });
 
+test("sidebar uses the official Bricket brand mark", async () => {
+  const source = await readFile("app/dashboard-client.tsx", "utf8");
+  const logo = await readFile("public/bricket-mark.png");
+  assert.match(source, /src="\/bricket-mark\.png"/);
+  assert.ok(logo.length > 1000);
+});
+
 test("agent is source-grounded, read-only and evaluated", async () => {
   const [route, prompt, evalCases] = await Promise.all([
     readFile("app/api/agent/route.ts", "utf8"),
