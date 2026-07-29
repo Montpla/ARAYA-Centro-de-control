@@ -1,0 +1,1 @@
+ALTER TABLE `uploaded_files` ADD `source_currency` text DEFAULT 'DOP' NOT NULL;

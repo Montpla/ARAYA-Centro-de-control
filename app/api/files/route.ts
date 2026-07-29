@@ -3,6 +3,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
 import { fileActivity, uploadedFiles } from "../../../db/schema";
+import { resolveSourceCurrency } from "../../../lib/currency";
 import { areaLabels, classifyUpload, safeFileName } from "../../../lib/file-routing";
 
 export const runtime = "edge";
@@ -74,6 +75,7 @@ function publicFileRow(row: typeof uploadedFiles.$inferSelect) {
     extension: row.extension,
     sizeBytes: row.sizeBytes,
     source: row.source,
+    sourceCurrency: row.sourceCurrency,
     status: row.status,
     uploaderName: row.uploaderName,
     version: row.version,
@@ -158,6 +160,11 @@ export async function POST(request: Request) {
   const description = String(formData.get("description") ?? "").trim().slice(0, 800);
   const section = String(formData.get("section") ?? "").trim().slice(0, 120);
   const source = formData.get("source") === "agent" ? "agent" : "dashboard";
+  const sourceCurrency = resolveSourceCurrency({
+    declaredCurrency: String(formData.get("sourceCurrency") ?? "auto"),
+    fileName: candidate.name,
+    description,
+  });
   const declaredCutoff = String(formData.get("declaredCutoff") ?? "").trim().slice(0, 40);
   const classification = classifyUpload({
     fileName: candidate.name,
@@ -202,6 +209,7 @@ export async function POST(request: Request) {
       area: classification.area,
       uploader: auth.user.email,
       sha256,
+      sourceCurrency,
     },
   });
 
@@ -221,6 +229,7 @@ export async function POST(request: Request) {
         sha256,
         storageKey,
         source,
+        sourceCurrency,
         status: "pendiente_revision",
         uploaderEmail: auth.user.email,
         uploaderName: auth.user.displayName,

@@ -245,12 +245,12 @@ export const permits = [
 ] as const;
 
 export const financingProcesses = [
-  { entity: "IFC", amount: "RD$420 M", status: "Formalización", detail: "Aprobado; primer desembolso previsto en julio de 2026." },
-  { entity: "ALNAP", amount: "RD$1.400 M", status: "Preaprobado", detail: "Pendiente permiso definitivo y título." },
-  { entity: "BLDH", amount: "RD$495 M", status: "Aprobado", detail: "Primera fase; pendiente permiso y título." },
-  { entity: "Banco Popular", amount: "RD$500 M", status: "Preaprobado", detail: "Gestión financiera en curso." },
-  { entity: "Banco Santa Cruz", amount: "RD$440 M", status: "Revisión", detail: "Fase I en revisión/preaprobación." },
-  { entity: "Banco Alaver", amount: "RD$300 M", status: "Evaluación", detail: "Extensión del crédito bajo evaluación." },
+  { entity: "IFC", amountDop: 420000000, status: "Formalización", detail: "Aprobado; primer desembolso previsto en julio de 2026." },
+  { entity: "ALNAP", amountDop: 1400000000, status: "Preaprobado", detail: "Pendiente permiso definitivo y título." },
+  { entity: "BLDH", amountDop: 495000000, status: "Aprobado", detail: "Primera fase; pendiente permiso y título." },
+  { entity: "Banco Popular", amountDop: 500000000, status: "Preaprobado", detail: "Gestión financiera en curso." },
+  { entity: "Banco Santa Cruz", amountDop: 440000000, status: "Revisión", detail: "Fase I en revisión/preaprobación." },
+  { entity: "Banco Alaver", amountDop: 300000000, status: "Evaluación", detail: "Extensión del crédito bajo evaluación." },
 ] as const;
 
 export const managementActions = [
@@ -296,5 +296,9 @@ export const juneDataQualityIssues = [
   {
     title: "Cabecera de periodo",
     detail: "La hoja de costes de Antonely declara “1 June 2016 to 30 June 2026”. Por contexto y cifras se interpreta como un error de rotulación, pero el original no se altera.",
+  },
+  {
+    title: "Anticipos · balance frente a detalle",
+    detail: "El balance registra RD$9.210.448,94 y el detalle de 26 anticipos suma RD$9.210.448,86. La diferencia de RD$0,08 queda abierta para conciliación.",
   },
 ] as const;

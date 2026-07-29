@@ -21,7 +21,6 @@ import {
 import {
   advances,
   antonelyFinanceSource,
-  antonelyPayableVendors,
   arrearsBreakdown,
   constructionDisciplines,
   costBreakdown,
@@ -42,6 +41,21 @@ import {
   structuralDelay,
   urbanismReportAreas,
 } from "./june-report-data";
+import {
+  antonelyAdvances,
+  antonelyBalanceLines,
+  antonelyCostAccounts,
+  antonelyDetailTotals,
+  antonelyPayableCategories,
+  antonelyPayableVendorsAll,
+} from "./antonely-finance-data";
+import {
+  CurrencyCode,
+  DEFAULT_DISPLAY_CURRENCY,
+  exchangeRateNote,
+  formatMoney,
+  formatMoneyMillions,
+} from "../lib/currency";
 import { UploadArea, areaLabels, uploadAreas, uploadStatusLabels } from "../lib/file-routing";
 
 type View =
@@ -77,6 +91,7 @@ type UploadedFileRecord = {
   extension: string;
   sizeBytes: number;
   source: "dashboard" | "agent";
+  sourceCurrency: CurrencyCode;
   status: string;
   uploaderName: string;
   version: number;
@@ -147,16 +162,38 @@ const statusLabel = {
 };
 
 const number = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 2 });
-const wholeNumber = new Intl.NumberFormat("es-ES", { maximumFractionDigits: 0 });
-const rd = (value: number) => `${value < 0 ? "–" : ""}RD$${wholeNumber.format(Math.abs(value))}`;
-const rdMillions = (value: number) => `${value < 0 ? "–" : ""}RD$${number.format(Math.abs(value) / 1_000_000)} M`;
-const usd = (value: number) => `USD ${number.format(value)}`;
 
 const fileSize = (bytes: number) => {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${number.format(bytes / 1024)} KB`;
   return `${number.format(bytes / (1024 * 1024))} MB`;
 };
+
+function financialQualityIssues(currency: CurrencyCode) {
+  const dop = (value: number) => formatMoney(value, "DOP", currency);
+  const usdValue = (value: number) => formatMoney(value, "USD", currency);
+  return juneDataQualityIssues.map((issue) => {
+    if (issue.title === "Presupuesto total") {
+      return { ...issue, detail: `La lámina 29 muestra ${formatMoneyMillions(3428500000, "DOP", currency)}; el Excel y la lámina 30 muestran ${formatMoneyMillions(3591280577.17, "DOP", currency)}. Se usa el Excel como control detallado.` };
+    }
+    if (issue.title === "Cuentas por pagar") {
+      return { ...issue, detail: `La relación consolidada suma ${dop(18597489.63)}; el balance, ${dop(18612245.9)}; y el detalle de Antonely, ${dop(18627534.91)}. Se mantienen las tres cifras para conciliación.` };
+    }
+    if (issue.title === "Morosidad") {
+      return { ...issue, detail: `El desglose suma ${usdValue(136840.44)}, cinco centavos de dólar más que el total declarado de ${usdValue(136840.39)}.` };
+    }
+    if (issue.title === "Versión comercial") {
+      return { ...issue, detail: `El informe de ventas aislado conserva una lámina anterior de 31 clientes y ${usdValue(148281.58)}; prevalece el consolidado actualizado al 06/07/2026.` };
+    }
+    if (issue.title === "Costes · fuente Antonely") {
+      return { ...issue, detail: `Antonely registra ${dop(48988755.86)} en junio y ${dop(712326161.73)} acumulados; el consolidado registra ${dop(48998910.52)} y ${dop(712326162.73)}. Diferencias: ${dop(10154.66)} y ${dop(1)}.` };
+    }
+    if (issue.title === "Anticipos · balance frente a detalle") {
+      return { ...issue, detail: `El balance registra ${dop(9210448.94)} y el detalle de 26 anticipos suma ${dop(9210448.86)}. La diferencia de ${dop(0.08)} queda abierta para conciliación.` };
+    }
+    return issue;
+  });
+}
 
 const defaultUploadArea: Record<View, UploadArea> = {
   resumen: "auto",
@@ -182,6 +219,7 @@ async function uploadProjectFile(
     declaredCutoff?: string;
     section?: string;
     source: "dashboard" | "agent";
+    sourceCurrency?: CurrencyCode | "auto";
   },
 ) {
   const formData = new FormData();
@@ -191,6 +229,7 @@ async function uploadProjectFile(
   formData.set("declaredCutoff", input.declaredCutoff ?? "");
   formData.set("section", input.section ?? "");
   formData.set("source", input.source);
+  formData.set("sourceCurrency", input.sourceCurrency ?? "auto");
   const response = await fetch("/api/files", { method: "POST", body: formData });
   const result = (await response.json()) as UploadResult;
   if (!response.ok) throw new Error(result.error ?? "No se pudo cargar el archivo.");
@@ -294,11 +333,15 @@ function Header({
   onAsk,
   onUpload,
   project,
+  currency,
+  onCurrencyChange,
 }: {
   view: View;
   onAsk: () => void;
   onUpload: () => void;
   project: (typeof projects)[ProjectId];
+  currency: CurrencyCode;
+  onCurrencyChange: (currency: CurrencyCode) => void;
 }) {
   const label = navItems.find((item) => item.id === view)?.label;
   return (
@@ -311,6 +354,24 @@ function Header({
         <h1>{label}</h1>
       </div>
       <div className="top-actions">
+        {!project.demo && (
+          <div className="currency-control" title={exchangeRateNote(currency)}>
+            <span>Moneda</span>
+            <div role="group" aria-label="Moneda de visualización">
+              {(["USD", "DOP"] as const).map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  className={currency === code ? "active" : ""}
+                  aria-pressed={currency === code}
+                  onClick={() => onCurrencyChange(code)}
+                >
+                  {code}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="live-state">
           <span className="live-dot" />
           Corte documental · {project.cutoff}
@@ -666,9 +727,11 @@ function SitePlan({
 function Overview({
   onNavigate,
   onSelectBuilding,
+  currency,
 }: {
   onNavigate: (view: View) => void;
   onSelectBuilding: (building: Building) => void;
+  currency: CurrencyCode;
 }) {
   return (
     <div className="view-stack">
@@ -728,12 +791,12 @@ function Overview({
           </button>
           <button className="attention-item" onClick={() => onNavigate("metricas")}>
             <span className="severity critical">CAJA</span>
-            <strong>Proyección diciembre: –RD$125,20 M</strong>
+            <strong>Proyección diciembre: {formatMoneyMillions(juneReport.finance.projectedCashDecemberDop, "DOP", currency)}</strong>
             <small>Condicionada a desembolsos y nueva financiación</small>
           </button>
           <button className="attention-item" onClick={() => onNavigate("comercial")}>
             <span className="severity medium">COBRANZA</span>
-            <strong>24 clientes con USD 136.840,39 vencidos</strong>
+            <strong>24 clientes con {formatMoney(juneReport.collections.overdueUsd, "USD", currency)} vencidos</strong>
             <small>Actualizado al 06/07/2026 · menos de 1% de morosidad</small>
           </button>
           <button className="attention-item" onClick={() => onNavigate("fuentes")}>
@@ -1007,7 +1070,7 @@ function HousingView() {
   );
 }
 
-function CommercialView() {
+function CommercialView({ currency }: { currency: CurrencyCode }) {
   const [section, setSection] = useState<"reservas" | "vinculacion" | "cobranza">("reservas");
   return (
     <div className="view-stack">
@@ -1019,7 +1082,7 @@ function CommercialView() {
         <StatCard eyebrow="Reservas activas" value={`${juneReport.sales.active}`} detail={`${juneReport.sales.reservations} históricas · ${juneReport.sales.withdrawn} desistidas`} />
         <StatCard eyebrow="Fase I" value={`${juneReport.sales.phaseOneActive}`} detail={`${juneReport.sales.phaseOneSales}% del objetivo comercial`} tone="good" />
         <StatCard eyebrow="Fase II" value={`${juneReport.sales.phaseTwoActive}`} detail={`${juneReport.sales.phaseTwoSales}% del objetivo comercial`} />
-        <StatCard eyebrow="Cartera vencida" value={usd(juneReport.collections.overdueUsd)} detail={`${juneReport.collections.overdue} clientes · menos de 1%`} tone="warn" />
+        <StatCard eyebrow="Cartera vencida" value={formatMoney(juneReport.collections.overdueUsd, "USD", currency)} detail={`${juneReport.collections.overdue} clientes · menos de 1%`} tone="warn" />
       </section>
       <section className="report-tabs" aria-label="Secciones del informe comercial">
         {[
@@ -1103,17 +1166,17 @@ function CommercialView() {
             </div>
           </article>
           <article className="panel">
-            <div className="panel-heading"><div><span className="section-kicker">MOROSIDAD</span><h3>Composición de la cartera vencida</h3></div><strong>{usd(juneReport.collections.overdueUsd)}</strong></div>
+            <div className="panel-heading"><div><span className="section-kicker">MOROSIDAD</span><h3>Composición de la cartera vencida</h3></div><strong>{formatMoney(juneReport.collections.overdueUsd, "USD", currency)}</strong></div>
             <div className="rank-list compact">
               {arrearsBreakdown.map((item) => (
                 <div key={item.name}>
                   <span><strong>{item.name}</strong><small>{item.clients} clientes</small></span>
                   <div><i style={{ width: `${(item.amountUsd / juneReport.collections.overdueUsd) * 100}%` }} /></div>
-                  <b>{usd(item.amountUsd)}</b>
+                  <b>{formatMoney(item.amountUsd, "USD", currency)}</b>
                 </div>
               ))}
             </div>
-            <p className="quality-note">El desglose excede el total declarado en USD 0,05; se conserva la cifra total de la fuente.</p>
+            <p className="quality-note">El desglose excede el total declarado en {formatMoney(0.05, "USD", currency)}; se conserva la cifra total de la fuente.</p>
           </article>
         </section>
       )}
@@ -1123,7 +1186,7 @@ function CommercialView() {
 
 function UrbanismView() {
   const [selectedArea, setSelectedArea] = useState<UrbanismArea>(urbanismAreas[0]);
-  const [selectedReportArea, setSelectedReportArea] = useState(urbanismReportAreas[0]);
+  const [selectedReportArea, setSelectedReportArea] = useState<(typeof urbanismReportAreas)[number]>(urbanismReportAreas[0]);
   return (
     <div className="view-stack">
       <section className="data-view-intro">
@@ -1194,7 +1257,7 @@ function UrbanismView() {
   );
 }
 
-function ControlView() {
+function ControlView({ currency }: { currency: CurrencyCode }) {
   const [section, setSection] = useState<"seguridad" | "permisos" | "financiacion">("seguridad");
   return (
     <div className="view-stack">
@@ -1260,16 +1323,16 @@ function ControlView() {
             {financingProcesses.map((process) => (
               <div className="finance-process" key={process.entity}>
                 <span><strong>{process.entity}</strong><small>{process.detail}</small></span>
-                <b>{process.amount}</b><i>{process.status}</i>
+                <b>{formatMoneyMillions(process.amountDop, "DOP", currency)}</b><i>{process.status}</i>
               </div>
             ))}
           </article>
           <article className="panel decision-panel">
             <span className="section-kicker">SOLICITUD DE APROBACIÓN</span>
             <h3>Línea de crédito AFI</h3>
-            <strong>RD$100 M</strong>
+            <strong>{formatMoneyMillions(100000000, "DOP", currency)}</strong>
             <p>Solicitud incluida en el informe de junio. Se presenta como decisión pendiente, no como financiación confirmada.</p>
-            <div className="callout warn"><strong>Condición de caja</strong><p>La proyección financiera cierra diciembre en –RD$125,20 M si no se materializan los flujos previstos.</p></div>
+            <div className="callout warn"><strong>Condición de caja</strong><p>La proyección financiera cierra diciembre en {formatMoneyMillions(juneReport.finance.projectedCashDecemberDop, "DOP", currency)} si no se materializan los flujos previstos.</p></div>
           </article>
         </section>
       )}
@@ -1313,14 +1376,14 @@ function TimelineView() {
   );
 }
 
-function SuppliersView({ suppliers, onAdd }: { suppliers: Supplier[]; onAdd: () => void }) {
+function SuppliersView({ suppliers, onAdd, currency }: { suppliers: Supplier[]; onAdd: () => void; currency: CurrencyCode }) {
   return (
     <div className="view-stack">
       <section className="stat-grid wide">
         <StatCard eyebrow="Proveedores operativos" value={`${suppliers.length}`} detail="Registros configurables del dashboard" />
         <StatCard eyebrow="Facturas en CxP" value="96" detail="Archivo departamental de Antonely" />
-        <StatCard eyebrow="Mayor exposición" value={rdMillions(antonelyPayableVendors[0].amount)} detail={antonelyPayableVendors[0].name} tone="warn" />
-        <StatCard eyebrow="CxP departamental" value={rdMillions(antonelyFinanceSource.payablesDetailDop)} detail="Pendiente de conciliación" tone="warn" />
+        <StatCard eyebrow="Mayor exposición" value={formatMoneyMillions(antonelyPayableVendorsAll[0].amount, "DOP", currency)} detail={antonelyPayableVendorsAll[0].name} tone="warn" />
+        <StatCard eyebrow="CxP departamental" value={formatMoneyMillions(antonelyFinanceSource.payablesDetailDop, "DOP", currency)} detail="Pendiente de conciliación" tone="warn" />
       </section>
       <section className="panel">
         <div className="panel-heading">
@@ -1360,14 +1423,14 @@ function SuppliersView({ suppliers, onAdd }: { suppliers: Supplier[]; onAdd: () 
             <span className="section-kicker">CUENTAS POR PAGAR · ANTONELY</span>
             <h3>Principales proveedores por saldo registrado</h3>
           </div>
-          <span className="data-note">Corte 30/06/2026 · valores RD$</span>
+          <span className="data-note">43 proveedores · {currency}</span>
         </div>
         <div className="rank-list compact">
-          {antonelyPayableVendors.map((supplier) => (
+          {antonelyPayableVendorsAll.map((supplier) => (
             <div key={supplier.name}>
               <span><strong>{supplier.name}</strong></span>
-              <div><i style={{ width: `${(supplier.amount / antonelyPayableVendors[0].amount) * 100}%` }} /></div>
-              <b>{rdMillions(supplier.amount)}</b>
+              <div><i style={{ width: `${Math.max(0, (supplier.amount / antonelyPayableVendorsAll[0].amount) * 100)}%` }} /></div>
+              <b>{formatMoneyMillions(supplier.amount, "DOP", currency)}</b>
             </div>
           ))}
         </div>
@@ -1377,13 +1440,16 @@ function SuppliersView({ suppliers, onAdd }: { suppliers: Supplier[]; onAdd: () 
   );
 }
 
-function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () => void }) {
-  const [section, setSection] = useState<"flujo" | "cxp" | "anticipos" | "control">("flujo");
+function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; onAdd: () => void; currency: CurrencyCode }) {
+  const [section, setSection] = useState<"flujo" | "cxp" | "anticipos" | "control" | "detalle">("flujo");
+  const rd = (value: number) => formatMoney(value, "DOP", currency);
+  const rdMillions = (value: number) => formatMoneyMillions(value, "DOP", currency);
+  const qualityIssues = financialQualityIssues(currency);
   return (
     <div className="view-stack">
       <section className="data-view-intro">
         <div><span className="section-kicker">INFORME FINANCIERO · JUNIO 2026</span><h2>Presupuesto, caja y obligaciones</h2></div>
-        <p>Importes del Excel financiero en pesos dominicanos. Selecciona un bloque para abrir el detalle.</p>
+        <p>Los importes fuente se conservan en DOP y se muestran en {currency}. {exchangeRateNote(currency)}.</p>
       </section>
       <section className="stat-grid wide">
         <StatCard eyebrow="Presupuesto de control" value={rdMillions(juneReport.finance.budgetDop)} detail={`${number.format((juneReport.finance.executedDop / juneReport.finance.budgetDop) * 100)}% ejecutado`} />
@@ -1397,6 +1463,7 @@ function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () =>
           { id: "cxp", label: "Cuentas por pagar", detail: rdMillions(juneReport.finance.cxpDop) },
           { id: "anticipos", label: "Anticipos", detail: rdMillions(juneReport.finance.advancesPendingDop) },
           { id: "control", label: "Control y balance", detail: rdMillions(juneReport.finance.assetsDop) },
+          { id: "detalle", label: "Detalle completo", detail: "29 · 15 · 26 · 41" },
         ].map((item) => (
           <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => setSection(item.id as typeof section)}>
             <span>{item.label}</span><strong>{item.detail}</strong>
@@ -1408,7 +1475,7 @@ function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () =>
         <section className="panel">
           <div className="panel-heading">
             <div><span className="section-kicker">PROYECCIÓN DE LIQUIDEZ</span><h3>Ingresos, costes y caja acumulada</h3></div>
-            <span className="data-note">Valores en RD$</span>
+            <span className="data-note">Vista en {currency}</span>
           </div>
           <div className="projection-chart">
             {financialProjection.map((month) => (
@@ -1469,7 +1536,7 @@ function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () =>
                 </div>
               ))}
             </div>
-            <p className="quality-note">El archivo de Antonely está RD$30.045,28 por encima de la relación consolidada y RD$15.289,01 por encima del balance. Requiere conciliación contable antes de cambiar el KPI principal.</p>
+            <p className="quality-note">El archivo de Antonely está {rd(30045.28)} por encima de la relación consolidada y {rd(15289.01)} por encima del balance. Requiere conciliación contable antes de cambiar el KPI principal.</p>
           </article>
         </section>
       )}
@@ -1489,7 +1556,7 @@ function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () =>
           </article>
           <article className="panel decision-panel">
             <span className="section-kicker">CONTROL DE ANTICIPOS</span>
-            <h3>27 registros</h3>
+            <h3>{antonelyDetailTotals.advanceCount} registros</h3>
             <strong>{rdMillions(10035120.72)}</strong>
             <p>Total concedido. El saldo pendiente de amortización es {rdMillions(juneReport.finance.advancesPendingDop)}.</p>
             <div className="callout"><strong>Lectura correcta</strong><p>Los importes “concedido” y “pendiente” no son equivalentes; el dashboard muestra ambos por separado.</p></div>
@@ -1507,7 +1574,7 @@ function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () =>
                 <div className="compact-row" key={item.name}><strong>{item.name}</strong><span>{rdMillions(item.cumulative)}</span><span>{rdMillions(item.june)}</span></div>
               ))}
             </div>
-            <p className="quality-note">Antonely registra RD$48.988.755,86 en junio y RD$712.326.161,73 acumulados. Frente al consolidado, las diferencias son RD$10.154,66 y RD$1,00 respectivamente.</p>
+            <p className="quality-note">Antonely registra {rd(48988755.86)} en junio y {rd(712326161.73)} acumulados. Frente al consolidado, las diferencias son {rd(10154.66)} y {rd(1)} respectivamente.</p>
           </article>
           <article className="panel">
             <div className="panel-heading"><div><span className="section-kicker">BALANCE</span><h3>Posición financiera</h3></div></div>
@@ -1523,10 +1590,95 @@ function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () =>
         </section>
       )}
 
+      {section === "detalle" && (
+        <section className="financial-detail-stack">
+          <article className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">29 CUENTAS DE COSTE</span><h3>Detalle acumulado por cuenta</h3></div>
+              <strong>{rd(antonelyFinanceSource.accumulatedCostsDop)}</strong>
+            </div>
+            <div className="financial-detail-scroll">
+              <div className="financial-detail-table cost-detail-table">
+                <div className="financial-detail-row head"><span>Código</span><span>Cuenta</span><span>A mayo</span><span>Junio</span><span>Acumulado</span></div>
+                {antonelyCostAccounts.map((item) => (
+                  <div className="financial-detail-row" key={item.code}>
+                    <b>{item.code}</b><strong>{item.name}</strong><span>{rd(item.may)}</span><span>{rd(item.june)}</span><span>{rd(item.cumulative)}</span>
+                  </div>
+                ))}
+                <div className="financial-detail-row total-row"><b>Total</b><strong>Fuente Antonely</strong><span>{rd(antonelyFinanceSource.previousAccumulatedDop)}</span><span>{rd(antonelyFinanceSource.juneCostsDop)}</span><span>{rd(antonelyFinanceSource.accumulatedCostsDop)}</span></div>
+              </div>
+            </div>
+          </article>
+
+          <article className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">15 CATEGORÍAS · 96 FACTURAS</span><h3>Cuentas por pagar por antigüedad</h3></div>
+              <strong>{rd(antonelyDetailTotals.payablesTotalDop)}</strong>
+            </div>
+            <div className="financial-detail-scroll">
+              <div className="financial-detail-table cxp-detail-table">
+                <div className="financial-detail-row head"><span>Categoría</span><span>Corriente</span><span>&lt; 1 mes</span><span>1 mes</span><span>2 meses</span><span>3 meses</span><span>Anterior</span><span>Total</span></div>
+                {antonelyPayableCategories.map((item) => (
+                  <div className="financial-detail-row" key={item.name}>
+                    <strong>{item.name}</strong><span>{rd(item.current)}</span><span>{rd(item.under1)}</span><span>{rd(item.month1)}</span><span>{rd(item.month2)}</span><span>{rd(item.month3)}</span><span>{rd(item.older)}</span><span>{rd(item.total)}</span>
+                  </div>
+                ))}
+                <div className="financial-detail-row total-row">
+                  <strong>Total</strong><span>{rd(antonelyDetailTotals.payablesCurrentDop)}</span><span>{rd(antonelyDetailTotals.payablesUnderOneMonthDop)}</span><span>{rd(antonelyDetailTotals.payablesOneMonthDop)}</span><span>{rd(antonelyDetailTotals.payablesTwoMonthsDop)}</span><span>{rd(antonelyDetailTotals.payablesThreeMonthsDop)}</span><span>{rd(antonelyDetailTotals.payablesOlderDop)}</span><span>{rd(antonelyDetailTotals.payablesTotalDop)}</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">26 ANTICIPOS</span><h3>Concedido y pendiente por documento</h3></div>
+              <strong>{rd(antonelyDetailTotals.advancePendingDop)}</strong>
+            </div>
+            <div className="financial-detail-scroll">
+              <div className="financial-detail-table advance-detail-table">
+                <div className="financial-detail-row head"><span>Proveedor</span><span>Referencia</span><span>Fecha</span><span>Categoría</span><span>Concedido</span><span>Pendiente</span></div>
+                {antonelyAdvances.map((item) => (
+                  <div className="financial-detail-row" key={`${item.vendor}-${item.reference}`}>
+                    <strong>{item.vendor}</strong><span>{item.reference}</span><span>{item.date}</span><span>{item.category}</span><span>{rd(item.granted)}</span><span>{rd(item.pending)}</span>
+                  </div>
+                ))}
+                <div className="financial-detail-row total-row"><strong>Total</strong><span>26 documentos</span><span>30/06/2026</span><span>Fuente Antonely</span><span>{rd(antonelyDetailTotals.advanceGrantedDop)}</span><span>{rd(antonelyDetailTotals.advancePendingDop)}</span></div>
+              </div>
+            </div>
+          </article>
+
+          <article className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">41 LÍNEAS DE BALANCE</span><h3>Balance de comprobación completo</h3></div>
+              <span className="source-status validada">CUADRADO</span>
+            </div>
+            <div className="balance-equation">
+              <span>Activos<strong>{rd(juneReport.finance.assetsDop)}</strong></span>
+              <i>=</i>
+              <span>Pasivos<strong>{rd(juneReport.finance.liabilitiesDop)}</strong></span>
+              <i>+</i>
+              <span>Patrimonio<strong>{rd(juneReport.finance.equityDop)}</strong></span>
+            </div>
+            <div className="financial-detail-scroll">
+              <div className="financial-detail-table balance-detail-table">
+                <div className="financial-detail-row head"><span>Sección</span><span>Cuenta</span><span>Importe</span></div>
+                {antonelyBalanceLines.map((item, index) => (
+                  <div className="financial-detail-row" key={`${item.section}-${item.name}-${index}`}>
+                    <b>{item.section}</b><strong>{item.name}</strong><span>{rd(item.amount)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p className="quality-note">El balance cuadra exactamente: activos = pasivos + patrimonio. El saldo de anticipos del balance difiere {rd(0.08)} del detalle y permanece señalado.</p>
+          </article>
+        </section>
+      )}
+
       <section className="panel">
-        <div className="panel-heading"><div><span className="section-kicker">CALIDAD DEL DATO</span><h3>Conciliaciones abiertas</h3></div><span className="count-badge">{juneDataQualityIssues.length}</span></div>
+        <div className="panel-heading"><div><span className="section-kicker">CALIDAD DEL DATO</span><h3>Conciliaciones abiertas</h3></div><span className="count-badge">{qualityIssues.length}</span></div>
         <div className="quality-grid">
-          {juneDataQualityIssues.map((issue) => <article key={issue.title}><strong>{issue.title}</strong><p>{issue.detail}</p></article>)}
+          {qualityIssues.map((issue) => <article key={issue.title}><strong>{issue.title}</strong><p>{issue.detail}</p></article>)}
         </div>
       </section>
 
@@ -1538,18 +1690,18 @@ function MetricsView({ metrics, onAdd }: { metrics: CustomMetric[]; onAdd: () =>
             {metrics.map((metric) => (
               <article className="metric-card" key={metric.id}>
                 <div className="metric-card-head"><span>{metric.owner}</span><i className={`trend ${metric.trend}`}>{metric.trend === "up" ? "↗" : metric.trend === "down" ? "↘" : "→"}</i></div>
-                <h4>{metric.name}</h4><strong>{metric.value} <small>{metric.unit}</small></strong>
-                <div className="metric-target"><span>Referencia {metric.target} {metric.unit}</span></div>
+                <h4>{metric.name}</h4><strong>{metric.id === "metric-cubicacion" ? rd(projectSnapshot.cubicacionesMeasured) : `${metric.value} ${metric.unit}`}</strong>
+                <div className="metric-target"><span>Referencia {metric.id === "metric-cubicacion" ? rd(projectSnapshot.cubicacionesAccounting) : `${metric.target} ${metric.unit}`}</span></div>
               </article>
             ))}
           </div>
-          <div className="panel-heading subsection-heading"><div><span className="section-kicker">CUBICACIONES</span><h3>Medición frente a contabilidad</h3></div><span className="data-note">Moneda no indicada en la fuente</span></div>
+          <div className="panel-heading subsection-heading"><div><span className="section-kicker">CUBICACIONES</span><h3>Medición frente a contabilidad</h3></div><span className="data-note">Origen DOP · vista {currency}</span></div>
           <div className="simple-table finance-table">
             <div className="table-row table-head"><span>Periodo</span><span>Cubicación</span><span>Contabilidad</span><span>Diferencia</span></div>
             {cubicaciones.map((item) => (
-              <div className="table-row" key={item.period}><strong>{item.period}</strong><span>{number.format(item.measured)}</span><span>{number.format(item.accounting)}</span><span>{number.format(item.accounting - item.measured)}</span></div>
+              <div className="table-row" key={item.period}><strong>{item.period}</strong><span>{rd(item.measured)}</span><span>{rd(item.accounting)}</span><span>{rd(item.accounting - item.measured)}</span></div>
             ))}
-            <div className="table-row total-row"><strong>Total</strong><span>{number.format(projectSnapshot.cubicacionesMeasured)}</span><span>{number.format(projectSnapshot.cubicacionesAccounting)}</span><span>{number.format(projectSnapshot.cubicacionesDifference)}</span></div>
+            <div className="table-row total-row"><strong>Total</strong><span>{rd(projectSnapshot.cubicacionesMeasured)}</span><span>{rd(projectSnapshot.cubicacionesAccounting)}</span><span>{rd(projectSnapshot.cubicacionesDifference)}</span></div>
           </div>
         </div>
       </details>
@@ -1616,6 +1768,7 @@ function CollaborativeFileRegistry() {
               <div className="uploaded-file-main">
                 <strong>{file.originalName}</strong>
                 <span>{file.areaLabel} · {fileSize(file.sizeBytes)} · v{file.version}</span>
+                <small>Moneda origen: {file.sourceCurrency} · visualización predeterminada: USD</small>
                 <small>{file.classificationReason}</small>
               </div>
               <div className="uploaded-file-owner">
@@ -1700,19 +1853,19 @@ function SourcesView({ onUpload }: { onUpload: () => void }) {
           <div><strong>Versiones</strong><p>El PDF duplica el consolidado; los informes parciales amplían datos y la lámina de mayo queda como histórico.</p></div>
           <div><strong>Edificios</strong><p>El índice MPP promedia 32 frentes; las disciplinas del informe de obra son un indicador diferente.</p></div>
           <div><strong>Viviendas</strong><p>El porcentaje disponible corresponde sólo a superestructura, no a terminación total.</p></div>
-          <div><strong>Nuevas cargas</strong><p>R2 conserva el archivo y D1 registra usuario, área, hash, versión, corte y estado de validación.</p></div>
+          <div><strong>Nuevas cargas</strong><p>R2 conserva el archivo y D1 registra usuario, área, moneda origen, hash, versión, corte y estado de validación. Sin moneda declarada se aplica DOP.</p></div>
         </div>
       </section>
     </div>
   );
 }
 
-function AgentPanel({ expanded, onClose }: { expanded: boolean; onClose: () => void }) {
+function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClose: () => void; currency: CurrencyCode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
       role: "assistant",
-      text: "Buenos días. Puedo consultar el corte real y también recibir archivos. Si adjuntas uno, lo clasificaré por área, registraré la versión y lo dejaré preparado para revisión antes de actualizar cifras consolidadas.",
+      text: "Buenos días. Puedo consultar el corte real y recibir archivos. Los importes se responden en USD por defecto; si una fuente no indica moneda, se registra como DOP. Cada archivo queda clasificado y pendiente de revisión antes de actualizar cifras consolidadas.",
       mode: "source-data-engine",
     },
   ]);
@@ -1720,6 +1873,7 @@ function AgentPanel({ expanded, onClose }: { expanded: boolean; onClose: () => v
   const [loading, setLoading] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [attachmentArea, setAttachmentArea] = useState<UploadArea>("auto");
+  const [attachmentCurrency, setAttachmentCurrency] = useState<CurrencyCode | "auto">("auto");
   const [uploading, setUploading] = useState(false);
 
   async function ask(text: string) {
@@ -1732,7 +1886,7 @@ function AgentPanel({ expanded, onClose }: { expanded: boolean; onClose: () => v
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed }),
+        body: JSON.stringify({ question: trimmed, currency }),
       });
       const payload = (await response.json()) as { answer?: string; error?: string; mode?: string };
       setMessages((current) => [
@@ -1773,6 +1927,7 @@ function AgentPanel({ expanded, onClose }: { expanded: boolean; onClose: () => v
         description: "Archivo cargado mediante ARAYA Copilot.",
         section: "Agente IA",
         source: "agent",
+        sourceCurrency: attachmentCurrency,
       });
       setMessages((current) => [
         ...current,
@@ -1785,6 +1940,7 @@ function AgentPanel({ expanded, onClose }: { expanded: boolean; onClose: () => v
       ]);
       setAttachment(null);
       setAttachmentArea("auto");
+      setAttachmentCurrency("auto");
     } catch (uploadError) {
       setMessages((current) => [
         ...current,
@@ -1845,6 +2001,11 @@ function AgentPanel({ expanded, onClose }: { expanded: boolean; onClose: () => v
             <select value={attachmentArea} onChange={(event) => setAttachmentArea(event.target.value as UploadArea)}>
               {uploadAreas.map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
             </select>
+            <select value={attachmentCurrency} onChange={(event) => setAttachmentCurrency(event.target.value as CurrencyCode | "auto")}>
+              <option value="auto">Moneda automática · sin indicar = DOP</option>
+              <option value="DOP">Origen DOP · peso dominicano</option>
+              <option value="USD">Origen USD · dólar estadounidense</option>
+            </select>
             <button type="button" onClick={() => void sendAttachment()} disabled={uploading}>Registrar archivo</button>
           </div>
         )}
@@ -1871,6 +2032,7 @@ function UploadModal({
   const [area, setArea] = useState<UploadArea>(initialArea);
   const [description, setDescription] = useState("");
   const [declaredCutoff, setDeclaredCutoff] = useState("");
+  const [sourceCurrency, setSourceCurrency] = useState<CurrencyCode | "auto">("auto");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -1886,6 +2048,7 @@ function UploadModal({
         declaredCutoff,
         section: areaLabels[area],
         source: "dashboard",
+        sourceCurrency,
       });
       onComplete(result.message ?? "Archivo registrado correctamente.");
     } catch (uploadError) {
@@ -1923,6 +2086,14 @@ function UploadModal({
           <label>
             Fecha de corte declarada
             <input value={declaredCutoff} onChange={(event) => setDeclaredCutoff(event.target.value)} placeholder="Ej. 30/06/2026" />
+          </label>
+          <label>
+            Moneda de origen
+            <select value={sourceCurrency} onChange={(event) => setSourceCurrency(event.target.value as CurrencyCode | "auto")}>
+              <option value="auto">Automática · sin indicar = DOP</option>
+              <option value="DOP">DOP · peso dominicano</option>
+              <option value="USD">USD · dólar estadounidense</option>
+            </select>
           </label>
           <label className="wide-field">
             Descripción o instrucciones para el agente
@@ -2358,6 +2529,7 @@ export function DashboardClient() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
+  const [currency, setCurrency] = useState<CurrencyCode>(DEFAULT_DISPLAY_CURRENCY);
   const activeProject = projects[activeProjectId];
 
   useEffect(() => {
@@ -2417,19 +2589,19 @@ export function DashboardClient() {
 
   function content() {
     if (activeProjectId === "mirador") return <DemoProjectContent view={view} onNavigate={setView} />;
-    if (view === "resumen") return <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} />;
+    if (view === "resumen") return <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} currency={currency} />;
     if (view === "planificacion") return <Planning />;
     if (view === "implantacion") return <div className="view-stack"><SitePlan onNavigate={setView} onSelectBuilding={setSelectedBuilding} /></div>;
     if (view === "edificios") return <BuildingsView selected={selectedBuilding} setSelected={setSelectedBuilding} />;
     if (view === "viviendas") return <HousingView />;
-    if (view === "comercial") return <CommercialView />;
+    if (view === "comercial") return <CommercialView currency={currency} />;
     if (view === "urbanismo") return <UrbanismView />;
-    if (view === "control") return <ControlView />;
+    if (view === "control") return <ControlView currency={currency} />;
     if (view === "cronologia") return <TimelineView />;
-    if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => setModal("supplier")} />;
-    if (view === "metricas") return <MetricsView metrics={metrics} onAdd={() => setModal("metric")} />;
+    if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => setModal("supplier")} currency={currency} />;
+    if (view === "metricas") return <MetricsView metrics={metrics} onAdd={() => setModal("metric")} currency={currency} />;
     if (view === "fuentes") return <SourcesView onUpload={() => setUploadOpen(true)} />;
-    return <AgentPanel expanded onClose={() => setView("resumen")} />;
+    return <AgentPanel expanded onClose={() => setView("resumen")} currency={currency} />;
   }
 
   return (
@@ -2531,6 +2703,8 @@ export function DashboardClient() {
           project={activeProject}
           onAsk={() => setAgentOpen(true)}
           onUpload={() => setUploadOpen(true)}
+          currency={currency}
+          onCurrencyChange={setCurrency}
         />
         <div className="global-search">
           <span>⌕</span>
@@ -2559,7 +2733,7 @@ export function DashboardClient() {
         <div className="content">{content()}</div>
       </main>
 
-      {activeProjectId === "araya" && agentOpen && view !== "agente" && <AgentPanel expanded={false} onClose={() => setAgentOpen(false)} />}
+      {activeProjectId === "araya" && agentOpen && view !== "agente" && <AgentPanel expanded={false} onClose={() => setAgentOpen(false)} currency={currency} />}
 
       {activeProjectId === "araya" && modal && (
         <RecordModal

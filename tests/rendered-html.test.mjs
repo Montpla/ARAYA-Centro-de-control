@@ -49,7 +49,7 @@ test("normalized source data contains 26 buildings and 156 apartments", async ()
   assert.match(source, /urbanismProgress: 18\.28/);
   assert.match(source, /overallProgress: 18\.23/);
   assert.match(source, /plannedProgress: 21\.24/);
-  assert.match(source, /currency: "No indicada en la fuente"/);
+  assert.match(source, /currency: "DOP"/);
   assert.match(source, /002 - IMPLANTACIÓN GENERAL\.dwg/);
   assert.match(source, /\/data-center\/002-implantacion-general\.dwg/);
   assert.match(source, /urbanismAreas/);
@@ -131,10 +131,11 @@ test("June 2026 reports are integrated with traceable downloads and reconciliati
   assert.match(dashboard, /juneDataQualityIssues/);
 });
 
-test("database migrations cover records and the collaborative file registry", async () => {
-  const [baseMigration, fileMigration] = await Promise.all([
+test("database migrations cover records, file registry and source currency", async () => {
+  const [baseMigration, fileMigration, currencyMigration] = await Promise.all([
     readFile("drizzle/0000_broken_vin_gonzales.sql", "utf8"),
     readFile("drizzle/0001_milky_jamie_braddock.sql", "utf8"),
+    readFile("drizzle/0002_dry_black_knight.sql", "utf8"),
   ]);
   assert.match(baseMigration, /CREATE TABLE `custom_metrics`/);
   assert.match(baseMigration, /CREATE TABLE `suppliers`/);
@@ -142,6 +143,8 @@ test("database migrations cover records and the collaborative file registry", as
   assert.match(fileMigration, /CREATE TABLE `uploaded_files`/);
   assert.match(fileMigration, /CREATE TABLE `file_activity`/);
   assert.match(fileMigration, /uploaded_files_sha256_idx/);
+  assert.match(currencyMigration, /source_currency/);
+  assert.match(currencyMigration, /DEFAULT 'DOP'/);
 });
 
 test("collaborative uploads use authenticated identity, R2 storage and duplicate detection", async () => {
@@ -155,9 +158,29 @@ test("collaborative uploads use authenticated identity, R2 storage and duplicate
   assert.match(route, /crypto\.subtle\.digest\("SHA-256"/);
   assert.match(route, /getFileBucket\(\)\.get/);
   assert.match(route, /pendiente_revision/);
+  assert.match(route, /resolveSourceCurrency/);
   assert.match(dashboard, /CARGA COLABORATIVA/);
   assert.match(dashboard, /uploadProjectFile/);
   assert.match(dashboard, /ACTUALIZACIÓN CADA 10 S/);
   assert.match(routing, /Clasificación automática/);
   assert.equal(JSON.parse(hosting).r2, "FILES");
+});
+
+test("financial presentation defaults to USD and preserves DOP source values", async () => {
+  const [dashboard, currency, financeDetail] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("lib/currency.ts", "utf8"),
+    readFile("app/antonely-finance-data.ts", "utf8"),
+  ]);
+  assert.match(currency, /DEFAULT_DISPLAY_CURRENCY: CurrencyCode = "USD"/);
+  assert.match(currency, /DOP_TO_USD = 0\.016788/);
+  assert.match(currency, /return "DOP"/);
+  assert.match(dashboard, /Moneda de visualización/);
+  assert.match(dashboard, /Detalle completo/);
+  assert.match(dashboard, /29 CUENTAS DE COSTE/);
+  assert.match(dashboard, /15 CATEGORÍAS · 96 FACTURAS/);
+  assert.match(dashboard, /26 ANTICIPOS/);
+  assert.match(dashboard, /41 LÍNEAS DE BALANCE/);
+  assert.match(financeDetail, /antonelyPayableVendorsAll/);
+  assert.match(financeDetail, /advancePendingDop: 9210448\.86/);
 });

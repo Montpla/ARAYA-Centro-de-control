@@ -1,6 +1,13 @@
 import { desc } from "drizzle-orm";
 import { cubicaciones, projectSnapshot } from "../../demo-data";
 import {
+  antonelyAdvances,
+  antonelyBalanceLines,
+  antonelyCostAccounts,
+  antonelyDetailTotals,
+  antonelyPayableCategories,
+} from "../../antonely-finance-data";
+import {
   advances,
   antonelyFinanceSource,
   arrearsBreakdown,
@@ -19,6 +26,7 @@ import { getDb } from "../../../db";
 import { uploadedFiles } from "../../../db/schema";
 import { areaLabels, uploadStatusLabels } from "../../../lib/file-routing";
 import { AGENT_PROMPT_VERSION, AGENT_SYSTEM_PROMPT } from "../../../lib/agent-prompt";
+import { CurrencyCode, DOP_TO_USD, FX_RATE_CUTOFF, formatMoney, formatMoneyMillions } from "../../../lib/currency";
 
 type ToolName =
   | "get_project_summary"
@@ -85,7 +93,7 @@ const tools = [
   {
     type: "function",
     name: "get_financial_measurements",
-    description: "Consulta cubicaciones y contabilidad. La moneda no está identificada en la fuente.",
+    description: "Consulta cubicaciones y contabilidad. La regla del proyecto asigna DOP porque la fuente no rotula moneda.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
     strict: true,
   },
@@ -178,8 +186,8 @@ async function executeTool(name: ToolName, args: Record<string, unknown>) {
       totalMeasured: projectSnapshot.cubicacionesMeasured,
       totalAccounting: projectSnapshot.cubicacionesAccounting,
       differenceAccountingMinusMeasured: projectSnapshot.cubicacionesDifference,
-      currency: projectSnapshot.currency,
-      warning: "No convertir ni denominar como USD, EUR o VES hasta identificar la moneda de la fuente.",
+      sourceCurrency: "DOP",
+      displayRule: `USD por defecto · 1 DOP = ${DOP_TO_USD} USD · corte ${FX_RATE_CUTOFF}`,
     };
   }
   if (name === "get_commercial_status") {
@@ -201,7 +209,13 @@ async function executeTool(name: ToolName, args: Record<string, unknown>) {
       advances,
       antonelyDepartmentalSource: antonelyFinanceSource,
       payablesReconciliation,
-      currency: "DOP / pesos dominicanos, salvo importes comerciales identificados expresamente como USD",
+      costAccounts: antonelyCostAccounts,
+      payablesCategories: antonelyPayableCategories,
+      advancesDetail: antonelyAdvances,
+      balanceLines: antonelyBalanceLines,
+      detailCounts: antonelyDetailTotals,
+      sourceCurrency: "DOP, salvo importes comerciales identificados expresamente como USD",
+      displayRule: `USD por defecto · 1 DOP = ${DOP_TO_USD} USD · corte ${FX_RATE_CUTOFF}`,
       source: "INFORME_JUN_2026_ARAYA_v1_1.xlsx y Datos para Informe Jun-26.xlsx",
       cutoff: juneReport.cutoff,
     };
@@ -225,6 +239,7 @@ async function executeTool(name: ToolName, args: Record<string, unknown>) {
         uploader: row.uploaderName,
         version: row.version,
         status: uploadStatusLabels[row.status] ?? row.status,
+        sourceCurrency: row.sourceCurrency,
         cutoff: row.declaredCutoff || "No declarado",
         createdAt: row.createdAt,
         classificationReason: row.classificationReason,
@@ -244,19 +259,22 @@ async function executeTool(name: ToolName, args: Record<string, unknown>) {
   };
 }
 
-function fallbackAnswer(question: string) {
+function fallbackAnswer(question: string, currency: CurrencyCode) {
   const normalized = question.toLowerCase();
   const source = `\n\nFuentes: centro de datos ARAYA (${projectSnapshot.dataSources.length} archivos integrados) · corte principal ${projectSnapshot.declaredCutoff}.`;
+  const dop = (value: number) => formatMoney(value, "DOP", currency);
+  const dopMillions = (value: number) => formatMoneyMillions(value, "DOP", currency);
+  const usdValue = (value: number) => formatMoney(value, "USD", currency);
 
   if (normalized.includes("archivo") || normalized.includes("adjunt") || normalized.includes("subir") || normalized.includes("cargar")) {
     return `Puedes adjuntar el archivo en este chat o usar “+ Cargar archivo” desde cualquier pestaña. El sistema sugerirá el área, conservará el original, registrará usuario y versión y lo dejará pendiente de revisión. Si el archivo contradice una cifra consolidada, mostrará la conciliación sin reemplazarla automáticamente.${source}`;
   }
 
   if (normalized.includes("calidad") || normalized.includes("fuente") || normalized.includes("inconsisten")) {
-    return `Hay ${juneDataQualityIssues.length} conciliaciones principales. Las nuevas incluyen el archivo de Antonely: costes de junio RD$48.988.755,86 frente a RD$48.998.910,52 del consolidado y tres totales de CxP entre RD$18.597.489,63 y RD$18.627.534,91. Todas permanecen visibles; ninguna cifra se corrige silenciosamente.${source}`;
+    return `Hay ${juneDataQualityIssues.length} conciliaciones principales. Las nuevas incluyen el archivo de Antonely: costes de junio ${dop(48988755.86)} frente a ${dop(48998910.52)} del consolidado y tres totales de CxP entre ${dop(18597489.63)} y ${dop(18627534.91)}. Todas permanecen visibles; ninguna cifra se corrige silenciosamente.${source}`;
   }
   if (normalized.includes("venta") || normalized.includes("reserva") || normalized.includes("moros") || normalized.includes("cobran")) {
-    return `Hay 279 reservas históricas, 228 activas y 51 desistidas. Fase I tiene 136 activas y Fase II, 92. Al 06/07/2026, 172 contratos se distribuyen en 106 al día, 42 con cuotas pendientes y 24 vencidos por USD 136.840,39. La morosidad declarada es inferior al 1%.${source}`;
+    return `Hay 279 reservas históricas, 228 activas y 51 desistidas. Fase I tiene 136 activas y Fase II, 92. Al 06/07/2026, 172 contratos se distribuyen en 106 al día, 42 con cuotas pendientes y 24 vencidos por ${usdValue(136840.39)}. La morosidad declarada es inferior al 1%.${source}`;
   }
   if (normalized.includes("seguridad") || normalized.includes("accidente") || normalized.includes("permiso") || normalized.includes("confotur")) {
     return `Seguridad reporta 0 accidentes en las semanas 3 y 4, 22 observaciones, 21 reuniones, 12 inspecciones y 3 acciones correctivas en proceso. Falta el reporte de la semana 2. Hay 8 permisos aprobados y el CONFOTUR definitivo permanece en proceso, pendiente de consejo.${source}`;
@@ -265,7 +283,7 @@ function fallbackAnswer(question: string) {
     return `El plano general DWG identifica 77 bloques TH, además de viales, estacionamientos, zonas verdes y equipamientos. El dashboard tiene datos operativos integrados para 26 edificios (TH-01 a TH-18 y TH-70 a TH-77), que representan 156 viviendas; los otros 51 TH quedan visibles como implantación sin estado de avance. El urbanismo registra 18,28% ejecutado frente a 16,18% planificado.${source}`;
   }
   if (normalized.includes("cubic") || normalized.includes("contab") || normalized.includes("dinero") || normalized.includes("financ")) {
-    return `El presupuesto financiero de control es RD$3.591,28 M; se han ejecutado RD$712,33 M, incluyendo RD$49,00 M en junio. Las cuentas por pagar detalladas suman RD$18,60 M y los anticipos pendientes RD$9,21 M. La caja proyectada cierra diciembre en –RD$125,20 M. Las cubicaciones anteriores conservan moneda no identificada y se muestran aparte.${source}`;
+    return `El presupuesto financiero de control es ${dopMillions(3591280577.17)}; se han ejecutado ${dopMillions(712326162.73)}, incluyendo ${dopMillions(48998910.52)} en junio. Las cuentas por pagar consolidadas suman ${dopMillions(18597489.63)} y los anticipos pendientes ${dopMillions(9210448.86)}. La caja proyectada cierra diciembre en ${dopMillions(-125196511.23)}. Las cubicaciones sin etiqueta se tratan como DOP según la regla del proyecto.${source}`;
   }
   if (normalized.includes("paquete") || normalized.includes("infraestructura") || normalized.includes("crític") || normalized.includes("critic")) {
     const mostDelayed = [...projectSnapshot.workPackages].sort((a, b) => b.deviationDays - a.deviationDays)[0];
@@ -288,14 +306,15 @@ function fallbackAnswer(question: string) {
 }
 
 export async function POST(request: Request) {
-  const payload = (await request.json()) as { question?: string };
+  const payload = (await request.json()) as { question?: string; currency?: string };
   const question = payload.question?.trim() ?? "";
+  const currency: CurrencyCode = payload.currency === "DOP" ? "DOP" : "USD";
   if (!question) return Response.json({ error: "Escribe una pregunta." }, { status: 400 });
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return Response.json({
-      answer: fallbackAnswer(question),
+      answer: fallbackAnswer(question, currency),
       mode: "source-data-engine",
       promptVersion: AGENT_PROMPT_VERSION,
     });
@@ -309,7 +328,7 @@ export async function POST(request: Request) {
       model: process.env.OPENAI_MODEL || "gpt-5.6-terra",
       reasoning: { effort: "low" },
       instructions: AGENT_SYSTEM_PROMPT,
-      input: question,
+      input: `${question}\n\nMoneda de salida solicitada: ${currency}.`,
       tools,
       tool_choice: "auto",
       text: { verbosity: "low" },

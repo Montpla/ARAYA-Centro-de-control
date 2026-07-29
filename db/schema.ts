@@ -50,6 +50,7 @@ export const uploadedFiles = sqliteTable(
     sha256: text("sha256").notNull(),
     storageKey: text("storage_key").notNull(),
     source: text("source").notNull().default("dashboard"),
+    sourceCurrency: text("source_currency").notNull().default("DOP"),
     status: text("status").notNull().default("pendiente_revision"),
     uploaderEmail: text("uploader_email").notNull(),
     uploaderName: text("uploader_name").notNull(),

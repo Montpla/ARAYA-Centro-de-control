@@ -321,7 +321,7 @@ export const customMetrics: CustomMetric[] = [
   { id: "metric-schedule", name: "Avance del cronograma", value: "17", target: "21,24", trend: "down", unit: "%", owner: "Planificación · MPP" },
   { id: "metric-urban", name: "Urbanismo ejecutado", value: "18,28", target: "16,18", trend: "up", unit: "%", owner: "Producción · Excel" },
   { id: "metric-housing", name: "Vivienda ejecutada", value: "18,21", target: "23,55", trend: "down", unit: "%", owner: "Producción · Excel" },
-  { id: "metric-cubicacion", name: "Cubicaciones acumuladas", value: "67.342.153,57", target: "71.731.477,87", trend: "down", unit: "moneda fuente", owner: "Finanzas · Excel" },
+  { id: "metric-cubicacion", name: "Cubicaciones acumuladas", value: "67.342.153,57", target: "71.731.477,87", trend: "down", unit: "DOP", owner: "Finanzas · Excel" },
 ];
 
 export const cubicaciones = [
@@ -342,7 +342,7 @@ export const dataSources: DataSource[] = [
     records: "27 meses · 2 áreas · 4 cubicaciones",
     notes: [
       "La hoja de cubicaciones dice “FASE I (26 EDIFICIOS)” y el nombre del archivo dice “FASE II”.",
-      "La moneda de las cubicaciones no está identificada; se conserva como moneda de la fuente.",
+      "La fuente no rotula la moneda; por la regla financiera del proyecto se interpreta como DOP y se conserva esa procedencia.",
     ],
   },
   {
@@ -496,7 +496,7 @@ export const projectSnapshot = {
   cubicacionesMeasured: 67342153.573152,
   cubicacionesAccounting: 71731477.87,
   cubicacionesDifference: 4389324.296848,
-  currency: "No indicada en la fuente",
+  currency: "DOP",
   buildings,
   timeline,
   suppliers,

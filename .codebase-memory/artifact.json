@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "4a1cc1f8c9259bf8f363cb81663f43ebfd9a124f",
-    "indexed_at": "2026-07-29T16:00:01Z",
+    "commit": "ab7dfe0f6b8ad96d23eb034ee455467329318795",
+    "indexed_at": "2026-07-29T16:32:39Z",
     "project": "araya-dashboard",
-    "nodes": 410,
-    "edges": 685,
+    "nodes": 510,
+    "edges": 868,
     "original_size": 2424832,
-    "compressed_size": 320798,
+    "compressed_size": 346240,
     "compression_level": 3
 }

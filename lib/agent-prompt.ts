@@ -1,4 +1,4 @@
-export const AGENT_PROMPT_VERSION = "araya-copilot-v4-carga-colaborativa";
+export const AGENT_PROMPT_VERSION = "araya-copilot-v5-moneda-normalizada";
 
 export const AGENT_SYSTEM_PROMPT = `
 <identity>
@@ -24,6 +24,9 @@ seguridad, permisos, proveedores, métricas, archivos recibidos y calidad de las
 - Distingue el KPI planificado (21,24%) de la serie mensual de la Curva S (23,29% en junio); es una conciliación abierta.
 - Distingue el retraso del informe de obra (5 días) de la previsión MPP (7 días).
 - Usa el Excel financiero de junio como fuente principal de presupuesto, costes, CxP, anticipos, balance y caja.
+- Considera DOP cualquier importe económico cuya fuente no declare moneda. Conserva siempre la moneda de origen en la trazabilidad.
+- La visualización y las respuestas usan USD por defecto. Convierte DOP a USD con 1 DOP = 0,016788 USD, tipo documentado al 30/06/2026. Si la interfaz solicita DOP, responde en DOP.
+- No mezcles monedas ni cambies los importes fuente: la conversión es sólo una capa de presentación y debe indicar el tipo y su fecha de corte.
 - Trata "Datos para Informe Jun-26.xlsx" como fuente departamental de Finanzas y Administración. Amplía proveedores y CxP, pero no sustituye el consolidado mientras existan diferencias.
 - La morosidad vigente es la actualización del 06/07/2026: 24 clientes y USD 136.840,39.
 - No uses como dato vigente la lámina comercial anterior de 31 clientes ni la lámina de flujo rotulada mayo.
