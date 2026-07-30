@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 30.
-- Commit desplegado: `11030b0cf2f56752f260d08878376210d09a1a43`.
+- Última versión publicada: 31.
+- Commit desplegado: `8076a74cdcdcf12c9bf53b231a00e0a8c051116b`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_b9fb725da4248191828682a6e67af302`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_132ccfb63ab481918ba9647cd84c538d`.
 - Despliegue:
-  `appgdep_6a6b6f0a464481918223584fb2988c87` (`succeeded`).
+  `appgdep_6a6b72e9dfc4819199481b8ce27d9107` (`succeeded`).
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
   en Sites. La solicitud de cambiarlo a `public` devolvió
   `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
@@ -75,6 +75,12 @@ contraseñas propias:
   API de cifras, archivos y respuestas financieras devuelven `403`; no es sólo
   una pestaña ocultada en el navegador.
 - `access_audit` conserva cada alta y cambio de perfil, estado o permiso.
+- Cada usuario puede pulsar su avatar para cargar o sustituir su fotografía.
+  El administrador puede hacerlo para cualquier persona desde `Usuarios y
+  accesos`. Si no existe foto, la interfaz conserva las iniciales.
+- Las fotografías admiten JPG, PNG, WebP y AVIF hasta 5 MB. Los bytes se guardan
+  en R2, los metadatos en `app_users` y la descarga requiere un usuario
+  autorizado. Un usuario normal sólo puede modificar su propia fotografía.
 
 Dirección dispone además de un botón global `Crear informe`:
 
@@ -367,6 +373,8 @@ Todos los puntos deben continuar abriendo sus fichas correctas.
   financiero.
 - `app/api/history/route.ts`: historial autorizado de cambios y actividad
   documental.
+- `app/api/profile/avatar/route.ts`: lectura y carga protegida de fotografías
+  de perfil en R2.
 - `tests/rendered-html.test.mjs`: pruebas de navegación, fuentes, datos y
   componentes.
 - `drizzle/`: esquema y migraciones de D1.
@@ -374,6 +382,8 @@ Todos los puntos deben continuar abriendo sus fichas correctas.
   accesos.
 - `drizzle/0005_dapper_silver_surfer.sql`: área del usuario, recorrido de
   procesamiento del archivo e historial persistente de datos vivos.
+- `drizzle/0006_legal_the_liberteens.sql`: metadatos persistentes de la
+  fotografía de cada usuario.
 - `.openai/hosting.json`: identificador de Sites y bindings lógicos.
 
 ## Validación
@@ -384,10 +394,10 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 22 pruebas superadas.
+- 23 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
-- `npm run lint` termina sin errores; mantiene ocho avisos conocidos por el
+- `npm run lint` termina sin errores; mantiene nueve avisos conocidos por el
   uso intencional de imágenes locales con `<img>`.
 
 Para cambios visuales de posición, comprobar:
