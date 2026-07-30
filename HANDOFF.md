@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 29.
-- Commit desplegado: `2fa700233491bc257ac86c704e799e6e3027d948`.
+- Última versión publicada: 30.
+- Commit desplegado: `11030b0cf2f56752f260d08878376210d09a1a43`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_d2c6e0c4f5188191a29d531757943923`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_b9fb725da4248191828682a6e67af302`.
 - Despliegue:
-  `appgdep_6a6b68d9fd2c8191bce96dcd4837a568` (`succeeded`).
+  `appgdep_6a6b6f0a464481918223584fb2988c87` (`succeeded`).
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
   en Sites. La solicitud de cambiarlo a `public` devolvió
   `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
@@ -88,6 +88,16 @@ Dirección dispone además de un botón global `Crear informe`:
   toma la versión viva disponible al generarse; si el periodo elegido no está
   cubierto, muestra una advertencia y usa la última evidencia disponible sin
   interpolar ni inventar cifras.
+
+La Curva S dispone de un control `Pantalla completa` en todas sus apariciones:
+
+- Abre la gráfica como una vista superpuesta de todo el viewport sin modificar
+  las series ni el corte mostrado.
+- El mismo control cambia a `Cerrar`; la tecla `Esc` también restaura el tamaño
+  normal.
+- Mientras está ampliada se bloquea el desplazamiento del dashboard de fondo.
+- En tablet y móvil conserva el desplazamiento horizontal para no comprimir ni
+  recortar los 27 meses de la gráfica.
 
 El selector de proyecto activo permite abrir dos promociones:
 
