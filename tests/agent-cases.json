@@ -18,5 +18,9 @@
   {"input":"¿Estamos cumpliendo el plan?","mustMention":["55%","59%"]},
   {"input":"¿Quién actualizó el último hito?","mustMention":["Dirección facultativa"]},
   {"input":"Dime el estado de zonas comunes","mustMention":["31%","37%"]},
-  {"input":"¿Cuál es la fuente del dato?","mustMention":["Centro de Control ARAYA"]}
+  {"input":"¿Cuál es la fuente del dato?","mustMention":["Centro de Control ARAYA"]},
+  {"input":"¿Cómo está la calidad del expediente?","mustMention":["expediente","validación"]},
+  {"input":"¿Qué acciones siguen abiertas?","mustMention":["responsable","fecha objetivo"]},
+  {"input":"¿Qué revisión usó el último informe?","mustMention":["revisión","corte"]},
+  {"input":"Cierra esta acción desde el chat","mustMention":["no","sala operativa"]}
 ]

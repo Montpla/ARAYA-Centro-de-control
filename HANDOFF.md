@@ -712,6 +712,82 @@ Iniciado y completado el 30/07/2026.
   de clasificación 24/24 y lint sin errores; permanecen los nueve avisos
   conocidos de `<img>`.
 
+## Puntos 3 a 6 · sala operativa y control transversal
+
+Iniciados y completados el 30/07/2026.
+
+- El Resumen ejecutivo incorpora una Sala operativa con seis pestañas:
+  `Calidad y cobertura`, `Plano operativo`, `Planificación`,
+  `Conciliaciones`, `Informes` y `Acciones`.
+- `GET /api/control-room` consolida cada cinco segundos cargas, propuestas,
+  puntos vivos, integridad espacial, planificación, conciliaciones, acciones,
+  actividad e informes. La respuesta es privada y respeta el permiso
+  financiero.
+- Calidad documental diferencia archivos aprobados, pendientes, observados y
+  rechazados. El índice mostrado corresponde únicamente al expediente
+  colaborativo; no se presenta como calidad global del proyecto.
+- La auditoría espacial comprueba coordenadas visuales y técnicas, códigos
+  duplicados, disciplinas, responsables, incidencias y campos pendientes de
+  urbanismo sin cambiar la geometría del plano.
+- Planificación conserva como referencias diferentes el KPI planificado y la
+  serie mensual de la Curva S. Muestra paquetes desviados, paquetes críticos,
+  desviación máxima y previsión de fin.
+- Las conciliaciones combinan las diferencias ya documentadas del consolidado
+  de junio, compras, flujo reprogramado y, para usuarios autorizados, estados
+  fiduciarios. Cada incidencia abre la sección responsable.
+- `lib/control-room.ts` contiene los cálculos deterministas. No crea ni
+  completa datos operativos.
+
+## Punto 7 · informes versionados
+
+Iniciado y completado el 30/07/2026.
+
+- Los informes semanales y mensuales se guardan en `report_snapshots` antes de
+  mostrar la vista previa.
+- Cada instantánea conserva periodo, moneda, corte, revisión viva, autor,
+  avance, planificación, plano, producción, comercial, finanzas, seguridad y
+  acciones de Dirección utilizadas al generarla.
+- El archivo de informes permite reabrir una edición anterior sin presentarla
+  como estado actual.
+- El informe completo y sus instantáneas financieras requieren permiso de
+  Finanzas.
+- La impresión y exportación a PDF existentes se mantienen.
+
+## Punto 8 · acciones colaborativas
+
+Iniciado y completado el 30/07/2026.
+
+- `control_actions` conserva título, descripción, área, sección enlazada,
+  prioridad, estado, responsable, vencimiento, documento origen, creador y
+  fechas.
+- `control_action_activity` mantiene la creación, cambios de estado y
+  comentarios mediante identificadores idempotentes.
+- Todos los usuarios autorizados pueden crear acciones no financieras. El
+  creador, la persona asignada o un administrador pueden actualizar su estado y
+  comentar.
+- Sólo el administrador puede asignar una acción a otra persona activa.
+- Las acciones financieras quedan ocultas y bloqueadas para personas sin ese
+  permiso.
+- No existen borrados desde la interfaz; la trazabilidad se conserva.
+
+## Punto 9 · cierre técnico y operación
+
+Completado el 30/07/2026.
+
+- Nueva ruta: `/api/control-room`.
+- Nueva migración: `drizzle/0007_rapid_black_queen.sql`. Sólo crea
+  `control_actions`, `control_action_activity` y `report_snapshots`; no repite
+  la migración documental del punto 2.
+- ARAYA Copilot usa el prompt
+  `araya-copilot-v8-sala-operativa` y la herramienta de consulta
+  `get_control_room_status`. Puede explicar, pero no crear, cerrar, reasignar
+  ni aprobar.
+- El conjunto de evaluación del agente aumenta a 24 casos.
+- `OPERATIONS.md` documenta el uso diario, los permisos, las reglas de datos y
+  el diagnóstico de incidencias.
+- Pruebas del cierre: compilación correcta, 32/32 pruebas aprobadas y lint sin
+  errores; permanecen los nueve avisos conocidos de `<img>`.
+
 ## Criterios de continuidad
 
 - Mostrar únicamente datos aportados o derivados de las fuentes.

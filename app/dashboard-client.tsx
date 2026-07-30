@@ -98,6 +98,11 @@ import {
   userAreas,
 } from "../lib/file-routing";
 import { LiveDataMap, applyLiveValuesToTargets } from "../lib/live-data";
+import {
+  ArchivedReportSnapshot,
+  ControlRoomPanel,
+  ControlRoomSnapshot,
+} from "./control-room-panel";
 
 type View =
   | "resumen"
@@ -261,6 +266,10 @@ type DirectionReportPeriod = {
   endDate: string;
   label: string;
   generatedAt: string;
+  archivedReportId?: string;
+  liveRevision?: number;
+  sourceCutoff?: string;
+  archivedSnapshot?: ArchivedReportSnapshot | null;
 };
 
 type LiveSyncState = {
@@ -1569,7 +1578,7 @@ function StatCard({
   );
 }
 
-function ProgressChart() {
+function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const width = 1180;
   const height = 410;
@@ -1577,17 +1586,17 @@ function ProgressChart() {
   const plotBottom = 292;
   const sidePadding = 70;
   const xFor = (index: number) =>
-    sidePadding + (index * (width - sidePadding * 2)) / (monthlyPlan.length - 1);
+    sidePadding + (index * (width - sidePadding * 2)) / (data.length - 1);
   const yFor = (value: number) =>
     plotBottom - (value / 100) * (plotBottom - plotTop);
   const monthLabel = (index: number) => {
     const date = new Date(2025, 5 + index, 1);
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
   };
-  const plannedPoints = monthlyPlan
+  const plannedPoints = data
     .map((point, index) => `${xFor(index)},${yFor(point.planned)}`)
     .join(" ");
-  const actualPoints = monthlyPlan
+  const actualPoints = data
     .map((point, index) =>
       point.actual === null ? null : `${xFor(index)},${yFor(point.actual)}`,
     )
@@ -1661,7 +1670,7 @@ function ProgressChart() {
             </text>
             <polyline className="progress-line planned" points={plannedPoints} />
             <polyline className="progress-line actual" points={actualPoints} />
-            {monthlyPlan.map((point, index) => (
+            {data.map((point, index) => (
               <g key={`${point.month}-${index}`}>
                 <circle
                   className="progress-point planned"
@@ -5062,15 +5071,16 @@ function ReportBuilder({
   onGenerate,
 }: {
   onClose: () => void;
-  onGenerate: (period: DirectionReportPeriod) => void;
+  onGenerate: (period: DirectionReportPeriod) => Promise<void>;
 }) {
   const [frequency, setFrequency] = useState<ReportFrequency>("monthly");
   const [month, setMonth] = useState("2026-06");
   const [startDate, setStartDate] = useState("2026-06-24");
   const [endDate, setEndDate] = useState("2026-06-30");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
     if (frequency === "monthly") {
@@ -5078,7 +5088,14 @@ function ReportBuilder({
         setError("Selecciona el mes que debe figurar en el informe.");
         return;
       }
-      onGenerate(monthReportPeriod(month));
+      setSaving(true);
+      try {
+        await onGenerate(monthReportPeriod(month));
+      } catch (reportError) {
+        setError(reportError instanceof Error ? reportError.message : "No se pudo archivar el informe.");
+      } finally {
+        setSaving(false);
+      }
       return;
     }
     if (!startDate || !endDate) {
@@ -5089,7 +5106,14 @@ function ReportBuilder({
       setError("La fecha final no puede ser anterior a la fecha inicial.");
       return;
     }
-    onGenerate(weeklyReportPeriod(startDate, endDate));
+    setSaving(true);
+    try {
+      await onGenerate(weeklyReportPeriod(startDate, endDate));
+    } catch (reportError) {
+      setError(reportError instanceof Error ? reportError.message : "No se pudo archivar el informe.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -5139,7 +5163,9 @@ function ReportBuilder({
         {error && <div className="callout warn"><strong>Revisa el periodo</strong><p>{error}</p></div>}
         <div className="modal-actions">
           <button className="button secondary" type="button" onClick={onClose}>Cancelar</button>
-          <button className="button primary" type="submit">Generar vista previa</button>
+          <button className="button primary" type="submit" disabled={saving}>
+            {saving ? "Archivando…" : "Generar vista previa"}
+          </button>
         </div>
       </form>
     </div>
@@ -5155,17 +5181,49 @@ function DirectionReport({
   currency: CurrencyCode;
   onClose: () => void;
 }) {
+  const archived = period.archivedSnapshot;
+  const archivedProduction = archived?.production as {
+    constructionDisciplines?: typeof constructionDisciplines;
+    structuralDelay?: typeof structuralDelay;
+    urbanismReportAreas?: typeof urbanismReportAreas;
+    delayedUrbanismStarts?: typeof delayedUrbanismStarts;
+    workPackages?: typeof workPackages;
+  } | undefined;
+  const archivedCommercial = archived?.commercial as {
+    sales?: typeof juneReport.sales;
+    collections?: typeof juneReport.collections;
+  } | undefined;
+  const archivedSafety = archived?.safety as {
+    metrics?: typeof safetyMetrics;
+    permits?: typeof permits;
+  } | undefined;
+  const reportExecutive = archived?.executive;
+  const reportPlan = archived?.monthlyPlan ?? monthlyPlan;
+  const reportDisciplines = archivedProduction?.constructionDisciplines ?? constructionDisciplines;
+  const reportStructuralDelay = archivedProduction?.structuralDelay ?? structuralDelay;
+  const reportUrbanismAreas = archivedProduction?.urbanismReportAreas ?? urbanismReportAreas;
+  const reportDelayedUrbanism = archivedProduction?.delayedUrbanismStarts ?? delayedUrbanismStarts;
+  const reportWorkPackages = archivedProduction?.workPackages ?? workPackages;
+  const reportSales = archivedCommercial?.sales ?? juneReport.sales;
+  const reportCollections = archivedCommercial?.collections ?? juneReport.collections;
+  const reportFinance = archived
+    ? (archived.finance as typeof juneReport.finance | null)
+    : juneReport.finance;
+  const reportSafetyMetrics = archivedSafety?.metrics ?? safetyMetrics;
+  const reportPermits = archivedSafety?.permits ?? permits;
+  const reportManagementActions = archived?.managementActions ?? managementActions;
+  const reportSourceCutoff = period.sourceCutoff || archived?.cutoff || juneReport.cutoff;
   const includesSourceCutoff =
     period.startDate <= REPORT_SOURCE_CUTOFF && period.endDate >= REPORT_SOURCE_CUTOFF;
-  const approvedPermits = permits.filter((permit) => permit.status === "Aprobado").length;
-  const criticalPackages = workPackages.filter((item) => item.critical);
+  const approvedPermits = reportPermits.filter((permit) => permit.status === "Aprobado").length;
+  const criticalPackages = reportWorkPackages.filter((item) => item.critical);
   const generatedAt = new Intl.DateTimeFormat("es-ES", {
     dateStyle: "long",
     timeStyle: "short",
   }).format(new Date(period.generatedAt));
   const reportKind = period.frequency === "weekly" ? "Informe semanal" : "Informe mensual";
   const dop = (value: number) => formatMoneyMillions(value, "DOP", currency);
-  const overdue = formatMoney(juneReport.collections.overdueUsd, "USD", currency);
+  const overdue = formatMoney(reportCollections.overdueUsd, "USD", currency);
 
   return (
     <div className="direction-report-overlay" role="dialog" aria-modal="true" aria-labelledby="direction-report-title">
@@ -5196,9 +5254,10 @@ function DirectionReport({
             <p>{period.label}</p>
           </div>
           <div className="report-meta">
-            <span><b>Corte documental</b>{juneReport.cutoff}</span>
+            <span><b>Corte documental</b>{reportSourceCutoff}</span>
             <span><b>Generado</b>{generatedAt}</span>
             <span><b>Moneda visual</b>{currency}</span>
+            {period.liveRevision !== undefined && <span><b>Revisión viva</b>{period.liveRevision || "base"}</span>}
           </div>
         </header>
 
@@ -5206,8 +5265,8 @@ function DirectionReport({
           <strong>{includesSourceCutoff ? "Periodo cubierto por el cierre validado" : "Periodo sin cierre documental exacto"}</strong>
           <p>
             {includesSourceCutoff
-              ? `Las cifras corresponden al cierre documental de ${juneReport.cutoff}; las cobranzas tienen corte específico al ${juneReport.collections.cutoff}.`
-              : `El periodo seleccionado es ${period.label}, pero el último cierre validado disponible es ${juneReport.cutoff}. Se muestran esos datos como última evidencia disponible, sin interpolaciones.`}
+              ? `Las cifras corresponden al cierre documental de ${reportSourceCutoff}; las cobranzas tienen corte específico al ${reportCollections.cutoff}.`
+              : `El periodo seleccionado es ${period.label}, pero el último cierre validado disponible es ${reportSourceCutoff}. Se muestran esos datos como última evidencia disponible, sin interpolaciones.`}
           </p>
         </section>
 
@@ -5217,12 +5276,12 @@ function DirectionReport({
             <small>Fuente: consolidado de junio 2026</small>
           </div>
           <div className="report-kpi-grid">
-            <article><span>Avance real</span><strong>{number.format(juneReport.physical.actual)}%</strong><small>Ejecución física</small></article>
-            <article><span>Plan KPI</span><strong>{number.format(juneReport.physical.planned)}%</strong><small>Objetivo documentado</small></article>
-            <article className="danger"><span>Desviación</span><strong>{number.format(juneReport.physical.gap)} pp</strong><small>{juneReport.physical.efficiency}% de eficiencia</small></article>
-            <article className="warn"><span>Previsión de plazo</span><strong>+{juneReport.physical.mppDelayDays} días</strong><small>Fin previsto {projectSnapshot.forecastFinish}</small></article>
-            <article><span>Alcance integrado</span><strong>{projectSnapshot.buildingCount} / {projectSnapshot.masterPlanBuildingCount}</strong><small>Edificios en datos / plano</small></article>
-            <article><span>Apartamentos</span><strong>{projectSnapshot.unitCount}</strong><small>26 edificios integrados</small></article>
+            <article><span>Avance real</span><strong>{number.format(reportExecutive?.physicalActual ?? juneReport.physical.actual)}%</strong><small>Ejecución física</small></article>
+            <article><span>Plan KPI</span><strong>{number.format(reportExecutive?.kpiPlan ?? juneReport.physical.planned)}%</strong><small>Objetivo documentado</small></article>
+            <article className="danger"><span>Desviación</span><strong>{number.format(reportExecutive?.deviationPoints ?? juneReport.physical.gap)} pp</strong><small>Brecha documentada al corte</small></article>
+            <article className="warn"><span>Previsión de plazo</span><strong>+{reportExecutive?.forecastDeviationDays ?? juneReport.physical.mppDelayDays} días</strong><small>Fin previsto {reportExecutive?.forecastFinish ?? projectSnapshot.forecastFinish}</small></article>
+            <article><span>Alcance integrado</span><strong>{reportExecutive?.integratedBuildings ?? projectSnapshot.buildingCount} / {projectSnapshot.masterPlanBuildingCount}</strong><small>Edificios en datos / plano</small></article>
+            <article><span>Apartamentos</span><strong>{reportExecutive?.apartments ?? projectSnapshot.unitCount}</strong><small>Vinculados a edificios integrados</small></article>
           </div>
         </section>
 
@@ -5231,7 +5290,7 @@ function DirectionReport({
             <div><span>02 · PLANIFICACIÓN</span><h2>Curva S · plan operativo y ejecución</h2></div>
             <small>Proyección verde · ejecución real roja</small>
           </div>
-          <ProgressChart />
+          <ProgressChart data={reportPlan} />
           <p className="report-footnote">El KPI principal de plan declara 21,24%; la serie mensual de junio marca 23,29%. Ambas referencias se conservan pendientes de conciliación.</p>
         </section>
 
@@ -5244,7 +5303,7 @@ function DirectionReport({
             <div>
               <h3>Disciplinas</h3>
               <div className="report-progress-list">
-                {constructionDisciplines.map((item) => (
+                {reportDisciplines.map((item) => (
                   <div key={item.name}>
                     <span>{item.name}</span>
                     <i><b style={{ width: `${item.progress}%` }} /></i>
@@ -5256,7 +5315,7 @@ function DirectionReport({
             <div>
               <h3>Mayores retrasos de superestructura</h3>
               <div className="report-delay-grid">
-                {structuralDelay.slice(0, 8).map((item) => (
+                {reportStructuralDelay.slice(0, 8).map((item) => (
                   <article key={item.building}><strong>{item.building}</strong><span>{item.days} días</span></article>
                 ))}
               </div>
@@ -5271,17 +5330,17 @@ function DirectionReport({
         <section className="report-section">
           <div className="report-section-heading">
             <div><span>04 · URBANISMO</span><h2>Situación de las obras exteriores</h2></div>
-            <small>Real {number.format(projectSnapshot.urbanismProgress)}% · plan {number.format(projectSnapshot.urbanismPlanned)}%</small>
+            <small>Real {number.format(reportExecutive?.urbanismActual ?? projectSnapshot.urbanismProgress)}% · plan {number.format(reportExecutive?.urbanismPlan ?? projectSnapshot.urbanismPlanned)}%</small>
           </div>
           <div className="report-urban-grid">
-            {urbanismReportAreas.map((item) => (
+            {reportUrbanismAreas.map((item) => (
               <article key={item.name}>
                 <span>{item.name}</span>
                 <strong>{number.format(item.progress)}%</strong>
               </article>
             ))}
           </div>
-          <p className="report-footnote">{delayedUrbanismStarts.length} inicios de urbanismo figuran retrasados en la fuente; el mayor retraso documentado es de {delayedUrbanismStarts[0].days} días.</p>
+          <p className="report-footnote">{reportDelayedUrbanism.length} inicios de urbanismo figuran retrasados en la fuente; el mayor retraso documentado es de {reportDelayedUrbanism[0]?.days ?? 0} días.</p>
         </section>
 
         <section className="report-section">
@@ -5290,12 +5349,18 @@ function DirectionReport({
             <small>Moneda de visualización: {currency}</small>
           </div>
           <div className="report-kpi-grid compact">
-            <article><span>Ventas activas</span><strong>{juneReport.sales.active}</strong><small>{juneReport.sales.juneReservations} reservas en junio</small></article>
-            <article className="warn"><span>Cartera vencida</span><strong>{overdue}</strong><small>{juneReport.collections.overdue} clientes</small></article>
-            <article><span>Presupuesto</span><strong>{dop(juneReport.finance.budgetDop)}</strong><small>Fuente original DOP</small></article>
-            <article><span>Ejecutado acumulado</span><strong>{dop(juneReport.finance.executedDop)}</strong><small>{number.format((juneReport.finance.executedDop / juneReport.finance.budgetDop) * 100)}% del presupuesto</small></article>
-            <article className="warn"><span>Cuentas por pagar</span><strong>{dop(juneReport.finance.cxpDop)}</strong><small>Control consolidado</small></article>
-            <article className="danger"><span>Caja proyectada a diciembre</span><strong>{dop(juneReport.finance.projectedCashDecemberDop)}</strong><small>Escenario de flujo</small></article>
+            <article><span>Ventas activas</span><strong>{reportSales.active}</strong><small>{reportSales.juneReservations} reservas en junio</small></article>
+            <article className="warn"><span>Cartera vencida</span><strong>{overdue}</strong><small>{reportCollections.overdue} clientes</small></article>
+            {reportFinance ? (
+              <>
+                <article><span>Presupuesto</span><strong>{dop(reportFinance.budgetDop)}</strong><small>Fuente original DOP</small></article>
+                <article><span>Ejecutado acumulado</span><strong>{dop(reportFinance.executedDop)}</strong><small>{number.format((reportFinance.executedDop / reportFinance.budgetDop) * 100)}% del presupuesto</small></article>
+                <article className="warn"><span>Cuentas por pagar</span><strong>{dop(reportFinance.cxpDop)}</strong><small>Control consolidado</small></article>
+                <article className="danger"><span>Caja proyectada a diciembre</span><strong>{dop(reportFinance.projectedCashDecemberDop)}</strong><small>Escenario de flujo</small></article>
+              </>
+            ) : (
+              <article><span>Finanzas</span><strong>Restringido</strong><small>La instantánea no incluye datos financieros.</small></article>
+            )}
           </div>
           <p className="report-footnote">{exchangeRateNote(currency)}. Los importes conservan su moneda de origen y solo cambia la presentación.</p>
         </section>
@@ -5303,10 +5368,10 @@ function DirectionReport({
         <section className="report-section">
           <div className="report-section-heading">
             <div><span>06 · SEGURIDAD Y PERMISOS</span><h2>Control transversal</h2></div>
-            <small>{approvedPermits} aprobados · {permits.length - approvedPermits} en proceso</small>
+            <small>{approvedPermits} aprobados · {reportPermits.length - approvedPermits} en proceso</small>
           </div>
           <div className="report-safety-grid">
-            {safetyMetrics.map((item) => (
+            {reportSafetyMetrics.map((item) => (
               <article key={item.label}><span>{item.label}</span><strong>{item.value}</strong><small>{item.detail}</small></article>
             ))}
           </div>
@@ -5315,10 +5380,10 @@ function DirectionReport({
         <section className="report-section report-actions-section">
           <div className="report-section-heading">
             <div><span>07 · DECISIONES DE DIRECCIÓN</span><h2>Acciones prioritarias y calidad de datos</h2></div>
-            <small>{juneDataQualityIssues.length} conciliaciones abiertas</small>
+            <small>{archived?.reconciliationSummary.total ?? juneDataQualityIssues.length} conciliaciones abiertas</small>
           </div>
           <ol className="report-actions-list">
-            {managementActions.map((action, index) => <li key={action}><b>{String(index + 1).padStart(2, "0")}</b><span>{action}</span></li>)}
+            {reportManagementActions.map((action, index) => <li key={action}><b>{String(index + 1).padStart(2, "0")}</b><span>{action}</span></li>)}
           </ol>
           <div className="report-quality-alert">
             <strong>Control de calidad documental</strong>
@@ -5328,7 +5393,7 @@ function DirectionReport({
 
         <footer className="direction-report-footer">
           <span>ARAYA Punta Cana · Centro de Control Grupo Bricket</span>
-          <span>{reportKind} · {period.label} · corte fuente {juneReport.cutoff}</span>
+          <span>{reportKind} · {period.label} · corte fuente {reportSourceCutoff}</span>
         </footer>
       </article>
     </div>
@@ -5874,15 +5939,53 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     refreshedAt: "",
     latestEvent: null,
   });
+  const [controlRoom, setControlRoom] = useState<ControlRoomSnapshot | null>(null);
+  const [controlRoomLoading, setControlRoomLoading] = useState(true);
+  const [controlRoomError, setControlRoomError] = useState("");
   const activeProject = projects[activeProjectId];
   const availableNavItems = navItems.filter((item) => item.id !== "usuarios" || currentUser.role === "admin");
   const arayaLiveSummary = `${buildings.length} edificios · ${buildings.reduce((total, building) => total + building.units.length, 0)} apartamentos`;
+
+  const refreshControlRoom = useCallback(async () => {
+    try {
+      const response = await fetch("/api/control-room", { cache: "no-store" });
+      const payload = (await response.json()) as ControlRoomSnapshot & { error?: string };
+      if (!response.ok) throw new Error(payload.error || "Sala operativa no disponible.");
+      setControlRoom(payload);
+      setControlRoomError("");
+    } catch (refreshError) {
+      setControlRoomError(
+        refreshError instanceof Error ? refreshError.message : "Sala operativa no disponible.",
+      );
+    } finally {
+      setControlRoomLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!window.matchMedia("(max-width: 760px)").matches) return;
     const timer = window.setTimeout(() => setAgentOpen(false), 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      if (!active) return;
+      await refreshControlRoom();
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 5_000);
+    const handleUpdate = () => void refresh();
+    window.addEventListener("araya-control-room-updated", handleUpdate);
+    window.addEventListener("araya-files-updated", handleUpdate);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("araya-control-room-updated", handleUpdate);
+      window.removeEventListener("araya-files-updated", handleUpdate);
+    };
+  }, [refreshControlRoom]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -6041,6 +6144,38 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     setInstallPrompt(null);
   }
 
+  async function generateDirectionReport(period: DirectionReportPeriod) {
+    const response = await fetch("/api/control-room", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        operation: "create_report",
+        requestKey: crypto.randomUUID(),
+        frequency: period.frequency,
+        startDate: period.startDate,
+        endDate: period.endDate,
+        label: period.label,
+        currency,
+      }),
+    });
+    const payload = (await response.json()) as {
+      error?: string;
+      report?: ControlRoomSnapshot["reports"][number];
+    };
+    if (!response.ok || !payload.report) {
+      throw new Error(payload.error || "No se pudo archivar el informe.");
+    }
+    setReportBuilderOpen(false);
+    setDirectionReport({
+      ...period,
+      archivedReportId: payload.report.id,
+      liveRevision: payload.report.liveRevision,
+      sourceCutoff: payload.report.cutoff,
+      archivedSnapshot: payload.report.snapshot,
+    });
+    window.dispatchEvent(new CustomEvent("araya-control-room-updated"));
+  }
+
   function content() {
     if (view === "usuarios" && currentUser.role === "admin") {
       return (
@@ -6053,7 +6188,33 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       );
     }
     if (activeProjectId === "mirador") return <DemoProjectContent view={view} onNavigate={setView} />;
-    if (view === "resumen") return <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} currency={currency} canAccessFinance={currentUser.financeAccess} currentUser={profileUser} />;
+    if (view === "resumen") {
+      return (
+        <div className="view-stack">
+          <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} currency={currency} canAccessFinance={currentUser.financeAccess} currentUser={profileUser} />
+          <ControlRoomPanel
+            snapshot={controlRoom}
+            loading={controlRoomLoading}
+            error={controlRoomError}
+            currentView={view}
+            onNavigate={(nextView) => navigate(nextView as View)}
+            onCreateReport={() => setReportBuilderOpen(true)}
+            onOpenReport={(report) => setDirectionReport({
+              frequency: report.frequency === "weekly" ? "weekly" : "monthly",
+              startDate: report.startDate,
+              endDate: report.endDate,
+              label: report.label,
+              generatedAt: report.createdAt,
+              archivedReportId: report.id,
+              liveRevision: report.liveRevision,
+              sourceCutoff: report.cutoff,
+              archivedSnapshot: report.snapshot,
+            })}
+            onRefresh={() => void refreshControlRoom()}
+          />
+        </div>
+      );
+    }
     if (view === "planificacion") return <Planning />;
     if (view === "implantacion") return <div className="view-stack"><SitePlan onNavigate={setView} onSelectBuilding={setSelectedBuilding} /></div>;
     if (view === "edificios") return <BuildingsView selected={selectedBuilding} setSelected={setSelectedBuilding} />;
@@ -6385,10 +6546,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       {activeProjectId === "araya" && reportBuilderOpen && (
         <ReportBuilder
           onClose={() => setReportBuilderOpen(false)}
-          onGenerate={(period) => {
-            setReportBuilderOpen(false);
-            setDirectionReport(period);
-          }}
+          onGenerate={generateDirectionReport}
         />
       )}
 

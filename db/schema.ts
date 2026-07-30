@@ -260,3 +260,77 @@ export const accessAudit = sqliteTable(
   ],
 );
 
+export const controlActions = sqliteTable(
+  "control_actions",
+  {
+    id: text("id").primaryKey(),
+    title: text("title").notNull(),
+    description: text("description").notNull().default(""),
+    area: text("area").notNull().default("direccion"),
+    relatedView: text("related_view").notNull().default("resumen"),
+    severity: text("severity").notNull().default("medium"),
+    status: text("status").notNull().default("open"),
+    assigneeEmail: text("assignee_email").notNull().default(""),
+    assigneeName: text("assignee_name").notNull().default(""),
+    dueDate: text("due_date").notNull().default(""),
+    sourceFileId: text("source_file_id").notNull().default(""),
+    requestKey: text("request_key").notNull(),
+    createdByEmail: text("created_by_email").notNull(),
+    createdByName: text("created_by_name").notNull(),
+    completedAt: text("completed_at").notNull().default(""),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("control_actions_request_key_idx").on(table.requestKey),
+    index("control_actions_area_idx").on(table.area),
+    index("control_actions_status_idx").on(table.status),
+    index("control_actions_assignee_email_idx").on(table.assigneeEmail),
+    index("control_actions_due_date_idx").on(table.dueDate),
+  ],
+);
+
+export const controlActionActivity = sqliteTable(
+  "control_action_activity",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    actionId: text("action_id").notNull(),
+    eventType: text("event_type").notNull(),
+    message: text("message").notNull().default(""),
+    requestKey: text("request_key").notNull(),
+    actorEmail: text("actor_email").notNull(),
+    actorName: text("actor_name").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("control_action_activity_request_key_idx").on(table.requestKey),
+    index("control_action_activity_action_id_idx").on(table.actionId),
+    index("control_action_activity_created_at_idx").on(table.createdAt),
+  ],
+);
+
+export const reportSnapshots = sqliteTable(
+  "report_snapshots",
+  {
+    id: text("id").primaryKey(),
+    frequency: text("frequency").notNull(),
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    label: text("label").notNull(),
+    currency: text("currency").notNull().default("USD"),
+    liveRevision: integer("live_revision").notNull().default(0),
+    cutoff: text("cutoff").notNull().default(""),
+    snapshotJson: text("snapshot_json").notNull(),
+    includesFinance: integer("includes_finance", { mode: "boolean" }).notNull().default(false),
+    requestKey: text("request_key").notNull(),
+    createdByEmail: text("created_by_email").notNull(),
+    createdByName: text("created_by_name").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("report_snapshots_request_key_idx").on(table.requestKey),
+    index("report_snapshots_created_at_idx").on(table.createdAt),
+    index("report_snapshots_frequency_idx").on(table.frequency),
+  ],
+);
+

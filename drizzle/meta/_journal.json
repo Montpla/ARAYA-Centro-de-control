@@ -50,6 +50,13 @@
       "when": 1785426461967,
       "tag": "0006_legal_the_liberteens",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1785440051111,
+      "tag": "0007_rapid_black_queen",
+      "breakpoints": true
     }
   ]
 }

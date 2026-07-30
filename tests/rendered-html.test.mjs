@@ -129,10 +129,11 @@ test("agent is source-grounded, guarded and evaluated", async () => {
   assert.match(route, /get_data_quality/);
   assert.match(route, /get_uploaded_files/);
   assert.match(route, /get_live_data_status/);
+  assert.match(route, /get_control_room_status/);
   assert.match(route, /materializeLiveRoot/);
   assert.match(prompt, /No inventes cifras/);
   assert.match(prompt, /Consulta siempre las herramientas/);
-  assert.equal(JSON.parse(evalCases).length, 20);
+  assert.equal(JSON.parse(evalCases).length, 24);
 });
 
 test("June 2026 reports are integrated with traceable downloads and reconciliations", async () => {
@@ -535,6 +536,55 @@ test("point two adds a controlled ingestion queue with human approval and immuta
   assert.match(migration, /CREATE TABLE `document_data_proposals`/);
   assert.match(migration, /CREATE TABLE `file_reviews`/);
   assert.match(prompt, /nunca se publica sin aprobación/);
+});
+
+test("points three to eight add a live operational control room without autonomous approvals", async () => {
+  const [dashboard, panel, route, control, schema, migration, prompt, styles] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/control-room-panel.tsx", "utf8"),
+    readFile("app/api/control-room/route.ts", "utf8"),
+    readFile("lib/control-room.ts", "utf8"),
+    readFile("db/schema.ts", "utf8"),
+    readFile("drizzle/0007_rapid_black_queen.sql", "utf8"),
+    readFile("lib/agent-prompt.ts", "utf8"),
+    readFile("app/globals.css", "utf8"),
+  ]);
+  assert.match(dashboard, /fetch\("\/api\/control-room"/);
+  assert.match(dashboard, /araya-control-room-updated/);
+  assert.match(dashboard, /setInterval\(\(\) => void refresh\(\), 5_000\)/);
+  assert.match(dashboard, /generateDirectionReport/);
+  assert.match(dashboard, /archivedSnapshot/);
+  assert.match(panel, /Calidad y cobertura/);
+  assert.match(panel, /Plano operativo/);
+  assert.match(panel, /Conciliaciones/);
+  assert.match(panel, /Responsable, vencimiento, comentarios e historial/);
+  assert.match(panel, /Abrir plano interactivo/);
+  assert.match(panel, /Revisión \{snapshot\.live\.revision/);
+  assert.match(route, /operation === "create_action"/);
+  assert.match(route, /operation === "update_action"/);
+  assert.match(route, /operation === "comment_action"/);
+  assert.match(route, /operation === "create_report"/);
+  assert.match(route, /requestKey/);
+  assert.match(route, /No tienes acceso para crear acciones financieras/);
+  assert.match(route, /La creación del informe completo requiere acceso financiero/);
+  assert.match(route, /Cache-Control", "private, no-store"/);
+  assert.match(control, /buildControlRoomBaseline/);
+  assert.match(control, /duplicateApartmentCodes/);
+  assert.match(control, /delayedPackages/);
+  assert.match(control, /buildReportSnapshot/);
+  assert.match(control, /Instantánea inmutable/);
+  assert.match(schema, /controlActions/);
+  assert.match(schema, /controlActionActivity/);
+  assert.match(schema, /reportSnapshots/);
+  assert.match(migration, /CREATE TABLE `control_actions`/);
+  assert.match(migration, /CREATE TABLE `control_action_activity`/);
+  assert.match(migration, /CREATE TABLE `report_snapshots`/);
+  assert.doesNotMatch(migration, /ALTER TABLE `uploaded_files`/);
+  assert.match(prompt, /araya-copilot-v8-sala-operativa/);
+  assert.match(prompt, /no crearlas, cerrarlas ni reasignarlas/);
+  assert.match(styles, /\.control-room-shell/);
+  assert.match(styles, /\.control-actions-layout/);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.control-room-heading/);
 });
 
 test("tablet and mobile mode provides app navigation, touch plan, camera upload and safe PWA metadata", async () => {

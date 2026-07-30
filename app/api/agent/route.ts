@@ -1,5 +1,5 @@
 import { desc } from "drizzle-orm";
-import { cubicaciones, projectSnapshot } from "../../demo-data";
+import { cubicaciones, monthlyPlan, projectSnapshot } from "../../demo-data";
 import {
   antonelyAdvances,
   antonelyBalanceLines,
@@ -36,12 +36,19 @@ import {
 } from "../../fiduciary-statements-data";
 import { dataAuthorityMatrix, dataGovernanceSummary } from "../../data-governance";
 import { getDb } from "../../../db";
-import { liveDataEvents, liveDataPoints, uploadedFiles } from "../../../db/schema";
+import {
+  controlActions,
+  liveDataEvents,
+  liveDataPoints,
+  reportSnapshots,
+  uploadedFiles,
+} from "../../../db/schema";
 import { areaLabels, uploadStatusLabels } from "../../../lib/file-routing";
 import { AGENT_PROMPT_VERSION, AGENT_SYSTEM_PROMPT } from "../../../lib/agent-prompt";
 import { requireApiUser } from "../../../lib/access-control";
 import { CurrencyCode, DOP_TO_USD, FX_RATE_CUTOFF, formatMoney, formatMoneyMillions } from "../../../lib/currency";
 import { LiveDataMap, materializeLiveRoot } from "../../../lib/live-data";
+import { buildControlRoomBaseline } from "../../../lib/control-room";
 
 type ToolName =
   | "get_project_summary"
@@ -54,6 +61,7 @@ type ToolName =
   | "get_safety_permits"
   | "get_data_quality"
   | "get_uploaded_files"
+  | "get_control_room_status"
   | "get_live_data_status";
 
 const tools = [
@@ -155,6 +163,13 @@ const tools = [
     parameters: { type: "object", properties: {}, additionalProperties: false },
     strict: true,
   },
+  {
+    type: "function",
+    name: "get_control_room_status",
+    description: "Consulta calidad del expediente, integridad del plano, alertas de planificación, conciliaciones, acciones asignadas e informes archivados.",
+    parameters: { type: "object", properties: {}, additionalProperties: false },
+    strict: true,
+  },
 ];
 
 function numberForAgent(value: number) {
@@ -185,6 +200,7 @@ async function getLiveDataSnapshot() {
 async function executeTool(name: ToolName, args: Record<string, unknown>, canAccessFinance: boolean) {
   const live = await getLiveDataSnapshot();
   const currentProjectSnapshot = materializeLiveRoot("projectSnapshot", projectSnapshot, live.values);
+  const currentMonthlyPlan = materializeLiveRoot("monthlyPlan", monthlyPlan, live.values);
   const currentCubicaciones = materializeLiveRoot("cubicaciones", cubicaciones, live.values);
   const currentJuneReport = materializeLiveRoot("juneReport", juneReport, live.values);
   const currentSalesModels = materializeLiveRoot("salesModels", salesModels, live.values);
@@ -224,6 +240,43 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
         updatedAt: point.updatedAt,
         updatedBy: point.updatedByName,
       })),
+    };
+  }
+  if (name === "get_control_room_status") {
+    const db = getDb();
+    const [actionRows, reportRows] = await Promise.all([
+      db.select().from(controlActions).orderBy(desc(controlActions.updatedAt)).limit(40),
+      db.select().from(reportSnapshots).orderBy(desc(reportSnapshots.createdAt)).limit(20),
+    ]);
+    const visibleActions = canAccessFinance
+      ? actionRows
+      : actionRows.filter((row) => row.area !== "finanzas");
+    const visibleReports = canAccessFinance
+      ? reportRows
+      : reportRows.filter((row) => !row.includesFinance);
+    return {
+      ...buildControlRoomBaseline(
+        canAccessFinance,
+        currentProjectSnapshot,
+        currentMonthlyPlan,
+      ),
+      actions: visibleActions.map((row) => ({
+        title: row.title,
+        area: row.area,
+        severity: row.severity,
+        status: row.status,
+        responsible: row.assigneeName || "Pendiente",
+        dueDate: row.dueDate || "Pendiente",
+      })),
+      reports: visibleReports.map((row) => ({
+        label: row.label,
+        frequency: row.frequency,
+        liveRevision: row.liveRevision,
+        cutoff: row.cutoff,
+        createdBy: row.createdByName,
+        createdAt: row.createdAt,
+      })),
+      rule: "El agente puede consultar y explicar. Las decisiones, aprobaciones y cambios de estado se realizan en las pantallas controladas del dashboard.",
     };
   }
   if (name === "get_project_summary") {
