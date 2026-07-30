@@ -406,11 +406,18 @@ test("S-curve matches the supplied executive reference without changing its data
   assert.match(dashboard, /Ejecutado Real/);
   assert.match(dashboard, /Al corte \(jun-2026\):/);
   assert.match(dashboard, /monthLabel/);
+  assert.match(dashboard, /isExpanded/);
+  assert.match(dashboard, /Ver Curva S a pantalla completa/);
+  assert.match(dashboard, /Cerrar pantalla completa/);
+  assert.match(dashboard, /event\.key === "Escape"/);
+  assert.match(dashboard, /document\.body\.style\.overflow = "hidden"/);
   assert.match(styles, /\.progress-line\.planned\s*\{[^}]*stroke: #28d4ed/s);
   assert.match(styles, /\.progress-line\.actual\s*\{[^}]*stroke: #ddb45b/s);
   assert.match(styles, /\.s-curve-plot\s*\{[^}]*background: #142b48/s);
   assert.match(styles, /\.legend\.plan\s*\{[^}]*background: #28d4ed/s);
   assert.match(styles, /\.legend\.actual\s*\{[^}]*background: #ddb45b/s);
+  assert.match(styles, /\.s-curve\.is-fullscreen\s*\{[^}]*position: fixed/s);
+  assert.match(styles, /\.s-curve-fullscreen-button/);
   assert.match(data, /\{ month: "jun", planned: 23\.29, actual: 18\.23 \}/);
   assert.match(data, /\{ month: "ago", planned: 100, actual: null \}/);
 });

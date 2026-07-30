@@ -801,8 +801,20 @@ button {
   position: relative;
 }
 
+.s-curve {
+  position: relative;
+}
+
 .s-curve-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
   margin: 0 8px 10px;
+}
+
+.s-curve-heading-copy {
+  min-width: 0;
 }
 
 .s-curve-heading h3 {
@@ -818,6 +830,99 @@ button {
   margin: 14px 0 0;
   color: #8a96aa;
   font-size: 12px;
+}
+
+.s-curve-fullscreen-button {
+  min-height: 42px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid #d8d3c8;
+  border-radius: 999px;
+  color: #35342f;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 22px rgba(41, 38, 31, 0.08);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.s-curve-fullscreen-button:hover {
+  color: white;
+  border-color: #142b48;
+  background: #142b48;
+  transform: translateY(-1px);
+}
+
+.s-curve-fullscreen-button:focus-visible {
+  outline: 3px solid rgba(78, 145, 215, 0.34);
+  outline-offset: 3px;
+}
+
+.s-curve-fullscreen-icon {
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.s-curve.is-fullscreen {
+  position: fixed;
+  z-index: 150;
+  inset: 0;
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 16px;
+  margin: 0;
+  padding: max(22px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+    max(22px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  overflow: auto;
+  background: #f7f5f0;
+  box-shadow: 0 0 0 100vmax rgba(13, 16, 24, 0.45);
+}
+
+.s-curve.is-fullscreen .s-curve-heading {
+  align-items: center;
+  margin: 0 8px;
+}
+
+.s-curve.is-fullscreen .s-curve-fullscreen-button {
+  color: white;
+  border-color: #142b48;
+  background: #142b48;
+}
+
+.s-curve.is-fullscreen .s-curve-plot {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.s-curve.is-fullscreen .chart-scroll {
+  min-height: 0;
+  display: flex;
+  flex: 1;
+  align-items: center;
+}
+
+.s-curve.is-fullscreen .line-chart {
+  min-width: 1180px;
+  max-height: calc(100dvh - 245px);
+}
+
+.s-curve.is-fullscreen .s-curve-insight {
+  margin: 0 18px;
 }
 
 .s-curve-plot {
@@ -959,6 +1064,62 @@ button {
 .s-curve-nav {
   display: block;
   margin: 12px 8px 0 auto;
+}
+
+@media (max-width: 760px) {
+  .s-curve-heading {
+    align-items: center;
+  }
+
+  .s-curve-heading h3 {
+    font-size: clamp(23px, 7vw, 31px);
+  }
+
+  .s-curve-fullscreen-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 12px;
+  }
+
+  .s-curve-fullscreen-button > span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .s-curve.is-fullscreen {
+    gap: 10px;
+    padding: calc(12px + env(safe-area-inset-top)) 10px
+      calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .s-curve.is-fullscreen .s-curve-heading {
+    margin: 0 4px;
+  }
+
+  .s-curve.is-fullscreen .s-curve-heading p {
+    margin-top: 5px;
+  }
+
+  .s-curve.is-fullscreen .s-curve-plot {
+    border-radius: 13px;
+  }
+
+  .s-curve.is-fullscreen .line-chart {
+    min-width: 980px;
+    max-height: none;
+  }
+
+  .s-curve.is-fullscreen .s-curve-insight {
+    margin: 0 4px;
+    font-size: 12px;
+  }
 }
 
 .empty-state {

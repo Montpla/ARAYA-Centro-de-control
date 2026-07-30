@@ -1322,6 +1322,7 @@ function StatCard({
 }
 
 function ProgressChart() {
+  const [isExpanded, setIsExpanded] = useState(false);
   const width = 1180;
   const height = 410;
   const plotTop = 22;
@@ -1345,11 +1346,44 @@ function ProgressChart() {
     .filter(Boolean)
     .join(" ");
 
+  useEffect(() => {
+    if (!isExpanded) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsExpanded(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isExpanded]);
+
   return (
-    <div className="s-curve">
+    <div
+      className={`s-curve ${isExpanded ? "is-fullscreen" : ""}`}
+      role={isExpanded ? "dialog" : undefined}
+      aria-modal={isExpanded ? true : undefined}
+      aria-label={isExpanded ? "Curva S a pantalla completa" : undefined}
+    >
       <div className="s-curve-heading">
-        <h3>Curva S — Plan vs. Ejecutado</h3>
-        <p>Avance físico acumulado del proyecto (% del monto total) · jun-2025 a ago-2027</p>
+        <div className="s-curve-heading-copy">
+          <h3>Curva S — Plan vs. Ejecutado</h3>
+          <p>Avance físico acumulado del proyecto (% del monto total) · jun-2025 a ago-2027</p>
+        </div>
+        <button
+          className="s-curve-fullscreen-button"
+          type="button"
+          onClick={() => setIsExpanded((current) => !current)}
+          aria-pressed={isExpanded}
+          aria-label={isExpanded ? "Cerrar pantalla completa" : "Ver Curva S a pantalla completa"}
+        >
+          <span className="s-curve-fullscreen-icon" aria-hidden="true">
+            {isExpanded ? "×" : "⛶"}
+          </span>
+          <span>{isExpanded ? "Cerrar" : "Pantalla completa"}</span>
+        </button>
       </div>
       <div className="s-curve-plot">
         <div className="chart-scroll">
