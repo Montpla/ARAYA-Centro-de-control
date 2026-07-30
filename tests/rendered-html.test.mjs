@@ -512,3 +512,48 @@ test("tablet and mobile mode provides app navigation, touch plan, camera upload 
   assert.doesNotMatch(serviceWorker, /\/api\//);
   assert.doesNotMatch(serviceWorker, /caches\.match\(event\.request\).*fetch\(event\.request\).*navigation/s);
 });
+
+test("July supplier, procurement, budget and IFC sources are audited and connected", async () => {
+  const [dashboard, data, procurement, comparison, duplicate, budget, contacts, deviations, ifcReport, supplierReport] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/demo-data.ts", "utf8"),
+    readFile("app/procurement-data.ts", "utf8"),
+    readFile("public/data-center/julio-2026/cuadro-comparativo-proveedores-2026-07-30.xlsx"),
+    readFile("public/data-center/julio-2026/cuadro-comparativo-proveedores-2026-07-30-copia.xlsx"),
+    readFile("public/data-center/julio-2026/comparativo-presupuesto-edificio-tipo-a.xls"),
+    readFile("public/data-center/julio-2026/contactos-proveedores-araya.xls"),
+    readFile("public/data-center/julio-2026/desviacion-mensual-junio-2026.xlsx"),
+    readFile("public/data-center/julio-2026/informe-analisis-ifc-2026-07-29.pdf"),
+    readFile("public/data-center/julio-2026/informe-analisis-proveedores-2026-07-30.pdf"),
+  ]);
+  assert.match(procurement, /uniqueSuppliers: supplierDirectory\.length/);
+  assert.match(procurement, /sourceRows: supplierContactRows\.length/);
+  assert.match(procurement, /auditedScheduledTotalDop: 202_373_400\.47/);
+  assert.match(procurement, /omittedFromSourceFormulaDop: 4_095_000/);
+  assert.match(procurement, /comparisonCount: 11/);
+  assert.match(procurement, /offerCount: 58/);
+  assert.match(procurement, /workbookSheetCount: 209/);
+  assert.match(procurement, /lineItemCount: 164/);
+  assert.match(procurement, /monthlyDeviationLines: MonthlyDeviationLine\[\]/);
+  assert.match(dashboard, /Directorio operativo verificado/);
+  assert.match(dashboard, /Flujo auditado de proveedores/);
+  assert.match(dashboard, new RegExp("Presupuesto original frente a actualizaci\\u00f3n"));
+  assert.match(dashboard, /Matriz operativa de obligaciones/);
+  for (const sourceId of [
+    "source-supplier-contacts",
+    "source-budget-type-a",
+    "source-ifc-analysis",
+    "source-procurement-comparison",
+    "source-procurement-comparison-duplicate",
+    "source-supplier-analysis",
+    "source-june-deviation",
+  ]) {
+    assert.match(data, new RegExp(sourceId));
+  }
+  assert.deepEqual(comparison, duplicate);
+  assert.ok(budget.length > 5_000_000);
+  assert.ok(contacts.length > 300_000);
+  assert.ok(deviations.length > 40_000);
+  assert.ok(ifcReport.length > 30_000);
+  assert.ok(supplierReport.length > 30_000);
+});

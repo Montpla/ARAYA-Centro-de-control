@@ -50,6 +50,20 @@ import {
   antonelyPayableVendorsAll,
 } from "./antonely-finance-data";
 import {
+  ifcComplianceGroups,
+  juneDeviationSummary,
+  monthlyDeviationLines,
+  procurementAudit,
+  procurementMonthlySchedule,
+  procurementPackages,
+  procurementQualityIssues,
+  supplierComparisons,
+  supplierContactAudit,
+  supplierDirectory,
+  typeABudgetChapters,
+  typeABudgetSummary,
+} from "./procurement-data";
+import {
   CurrencyCode,
   DEFAULT_DISPLAY_CURRENCY,
   exchangeRateNote,
@@ -386,9 +400,9 @@ const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
     kicker: "CONTROL FINANCIERO",
     title: "Finanzas, fideicomiso y conciliaciones",
     description: "Presupuesto, costes, CxP, anticipos, balance y caja se mantienen separados por fuente y moneda.",
-    sourceIds: ["source-june-finance", "source-antonely-june-finance", "source-may-cashflow", "source-june-consolidated"],
+    sourceIds: ["source-june-finance", "source-antonely-june-finance", "source-may-cashflow", "source-june-consolidated", "source-budget-type-a", "source-june-deviation"],
     modules: [
-      { id: "budget-cost", label: "Presupuesto y costes", detail: "Control acumulado, ejecución mensual y cuentas de coste.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
+      { id: "budget-cost", label: "Presupuesto y costes", detail: "Control acumulado, ejecución mensual, 164 partidas tipo A y desviación de junio.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance", "source-budget-type-a", "source-june-deviation"] },
       { id: "payables", label: "Cuentas por pagar", detail: "Categorías, antigüedad, proveedores y facturas.", status: "live", sourceIds: ["source-antonely-june-finance"], targetView: "proveedores" },
       { id: "advances", label: "Anticipos", detail: "26 anticipos y saldos pendientes.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
       { id: "trust-balance", label: "Fideicomiso", detail: "Balance, resultados y conciliación patrimonial.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
@@ -412,10 +426,11 @@ const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
   proveedores: {
     kicker: "CADENA DE SUMINISTRO",
     title: "Proveedores, facturas y entregas",
-    description: "El listado financiero ya abre facturas; la estructura operativa admite contratos, pedidos y entregas futuras.",
-    sourceIds: ["source-antonely-june-finance", "source-june-finance", "source-june-works"],
+    description: "El maestro verificado abre cada proveedor, el listado financiero abre facturas y los comparativos conectan compras, ofertas y calendario.",
+    sourceIds: ["source-supplier-contacts", "source-supplier-analysis", "source-procurement-comparison", "source-procurement-comparison-duplicate", "source-antonely-june-finance", "source-june-finance", "source-june-works"],
     modules: [
-      { id: "vendor-master", label: "Maestro de proveedores", detail: "Datos operativos, contacto, categoría y estado.", status: "partial", sourceIds: ["source-antonely-june-finance"] },
+      { id: "vendor-master", label: "Maestro de proveedores", detail: "67 empresas únicas, contactos, servicios y alertas de calidad.", status: "live", sourceIds: ["source-supplier-contacts", "source-supplier-analysis"] },
+      { id: "procurement-plan", label: "Plan de compras", detail: "14 paquetes, 58 ofertas y flujo mensual auditado.", status: "live", sourceIds: ["source-procurement-comparison", "source-procurement-comparison-duplicate"], targetView: "cronologia" },
       { id: "vendor-invoices", label: "Facturas", detail: "86 facturas consolidadas desde 96 líneas contables.", status: "live", sourceIds: ["source-antonely-june-finance"] },
       { id: "vendor-contracts", label: "Contratos y pedidos", detail: "Estructura preparada para documentos y condiciones.", status: "ready", sourceIds: [], pendingFields: ["Contrato", "Pedido", "Importe", "Plazo", "Documento"] },
       { id: "vendor-deliveries", label: "Entregas", detail: "Estructura preparada para fechas, albaranes y alertas.", status: "ready", sourceIds: [], pendingFields: ["Entrega prevista", "Entrega real", "Albarán", "Incidencia"] },
@@ -426,12 +441,13 @@ const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
     kicker: "CONTROL TRANSVERSAL",
     title: "Seguridad, permisos y gestiones",
     description: "Cada indicador y trámite queda preparado para abrir su evidencia, responsable, fecha y siguiente paso.",
-    sourceIds: ["source-june-works", "source-june-consolidated", "source-june-pdf"],
+    sourceIds: ["source-june-works", "source-june-consolidated", "source-june-pdf", "source-ifc-analysis"],
     modules: [
       { id: "safety", label: "Seguridad y salud", detail: "Indicadores, hallazgos y brechas semanales.", status: "partial", sourceIds: ["source-june-works"], pendingFields: ["Evidencia", "Responsable", "Cierre del hallazgo"] },
       { id: "permits", label: "Permisos", detail: "Matriz de entidades, referencias y estados.", status: "live", sourceIds: ["source-june-consolidated"] },
       { id: "inspections", label: "Inspecciones", detail: "Estructura preparada para actas y no conformidades.", status: "ready", sourceIds: [], pendingFields: ["Acta", "Inspector", "Resultado", "Acción correctiva"] },
       { id: "financing-control", label: "Gestiones financieras", detail: "Procesos y decisiones pendientes de financiación.", status: "partial", sourceIds: ["source-june-consolidated"], targetView: "metricas" },
+      { id: "ifc-compliance", label: "Cumplimiento IFC", detail: "Compromisos, reportes, seguros y puntos de negociación.", status: "partial", sourceIds: ["source-ifc-analysis"], pendingFields: ["Responsable", "Evidencia", "Fecha objetivo", "Estado"] },
     ],
     connections: [{ label: "Planificación", view: "planificacion" }, { label: "Finanzas", view: "metricas" }, { label: "Centro de datos", view: "fuentes" }],
   },
@@ -1165,7 +1181,7 @@ function Header({
 }
 
 function sourceRequiresFinance(source: (typeof dataSources)[number]) {
-  return /financ|balance|flujo|cxp|antonely/i.test(`${source.kind} ${source.file}`);
+  return /financ|balance|flujo|cxp|antonely|presupuesto|desviaci[oó]n|pr[eé]stamo ifc/i.test(`${source.kind} ${source.file}`);
 }
 
 function sourceWorkspaceDetail(source: (typeof dataSources)[number]): WorkspaceDetail {
@@ -2592,7 +2608,7 @@ function UrbanismView() {
 }
 
 function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; canAccessFinance: boolean }) {
-  const [section, setSection] = useState<"seguridad" | "permisos" | "financiacion">("seguridad");
+  const [section, setSection] = useState<"seguridad" | "permisos" | "financiacion" | "cumplimiento">("seguridad");
   const workspace = useContext(WorkspaceDetailContext);
   return (
     <div className="view-stack">
@@ -2604,7 +2620,10 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
         {[
           { id: "seguridad", label: "Seguridad y salud", detail: "0 accidentes" },
           { id: "permisos", label: "Permisos", detail: "8 aprobados · 1 en proceso" },
-          ...(canAccessFinance ? [{ id: "financiacion", label: "Financiación", detail: "6 procesos" }] : []),
+          ...(canAccessFinance ? [
+            { id: "financiacion", label: "Financiación", detail: "6 procesos" },
+            { id: "cumplimiento", label: "Cumplimiento IFC", detail: "4 bloques" },
+          ] : []),
         ].map((item) => (
           <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => setSection(item.id as typeof section)}>
             <span>{item.label}</span><strong>{item.detail}</strong>
@@ -2724,6 +2743,40 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
           </article>
         </section>
       )}
+
+      {canAccessFinance && section === "cumplimiento" && (
+        <section className="financial-detail-stack">
+          <article className="panel ifc-compliance-panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">PRÉSTAMO IFC · ANÁLISIS 29/07/2026</span><h3>Matriz operativa de obligaciones</h3></div>
+              <a className="button secondary" href="/data-center/julio-2026/informe-analisis-ifc-2026-07-29.pdf" target="_blank" rel="noreferrer">Abrir informe</a>
+            </div>
+            <div className="ifc-compliance-grid">
+              {ifcComplianceGroups.map((group) => (
+                <article key={group.title}>
+                  <strong>{group.title}</strong>
+                  <ul>{group.items.map((item) => <li key={item}>{item}</li>)}</ul>
+                </article>
+              ))}
+            </div>
+            <p className="quality-note">Esta matriz resume el informe recibido para facilitar el seguimiento. No sustituye el contrato de préstamo ni el criterio jurídico; cada obligación deberá enlazarse con responsable, evidencia y fecha de cumplimiento.</p>
+          </article>
+          <article className="report-grid">
+            <div className="panel decision-panel">
+              <span className="section-kicker">RIESGO OPERATIVO</span>
+              <h3>Notificación de incidentes</h3>
+              <strong>3 días</strong>
+              <p>Plazo identificado para comunicar incidentes significativos. Debe integrarse con el registro de Seguridad y la cadena de escalado.</p>
+            </div>
+            <div className="panel decision-panel">
+              <span className="section-kicker">SEGUIMIENTO DOCUMENTAL</span>
+              <h3>Reportes y auditoría</h3>
+              <strong>Mensual · anual</strong>
+              <p>Reportes financieros y operativos mensuales, más estados financieros auditados anualmente.</p>
+            </div>
+          </article>
+        </section>
+      )}
     </div>
   );
 }
@@ -2796,6 +2849,7 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
   const [payables, setPayables] = useState<PayablesDataset | null>(null);
   const [payablesError, setPayablesError] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
+  const [directorySearch, setDirectorySearch] = useState("");
   const [selectedVendorName, setSelectedVendorName] = useState("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
 
@@ -2829,6 +2883,16 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
     if (!query) return payables.vendors;
     return payables.vendors.filter((supplier) => supplier.name.toLocaleLowerCase("es").includes(query));
   }, [payables, supplierSearch]);
+  const visibleDirectorySuppliers = useMemo(() => {
+    const query = directorySearch.trim().toLocaleLowerCase("es");
+    if (!query) return supplierDirectory;
+    return supplierDirectory.filter((supplier) => [
+      supplier.name,
+      ...supplier.services,
+      ...supplier.contacts,
+      ...supplier.legalIds,
+    ].some((value) => value.toLocaleLowerCase("es").includes(query)));
+  }, [directorySearch]);
 
   const selectedVendor = payables?.vendors.find((supplier) => supplier.name === selectedVendorName) ?? null;
   const selectedVendorInvoices = useMemo(
@@ -2836,39 +2900,201 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
     [payables, selectedVendorName],
   );
   const selectedInvoice = selectedVendorInvoices.find((invoice) => invoice.id === selectedInvoiceId) ?? null;
-  const biggestVendorName = payables?.vendors[0]?.name ?? antonelyPayableVendorsAll[0].name;
-  const biggestVendorAmount = payables?.vendors[0]?.amountDop ?? antonelyPayableVendorsAll[0].amount;
 
   return (
     <div className="view-stack">
       <section className="stat-grid wide">
-        <StatCard eyebrow="Proveedores operativos" value={`${suppliers.length}`} detail="Registros configurables del dashboard" />
+        <StatCard eyebrow="Directorio validado" value={`${supplierContactAudit.uniqueSuppliers}`} detail={`${supplierContactAudit.sourceRows} registros de origen`} />
         {canAccessFinance ? (
           <>
+            <StatCard eyebrow="Relaciones con crédito" value={`${supplierContactAudit.creditRelationships}`} detail={formatMoneyMillions(supplierContactAudit.creditLimitDop, "DOP", currency)} />
+            <StatCard eyebrow="Plan de compras auditado" value={formatMoneyMillions(procurementAudit.auditedScheduledTotalDop, "DOP", currency)} detail={`${procurementAudit.packageCount} paquetes · 26 edificios`} tone="warn" />
             <StatCard eyebrow="Facturas consolidadas" value={payables ? `${payables.invoiceCount}` : "…"} detail={`${payables?.sourceLineCount ?? 96} líneas contables`} />
-            <StatCard eyebrow="Mayor exposición" value={formatMoneyMillions(biggestVendorAmount, "DOP", currency)} detail={biggestVendorName} tone="warn" />
-            <StatCard eyebrow="CxP departamental" value={formatMoneyMillions(payables?.totalDop ?? antonelyFinanceSource.payablesDetailDop, "DOP", currency)} detail="Pendiente de conciliación" tone="warn" />
           </>
         ) : (
           <>
-            <StatCard eyebrow="En plazo" value={`${suppliers.filter((item) => item.status === "al_dia").length}`} detail="Entregas sin alerta registrada" tone="good" />
-            <StatCard eyebrow="En revisión" value={`${suppliers.filter((item) => item.status === "revision").length}`} detail="Seguimiento operativo" tone="warn" />
-            <StatCard eyebrow="Con retraso" value={`${suppliers.filter((item) => item.status === "retraso").length}`} detail="Requiere gestión de entrega" tone="danger" />
+            <StatCard eyebrow="Comparativos" value={`${procurementAudit.comparisonCount}`} detail={`${procurementAudit.offerCount} ofertas verificadas`} tone="good" />
+            <StatCard eyebrow="Paquetes de compra" value={`${procurementAudit.packageCount}`} detail="Planificados para la fase de 26 edificios" tone="warn" />
+            <StatCard eyebrow="Datos por completar" value={`${supplierContactAudit.missingLegalId + supplierContactAudit.missingEmail}`} detail={`${supplierContactAudit.missingLegalId} RNC · ${supplierContactAudit.missingEmail} correos`} tone="danger" />
           </>
         )}
+      </section>
+      <section className="panel supplier-directory-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="section-kicker">MAESTRO DE PROVEEDORES · 30/07/2026</span>
+            <h3>Directorio operativo verificado</h3>
+          </div>
+          <a className="button secondary" href="/data-center/julio-2026/contactos-proveedores-araya.xls" target="_blank" rel="noreferrer">Abrir archivo fuente</a>
+        </div>
+        <div className="payable-supplier-toolbar">
+          <label>
+            <span>Buscar empresa, servicio, contacto o RNC</span>
+            <input type="search" value={directorySearch} onChange={(event) => setDirectorySearch(event.target.value)} placeholder="Ej. hormigón, DACIA, 1-01…" />
+          </label>
+          <div><strong>{visibleDirectorySuppliers.length}</strong><span>resultados</span></div>
+        </div>
+        <div className="supplier-master-grid">
+          {visibleDirectorySuppliers.map((supplier) => (
+            <button
+              type="button"
+              className="supplier-master-card workspace-data-row"
+              key={supplier.id}
+              onClick={() => workspace.openDetail({
+                id: `directory-${supplier.id}`,
+                kicker: "MAESTRO DE PROVEEDORES",
+                title: supplier.name,
+                summary: supplier.services.join(" · ") || "Servicio pendiente de completar",
+                status: supplier.qualityIssues.length ? "observed" : "live",
+                metrics: [
+                  { label: "Tamaño", value: supplier.size || "Sin dato" },
+                  { label: "RNC", value: supplier.legalIds.join(" · ") || "Sin dato" },
+                  { label: "Contacto", value: supplier.contacts.join(" · ") || "Sin dato" },
+                  { label: "Teléfono", value: supplier.phones.join(" · ") || "Sin dato" },
+                  { label: "Correo / web", value: supplier.emails.join(" · ") || "Sin dato" },
+                  { label: "Relación", value: supplier.relationships.join(" · ") || "Sin negociación" },
+                  ...(canAccessFinance ? [
+                    { label: "Condición de crédito", value: supplier.creditTerms.join(" · ") || "Sin dato" },
+                    { label: "Límite registrado", value: supplier.creditLimitDop ? formatMoney(supplier.creditLimitDop, "DOP", currency) : "Sin límite informado" },
+                  ] : []),
+                ],
+                sourceIds: ["source-supplier-contacts", "source-supplier-analysis"],
+                pendingFields: supplier.qualityIssues.length ? supplier.qualityIssues : undefined,
+                actions: [{ label: "Abrir Centro de datos", view: "fuentes" }],
+              })}
+            >
+              <span className="supplier-logo">{supplier.name.slice(0, 2).toUpperCase()}</span>
+              <span className="supplier-master-copy">
+                <strong>{supplier.name}</strong>
+                <small>{supplier.services.join(" · ") || "Servicio sin detallar"}</small>
+                <em>{supplier.contacts[0] || supplier.phones[0] || "Contacto pendiente"}</em>
+              </span>
+              <span className={supplier.qualityIssues.length ? "source-status observada" : "source-status validada"}>
+                {supplier.qualityIssues.length ? `${supplier.qualityIssues.length} alertas` : "Completo"}
+              </span>
+            </button>
+          ))}
+        </div>
+        <p className="quality-note">Las filas vacías de las plantillas no se contabilizan como proveedores. Los registros repetidos por empresa se consolidan sin perder sus filas de origen.</p>
+      </section>
+
+      <section className="report-grid procurement-overview">
+        <article className="panel">
+          <div className="panel-heading">
+            <div><span className="section-kicker">PLAN DE COMPRAS · 26 EDIFICIOS</span><h3>Paquetes y proveedores previstos</h3></div>
+            <span className="data-note">{procurementAudit.packageCount} paquetes</span>
+          </div>
+          <div className="procurement-package-list">
+            {procurementPackages.map((item) => (
+              <button
+                type="button"
+                key={item.id}
+                className="procurement-package-row workspace-data-row"
+                onClick={() => workspace.openDetail({
+                  id: item.id,
+                  kicker: "PAQUETE DE COMPRA",
+                  title: item.name,
+                  summary: `Proveedor previsto: ${item.supplier}. Alcance: ${item.buildings} edificios.`,
+                  status: item.supplier.startsWith("PROVEEDOR") ? "partial" : "live",
+                  metrics: [
+                    { label: "Proveedor", value: item.supplier },
+                    { label: "Edificios", value: `${item.buildings}` },
+                    ...(canAccessFinance ? [
+                      { label: "Precio por edificio", value: formatMoney(item.unitPricePerBuildingDop, "DOP", currency) },
+                      { label: "Total programado", value: formatMoney(item.scheduledTotalDop, "DOP", currency) },
+                    ] : []),
+                  ],
+                  sourceIds: ["source-procurement-comparison"],
+                  pendingFields: item.supplier.startsWith("PROVEEDOR") ? ["Proveedor adjudicado", "Contrato", "Fecha de entrega"] : ["Contrato", "Pedido", "Albaranes"],
+                  actions: [{ label: "Abrir Cronología", view: "cronologia" }, { label: "Abrir Centro de datos", view: "fuentes" }],
+                })}
+              >
+                <span><strong>{item.name}</strong><small>{item.supplier} · {item.buildings} edificios</small></span>
+                {canAccessFinance && <b>{formatMoney(item.scheduledTotalDop, "DOP", currency)}</b>}
+                <i aria-hidden="true">→</i>
+              </button>
+            ))}
+          </div>
+        </article>
+        <article className="panel">
+          <div className="panel-heading">
+            <div><span className="section-kicker">CALENDARIO DE DESEMBOLSOS</span><h3>Flujo auditado de proveedores</h3></div>
+            {canAccessFinance && <strong>{formatMoneyMillions(procurementAudit.auditedScheduledTotalDop, "DOP", currency)}</strong>}
+          </div>
+          <div className="procurement-month-chart">
+            {procurementMonthlySchedule.map((item) => (
+              <div key={item.month}>
+                <span className="procurement-month-bar"><i style={{ height: `${Math.max(7, (item.amountDop / 42000000) * 100)}%` }} /></span>
+                <strong>{item.month}</strong>
+                {canAccessFinance && <small>{formatMoneyMillions(item.amountDop, "DOP", currency)}</small>}
+              </div>
+            ))}
+          </div>
+          <div className="callout warn">
+            <strong>Corrección auditada del dashboard</strong>
+            <p>El total del archivo omite {canAccessFinance ? formatMoney(procurementAudit.omittedFromSourceFormulaDop, "DOP", currency) : "una partida"} en su fórmula, aunque el calendario mensual sí la incluye. El documento original no se modifica.</p>
+          </div>
+        </article>
+      </section>
+
+      <section className="panel supplier-comparisons-panel">
+        <div className="panel-heading">
+          <div><span className="section-kicker">11 CUADROS COMPARATIVOS</span><h3>Ofertas por especialidad</h3></div>
+          <span className="data-note">{procurementAudit.offerCount} ofertas · pulsa para abrir</span>
+        </div>
+        <div className="supplier-comparison-grid">
+          {supplierComparisons.map((comparison) => {
+            const scoredOffers = comparison.offers.filter((offer) => offer.score !== null);
+            const maxScore = Math.max(...scoredOffers.map((offer) => offer.score ?? 0));
+            const bestScore = scoredOffers.filter((offer) => offer.score === maxScore);
+            return (
+              <button
+                type="button"
+                key={comparison.id}
+                className="supplier-comparison-card workspace-data-row"
+                onClick={() => workspace.openDetail({
+                  id: comparison.id,
+                  kicker: `COMPARATIVO · ${comparison.sheet}`,
+                  title: comparison.title,
+                  summary: `${comparison.offers.length} ofertas verificadas${comparison.date ? ` · ${comparison.date}` : ""}. La mayor puntuación no implica adjudicación automática.`,
+                  status: comparison.observations.length ? "observed" : "live",
+                  metrics: [
+                    { label: "Ofertas", value: `${comparison.offers.length}` },
+                    { label: "Mayor puntuación", value: bestScore.map((offer) => `${offer.supplier} (${offer.score})`).join(" · ") },
+                    ...(canAccessFinance ? [
+                      { label: "Presupuesto de referencia", value: formatMoney(comparison.budgetDop, "DOP", currency) },
+                      ...comparison.offers.map((offer) => ({
+                        label: offer.supplier,
+                        value: offer.totalDop === null ? "Oferta incompleta" : `${formatMoney(offer.totalDop, "DOP", currency)} · ${offer.score ?? "s/p"} ptos.`,
+                      })),
+                    ] : []),
+                  ],
+                  sourceIds: ["source-procurement-comparison", "source-procurement-comparison-duplicate"],
+                  pendingFields: comparison.observations.length ? comparison.observations : ["Adjudicación", "Contrato", "Fecha de entrega"],
+                  actions: [{ label: "Abrir Centro de datos", view: "fuentes" }],
+                })}
+              >
+                <span><small>{comparison.sheet}</small><strong>{comparison.title}</strong></span>
+                <span><b>{comparison.offers.length}</b><small>ofertas</small></span>
+                <em>{bestScore.map((offer) => offer.supplier).join(" / ")}</em>
+              </button>
+            );
+          })}
+        </div>
+        <p className="quality-note">Los ganadores mostrados son los de mayor puntuación de la hoja. La adjudicación definitiva debe confirmarse con contrato o pedido; las observaciones cualitativas se conservan en cada ficha.</p>
       </section>
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <span className="section-kicker">CADENA DE SUMINISTRO</span>
-            <h3>Proveedores incorporados al Centro de Control</h3>
+            <span className="section-kicker">SEGUIMIENTO COLABORATIVO</span>
+            <h3>Entregas y estado operativo editable</h3>
           </div>
           <button className="button primary" onClick={onAdd}>Nuevo proveedor</button>
         </div>
         {suppliers.length === 0 ? (
           <div className="empty-state">
-            <strong>No se han recibido datos de proveedores.</strong>
-            <p>El panel queda preparado para añadir empresas, categorías, contactos, entregas e importes sin inventar registros.</p>
+            <strong>El directorio está cargado; el seguimiento de entregas aún no tiene registros.</strong>
+            <p>Este bloque queda preparado para añadir responsables, pedidos, fechas comprometidas, incidencias y estados sin inventar información.</p>
           </div>
         ) : (
           <div className="supplier-grid">
@@ -3078,7 +3304,7 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
 }
 
 function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; onAdd: () => void; currency: CurrencyCode }) {
-  const [section, setSection] = useState<"flujo" | "cxp" | "anticipos" | "control" | "detalle">("flujo");
+  const [section, setSection] = useState<"flujo" | "presupuesto" | "cxp" | "anticipos" | "control" | "detalle">("flujo");
   const rd = (value: number) => formatMoney(value, "DOP", currency);
   const rdMillions = (value: number) => formatMoneyMillions(value, "DOP", currency);
   const qualityIssues = financialQualityIssues(currency);
@@ -3097,6 +3323,7 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
       <section className="report-tabs finance-tabs">
         {[
           { id: "flujo", label: "Flujo de caja", detail: "Jul–Dic 2026" },
+          { id: "presupuesto", label: "Presupuesto y desviación", detail: "Tipo A · jun-26" },
           { id: "cxp", label: "Cuentas por pagar", detail: rdMillions(juneReport.finance.cxpDop) },
           { id: "anticipos", label: "Anticipos", detail: rdMillions(juneReport.finance.advancesPendingDop) },
           { id: "control", label: "Control y balance", detail: rdMillions(juneReport.finance.assetsDop) },
@@ -3127,6 +3354,76 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
             ))}
           </div>
           <div className="chart-legend"><span><i className="income" />Ingresos</span><span><i className="cost" />Costes</span><span>La cifra bajo cada mes es la caja acumulada.</span></div>
+        </section>
+      )}
+
+      {section === "presupuesto" && (
+        <section className="financial-detail-stack budget-audit-stack">
+          <article className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">EDIFICIO TIPO A · 209 HOJAS VERIFICADAS</span><h3>Presupuesto original frente a actualización</h3></div>
+              <a className="button secondary" href="/data-center/julio-2026/comparativo-presupuesto-edificio-tipo-a.xls" target="_blank" rel="noreferrer">Abrir presupuesto</a>
+            </div>
+            <div className="budget-summary-grid">
+              <span><small>Original por edificio</small><strong>{rd(typeABudgetSummary.originalPerBuildingDop)}</strong></span>
+              <span><small>Actualizado por edificio</small><strong>{rd(typeABudgetSummary.updatedPerBuildingDop)}</strong></span>
+              <span><small>Diferencia por edificio</small><strong className="danger-text">+{rd(typeABudgetSummary.differencePerBuildingDop)}</strong></span>
+              <span><small>Desviación</small><strong className="danger-text">+{number.format(typeABudgetSummary.deviationPerBuilding * 100)}%</strong></span>
+              <span><small>Actualizado · 77 edificios</small><strong>{rd(typeABudgetSummary.updated77BuildingsDop)}</strong></span>
+              <span><small>Variación · 77 edificios</small><strong className="danger-text">+{rd(typeABudgetSummary.difference77BuildingsDop)}</strong></span>
+            </div>
+            <div className="financial-detail-scroll">
+              <div className="financial-detail-table budget-chapter-table">
+                <div className="financial-detail-row head"><span>Capítulo</span><span>Original</span><span>Actualizado</span><span>Diferencia</span><span>Variación</span></div>
+                {typeABudgetChapters.map((item) => (
+                  <div className="financial-detail-row" key={item.name}>
+                    <strong>{item.name}</strong>
+                    <span>{rd(item.originalDop)}</span>
+                    <span>{rd(item.updatedDop)}</span>
+                    <span className={item.differenceDop > 0 ? "danger-text" : item.differenceDop < 0 ? "good-text" : ""}>{rd(item.differenceDop)}</span>
+                    <b className={item.deviation > 0 ? "danger-text" : item.deviation < 0 ? "good-text" : ""}>{number.format(item.deviation * 100)}%</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p className="quality-note">Las 164 partidas y sus análisis de precio unitario permanecen en el archivo original. Las fichas con sufijos (2) y (3) no se descartan: algunas son revisiones históricas con valores diferentes.</p>
+          </article>
+
+          <article className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">DESVIACIÓN MENSUAL · JUNIO 2026</span><h3>Impacto por partida y alcance real</h3></div>
+              <a className="button secondary" href="/data-center/julio-2026/desviacion-mensual-junio-2026.xlsx" target="_blank" rel="noreferrer">Abrir desviaciones</a>
+            </div>
+            <div className="budget-summary-grid compact">
+              <span><small>Actualizado por edificio</small><strong>{rd(juneDeviationSummary.updatedPerBuildingDop)}</strong></span>
+              <span><small>Variación por edificio</small><strong className="danger-text">+{rd(juneDeviationSummary.differencePerBuildingDop)}</strong></span>
+              <span><small>Variación porcentual</small><strong className="danger-text">+{number.format(juneDeviationSummary.deviationPerBuilding * 100)}%</strong></span>
+              <span><small>Impacto ponderado proyecto</small><strong className="good-text">{rd(juneDeviationSummary.weightedProjectImpactDop)}</strong></span>
+            </div>
+            <div className="financial-detail-scroll">
+              <div className="financial-detail-table deviation-detail-table">
+                <div className="financial-detail-row head"><span>Partida</span><span>Actualizado</span><span>Variación</span><span>Aplicación</span><span>Impacto proyecto</span><span>Lectura</span></div>
+                {monthlyDeviationLines.map((item) => (
+                  <div className="financial-detail-row" key={item.name}>
+                    <strong>{item.name}</strong>
+                    <span>{rd(item.updatedDop)}</span>
+                    <b className={item.deviation > 0 ? "danger-text" : item.deviation < 0 ? "good-text" : ""}>{number.format(item.deviation * 100)}%</b>
+                    <span>{item.buildingCount ? `${item.buildingCount} edificios` : "Sin aplicación indicada"}</span>
+                    <span className={item.projectImpactDop > 0 ? "danger-text" : item.projectImpactDop < 0 ? "good-text" : ""}>{rd(item.projectImpactDop)}</span>
+                    <small>{item.observation}</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="callout warn"><strong>Notas finales desactualizadas en origen</strong><p>El comentario del Excel habla de +0,7% y RD$138.178; sus fórmulas vigentes calculan +0,30% y {rd(juneDeviationSummary.differencePerBuildingDop)}. El dashboard usa los valores calculados y conserva el documento sin cambios.</p></div>
+          </article>
+
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">CONTROL DE CALIDAD</span><h3>Incidencias detectadas en las nuevas fuentes</h3></div><span className="count-badge">{procurementQualityIssues.length}</span></div>
+            <div className="quality-grid">
+              {procurementQualityIssues.map((issue) => <article key={issue.title}><strong>{issue.title}</strong><p>{issue.detail}</p></article>)}
+            </div>
+          </article>
         </section>
       )}
 

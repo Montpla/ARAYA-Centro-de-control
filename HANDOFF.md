@@ -543,6 +543,61 @@ Conciliaciones que deben seguir visibles:
 10. Anticipos: balance DOP 9.210.448,94 frente a detalle DOP 9.210.448,86;
     diferencia DOP 0,08.
 
+## Integración documental del 30/07/2026
+
+Se recibieron siete archivos y se revisaron completos:
+
+- 229 hojas únicas de cálculo; 241 si se cuenta la copia idéntica recibida.
+- Cuatro páginas PDF.
+- Los dos archivos `CUADRO COMPARATIVO-PROVEEDORES 30-07-2026` son copias
+  binarias idénticas. Se conservan ambos, pero solo uno alimenta los datos.
+- Los originales están en `public/data-center/julio-2026/`.
+
+Nuevos módulos:
+
+- `Proveedores`: maestro consolidado de 67 empresas a partir de 71 registros,
+  búsqueda por empresa, servicio, contacto o RNC, ficha individual, alertas de
+  calidad, 14 paquetes de compra, calendario de desembolsos y 11 comparativos
+  con 58 ofertas.
+- `Finanzas > Presupuesto y desviación`: presupuesto del edificio tipo A con
+  209 hojas, 164 partidas y 15 capítulos; además, desviación mensual de junio
+  por 24 partidas e impacto ponderado.
+- `Seguridad y permisos > Cumplimiento IFC`: compromisos afirmativos y
+  negativos, reportes, seguros y puntos de negociación. Solo aparece con
+  permiso financiero.
+- `Centro de datos`: siete nuevas entradas con descarga, corte, alcance,
+  observaciones y trazabilidad.
+
+Datos auditados:
+
+- Directorio: 67 proveedores únicos; 16 relaciones con crédito; límites
+  declarados por DOP 41.650.000. Hay 37 filas sin RNC, 13 sin correo y un RNC
+  compartido por dos empresas.
+- Flujo de proveedores: la fórmula de total del archivo declara
+  DOP 198.278.400,47, pero omite una partida de DOP 4.095.000. El calendario
+  mensual sí la incluye y suma DOP 202.373.400,47; este último es el total
+  auditado del dashboard.
+- Presupuesto tipo A: original DOP 19.903.102,52 y actualizado
+  DOP 20.065.326,06 por edificio; diferencia DOP 162.223,54 (+0,815%).
+  Para 77 edificios, diferencia DOP 12.491.212,64.
+- Desviación mensual de junio: las fórmulas vigentes calculan
+  DOP 60.450,62 por edificio (+0,304%) y un ahorro ponderado del proyecto de
+  DOP 1.613.789,94. Las notas narrativas finales del Excel están
+  desactualizadas y no se usan como KPI.
+- El archivo de comparativos contiene cuatro valores de prueba y seis fechas
+  con año incoherente. Se excluyen de los totales y quedan señalados.
+- El resumen IFC es una matriz operativa auxiliar; no sustituye el contrato
+  original ni el criterio jurídico.
+
+Implementación:
+
+- Datos normalizados en `app/procurement-data.ts`.
+- Pruebas: `npm run lint` sin errores y `npm test` con 24/24 aprobadas.
+- La comprobación local mediante navegador fue bloqueada por la política del
+  navegador para direcciones locales; la compilación y las pruebas de
+  presentación sí quedaron verificadas. Revisar visualmente la URL publicada
+  después de cada despliegue.
+
 ## Criterios de continuidad
 
 - Mostrar únicamente datos aportados o derivados de las fuentes.
