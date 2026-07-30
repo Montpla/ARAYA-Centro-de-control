@@ -226,6 +226,41 @@ test("dashboard requires verified membership and provides administrator-managed 
   assert.match(migration, /CREATE TABLE `access_audit`/);
 });
 
+test("user initials can be replaced by protected persistent profile photos", async () => {
+  const [dashboard, styles, avatarRoute, adminRoute, access, schema, migration] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/globals.css", "utf8"),
+    readFile("app/api/profile/avatar/route.ts", "utf8"),
+    readFile("app/api/admin/users/route.ts", "utf8"),
+    readFile("lib/access-control.ts", "utf8"),
+    readFile("db/schema.ts", "utf8"),
+    readFile("drizzle/0006_legal_the_liberteens.sql", "utf8"),
+  ]);
+  assert.match(dashboard, /function UserAvatar/);
+  assert.match(dashboard, /Cambiar fotograf/);
+  assert.match(dashboard, /accept="image\/jpeg,image\/png,image\/webp,image\/avif"/);
+  assert.match(dashboard, /userInitials\(user\.displayName\)/);
+  assert.match(dashboard, /onCurrentAvatarUpdated/);
+  assert.match(dashboard, /className="mobile-user-avatar"/);
+  assert.match(styles, /\.user-avatar-control/);
+  assert.match(styles, /\.avatar-edit-mark/);
+  assert.match(styles, /\.avatar-button img\s*\{[^}]*object-fit: cover/s);
+  assert.match(avatarRoute, /requireApiUser\(\)/);
+  assert.match(avatarRoute, /targetUserId !== auth\.user\.id && auth\.user\.role !== "admin"/);
+  assert.match(avatarRoute, /MAX_AVATAR_SIZE = 5 \* 1024 \* 1024/);
+  assert.match(avatarRoute, /image\/jpeg/);
+  assert.doesNotMatch(avatarRoute, /image\/svg/);
+  assert.match(avatarRoute, /foto_perfil_actualizada/);
+  assert.match(avatarRoute, /bucket\.put/);
+  assert.match(schema, /avatarStorageKey/);
+  assert.match(schema, /avatarUpdatedAt/);
+  assert.match(access, /avatarUrl:/);
+  assert.match(adminRoute, /avatarUrl:/);
+  assert.match(migration, /ADD `avatar_storage_key`/);
+  assert.match(migration, /ADD `avatar_mime_type`/);
+  assert.match(migration, /ADD `avatar_updated_at`/);
+});
+
 test("spatial views derive live colors and accept new mapped buildings and urbanism areas", async () => {
   const [dashboard, data] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),

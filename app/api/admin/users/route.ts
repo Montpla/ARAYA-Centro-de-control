@@ -19,6 +19,9 @@ function publicRow(row: typeof appUsers.$inferSelect) {
     area: isUserArea(row.area) ? row.area : "direccion",
     financeAccess: row.role === "admin" || row.financeAccess,
     active: row.active,
+    avatarUrl: row.avatarStorageKey
+      ? `/api/profile/avatar?user=${row.id}&v=${encodeURIComponent(row.avatarUpdatedAt)}`
+      : "",
     lastLoginAt: row.lastLoginAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

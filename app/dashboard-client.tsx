@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, createContext, useContext, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Building,
   CustomMetric,
@@ -90,6 +90,7 @@ type DashboardUser = {
   area: UserArea;
   financeAccess: boolean;
   active: boolean;
+  avatarUrl: string;
 };
 
 type ManagedUser = DashboardUser & {
@@ -960,11 +961,117 @@ function ProgressRing({ value }: { value: number }) {
   );
 }
 
+function userInitials(displayName: string) {
+  return displayName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase() || "BR";
+}
+
+function UserAvatar({
+  user,
+  editable = false,
+  onUploaded,
+  onStatus,
+  className = "",
+}: {
+  user: Pick<DashboardUser, "id" | "displayName" | "avatarUrl">;
+  editable?: boolean;
+  onUploaded?: (avatarUrl: string) => void;
+  onStatus?: (message: string) => void;
+  className?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploadedAvatarUrl, setUploadedAvatarUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const avatarUrl = uploadedAvatarUrl || user.avatarUrl;
+
+  useEffect(() => {
+    if (!feedback) return;
+    const timer = window.setTimeout(() => setFeedback(""), 3500);
+    return () => window.clearTimeout(timer);
+  }, [feedback]);
+
+  async function uploadAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setFeedback("");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("targetUserId", String(user.id));
+      const response = await fetch("/api/profile/avatar", {
+        method: "POST",
+        body: formData,
+      });
+      const payload = await response.json() as {
+        avatarUrl?: string;
+        message?: string;
+        error?: string;
+      };
+      if (!response.ok || !payload.avatarUrl) {
+        throw new Error(payload.error ?? "No se pudo actualizar la fotografía.");
+      }
+      setUploadedAvatarUrl(payload.avatarUrl);
+      setFeedback("Foto actualizada");
+      onUploaded?.(payload.avatarUrl);
+      onStatus?.(payload.message ?? "Fotografía actualizada.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "No se pudo actualizar la fotografía.";
+      setFeedback(message);
+      onStatus?.(message);
+    } finally {
+      event.target.value = "";
+      setUploading(false);
+    }
+  }
+
+  return (
+    <span className={`user-avatar-control ${editable ? "editable" : ""} ${className}`.trim()}>
+      <button
+        className="avatar-button"
+        type="button"
+        disabled={!editable || uploading}
+        onClick={() => inputRef.current?.click()}
+        aria-label={editable ? `Cambiar fotografía de ${user.displayName}` : `Fotografía de ${user.displayName}`}
+        title={editable ? "Cambiar fotografía" : user.displayName}
+      >
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" />
+        ) : (
+          <span className="avatar-initials">{userInitials(user.displayName)}</span>
+        )}
+        {editable && (
+          <i className="avatar-edit-mark" aria-hidden="true">
+            {uploading ? "…" : "+"}
+          </i>
+        )}
+      </button>
+      {editable && (
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/avif"
+          onChange={(event) => void uploadAvatar(event)}
+          hidden
+        />
+      )}
+      {feedback && <small className="avatar-feedback" role="status">{feedback}</small>}
+    </span>
+  );
+}
+
 function Header({
   view,
   onAsk,
   onUpload,
   onReport,
+  onAvatarUpdated,
   project,
   currency,
   onCurrencyChange,
@@ -976,6 +1083,7 @@ function Header({
   onAsk: () => void;
   onUpload: () => void;
   onReport: () => void;
+  onAvatarUpdated: (avatarUrl: string) => void;
   project: (typeof projects)[ProjectId];
   currency: CurrencyCode;
   onCurrencyChange: (currency: CurrencyCode) => void;
@@ -1039,13 +1147,17 @@ function Header({
           + Cargar archivo
         </button>
         <div className="account-control">
-          <div>
+          <div className="account-copy">
             <strong>{currentUser.displayName}</strong>
             <span>{currentUser.role === "admin" ? "Administrador" : "Usuario autorizado"} · {areaLabels[currentUser.area]}</span>
+            <a href="/signout-with-chatgpt?return_to=/">Cerrar sesión</a>
           </div>
-          <a className="avatar" aria-label="Cerrar sesión" title="Cerrar sesión" href="/signout-with-chatgpt?return_to=/">
-            {currentUser.displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "BR"}
-          </a>
+          <UserAvatar
+            user={currentUser}
+            editable
+            className="header-user-avatar"
+            onUploaded={onAvatarUpdated}
+          />
         </div>
       </div>
     </header>
@@ -3256,7 +3368,13 @@ async function fetchManagedUsers() {
   return payload.users ?? [];
 }
 
-function UsersAdminView({ currentUser }: { currentUser: DashboardUser }) {
+function UsersAdminView({
+  currentUser,
+  onCurrentAvatarUpdated,
+}: {
+  currentUser: DashboardUser;
+  onCurrentAvatarUpdated: (avatarUrl: string) => void;
+}) {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState("");
@@ -3344,7 +3462,8 @@ function UsersAdminView({ currentUser }: { currentUser: DashboardUser }) {
         </div>
         <p>
           Cada persona inicia sesión con su cuenta de ChatGPT. Bricket no almacena
-          contraseñas; aquí se autoriza el correo y se decide si puede abrir Finanzas.
+          contraseñas; aquí se autoriza el correo, se personaliza su fotografía y se
+          decide si puede abrir Finanzas.
         </p>
       </section>
 
@@ -3400,7 +3519,17 @@ function UsersAdminView({ currentUser }: { currentUser: DashboardUser }) {
               return (
                 <article key={user.email} className={!user.active ? "disabled" : ""}>
                   <div className="user-identity">
-                    <span>{user.displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</span>
+                    <UserAvatar
+                      user={user}
+                      editable
+                      onStatus={setMessage}
+                      onUploaded={(avatarUrl) => {
+                        setUsers((current) => current.map((item) =>
+                          item.id === user.id ? { ...item, avatarUrl } : item
+                        ));
+                        if (isSelf) onCurrentAvatarUpdated(avatarUrl);
+                      }}
+                    />
                     <div><strong>{user.displayName}</strong><small>{user.email}</small></div>
                   </div>
                   <label>Perfil
@@ -4693,6 +4822,7 @@ function DemoProjectContent({ view, onNavigate }: { view: View; onNavigate: (vie
 }
 
 export function DashboardClient({ currentUser }: { currentUser: DashboardUser }) {
+  const [profileUser, setProfileUser] = useState(currentUser);
   const [activeProjectId, setActiveProjectId] = useState<ProjectId>("araya");
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [view, setView] = useState<View>("resumen");
@@ -4884,9 +5014,18 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   }
 
   function content() {
-    if (view === "usuarios" && currentUser.role === "admin") return <UsersAdminView currentUser={currentUser} />;
+    if (view === "usuarios" && currentUser.role === "admin") {
+      return (
+        <UsersAdminView
+          currentUser={profileUser}
+          onCurrentAvatarUpdated={(avatarUrl) =>
+            setProfileUser((current) => ({ ...current, avatarUrl }))
+          }
+        />
+      );
+    }
     if (activeProjectId === "mirador") return <DemoProjectContent view={view} onNavigate={setView} />;
-    if (view === "resumen") return <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} currency={currency} canAccessFinance={currentUser.financeAccess} currentUser={currentUser} />;
+    if (view === "resumen") return <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} currency={currency} canAccessFinance={currentUser.financeAccess} currentUser={profileUser} />;
     if (view === "planificacion") return <Planning />;
     if (view === "implantacion") return <div className="view-stack"><SitePlan onNavigate={setView} onSelectBuilding={setSelectedBuilding} /></div>;
     if (view === "edificios") return <BuildingsView selected={selectedBuilding} setSelected={setSelectedBuilding} />;
@@ -5029,10 +5168,13 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
           onAsk={() => setAgentOpen(true)}
           onUpload={() => setUploadOpen(true)}
           onReport={() => setReportBuilderOpen(true)}
+          onAvatarUpdated={(avatarUrl) =>
+            setProfileUser((current) => ({ ...current, avatarUrl }))
+          }
           currency={currency}
           onCurrencyChange={setCurrency}
           liveSync={liveSync}
-          currentUser={currentUser}
+          currentUser={profileUser}
           canAccessFinance={currentUser.financeAccess}
         />
         <div className="global-search">
@@ -5170,12 +5312,17 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
               ))}
             </nav>
             <div className="mobile-account">
-              <div className="avatar" aria-hidden="true">
-                {currentUser.displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "BR"}
-              </div>
+              <UserAvatar
+                user={profileUser}
+                editable
+                className="mobile-user-avatar"
+                onUploaded={(avatarUrl) =>
+                  setProfileUser((current) => ({ ...current, avatarUrl }))
+                }
+              />
               <div>
-                <strong>{currentUser.displayName}</strong>
-                <span>{areaLabels[currentUser.area]} · {currentUser.role === "admin" ? "Administrador" : "Usuario autorizado"}</span>
+                <strong>{profileUser.displayName}</strong>
+                <span>{areaLabels[profileUser.area]} · {profileUser.role === "admin" ? "Administrador" : "Usuario autorizado"}</span>
               </div>
               <a href="/signout-with-chatgpt?return_to=/">Salir</a>
             </div>

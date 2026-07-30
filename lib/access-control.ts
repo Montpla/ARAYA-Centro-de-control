@@ -12,6 +12,7 @@ export type AuthorizedUser = {
   area: UserArea;
   financeAccess: boolean;
   active: boolean;
+  avatarUrl: string;
 };
 
 function normalizeEmail(value: string) {
@@ -27,6 +28,9 @@ function publicUser(row: typeof appUsers.$inferSelect): AuthorizedUser {
     area: isUserArea(row.area) ? row.area : "direccion",
     financeAccess: row.role === "admin" || row.financeAccess,
     active: row.active,
+    avatarUrl: row.avatarStorageKey
+      ? `/api/profile/avatar?user=${row.id}&v=${encodeURIComponent(row.avatarUpdatedAt)}`
+      : "",
   };
 }
 
