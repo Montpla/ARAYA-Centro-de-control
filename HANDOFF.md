@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 33.
-- Commit desplegado: `fce24495294d6cee58e23409a13a723a7d8f28b5`.
+- Última versión publicada: 34.
+- Commit desplegado: `4ff87462e8ee77dd4713d07b1b7ad3a16ca8523f`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_c7aef4d7fadc8191aef9d3bf5f78e57a`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_0c55ef0015cc8191972b9f7113473e9c`.
 - Despliegue:
-  `appgdep_6a6b94387d948191be3abdab4b388eee` (`succeeded`).
+  `appgdep_6a6b99b1afbc81919e4236a3cb4ca981` (`succeeded`).
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
   en Sites. La solicitud de cambiarlo a `public` devolvió
   `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
