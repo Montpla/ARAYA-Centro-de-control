@@ -614,12 +614,29 @@ export const dataSources: DataSource[] = [
     ],
     downloadUrl: "/data-center/julio-2026/desviacion-mensual-junio-2026.xlsx",
   },
+  {
+    id: "source-reprogrammed-flow-phase-1",
+    file: "ARAYA_-Flujo I reprogramado.xlsx",
+    kind: "Flujo de obra reprogramado · Fase I",
+    declaredCutoff: "30/06/2026",
+    savedAt: "30/07/2026 12:17",
+    status: "observada",
+    records: "6 hojas · 1.137 fórmulas · real dic-25/jun-26 · proyección jul-26/jul-27",
+    notes: [
+      "El alcance se limita a Urbanismo y Edificios de la Fase I; no sustituye el flujo de caja ni el presupuesto global del proyecto.",
+      "La reprogramación conserva el total de RD$751.309.284,94 y concentra RD$58.108.348,13 de desviación acumulada en agosto y septiembre de 2026.",
+      "La portada describe una redistribución solo del sobrante de junio, pero las fórmulas redistribuyen la desviación acumulada desde diciembre de 2025. El dashboard usa las fórmulas vigentes.",
+      "Dos importes de la hoja Reprogramación tienen formato porcentual erróneo y Hoja1 contiene cálculos auxiliares sin etiquetas; ninguno altera los indicadores.",
+      "El archivo no contiene medición física, cantidades ejecutadas ni porcentajes de avance. El avance físico permanece en 18,23%.",
+    ],
+    downloadUrl: "/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx",
+  },
 ];
 
 export const projectSnapshot = {
   project: "ARAYA",
   declaredCutoff: "30/06/2026",
-  lastUpdated: "29/07/2026 14:33",
+  lastUpdated: "30/07/2026 12:17",
   overallProgress: 18.23,
   plannedProgress: 21.24,
   scheduleProgress: 17,

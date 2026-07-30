@@ -64,6 +64,12 @@ import {
   typeABudgetSummary,
 } from "./procurement-data";
 import {
+  reprogrammedFlowAudit,
+  reprogrammedFlowMonths,
+  reprogrammedFlowQualityIssues,
+  reprogrammedFlowScopes,
+} from "./reprogrammed-flow-data";
+import {
   CurrencyCode,
   DEFAULT_DISPLAY_CURRENCY,
   exchangeRateNote,
@@ -400,9 +406,10 @@ const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
     kicker: "CONTROL FINANCIERO",
     title: "Finanzas, fideicomiso y conciliaciones",
     description: "Presupuesto, costes, CxP, anticipos, balance y caja se mantienen separados por fuente y moneda.",
-    sourceIds: ["source-june-finance", "source-antonely-june-finance", "source-may-cashflow", "source-june-consolidated", "source-budget-type-a", "source-june-deviation"],
+    sourceIds: ["source-june-finance", "source-antonely-june-finance", "source-may-cashflow", "source-june-consolidated", "source-budget-type-a", "source-june-deviation", "source-reprogrammed-flow-phase-1"],
     modules: [
       { id: "budget-cost", label: "Presupuesto y costes", detail: "Control acumulado, ejecución mensual, 164 partidas tipo A y desviación de junio.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance", "source-budget-type-a", "source-june-deviation"] },
+      { id: "phase-1-work-flow", label: "Flujo de obra · Fase I", detail: "Real de diciembre a junio y proyección reprogramada hasta julio de 2027.", status: "live", sourceIds: ["source-reprogrammed-flow-phase-1"] },
       { id: "payables", label: "Cuentas por pagar", detail: "Categorías, antigüedad, proveedores y facturas.", status: "live", sourceIds: ["source-antonely-june-finance"], targetView: "proveedores" },
       { id: "advances", label: "Anticipos", detail: "26 anticipos y saldos pendientes.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
       { id: "trust-balance", label: "Fideicomiso", detail: "Balance, resultados y conciliación patrimonial.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
@@ -528,6 +535,10 @@ const liveDataTargets: Record<string, unknown> = {
   payablesReconciliation,
   permits,
   projectSnapshot,
+  reprogrammedFlowAudit,
+  reprogrammedFlowMonths,
+  reprogrammedFlowQualityIssues,
+  reprogrammedFlowScopes,
   safetyFindings,
   safetyMetrics,
   salesLocations,
@@ -3304,7 +3315,8 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
 }
 
 function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; onAdd: () => void; currency: CurrencyCode }) {
-  const [section, setSection] = useState<"flujo" | "presupuesto" | "cxp" | "anticipos" | "control" | "detalle">("flujo");
+  const [section, setSection] = useState<"flujo" | "flujo_obra" | "presupuesto" | "cxp" | "anticipos" | "control" | "detalle">("flujo");
+  const workspace = useContext(WorkspaceDetailContext);
   const rd = (value: number) => formatMoney(value, "DOP", currency);
   const rdMillions = (value: number) => formatMoneyMillions(value, "DOP", currency);
   const qualityIssues = financialQualityIssues(currency);
@@ -3323,6 +3335,7 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
       <section className="report-tabs finance-tabs">
         {[
           { id: "flujo", label: "Flujo de caja", detail: "Jul–Dic 2026" },
+          { id: "flujo_obra", label: "Flujo de obra", detail: "Fase I · reprogramado" },
           { id: "presupuesto", label: "Presupuesto y desviación", detail: "Tipo A · jun-26" },
           { id: "cxp", label: "Cuentas por pagar", detail: rdMillions(juneReport.finance.cxpDop) },
           { id: "anticipos", label: "Anticipos", detail: rdMillions(juneReport.finance.advancesPendingDop) },
@@ -3354,6 +3367,119 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
             ))}
           </div>
           <div className="chart-legend"><span><i className="income" />Ingresos</span><span><i className="cost" />Costes</span><span>La cifra bajo cada mes es la caja acumulada.</span></div>
+        </section>
+      )}
+
+      {section === "flujo_obra" && (
+        <section className="financial-detail-stack work-flow-stack">
+          <article className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">FASE I · CORTE 30/06/2026</span><h3>Flujo de obra real y reprogramado</h3></div>
+              <a className="button secondary" href="/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx" target="_blank" rel="noreferrer">Abrir Excel</a>
+            </div>
+            <div className="budget-summary-grid compact work-flow-summary">
+              <span><small>Alcance total</small><strong>{rd(reprogrammedFlowAudit.reprogrammedTotalDop)}</strong></span>
+              <span><small>Real · dic-25 a jun-26</small><strong>{rd(reprogrammedFlowAudit.actualPeriodDop)}</strong></span>
+              <span><small>Real acumulado al corte</small><strong>{rd(reprogrammedFlowAudit.actualToCutoffDop)}</strong></span>
+              <span><small>Por ejecutar · jul-26 a jul-27</small><strong>{rd(reprogrammedFlowAudit.remainingForecastDop)}</strong></span>
+            </div>
+            <div className="callout">
+              <strong>Alcance separado del flujo de caja global</strong>
+              <p>Esta fuente solo cubre Urbanismo y Edificios de la Fase I. No incluye terreno, diseño, gerencia, indirectos, inspección, permisos ni gastos financieros.</p>
+            </div>
+          </article>
+
+          <article className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">COMPARACIÓN MENSUAL</span><h3>Presupuesto original frente a real / reprogramado</h3></div>
+              <span className="data-note">Pulsa cualquier mes para abrir su ficha · {currency}</span>
+            </div>
+            <div className="work-flow-chart-scroll">
+              <div className="work-flow-chart" role="img" aria-label="Flujo mensual original frente a real y reprogramado">
+                {reprogrammedFlowMonths.map((item) => (
+                  <button
+                    type="button"
+                    className={`work-flow-month workspace-data-row ${item.status}`}
+                    key={item.month}
+                    onClick={() => workspace.openDetail({
+                      id: `work-flow-${item.month}`,
+                      kicker: item.status === "actual" ? "FLUJO REAL" : "FLUJO REPROGRAMADO",
+                      title: item.month.toUpperCase(),
+                      summary: item.status === "actual"
+                        ? "Importe real de Urbanismo y Edificios frente al presupuesto original del mes."
+                        : "Proyección vigente de Urbanismo y Edificios frente al presupuesto original del mes.",
+                      status: item.status === "actual" ? "live" : "partial",
+                      metrics: [
+                        { label: "Presupuesto original", value: rd(item.originalDop) },
+                        { label: item.status === "actual" ? "Ejecutado real" : "Reprogramado", value: rd(item.currentDop) },
+                        { label: "Diferencia", value: rd(item.varianceDop) },
+                        { label: "Urbanismo", value: rd(item.urbanismDop) },
+                        { label: "Edificios", value: rd(item.buildingsDop) },
+                      ],
+                      sourceIds: ["source-reprogrammed-flow-phase-1"],
+                      actions: [{ label: "Abrir Centro de datos", view: "fuentes" }],
+                    })}
+                  >
+                    <span className="work-flow-bars">
+                      <i className="original" style={{ height: `${Math.max(2, (item.originalDop / 110_000_000) * 100)}%` }} title={`Original ${rd(item.originalDop)}`} />
+                      <i className="current" style={{ height: `${Math.max(2, (item.currentDop / 110_000_000) * 100)}%` }} title={`${item.status === "actual" ? "Real" : "Reprogramado"} ${rd(item.currentDop)}`} />
+                    </span>
+                    <strong>{item.month}</strong>
+                    <small>{item.status === "actual" ? "Real" : "Proy."}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="chart-legend work-flow-legend">
+              <span><i className="work-flow-original" />Presupuesto original</span>
+              <span><i className="work-flow-current" />Real hasta junio · reprogramado desde julio</span>
+            </div>
+            <div className="callout warn">
+              <strong>Agosto y septiembre concentran la recuperación</strong>
+              <p>La desviación acumulada de {rd(reprogrammedFlowAudit.cumulativeVarianceRedistributedDop)} se añade por mitades: {rd(reprogrammedFlowAudit.augustAdjustmentDop)} en agosto y la misma cantidad en septiembre de 2026.</p>
+            </div>
+          </article>
+
+          <article className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">REAL VS. PRESUPUESTO · DIC-25 A JUN-26</span><h3>Lectura por ámbito</h3></div>
+              <span className="data-note">Variación positiva = remanente · negativa = sobregiro</span>
+            </div>
+            <div className="financial-detail-scroll">
+              <div className="financial-detail-table work-flow-scope-table">
+                <div className="financial-detail-row head"><span>Ámbito</span><span>Presupuestado</span><span>Real</span><span>Variación</span><span>Variación %</span><span>Real acumulado</span><span>Por ejecutar</span></div>
+                {reprogrammedFlowScopes.map((item) => (
+                  <div className={`financial-detail-row ${item.id === "total" ? "total-row" : ""}`} key={item.id}>
+                    <strong>{item.label}</strong>
+                    <span>{rd(item.budgetPeriodDop)}</span>
+                    <span>{rd(item.actualPeriodDop)}</span>
+                    <span className={item.varianceDop < 0 ? "danger-text" : "good-text"}>{rd(item.varianceDop)}</span>
+                    <b className={item.varianceDop < 0 ? "danger-text" : "good-text"}>{number.format(item.varianceRatio * 100)}%</b>
+                    <span>{rd(item.actualToCutoffDop)}</span>
+                    <span>{rd(item.remainingForecastDop)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <p className="quality-note">El real de junio de este flujo es {rd(reprogrammedFlowAudit.juneScopedActualDop)}. Finanzas registra {rd(reprogrammedFlowAudit.juneFullFinanceActualDop)} para el proyecto completo; la diferencia de {rd(reprogrammedFlowAudit.juneScopeDifferenceDop)} responde al alcance excluido y no se presenta como error contable.</p>
+          </article>
+
+          <article className="panel physical-progress-lock">
+            <div>
+              <span className="section-kicker">GOBIERNO DEL DATO FÍSICO</span>
+              <h3>El avance físico no cambia con este archivo</h3>
+              <p>El libro solo contiene importes presupuestados, reales y reprogramados. No aporta mediciones físicas, unidades ejecutadas ni porcentajes de producción.</p>
+            </div>
+            <strong>18,23%</strong>
+            <small>Último avance físico validado · corte 30/06/2026</small>
+          </article>
+
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">CALIDAD DE LA FUENTE</span><h3>Incidencias y reglas de lectura</h3></div><span className="count-badge">{reprogrammedFlowQualityIssues.length}</span></div>
+            <div className="quality-grid">
+              {reprogrammedFlowQualityIssues.map((issue) => <article key={issue.title}><strong>{issue.title}</strong><p>{issue.detail}</p></article>)}
+            </div>
+          </article>
         </section>
       )}
 

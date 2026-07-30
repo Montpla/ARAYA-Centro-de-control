@@ -598,6 +598,35 @@ Implementación:
   presentación sí quedaron verificadas. Revisar visualmente la URL publicada
   después de cada despliegue.
 
+### Flujo de obra Fase I reprogramado
+
+Archivo integrado:
+`public/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx`.
+
+- Se revisaron sus seis hojas, 1.137 fórmulas y todas las páginas renderizadas.
+  No contiene errores de fórmula ni enlaces externos.
+- Alcance: Urbanismo y Edificios de la Fase I. Excluye terreno, diseño,
+  gerencia, indirectos, inspección, permisos y gastos financieros. No sustituye
+  el flujo de caja ni el presupuesto global.
+- Total del flujo: DOP 751.309.284,94.
+- Real de diciembre de 2025 a junio de 2026: DOP 123.172.225,09.
+- Real acumulado incluyendo el saldo anterior: DOP 145.297.705,00.
+- Pendiente reprogramado de julio de 2026 a julio de 2027:
+  DOP 606.011.579,94.
+- La desviación acumulada de DOP 58.108.348,13 se concentra por mitades en
+  agosto y septiembre de 2026.
+- La portada y el Resumen dicen que se redistribuye solo el sobrante de junio,
+  pero las fórmulas redistribuyen la desviación acumulada completa desde
+  diciembre de 2025. El dashboard sigue las fórmulas.
+- `Reprogramación!B27` y `B53` son importes DOP con un formato porcentual
+  erróneo. `Hoja1` es una hoja auxiliar sin etiquetas; no alimenta KPI.
+- El real de junio de este flujo es DOP 28.809.561,44; Finanzas registra
+  DOP 48.998.910,52 para el proyecto completo. La diferencia corresponde al
+  alcance excluido y no se presenta como error contable.
+- El archivo no contiene mediciones físicas, cantidades ejecutadas ni
+  porcentajes de producción. Por tanto, el avance físico validado sigue siendo
+  18,23% con corte 30/06/2026.
+
 ## Criterios de continuidad
 
 - Mostrar únicamente datos aportados o derivados de las fuentes.

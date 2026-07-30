@@ -557,3 +557,30 @@ test("July supplier, procurement, budget and IFC sources are audited and connect
   assert.ok(ifcReport.length > 30_000);
   assert.ok(supplierReport.length > 30_000);
 });
+
+test("reprogrammed Phase I flow remains separate from physical progress and global cash flow", async () => {
+  const [dashboard, data, flowData, agentRoute, workbook] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/demo-data.ts", "utf8"),
+    readFile("app/reprogrammed-flow-data.ts", "utf8"),
+    readFile("app/api/agent/route.ts", "utf8"),
+    readFile("public/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx"),
+  ]);
+  assert.match(data, /source-reprogrammed-flow-phase-1/);
+  assert.match(data, /overallProgress: 18\.23/);
+  assert.match(flowData, /formulaCount: 1_137/);
+  assert.match(flowData, /reprogrammedTotalDop: 751_309_284\.940335/);
+  assert.match(flowData, /actualPeriodDop: 123_172_225\.09/);
+  assert.match(flowData, /remainingForecastDop: 606_011_579\.940335/);
+  assert.match(flowData, /cumulativeVarianceRedistributedDop: 58_108_348\.1320865/);
+  assert.match(flowData, /juneScopedActualDop: 28_809_561\.44/);
+  assert.match(flowData, /Sin indicador de avance físico/);
+  assert.match(dashboard, /Flujo de obra real y reprogramado/);
+  assert.match(dashboard, /El avance físico no cambia con este archivo/);
+  assert.match(dashboard, /18,23%/);
+  assert.match(dashboard, /source-reprogrammed-flow-phase-1/);
+  assert.match(agentRoute, /phaseOneWorkFlow/);
+  assert.match(agentRoute, /normalized\.includes\("flujo"\)/);
+  assert.match(agentRoute, /flujo\|reprogram/);
+  assert.ok(workbook.length > 40_000);
+});

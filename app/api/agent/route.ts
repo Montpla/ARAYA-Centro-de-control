@@ -22,6 +22,12 @@ import {
   salesLocations,
   salesModels,
 } from "../../june-report-data";
+import {
+  reprogrammedFlowAudit,
+  reprogrammedFlowMonths,
+  reprogrammedFlowQualityIssues,
+  reprogrammedFlowScopes,
+} from "../../reprogrammed-flow-data";
 import { getDb } from "../../../db";
 import { liveDataEvents, liveDataPoints, uploadedFiles } from "../../../db/schema";
 import { areaLabels, uploadStatusLabels } from "../../../lib/file-routing";
@@ -191,6 +197,10 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
   const currentPermits = materializeLiveRoot("permits", permits, live.values);
   const currentFinancingProcesses = materializeLiveRoot("financingProcesses", financingProcesses, live.values);
   const currentJuneDataQualityIssues = materializeLiveRoot("juneDataQualityIssues", juneDataQualityIssues, live.values);
+  const currentReprogrammedFlowAudit = materializeLiveRoot("reprogrammedFlowAudit", reprogrammedFlowAudit, live.values);
+  const currentReprogrammedFlowMonths = materializeLiveRoot("reprogrammedFlowMonths", reprogrammedFlowMonths, live.values);
+  const currentReprogrammedFlowScopes = materializeLiveRoot("reprogrammedFlowScopes", reprogrammedFlowScopes, live.values);
+  const currentReprogrammedFlowQualityIssues = materializeLiveRoot("reprogrammedFlowQualityIssues", reprogrammedFlowQualityIssues, live.values);
 
   if (name === "get_live_data_status") {
     return {
@@ -291,9 +301,16 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
       advancesDetail: currentAntonelyAdvances,
       balanceLines: currentAntonelyBalanceLines,
       detailCounts: currentAntonelyDetailTotals,
+      phaseOneWorkFlow: {
+        audit: currentReprogrammedFlowAudit,
+        months: currentReprogrammedFlowMonths,
+        scopes: currentReprogrammedFlowScopes,
+        qualityIssues: currentReprogrammedFlowQualityIssues,
+        physicalProgressEffect: "Ninguno. El archivo no contiene mediciones físicas; el avance físico validado sigue en 18,23%.",
+      },
       sourceCurrency: "DOP, salvo importes comerciales identificados expresamente como USD",
       displayRule: `USD por defecto · 1 DOP = ${DOP_TO_USD} USD · corte ${FX_RATE_CUTOFF}`,
-      source: "INFORME_JUN_2026_ARAYA_v1_1.xlsx y Datos para Informe Jun-26.xlsx",
+      source: "INFORME_JUN_2026_ARAYA_v1_1.xlsx, Datos para Informe Jun-26.xlsx y ARAYA_-Flujo I reprogramado.xlsx",
       cutoff: currentJuneReport.cutoff,
     };
   }
@@ -351,6 +368,7 @@ async function fallbackAnswer(question: string, currency: CurrencyCode) {
   const currentJuneReport = materializeLiveRoot("juneReport", juneReport, live.values);
   const currentJuneDataQualityIssues = materializeLiveRoot("juneDataQualityIssues", juneDataQualityIssues, live.values);
   const currentSafetyMetrics = materializeLiveRoot("safetyMetrics", safetyMetrics, live.values);
+  const currentReprogrammedFlowAudit = materializeLiveRoot("reprogrammedFlowAudit", reprogrammedFlowAudit, live.values);
   const normalized = question.toLowerCase();
   const source = `\n\nFuentes: centro de datos ARAYA (${currentProjectSnapshot.dataSources.length} archivos integrados) · corte principal ${currentProjectSnapshot.declaredCutoff} · versión viva ${live.latestEvent?.id ?? "base"}.`;
   const dopMillions = (value: number) => formatMoneyMillions(value, "DOP", currency);
@@ -374,6 +392,9 @@ async function fallbackAnswer(question: string, currency: CurrencyCode) {
   }
   if (normalized.includes("plano") || normalized.includes("implantaci") || normalized.includes("urbanismo")) {
     return `El plano general identifica ${currentProjectSnapshot.masterPlanBuildingCount} bloques TH, además de viales, estacionamientos, paisajismo y equipamientos. Hay datos operativos para ${currentProjectSnapshot.buildingCount} edificios y ${currentProjectSnapshot.unitCount} apartamentos; ${currentProjectSnapshot.buildingsPendingIntegration} bloques siguen visibles como implantación sin avance informado. El urbanismo registra ${numberForAgent(currentProjectSnapshot.urbanismProgress)}% ejecutado frente a ${numberForAgent(currentProjectSnapshot.urbanismPlanned)}% planificado.${source}`;
+  }
+  if (normalized.includes("flujo") || normalized.includes("reprogram")) {
+    return `El flujo de obra reprogramado de la Fase I asciende a ${dopMillions(currentReprogrammedFlowAudit.reprogrammedTotalDop)}. El real de diciembre de 2025 a junio de 2026 es ${dopMillions(currentReprogrammedFlowAudit.actualPeriodDop)} y quedan ${dopMillions(currentReprogrammedFlowAudit.remainingForecastDop)} por ejecutar entre julio de 2026 y julio de 2027. La desviación acumulada de ${dopMillions(currentReprogrammedFlowAudit.cumulativeVarianceRedistributedDop)} se concentra por mitades en agosto y septiembre de 2026. Esta fuente solo contiene importes de Urbanismo y Edificios; no incluye mediciones físicas, por lo que el avance físico validado sigue en ${numberForAgent(currentProjectSnapshot.overallProgress)}%.${source}`;
   }
   if (normalized.includes("cubic") || normalized.includes("contab") || normalized.includes("dinero") || normalized.includes("financ")) {
     const finance = currentJuneReport.finance;
@@ -407,7 +428,7 @@ export async function POST(request: Request) {
   const question = payload.question?.trim() ?? "";
   const currency: CurrencyCode = payload.currency === "DOP" ? "DOP" : "USD";
   if (!question) return Response.json({ error: "Escribe una pregunta." }, { status: 400 });
-  const asksForFinance = /finanz|presupuesto|costo|coste|caja|balance|cuentas por pagar|cxp|anticipo|cr[eé]dito|cubicaci[oó]n/i.test(question);
+  const asksForFinance = /finanz|presupuesto|costo|coste|caja|flujo|reprogram|balance|cuentas por pagar|cxp|anticipo|cr[eé]dito|cubicaci[oó]n/i.test(question);
   if (asksForFinance && !auth.user.financeAccess) {
     return Response.json({
       answer: "La información financiera está restringida para tu usuario. Un administrador puede concederte acceso desde la pestaña Usuarios y accesos.",

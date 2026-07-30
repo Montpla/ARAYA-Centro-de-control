@@ -4156,7 +4156,7 @@ button {
 }
 
 .report-tabs.finance-tabs {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .report-tabs button {
@@ -7913,14 +7913,14 @@ button {
   justify-content: center;
   min-height: 190px;
   padding: 0 5px;
-  border-bottom: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line);
 }
 
 .procurement-month-bar i {
   display: block;
   width: min(24px, 100%);
   border-radius: 7px 7px 2px 2px;
-  background: var(--accent);
+  background: var(--orange);
   box-shadow: 0 4px 12px rgba(239, 91, 43, 0.2);
 }
 
@@ -7967,13 +7967,13 @@ button {
 }
 
 .supplier-comparison-card > span:nth-child(2) b {
-  font: 600 1.35rem/1 var(--font-display);
+  font: 600 1.35rem/1 var(--font-editorial);
 }
 
 .supplier-comparison-card em {
   grid-column: 1 / -1;
   align-self: end;
-  color: var(--accent-dark);
+  color: var(--orange);
   font-size: 0.68rem;
   font-style: normal;
 }
@@ -7995,7 +7995,7 @@ button {
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--surface-soft);
+  background: var(--paper);
 }
 
 .budget-summary-grid small {
@@ -8040,13 +8040,13 @@ button {
   padding: 18px;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: var(--surface-soft);
+  background: var(--paper);
 }
 
 .ifc-compliance-grid article > strong {
   display: block;
   margin-bottom: 10px;
-  color: var(--accent-dark);
+  color: var(--orange);
 }
 
 .ifc-compliance-grid ul {
@@ -8102,6 +8102,161 @@ button {
 
   .procurement-package-row > i {
     display: none;
+  }
+}
+
+/* Fase I work-flow reprogramming */
+.work-flow-chart-scroll {
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+  scrollbar-color: var(--line) transparent;
+}
+
+.work-flow-chart {
+  display: grid;
+  grid-template-columns: repeat(20, minmax(50px, 1fr));
+  gap: 6px;
+  min-width: 1120px;
+  min-height: 310px;
+}
+
+.work-flow-month {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  gap: 5px;
+  min-width: 0;
+  padding: 0 4px 7px;
+  border: 0;
+  border-bottom: 2px solid var(--line);
+  border-radius: 8px 8px 3px 3px;
+  color: var(--ink);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.work-flow-month:hover,
+.work-flow-month:focus-visible {
+  border-color: var(--orange);
+  background: var(--paper);
+  outline: none;
+}
+
+.work-flow-month.actual {
+  background: rgba(20, 43, 72, 0.035);
+}
+
+.work-flow-bars {
+  display: flex;
+  align-items: end;
+  justify-content: center;
+  gap: 4px;
+  min-height: 235px;
+  border-bottom: 1px solid var(--line);
+}
+
+.work-flow-bars i {
+  display: block;
+  width: 14px;
+  min-height: 3px;
+  border-radius: 5px 5px 1px 1px;
+}
+
+.work-flow-bars .original {
+  background: #aeb8c6;
+}
+
+.work-flow-bars .current {
+  background: var(--orange);
+}
+
+.work-flow-month.actual .work-flow-bars .current {
+  background: #173452;
+}
+
+.work-flow-month strong {
+  font-size: 0.63rem;
+  text-transform: uppercase;
+}
+
+.work-flow-month small {
+  color: var(--muted);
+  font-size: 0.57rem;
+}
+
+.work-flow-legend {
+  margin-top: 12px;
+}
+
+.work-flow-legend i {
+  display: inline-block;
+  width: 18px;
+  height: 5px;
+  margin-right: 6px;
+  border-radius: 3px;
+}
+
+.work-flow-legend .work-flow-original {
+  background: #aeb8c6;
+}
+
+.work-flow-legend .work-flow-current {
+  background: var(--orange);
+}
+
+.work-flow-scope-table {
+  min-width: 1050px;
+}
+
+.work-flow-scope-table .financial-detail-row {
+  grid-template-columns: minmax(150px, 1fr) repeat(6, minmax(135px, 1fr));
+}
+
+.physical-progress-lock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 28px;
+  align-items: center;
+  border-color: rgba(27, 111, 79, 0.24);
+  background: rgba(27, 111, 79, 0.045);
+}
+
+.physical-progress-lock h3 {
+  margin: 5px 0;
+}
+
+.physical-progress-lock p {
+  max-width: 760px;
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.physical-progress-lock > strong {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  color: var(--green);
+  font: 600 clamp(2rem, 5vw, 4.2rem)/1 var(--font-editorial);
+}
+
+.physical-progress-lock > small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+}
+
+@media (max-width: 760px) {
+  .physical-progress-lock {
+    grid-template-columns: 1fr;
+  }
+
+  .physical-progress-lock > strong {
+    grid-row: auto;
+    grid-column: auto;
+  }
+
+  .physical-progress-lock > small {
+    grid-column: auto;
   }
 }
 
