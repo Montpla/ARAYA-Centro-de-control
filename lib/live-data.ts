@@ -74,7 +74,15 @@ const financialRootSet = new Set([
   "cxpCategories",
   "financialProjection",
   "financingProcesses",
+  "fiduciaryBalanceSections",
+  "fiduciaryManagementReconciliation",
+  "fiduciaryStatementQualityIssues",
+  "fiduciaryStatementSummary",
   "payablesReconciliation",
+  "reprogrammedFlowAudit",
+  "reprogrammedFlowMonths",
+  "reprogrammedFlowQualityIssues",
+  "reprogrammedFlowScopes",
 ]);
 const keyPattern = /^[A-Za-z][A-Za-z0-9]*(?:\.(?:[A-Za-z][A-Za-z0-9]*|\d+))*$/;
 
@@ -103,6 +111,13 @@ export function redactFinancialFields(key: string, value: LiveDataValue) {
       if (field.startsWith("cubicaciones")) delete next[field];
     });
     return next;
+  }
+  if (key === "dataSources" && Array.isArray(value)) {
+    return value.filter((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return true;
+      const source = item as Record<string, LiveDataValue>;
+      return !/financ|fideicomiso|balance|resultado|flujo|cxp|antonely|presupuesto|desviaci[oó]n|pr[eé]stamo ifc/i.test(`${source.kind ?? ""} ${source.file ?? ""}`);
+    });
   }
   return value;
 }

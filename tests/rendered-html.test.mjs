@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 test("dashboard includes the complete project-control navigation and site plan", async () => {
@@ -300,6 +301,10 @@ test("financial files, live values and agent answers enforce per-user authorizat
   assert.match(liveRoute, /redactFinancialFields/);
   assert.match(liveRoute, /No tienes permiso para publicar datos financieros/);
   assert.match(liveModel, /isFinancialLiveKey/);
+  assert.match(liveModel, /"fiduciaryStatementSummary"/);
+  assert.match(liveModel, /"reprogrammedFlowAudit"/);
+  assert.match(liveModel, /key === "dataSources"/);
+  assert.match(liveModel, /fideicomiso\|balance\|resultado/);
   assert.match(agent, /Acceso financiero no autorizado/);
   assert.match(agent, /auth\.user\.financeAccess/);
   assert.match(agent, /rows\.filter\(\(row\) => row\.area !== "finanzas"\)/);
@@ -583,4 +588,41 @@ test("reprogrammed Phase I flow remains separate from physical progress and glob
   assert.match(agentRoute, /normalized\.includes\("flujo"\)/);
   assert.match(agentRoute, /flujo\|reprogram/);
   assert.ok(workbook.length > 40_000);
+});
+
+test("data governance registers every integrated source once and every download exists", async () => {
+  const data = await readFile("app/demo-data.ts", "utf8");
+  const governance = await readFile("app/data-governance.ts", "utf8");
+  const sourceBlock = data.match(/export const dataSources: DataSource\[\] = \[([\s\S]*?)\n\];/)?.[1] ?? "";
+  const sourceIds = [...sourceBlock.matchAll(/\bid: "(source-[^"]+)"/g)].map((match) => match[1]);
+  const downloadUrls = [...sourceBlock.matchAll(/downloadUrl: "([^"]+)"/g)].map((match) => match[1]);
+
+  assert.equal(sourceIds.length, 22);
+  assert.equal(new Set(sourceIds).size, sourceIds.length);
+  assert.equal(downloadUrls.length, sourceIds.length);
+  for (const sourceId of sourceIds) assert.match(governance, new RegExp(`"${sourceId}"`));
+  for (const url of downloadUrls) await access(`public${url}`);
+
+  const original = await readFile("public/data-center/julio-2026/cuadro-comparativo-proveedores-2026-07-30.xlsx");
+  const duplicate = await readFile("public/data-center/julio-2026/cuadro-comparativo-proveedores-2026-07-30-copia.xlsx");
+  assert.equal(createHash("sha256").update(original).digest("hex"), createHash("sha256").update(duplicate).digest("hex"));
+});
+
+test("official fiduciary statements reconcile and remain separate from management control", async () => {
+  const fiduciary = await readFile("app/fiduciary-statements-data.ts", "utf8");
+  const dashboard = await readFile("app/dashboard-client.tsx", "utf8");
+  const agent = await readFile("app/api/agent/route.ts", "utf8");
+
+  assert.match(fiduciary, /assetsDop: 758765771\.05/);
+  assert.match(fiduciary, /liabilitiesDop: 448317797\.67/);
+  assert.match(fiduciary, /netEquityDop: 310447973\.38/);
+  assert.ok(Math.abs(758765771.05 - 448317797.67 - 310447973.38) < 0.005);
+  assert.equal(311209328.75 - 311209328.75, 0);
+  assert.ok(Math.abs(43835537.2 - 49964983.46 - -6129446.26) < 0.005);
+  assert.ok(Math.abs(4701963.91 - 10774703.46 - -6072739.55) < 0.005);
+  assert.match(dashboard, /id: "fideicomiso", label: "Fideicomiso"/);
+  assert.match(dashboard, /MATRIZ MAESTRA DEL DATO/);
+  assert.match(dashboard, /Fiduciaria Universal prevalecen para balance contable y resultados oficiales/);
+  assert.match(agent, /fiduciaryOfficialStatements/);
+  assert.match(agent, /fideicomiso\|presupuesto/);
 });

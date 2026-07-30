@@ -70,6 +70,17 @@ import {
   reprogrammedFlowScopes,
 } from "./reprogrammed-flow-data";
 import {
+  fiduciaryBalanceSections,
+  fiduciaryManagementReconciliation,
+  fiduciaryStatementQualityIssues,
+  fiduciaryStatementSummary,
+} from "./fiduciary-statements-data";
+import {
+  dataAuthorityMatrix,
+  dataGovernanceSummary,
+  sourceGovernance,
+} from "./data-governance";
+import {
   CurrencyCode,
   DEFAULT_DISPLAY_CURRENCY,
   exchangeRateNote,
@@ -406,13 +417,13 @@ const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
     kicker: "CONTROL FINANCIERO",
     title: "Finanzas, fideicomiso y conciliaciones",
     description: "Presupuesto, costes, CxP, anticipos, balance y caja se mantienen separados por fuente y moneda.",
-    sourceIds: ["source-june-finance", "source-antonely-june-finance", "source-may-cashflow", "source-june-consolidated", "source-budget-type-a", "source-june-deviation", "source-reprogrammed-flow-phase-1"],
+    sourceIds: ["source-june-finance", "source-antonely-june-finance", "source-may-cashflow", "source-june-consolidated", "source-budget-type-a", "source-june-deviation", "source-reprogrammed-flow-phase-1", "source-fiduciary-trial-balance", "source-fiduciary-balance-sheet", "source-fiduciary-income-accumulated", "source-fiduciary-income-monthly"],
     modules: [
       { id: "budget-cost", label: "Presupuesto y costes", detail: "Control acumulado, ejecución mensual, 164 partidas tipo A y desviación de junio.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance", "source-budget-type-a", "source-june-deviation"] },
       { id: "phase-1-work-flow", label: "Flujo de obra · Fase I", detail: "Real de diciembre a junio y proyección reprogramada hasta julio de 2027.", status: "live", sourceIds: ["source-reprogrammed-flow-phase-1"] },
       { id: "payables", label: "Cuentas por pagar", detail: "Categorías, antigüedad, proveedores y facturas.", status: "live", sourceIds: ["source-antonely-june-finance"], targetView: "proveedores" },
       { id: "advances", label: "Anticipos", detail: "26 anticipos y saldos pendientes.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
-      { id: "trust-balance", label: "Fideicomiso", detail: "Balance, resultados y conciliación patrimonial.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
+      { id: "trust-balance", label: "Fideicomiso", detail: "Estados oficiales, resultados y conciliación con el control interno.", status: "live", sourceIds: ["source-fiduciary-trial-balance", "source-fiduciary-balance-sheet", "source-fiduciary-income-accumulated", "source-fiduciary-income-monthly", "source-june-finance", "source-antonely-june-finance"] },
       { id: "cashflow", label: "Flujo de caja", detail: "Proyección y necesidades de financiación.", status: "live", sourceIds: ["source-june-finance", "source-may-cashflow"] },
     ],
     connections: [{ label: "Proveedores y facturas", view: "proveedores" }, { label: "Ventas y cobranza", view: "comercial" }, { label: "Centro de datos", view: "fuentes" }],
@@ -503,7 +514,7 @@ const statCardLinks: Record<string, { view: View; sourceIds: string[] }> = {
   "Cuentas por pagar": { view: "metricas", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
   "Caja proyectada · dic": { view: "metricas", sourceIds: ["source-june-finance", "source-may-cashflow"] },
   "Fuentes visibles": { view: "fuentes", sourceIds: [] },
-  "Registros MPP": { view: "fuentes", sourceIds: ["source-mpp"] },
+  "Datos gobernados": { view: "fuentes", sourceIds: dataAuthorityMatrix.map((item) => item.primarySourceId) },
   "Alertas de calidad": { view: "fuentes", sourceIds: ["source-june-consolidated", "source-june-finance"] },
   "Corte declarado": { view: "fuentes", sourceIds: ["source-june-consolidated", "source-xls", "source-mpp"] },
 };
@@ -528,6 +539,10 @@ const liveDataTargets: Record<string, unknown> = {
   delayedUrbanismStarts,
   financialProjection,
   financingProcesses,
+  fiduciaryBalanceSections,
+  fiduciaryManagementReconciliation,
+  fiduciaryStatementQualityIssues,
+  fiduciaryStatementSummary,
   juneDataQualityIssues,
   juneReport,
   managementActions,
@@ -831,7 +846,7 @@ const processingStageLabels: Record<string, string> = {
 function financialQualityIssues(currency: CurrencyCode) {
   const dop = (value: number) => formatMoney(value, "DOP", currency);
   const usdValue = (value: number) => formatMoney(value, "USD", currency);
-  return juneDataQualityIssues.map((issue) => {
+  const juneIssues = juneDataQualityIssues.map((issue) => {
     if (issue.title === "Presupuesto total") {
       return { ...issue, detail: `La lámina 29 muestra ${formatMoneyMillions(3428500000, "DOP", currency)}; el Excel y la lámina 30 muestran ${formatMoneyMillions(3591280577.17, "DOP", currency)}. Se usa el Excel como control detallado.` };
     }
@@ -852,6 +867,16 @@ function financialQualityIssues(currency: CurrencyCode) {
     }
     return issue;
   });
+  const fiduciaryIssues = fiduciaryStatementQualityIssues.map((issue) => {
+    if (issue.title === "Cuentas por pagar con distinto alcance") {
+      return { ...issue, detail: `Fiduciaria declara ${dop(24814585.2)}; el control consolidado operativo declara ${dop(18597489.63)}. La diferencia no se trata como error hasta disponer de conciliación por cuenta.` };
+    }
+    if (issue.title === "Disponibilidades pendientes de conciliación bancaria") {
+      return { ...issue, detail: `Fiduciaria declara ${dop(50353287.01)} y el control interno ${dop(48234289.3)}. Se mantiene abierta la diferencia de ${dop(2118997.71)}.` };
+    }
+    return issue;
+  });
+  return [...juneIssues, ...fiduciaryIssues];
 }
 
 const defaultUploadArea: Record<View, UploadArea> = {
@@ -1192,10 +1217,11 @@ function Header({
 }
 
 function sourceRequiresFinance(source: (typeof dataSources)[number]) {
-  return /financ|balance|flujo|cxp|antonely|presupuesto|desviaci[oó]n|pr[eé]stamo ifc/i.test(`${source.kind} ${source.file}`);
+  return /financ|fideicomiso|balance|resultado|flujo|cxp|antonely|presupuesto|desviaci[oó]n|pr[eé]stamo ifc/i.test(`${source.kind} ${source.file}`);
 }
 
 function sourceWorkspaceDetail(source: (typeof dataSources)[number]): WorkspaceDetail {
+  const governance = sourceGovernance[source.id];
   return {
     id: `source-${source.id}`,
     kicker: source.kind,
@@ -1206,8 +1232,9 @@ function sourceWorkspaceDetail(source: (typeof dataSources)[number]): WorkspaceD
       { label: "Corte declarado", value: source.declaredCutoff },
       { label: "Guardado", value: source.savedAt },
       { label: "Contenido", value: source.records },
+      ...(governance ? [{ label: "Jerarquía", value: governance.authority }, { label: "Alcance", value: governance.scope }] : []),
     ],
-    notes: source.notes,
+    notes: governance ? [`Alimenta: ${governance.feeds}`, ...source.notes] : source.notes,
     sourceIds: [source.id],
     actions: [{ label: "Abrir Centro de datos", view: "fuentes" }],
   };
@@ -3315,7 +3342,7 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
 }
 
 function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; onAdd: () => void; currency: CurrencyCode }) {
-  const [section, setSection] = useState<"flujo" | "flujo_obra" | "presupuesto" | "cxp" | "anticipos" | "control" | "detalle">("flujo");
+  const [section, setSection] = useState<"flujo" | "flujo_obra" | "presupuesto" | "cxp" | "anticipos" | "fideicomiso" | "control" | "detalle">("flujo");
   const workspace = useContext(WorkspaceDetailContext);
   const rd = (value: number) => formatMoney(value, "DOP", currency);
   const rdMillions = (value: number) => formatMoneyMillions(value, "DOP", currency);
@@ -3339,7 +3366,8 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
           { id: "presupuesto", label: "Presupuesto y desviación", detail: "Tipo A · jun-26" },
           { id: "cxp", label: "Cuentas por pagar", detail: rdMillions(juneReport.finance.cxpDop) },
           { id: "anticipos", label: "Anticipos", detail: rdMillions(juneReport.finance.advancesPendingDop) },
-          { id: "control", label: "Control y balance", detail: rdMillions(juneReport.finance.assetsDop) },
+          { id: "fideicomiso", label: "Fideicomiso", detail: rdMillions(fiduciaryStatementSummary.balance.assetsDop) },
+          { id: "control", label: "Control interno", detail: rdMillions(juneReport.finance.assetsDop) },
           { id: "detalle", label: "Detalle completo", detail: "29 · 15 · 26 · 41" },
         ].map((item) => (
           <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => setSection(item.id as typeof section)}>
@@ -3624,6 +3652,101 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
         </section>
       )}
 
+      {section === "fideicomiso" && (
+        <section className="financial-detail-stack fiduciary-stack">
+          <article className="panel">
+            <div className="panel-heading">
+              <div>
+                <span className="section-kicker">FIDUCIARIA UNIVERSAL · CORTE 30/06/2026</span>
+                <h3>Estados financieros oficiales del fideicomiso</h3>
+              </div>
+              <span className="source-status validada">OFICIAL</span>
+            </div>
+            <p className="section-copy">Esta pestaña conserva la contabilidad emitida por la Fiduciaria separada del control interno de presupuesto, costes, caja y obligaciones operativas.</p>
+            <div className="source-actions fiduciary-doc-actions">
+              <a className="button secondary" href="/data-center/junio-2026/fideicomiso/balance-comprobacion-junio-2026.pdf" target="_blank" rel="noreferrer">Balance de comprobación</a>
+              <a className="button secondary" href="/data-center/junio-2026/fideicomiso/balance-general-junio-2026.pdf" target="_blank" rel="noreferrer">Balance general</a>
+              <a className="button secondary" href="/data-center/junio-2026/fideicomiso/estado-resultados-acumulado-junio-2026.pdf" target="_blank" rel="noreferrer">Resultados acumulados</a>
+              <a className="button secondary" href="/data-center/junio-2026/fideicomiso/estado-resultados-junio-2026.pdf" target="_blank" rel="noreferrer">Resultados de junio</a>
+            </div>
+            <div className="balance-equation fiduciary-equation">
+              <span>Activos<strong>{rd(fiduciaryStatementSummary.balance.assetsDop)}</strong></span>
+              <i>=</i>
+              <span>Pasivos<strong>{rd(fiduciaryStatementSummary.balance.liabilitiesDop)}</strong></span>
+              <i>+</i>
+              <span>Patrimonio neto<strong>{rd(fiduciaryStatementSummary.balance.netEquityDop)}</strong></span>
+            </div>
+            <p className="quality-note">Estado emitido el {fiduciaryStatementSummary.issuedAt}. El balance cuadra exactamente y el resultado del periodo se incorpora al patrimonio neto.</p>
+          </article>
+
+          <article className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">RESULTADOS</span><h3>Junio frente al acumulado enero-junio</h3></div>
+              <span className="data-note">Moneda fuente DOP · vista {currency}</span>
+            </div>
+            <div className="budget-summary-grid fiduciary-results-grid">
+              <span><small>Ingresos · junio</small><strong>{rd(fiduciaryStatementSummary.monthlyResult.incomeDop)}</strong></span>
+              <span><small>Gastos · junio</small><strong>{rd(fiduciaryStatementSummary.monthlyResult.expensesDop)}</strong></span>
+              <span><small>Resultado · junio</small><strong className="danger-text">{rd(fiduciaryStatementSummary.monthlyResult.netResultDop)}</strong></span>
+              <span><small>Ingresos · acumulado</small><strong>{rd(fiduciaryStatementSummary.accumulatedResult.incomeDop)}</strong></span>
+              <span><small>Gastos · acumulado</small><strong>{rd(fiduciaryStatementSummary.accumulatedResult.expensesDop)}</strong></span>
+              <span><small>Resultado · acumulado</small><strong className="danger-text">{rd(fiduciaryStatementSummary.accumulatedResult.netResultDop)}</strong></span>
+            </div>
+            <div className="callout">
+              <strong>Comprobación cruzada superada</strong>
+              <p>El resultado acumulado de {rd(fiduciaryStatementSummary.accumulatedResult.netResultDop)} coincide con el beneficio del periodo mostrado en el estado de situación.</p>
+            </div>
+          </article>
+
+          <article className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">COMPOSICIÓN DEL BALANCE</span><h3>Activos, pasivos y patrimonio neto</h3></div>
+              <span className="data-note">Fuente oficial</span>
+            </div>
+            <div className="financial-detail-scroll">
+              <div className="financial-detail-table fiduciary-balance-table">
+                <div className="financial-detail-row head"><span>Bloque</span><span>Cuenta</span><span>Importe</span></div>
+                {fiduciaryBalanceSections.flatMap((sectionItem) => [
+                  ...sectionItem.lines.map((line) => (
+                    <div className="financial-detail-row" key={`${sectionItem.id}-${line.name}`}>
+                      <b>{sectionItem.label}</b><strong>{line.name}</strong><span>{rd(line.amountDop)}</span>
+                    </div>
+                  )),
+                  <div className="financial-detail-row total-row" key={`${sectionItem.id}-total`}>
+                    <b>Total</b><strong>{sectionItem.label}</strong><span>{rd(sectionItem.totalDop)}</span>
+                  </div>,
+                ])}
+              </div>
+            </div>
+            <div className="callout">
+              <strong>Balance de comprobación cuadrado</strong>
+              <p>Debe {rd(fiduciaryStatementSummary.trialBalance.debitDop)} y Haber {rd(fiduciaryStatementSummary.trialBalance.creditDop)}. Diferencia: {rd(fiduciaryStatementSummary.trialBalance.differenceDop)}.</p>
+            </div>
+          </article>
+
+          <article className="panel reconciliation-panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">CONCILIACIÓN DE CAPAS</span><h3>Fiduciaria oficial frente a control interno</h3></div>
+              <span className="data-note">No se suman ni se sobrescriben</span>
+            </div>
+            <div className="financial-detail-scroll">
+              <div className="financial-detail-table fiduciary-reconciliation-table">
+                <div className="financial-detail-row head"><span>Indicador</span><span>Fiduciaria</span><span>Gestión</span><span>Diferencia gestión - oficial</span><span>Decisión</span></div>
+                {fiduciaryManagementReconciliation.map((item) => (
+                  <div className="financial-detail-row" key={item.metric}>
+                    <strong>{item.metric}</strong>
+                    <span>{rd(item.officialDop)}</span>
+                    <span>{rd(item.managementDop)}</span>
+                    <b className="danger-text">{rd(item.differenceDop)}</b>
+                    <small>{item.decision}</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </article>
+        </section>
+      )}
+
       {section === "control" && (
         <section className="report-grid">
           <article className="panel">
@@ -3637,7 +3760,7 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
             <p className="quality-note">Antonely registra {rd(48988755.86)} en junio y {rd(712326161.73)} acumulados. Frente al consolidado, las diferencias son {rd(10154.66)} y {rd(1)} respectivamente.</p>
           </article>
           <article className="panel">
-            <div className="panel-heading"><div><span className="section-kicker">BALANCE</span><h3>Posición financiera</h3></div></div>
+            <div className="panel-heading"><div><span className="section-kicker">CONTROL INTERNO</span><h3>Posición financiera de gestión</h3></div></div>
             <div className="balance-grid">
               <div><span>Activos</span><strong>{rdMillions(juneReport.finance.assetsDop)}</strong></div>
               <div><span>Pasivos</span><strong>{rdMillions(juneReport.finance.liabilitiesDop)}</strong></div>
@@ -3646,6 +3769,7 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
               <div><span>Depósitos clientes</span><strong>{rdMillions(juneReport.finance.clientDepositsDop)}</strong></div>
               <div><span>Por ejecutar</span><strong>{rdMillions(juneReport.finance.remainingDop)}</strong></div>
             </div>
+            <p className="quality-note">Esta vista procede del Excel de gestión. El estado contable oficial emitido por Fiduciaria Universal se consulta en la pestaña Fideicomiso.</p>
           </article>
         </section>
       )}
@@ -4196,14 +4320,18 @@ function DataHistoryPanel() {
   );
 }
 
-function SourcesView({ onUpload, canAccessFinance }: { onUpload: () => void; canAccessFinance: boolean }) {
+function SourcesView({ onUpload, canAccessFinance, currency }: { onUpload: () => void; canAccessFinance: boolean; currency: CurrencyCode }) {
   const workspace = useContext(WorkspaceDetailContext);
   const visibleSources = canAccessFinance
     ? dataSources
-    : dataSources.filter((source) => !/financ|balance|flujo|cxp|antonely/i.test(`${source.kind} ${source.file}`));
+    : dataSources.filter((source) => !sourceRequiresFinance(source));
   const visibleIssues = canAccessFinance
-    ? juneDataQualityIssues
+    ? [...juneDataQualityIssues, ...procurementQualityIssues, ...reprogrammedFlowQualityIssues, ...fiduciaryStatementQualityIssues]
     : juneDataQualityIssues.filter((issue) => !/presupuesto|pagar|coste|anticipo|inter[eé]s/i.test(issue.title));
+  const visibleAuthorityMatrix = dataAuthorityMatrix.filter((item) => {
+    const source = dataSources.find((candidate) => candidate.id === item.primarySourceId);
+    return canAccessFinance || !source || !sourceRequiresFinance(source);
+  });
   return (
     <div className="view-stack">
       <section className="panel data-center-intro">
@@ -4216,7 +4344,7 @@ function SourcesView({ onUpload, canAccessFinance }: { onUpload: () => void; can
       </section>
       <section className="stat-grid wide">
         <StatCard eyebrow="Fuentes visibles" value={`${visibleSources.length}`} detail={canAccessFinance ? "Repositorio completo autorizado" : "Documentación operativa autorizada"} />
-        <StatCard eyebrow="Registros MPP" value="2.228" detail="2.195 asignaciones y 22 paquetes" />
+        <StatCard eyebrow="Datos gobernados" value={`${visibleAuthorityMatrix.length}`} detail="Indicadores con fuente principal y regla de prevalencia" />
         <StatCard eyebrow="Alertas de calidad" value={`${visibleIssues.length}`} detail="Visibles según permisos y sin corrección silenciosa" tone="warn" />
         <StatCard eyebrow="Corte declarado" value="30/06/2026" detail="Fecha tomada de los archivos" />
       </section>
@@ -4233,35 +4361,77 @@ function SourcesView({ onUpload, canAccessFinance }: { onUpload: () => void; can
         </div>
         <p className="governance-note">La identidad procede del acceso al dashboard. Cada dato normalizado se publica con fuente, corte, moneda de origen y versión; las contradicciones quedan observadas para evitar sustituciones silenciosas.</p>
       </section>
+      <section className="panel data-authority-panel">
+        <div className="panel-heading">
+          <div>
+            <span className="section-kicker">MATRIZ MAESTRA DEL DATO</span>
+            <h3>Qué fuente manda en cada indicador</h3>
+          </div>
+          <span className="data-note">{dataGovernanceSummary.reconciledMetrics} conciliados · {dataGovernanceSummary.separatedMetrics} separados · {dataGovernanceSummary.observedMetrics} observados</span>
+        </div>
+        <p className="section-copy">Una fuente especializada prevalece únicamente dentro de su alcance. Los datos oficiales, de control, de soporte, históricos y duplicados permanecen identificados para evitar dobles conteos.</p>
+        <div className="financial-detail-scroll">
+          <div className="financial-detail-table data-authority-table">
+            <div className="financial-detail-row head"><span>Indicador</span><span>Fuente principal</span><span>Clase</span><span>Estado</span><span>Regla aplicada</span></div>
+            {visibleAuthorityMatrix.map((item) => {
+              const source = dataSources.find((candidate) => candidate.id === item.primarySourceId);
+              const governance = sourceGovernance[item.primarySourceId];
+              return (
+                <button
+                  type="button"
+                  className="financial-detail-row workspace-data-row"
+                  key={item.id}
+                  onClick={() => source && workspace.openDetail(sourceWorkspaceDetail(source))}
+                >
+                  <strong>{item.metric}</strong>
+                  <span>{source?.file ?? item.primarySourceId}</span>
+                  <span className={`authority-badge ${governance?.authority ?? "soporte"}`}>{governance?.authority ?? "soporte"}</span>
+                  <span className={`governance-status ${item.status}`}>{item.status}</span>
+                  <small>{item.decision}</small>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {canAccessFinance && <p className="quality-note">Las cifras monetarias se conservan en su moneda fuente y se presentan en {currency}. Los estados del fideicomiso no sustituyen el presupuesto ni el flujo de gestión.</p>}
+      </section>
       <CollaborativeFileRegistry />
       <DataHistoryPanel />
       <section className="source-grid">
-        {visibleSources.map((source) => (
-          <article className="panel source-card" key={source.id}>
-            <div className="panel-heading">
-              <div><span className="section-kicker">{source.kind}</span><h3>{source.file}</h3></div>
-              <span className={`source-status ${source.status}`}>{source.status}</span>
-            </div>
-            <div className="source-meta">
-              <span>Corte declarado<strong>{source.declaredCutoff}</strong></span>
-              <span>Guardado<strong>{source.savedAt}</strong></span>
-              <span>Contenido<strong>{source.records}</strong></span>
-            </div>
-            <ul className="quality-list">
-              {source.notes.map((note) => <li key={note}>{note}</li>)}
-            </ul>
-            <div className="source-actions">
-              <button className="button primary" type="button" onClick={() => workspace.openDetail(sourceWorkspaceDetail(source))}>
-                Abrir ficha y conexiones
-              </button>
-              {source.downloadUrl && (
-                <a className="button secondary" href={source.downloadUrl} download={source.file}>
-                  Descargar archivo
-                </a>
-              )}
-            </div>
-          </article>
-        ))}
+        {visibleSources.map((source) => {
+          const governance = sourceGovernance[source.id];
+          return (
+            <article className="panel source-card" key={source.id}>
+              <div className="panel-heading">
+                <div><span className="section-kicker">{source.kind}</span><h3>{source.file}</h3></div>
+                <div className="source-badge-stack">
+                  {governance && <span className={`authority-badge ${governance.authority}`}>{governance.authority}</span>}
+                  <span className={`source-status ${source.status}`}>{source.status}</span>
+                </div>
+              </div>
+              <div className="source-meta">
+                <span>Corte declarado<strong>{source.declaredCutoff}</strong></span>
+                <span>Guardado<strong>{source.savedAt}</strong></span>
+                <span>Contenido<strong>{source.records}</strong></span>
+                {governance && <span>Alcance<strong>{governance.scope}</strong></span>}
+              </div>
+              {governance && <p className="source-feeds"><strong>Alimenta:</strong> {governance.feeds}</p>}
+              <ul className="quality-list">
+                {source.notes.map((note) => <li key={note}>{note}</li>)}
+              </ul>
+              <div className="source-actions">
+                <button className="button primary" type="button" onClick={() => workspace.openDetail(sourceWorkspaceDetail(source))}>
+                  Abrir ficha y conexiones
+                </button>
+                {source.downloadUrl && (
+                  <a className="button secondary" href={source.downloadUrl} download={source.file}>
+                    Descargar archivo
+                  </a>
+                )}
+              </div>
+            </article>
+          );
+        })}
       </section>
       <section className="panel">
         <div className="panel-heading">
@@ -4270,7 +4440,8 @@ function SourcesView({ onUpload, canAccessFinance }: { onUpload: () => void; can
         <div className="governance-grid">
           <div><strong>Avance físico</strong><p>El informe y los Excel son la fuente del 18,23% ejecutado y del KPI planificado de 21,24%.</p></div>
           <div><strong>Avance de cronograma</strong><p>MPP es la fuente del 17%, fechas, actividades y camino crítico.</p></div>
-          {canAccessFinance && <div><strong>Finanzas</strong><p>El Excel de junio prevalece para presupuesto, costes, CxP, anticipos, balance y caja.</p></div>}
+          {canAccessFinance && <div><strong>Control de gestión</strong><p>El Excel de junio prevalece para presupuesto, costes, CxP operativa, anticipos y caja.</p></div>}
+          {canAccessFinance && <div><strong>Fideicomiso</strong><p>Los PDF emitidos por Fiduciaria Universal prevalecen para balance contable y resultados oficiales.</p></div>}
           {canAccessFinance && <div><strong>Fuente Antonely</strong><p>Amplía el detalle de CxP y proveedores; sus diferencias permanecen abiertas hasta conciliación contable.</p></div>}
           <div><strong>Versiones</strong><p>El PDF duplica el consolidado; los informes parciales amplían datos y la lámina de mayo queda como histórico.</p></div>
           <div><strong>Edificios</strong><p>El índice MPP promedia 32 frentes; las disciplinas del informe de obra son un indicador diferente.</p></div>
@@ -5459,7 +5630,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     if (view === "cronologia") return <TimelineView />;
     if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => setModal("supplier")} currency={currency} canAccessFinance={currentUser.financeAccess} />;
     if (view === "metricas") return currentUser.financeAccess ? <MetricsView metrics={metrics} onAdd={() => setModal("metric")} currency={currency} /> : <FinanceLockedView />;
-    if (view === "fuentes") return <SourcesView onUpload={() => setUploadOpen(true)} canAccessFinance={currentUser.financeAccess} />;
+    if (view === "fuentes") return <SourcesView onUpload={() => setUploadOpen(true)} canAccessFinance={currentUser.financeAccess} currency={currency} />;
     return <AgentPanel expanded onClose={() => setView("resumen")} currency={currency} />;
   }
 
@@ -5542,7 +5713,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
               {item.id === "fuentes" && <em>{activeProjectId === "araya"
                 ? currentUser.financeAccess
                   ? dataSources.length
-                  : dataSources.filter((source) => !/financ|balance|flujo|cxp|antonely/i.test(`${source.kind} ${source.file}`)).length
+                  : dataSources.filter((source) => !sourceRequiresFinance(source)).length
                 : 3}</em>}
               {item.id === "metricas" && !currentUser.financeAccess && <em className="restricted">BLOQUEADO</em>}
             </button>

@@ -28,6 +28,13 @@ import {
   reprogrammedFlowQualityIssues,
   reprogrammedFlowScopes,
 } from "../../reprogrammed-flow-data";
+import {
+  fiduciaryBalanceSections,
+  fiduciaryManagementReconciliation,
+  fiduciaryStatementQualityIssues,
+  fiduciaryStatementSummary,
+} from "../../fiduciary-statements-data";
+import { dataAuthorityMatrix, dataGovernanceSummary } from "../../data-governance";
 import { getDb } from "../../../db";
 import { liveDataEvents, liveDataPoints, uploadedFiles } from "../../../db/schema";
 import { areaLabels, uploadStatusLabels } from "../../../lib/file-routing";
@@ -301,6 +308,13 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
       advancesDetail: currentAntonelyAdvances,
       balanceLines: currentAntonelyBalanceLines,
       detailCounts: currentAntonelyDetailTotals,
+      fiduciaryOfficialStatements: {
+        summary: fiduciaryStatementSummary,
+        balanceSections: fiduciaryBalanceSections,
+        managementReconciliation: fiduciaryManagementReconciliation,
+        qualityIssues: fiduciaryStatementQualityIssues,
+        rule: "Fiduciaria Universal prevalece para balance y resultados oficiales. El Excel conserva su función de control interno.",
+      },
       phaseOneWorkFlow: {
         audit: currentReprogrammedFlowAudit,
         months: currentReprogrammedFlowMonths,
@@ -310,7 +324,7 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
       },
       sourceCurrency: "DOP, salvo importes comerciales identificados expresamente como USD",
       displayRule: `USD por defecto · 1 DOP = ${DOP_TO_USD} USD · corte ${FX_RATE_CUTOFF}`,
-      source: "INFORME_JUN_2026_ARAYA_v1_1.xlsx, Datos para Informe Jun-26.xlsx y ARAYA_-Flujo I reprogramado.xlsx",
+      source: "INFORME_JUN_2026_ARAYA_v1_1.xlsx, Datos para Informe Jun-26.xlsx, ARAYA_-Flujo I reprogramado.xlsx y estados oficiales de Fiduciaria Universal",
       cutoff: currentJuneReport.cutoff,
     };
   }
@@ -349,16 +363,18 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
   return {
     sources: canAccessFinance
       ? currentProjectSnapshot.dataSources
-      : currentProjectSnapshot.dataSources.filter((source) => !/financ|balance|flujo|cxp|antonely/i.test(`${source.kind} ${source.file}`)),
+      : currentProjectSnapshot.dataSources.filter((source) => !/financ|fideicomiso|balance|resultado|flujo|cxp|antonely/i.test(`${source.kind} ${source.file}`)),
     juneIssues: canAccessFinance
       ? currentJuneDataQualityIssues
       : currentJuneDataQualityIssues.filter((issue) => !/presupuesto|pagar|coste|anticipo|inter[eé]s/i.test(issue.title)),
+    fiduciaryIssues: canAccessFinance ? fiduciaryStatementQualityIssues : [],
     interpretation: {
       physicalProgress: "Excel: 18,23% ejecutado frente a 21,24% planificado.",
       scheduleProgress: "MPP: 17%. Es un indicador distinto y no se sustituye por el del Excel.",
       buildings: "Índice de frentes = promedio simple de 32 frentes por edificio.",
       units: "El avance disponible por apartamento corresponde sólo a superestructura.",
     },
+    governance: canAccessFinance ? { summary: dataGovernanceSummary, matrix: dataAuthorityMatrix } : undefined,
   };
 }
 
@@ -396,6 +412,9 @@ async function fallbackAnswer(question: string, currency: CurrencyCode) {
   if (normalized.includes("flujo") || normalized.includes("reprogram")) {
     return `El flujo de obra reprogramado de la Fase I asciende a ${dopMillions(currentReprogrammedFlowAudit.reprogrammedTotalDop)}. El real de diciembre de 2025 a junio de 2026 es ${dopMillions(currentReprogrammedFlowAudit.actualPeriodDop)} y quedan ${dopMillions(currentReprogrammedFlowAudit.remainingForecastDop)} por ejecutar entre julio de 2026 y julio de 2027. La desviación acumulada de ${dopMillions(currentReprogrammedFlowAudit.cumulativeVarianceRedistributedDop)} se concentra por mitades en agosto y septiembre de 2026. Esta fuente solo contiene importes de Urbanismo y Edificios; no incluye mediciones físicas, por lo que el avance físico validado sigue en ${numberForAgent(currentProjectSnapshot.overallProgress)}%.${source}`;
   }
+  if (normalized.includes("fideicomiso") || normalized.includes("balance") || normalized.includes("resultado")) {
+    return `Los estados oficiales de Fiduciaria Universal muestran activos por ${dopMillions(fiduciaryStatementSummary.balance.assetsDop)}, pasivos por ${dopMillions(fiduciaryStatementSummary.balance.liabilitiesDop)} y patrimonio neto por ${dopMillions(fiduciaryStatementSummary.balance.netEquityDop)}. El resultado de junio es ${dopMillions(fiduciaryStatementSummary.monthlyResult.netResultDop)} y el acumulado enero-junio, ${dopMillions(fiduciaryStatementSummary.accumulatedResult.netResultDop)}. El balance cuadra y el resultado acumulado coincide con el incorporado al patrimonio. Estas cifras se mantienen separadas del Excel de control interno por diferencias de alcance y clasificación.${source}`;
+  }
   if (normalized.includes("cubic") || normalized.includes("contab") || normalized.includes("dinero") || normalized.includes("financ")) {
     const finance = currentJuneReport.finance;
     return `El presupuesto financiero de control es ${dopMillions(finance.budgetDop)}; se han ejecutado ${dopMillions(finance.executedDop)}, incluyendo ${dopMillions(finance.juneExecutedDop)} en el periodo. Las cuentas por pagar suman ${dopMillions(finance.cxpDop)} y los anticipos pendientes ${dopMillions(finance.advancesPendingDop)}. La caja proyectada cierra diciembre en ${dopMillions(finance.projectedCashDecemberDop)}. Las cantidades sin moneda declarada se tratan como DOP y la visualización predeterminada es USD.${source}`;
@@ -428,7 +447,7 @@ export async function POST(request: Request) {
   const question = payload.question?.trim() ?? "";
   const currency: CurrencyCode = payload.currency === "DOP" ? "DOP" : "USD";
   if (!question) return Response.json({ error: "Escribe una pregunta." }, { status: 400 });
-  const asksForFinance = /finanz|presupuesto|costo|coste|caja|flujo|reprogram|balance|cuentas por pagar|cxp|anticipo|cr[eé]dito|cubicaci[oó]n/i.test(question);
+  const asksForFinance = /finanz|fideicomiso|presupuesto|costo|coste|caja|flujo|reprogram|balance|resultado|cuentas por pagar|cxp|anticipo|cr[eé]dito|cubicaci[oó]n/i.test(question);
   if (asksForFinance && !auth.user.financeAccess) {
     return Response.json({
       answer: "La información financiera está restringida para tu usuario. Un administrador puede concederte acceso desde la pestaña Usuarios y accesos.",

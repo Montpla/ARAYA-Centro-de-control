@@ -394,7 +394,7 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 23 pruebas superadas.
+- 27 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
 - `npm run lint` termina sin errores; mantiene nueve avisos conocidos por el
@@ -506,7 +506,7 @@ Vistas ampliadas:
 - `Urbanismo`: indicador físico-financiero separado del 4% de actividades
   terminadas, avance por especialidad y retrasos de inicio.
 - `Planificación`: Curva S exacta del informe y acciones recomendadas.
-- `Centro de datos`: 10 fuentes, 8 descargas, carga colaborativa, versiones y
+- `Centro de datos`: 22 fuentes, 22 descargas, carga colaborativa, versiones y
   reglas de prevalencia.
 
 Datos de control:
@@ -626,6 +626,44 @@ Archivo integrado:
 - El archivo no contiene mediciones físicas, cantidades ejecutadas ni
   porcentajes de producción. Por tanto, el avance físico validado sigue siendo
   18,23% con corte 30/06/2026.
+
+## Punto 1 · consolidación y limpieza de datos
+
+Iniciado y completado el 30/07/2026. No iniciar el punto 2 hasta que el usuario
+valide expresamente este resultado.
+
+- El inventario maestro contiene 22 fuentes únicas registradas y 22 descargas
+  verificadas. El Excel de avance físico y el MPP ya disponen de copia
+  descargable en el Centro de datos.
+- `app/data-governance.ts` clasifica cada fuente como oficial, control, soporte,
+  histórica o duplicada y define la fuente principal de 11 indicadores.
+- El Centro de datos muestra una matriz interactiva de autoridad, alcance,
+  estado de conciliación y regla aplicada.
+- La copia binaria del comparativo de proveedores continúa almacenada para
+  trazabilidad, pero queda excluida de cálculos.
+- Los cuatro estados de Fiduciaria Universal quedaron incorporados en
+  `public/data-center/junio-2026/fideicomiso/` y en una pestaña financiera
+  independiente `Fideicomiso`.
+- `app/fiduciary-statements-data.ts` conserva el estado de situación, balance de
+  comprobación, resultados de junio, resultados acumulados y conciliación con
+  el control interno.
+- Estado oficial: activos DOP 758.765.771,05; pasivos DOP 448.317.797,67;
+  patrimonio neto DOP 310.447.973,38.
+- Resultado oficial: junio -DOP 6.072.739,55; enero-junio
+  -DOP 6.129.446,26.
+- El balance oficial cuadra, Debe = Haber y el resultado acumulado coincide con
+  el importe incorporado al patrimonio.
+- Fiduciaria Universal prevalece para balance y resultados contables. El Excel
+  de junio prevalece para presupuesto, costes, caja y CxP operativa. No se
+  suman ni se sobrescriben estas capas.
+- Las diferencias entre contabilidad oficial y control interno quedan visibles
+  por indicador; requieren conciliación bancaria/contable antes de cambiar una
+  cifra de control.
+- Las raíces vivas del flujo reprogramado y del fideicomiso se clasificaron
+  expresamente como financieras en `lib/live-data.ts`. Los usuarios sin permiso
+  no reciben estos valores ni las fuentes financieras publicadas en vivo.
+- Pruebas del punto 1: compilación correcta, 27/27 pruebas aprobadas y lint sin
+  errores; permanecen los nueve avisos conocidos de `<img>`.
 
 ## Criterios de continuidad
 

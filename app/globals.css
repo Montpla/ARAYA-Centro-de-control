@@ -1295,6 +1295,8 @@ button {
 
 .source-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: flex-end;
   margin-top: 16px;
 }
@@ -1313,6 +1315,67 @@ button {
   font-size: 9px;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.source-badge-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.authority-badge,
+.governance-status {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.authority-badge.oficial {
+  color: #0e5b43;
+  background: #e4f3eb;
+}
+
+.authority-badge.control {
+  color: #1b4f78;
+  background: #e6f0f8;
+}
+
+.authority-badge.soporte {
+  color: #775814;
+  background: #f7edcf;
+}
+
+.authority-badge.histórico {
+  color: #655c51;
+  background: #eeeae3;
+}
+
+.authority-badge.duplicado {
+  color: #8b3027;
+  background: #f7e5e2;
+}
+
+.governance-status.conciliado {
+  color: var(--green);
+  background: var(--green-soft);
+}
+
+.governance-status.separado {
+  color: #275a80;
+  background: #e6f0f8;
+}
+
+.governance-status.observado {
+  color: var(--red);
+  background: var(--red-soft);
 }
 
 .source-meta,
@@ -1335,6 +1398,13 @@ button {
 .source-meta strong {
   color: var(--ink);
   font-size: 10px;
+}
+
+.source-feeds {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
 }
 
 .quality-list {
@@ -4462,6 +4532,56 @@ button {
   color: var(--orange);
   font-style: normal;
   font-weight: 900;
+}
+
+.fiduciary-doc-actions {
+  justify-content: flex-start;
+}
+
+.fiduciary-equation {
+  margin-top: 20px;
+}
+
+.fiduciary-results-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.fiduciary-balance-table .financial-detail-row {
+  grid-template-columns: minmax(150px, 0.55fr) minmax(360px, 1.5fr) minmax(170px, 0.65fr);
+}
+
+.fiduciary-reconciliation-table {
+  min-width: 1180px;
+}
+
+.fiduciary-reconciliation-table .financial-detail-row {
+  grid-template-columns: minmax(150px, 0.7fr) repeat(3, minmax(150px, 0.7fr)) minmax(360px, 1.6fr);
+}
+
+.data-authority-table {
+  min-width: 1260px;
+}
+
+.data-authority-table .financial-detail-row {
+  grid-template-columns: minmax(180px, 0.8fr) minmax(260px, 1.1fr) 100px 110px minmax(390px, 1.8fr);
+}
+
+button.financial-detail-row {
+  width: 100%;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.financial-detail-row:hover,
+button.financial-detail-row:focus-visible {
+  outline: 0;
+  background: var(--orange-soft);
 }
 
 .collection-bar {
@@ -8246,6 +8366,19 @@ button {
 }
 
 @media (max-width: 760px) {
+  .fiduciary-results-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .fiduciary-doc-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .fiduciary-doc-actions .button {
+    justify-content: center;
+  }
+
   .physical-progress-lock {
     grid-template-columns: 1fr;
   }
