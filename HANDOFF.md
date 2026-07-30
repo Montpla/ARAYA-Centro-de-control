@@ -1,6 +1,6 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 29/07/2026
+Actualizado: 30/07/2026
 Zona horaria del usuario: America/La_Paz
 Idioma de trabajo: español
 
@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 27.
-- Commit desplegado: `af0c42fddf9a8bb668c7edb232b1583e41962aaf`.
+- Última versión publicada: 28.
+- Commit desplegado: `eef00e7f0d6a6a22c87898992100f457bde95daa`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_844f489963ac8191941291354d14e614`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_e5fe2c0afbb88191bbd393943bfe176b`.
 - Despliegue:
-  `appgdep_6a6a6db004588191943c2b2a794f1ed2` (`succeeded`).
+  `appgdep_6a6b633fa6e0819193986dc8ff9c6b35` (`succeeded`).
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
   en Sites. La solicitud de cambiarlo a `public` devolvió
   `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
@@ -345,6 +345,10 @@ Todos los puntos deben continuar abriendo sus fichas correctas.
 - `app/globals.css`: sistema visual y diseño responsive.
 - `app/api/agent/route.ts`: consultas del agente.
 - `app/api/dashboard/route.ts`: lectura y creación de métricas/proveedores.
+- `app/antonely-payable-invoices.ts`: 96 líneas verificadas de CxP, agrupación
+  en 86 facturas y trazabilidad por fila, partida y documento.
+- `app/api/payables/route.ts`: detalle de proveedores y facturas protegido por
+  permiso financiero, con datos vivos y respaldo de la fuente de junio.
 - `app/api/admin/users/route.ts`: administración de usuarios, perfiles y
   permisos financieros.
 - `lib/access-control.ts`: autorización común para páginas y API.
@@ -370,7 +374,7 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 20 pruebas superadas.
+- 21 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
 - `npm run lint` termina sin errores; mantiene ocho avisos conocidos por el
@@ -436,8 +440,13 @@ Archivo de Antonely:
 - SHA-256:
   `C87ABEA3FEA21BB44D598313C2FAA8719F22FF4B265C30EBD45358897B9D590F`
 - Hojas: costes acumulados, cuentas por pagar, anticipos y balance.
-- CxP: 96 líneas de factura, 15 categorías y 43 proveedores; el ranking
-  completo se muestra en `Proveedores`.
+- CxP: 96 líneas de factura, 86 facturas consolidadas, 15 categorías y 43
+  proveedores. `Proveedores` permite abrir cada proveedor, consultar sus
+  facturas y abrir el detalle auditable de cada registro.
+- Los archivos recibidos no incluyen PDFs individuales de esas facturas. La
+  ficha muestra el documento como pendiente y permite abrir el Excel fuente;
+  el botón `Abrir factura` se activa cuando una actualización añade
+  `documentUrl` a la línea normalizada.
 - Finanzas incorpora un `Detalle completo` con 29 cuentas de coste, 15
   categorías de CxP, 26 anticipos y 41 líneas de balance.
 - Anticipos pendientes: DOP 9.210.448,86 en el detalle y DOP 9.210.448,94 en
@@ -455,6 +464,9 @@ Nuevas vistas interactivas:
 
 Vistas ampliadas:
 
+- `Proveedores`: buscador, listado maestro interactivo, ficha de proveedor,
+  facturas consolidadas, detalle de vencimiento e imputaciones. El API exige
+  acceso financiero y se refresca cada cinco segundos.
 - `Edificios`: disciplinas, retrasos de superestructura y pedidos vencidos.
 - `Urbanismo`: indicador físico-financiero separado del 4% de actividades
   terminadas, avance por especialidad y retrasos de inicio.
