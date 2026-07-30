@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   Building,
   CustomMetric,
@@ -204,6 +204,14 @@ type OperationalAlert = {
   view: View;
 };
 
+type WorkspaceSearchResult = {
+  label: string;
+  detail: string;
+  view: View;
+  building: Building | null;
+  sourceId?: string;
+};
+
 type PayableInvoice = {
   id: string;
   vendorName: string;
@@ -239,6 +247,241 @@ type PayablesDataset = {
     oldestAgingIndex: number;
   }>;
   invoices: PayableInvoice[];
+};
+
+type WorkspaceDetail = {
+  id: string;
+  kicker: string;
+  title: string;
+  summary: string;
+  status?: "live" | "partial" | "ready" | "observed";
+  metrics?: Array<{ label: string; value: string }>;
+  notes?: string[];
+  pendingFields?: string[];
+  sourceIds?: string[];
+  actions?: Array<{ label: string; view: View }>;
+};
+
+type WorkspaceModule = {
+  id: string;
+  label: string;
+  detail: string;
+  status: "live" | "partial" | "ready" | "observed";
+  sourceIds: string[];
+  targetView?: View;
+  pendingFields?: string[];
+};
+
+type WorkspaceAreaConfig = {
+  kicker: string;
+  title: string;
+  description: string;
+  sourceIds: string[];
+  modules: WorkspaceModule[];
+  connections: Array<{ label: string; view: View }>;
+};
+
+const WorkspaceDetailContext = createContext<{
+  enabled: boolean;
+  openDetail: (detail: WorkspaceDetail) => void;
+}>({
+  enabled: false,
+  openDetail: () => undefined,
+});
+
+const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
+  resumen: {
+    kicker: "MAPA OPERATIVO DEL PROYECTO",
+    title: "Resumen conectado con todas las áreas",
+    description: "Cada bloque abre la sección responsable y conserva el documento que respalda el dato.",
+    sourceIds: ["source-june-consolidated", "source-june-pdf", "source-xls", "source-mpp"],
+    modules: [
+      { id: "executive-kpis", label: "Indicadores ejecutivos", detail: "Avance, plazo, alcance y alertas del corte.", status: "live", sourceIds: ["source-june-consolidated", "source-xls", "source-mpp"], targetView: "planificacion" },
+      { id: "spatial-control", label: "Control espacial", detail: "Edificios, apartamentos y urbanismo enlazados con el plano.", status: "live", sourceIds: ["source-dwg-implantacion", "source-mpp"], targetView: "implantacion" },
+      { id: "direction-reports", label: "Informes de Dirección", detail: "Generación semanal y mensual con el último cierre validado.", status: "live", sourceIds: ["source-june-consolidated", "source-june-pdf"], targetView: "fuentes" },
+      { id: "decision-log", label: "Decisiones y alertas", detail: "Brechas priorizadas y acciones de recuperación.", status: "partial", sourceIds: ["source-june-consolidated", "source-june-works"], targetView: "cronologia", pendingFields: ["Responsable", "Fecha objetivo", "Estado de la decisión"] },
+    ],
+    connections: [{ label: "Planificación", view: "planificacion" }, { label: "Implantación", view: "implantacion" }, { label: "Centro de datos", view: "fuentes" }],
+  },
+  planificacion: {
+    kicker: "ESTRUCTURA DE PLANIFICACIÓN",
+    title: "Cronograma, Curva S y recuperación",
+    description: "Los paquetes, hitos y desviaciones quedan preparados para recibir nuevas actualizaciones del MPP y del avance físico.",
+    sourceIds: ["source-mpp", "source-xls", "source-june-works", "source-june-consolidated"],
+    modules: [
+      { id: "s-curve", label: "Curva S", detail: "Plan operativo y ejecutado real por mes.", status: "live", sourceIds: ["source-xls", "source-june-works"] },
+      { id: "master-schedule", label: "Cronograma maestro", detail: "Paquetes, línea base, fin previsto y camino crítico.", status: "live", sourceIds: ["source-mpp"], targetView: "cronologia" },
+      { id: "recovery-plan", label: "Plan de recuperación", detail: "Acciones propuestas y seguimiento de su ejecución.", status: "partial", sourceIds: ["source-june-works"], pendingFields: ["Responsable", "Inicio", "Fin", "Evidencia", "Resultado"] },
+      { id: "lookahead", label: "Lookahead semanal", detail: "Espacio preparado para planificación de corto plazo.", status: "ready", sourceIds: ["source-mpp"], pendingFields: ["Actividades próximas", "Restricciones", "Compromisos semanales"] },
+    ],
+    connections: [{ label: "Edificios", view: "edificios" }, { label: "Cronología", view: "cronologia" }, { label: "Informe de obra", view: "fuentes" }],
+  },
+  implantacion: {
+    kicker: "MODELO ESPACIAL CONECTADO",
+    title: "Plano, edificios, apartamentos y urbanismo",
+    description: "Cada elemento del plano abre su ficha y queda enlazado con el inventario operativo y la documentación técnica.",
+    sourceIds: ["source-dwg-implantacion", "source-mpp", "source-june-works"],
+    modules: [
+      { id: "masterplan", label: "Plano general", detail: "Implantación visual y plano técnico DWG.", status: "live", sourceIds: ["source-dwg-implantacion"] },
+      { id: "building-layer", label: "Capa de edificios", detail: "26 edificios integrados y 51 posiciones de implantación.", status: "live", sourceIds: ["source-dwg-implantacion", "source-mpp"], targetView: "edificios" },
+      { id: "apartment-layer", label: "Capa de apartamentos", detail: "156 fichas operativas enlazadas con sus edificios.", status: "live", sourceIds: ["source-mpp"], targetView: "viviendas" },
+      { id: "urban-layer", label: "Capas de urbanismo", detail: "Viales, estacionamientos, paisajismo, acceso y equipamientos.", status: "partial", sourceIds: ["source-dwg-implantacion", "source-june-works"], targetView: "urbanismo" },
+    ],
+    connections: [{ label: "Edificios", view: "edificios" }, { label: "Apartamentos", view: "viviendas" }, { label: "Urbanismo", view: "urbanismo" }],
+  },
+  edificios: {
+    kicker: "CONTROL DE PRODUCCIÓN",
+    title: "Edificios y disciplinas de obra",
+    description: "La ficha de cada edificio concentra apartamentos, avance, desviaciones, incidencias y futuras evidencias.",
+    sourceIds: ["source-mpp", "source-june-works", "source-xls"],
+    modules: [
+      { id: "building-register", label: "Registro de 26 edificios", detail: "Avance, previsión y desviación por edificio.", status: "live", sourceIds: ["source-mpp"] },
+      { id: "disciplines", label: "Disciplinas", detail: "Superestructura, albañilería, instalaciones y acabados.", status: "partial", sourceIds: ["source-june-works", "source-mpp"], pendingFields: ["Avance por disciplina y edificio", "Fecha de corte"] },
+      { id: "materials", label: "Materiales y suministros", detail: "Pedidos vencidos y restricciones de producción.", status: "partial", sourceIds: ["source-june-works"], targetView: "proveedores", pendingFields: ["Pedido", "Proveedor", "Entrega comprometida", "Estado"] },
+      { id: "field-evidence", label: "Evidencias de campo", detail: "Espacio preparado para fotografías, actas e incidencias.", status: "ready", sourceIds: [], pendingFields: ["Fotografías", "Responsable", "Incidencias", "Acta semanal"] },
+    ],
+    connections: [{ label: "Apartamentos", view: "viviendas" }, { label: "Planificación", view: "planificacion" }, { label: "Proveedores", view: "proveedores" }],
+  },
+  viviendas: {
+    kicker: "FICHAS INDIVIDUALES",
+    title: "Apartamentos preparados para el ciclo completo",
+    description: "Cada apartamento admite nuevas disciplinas, responsables, incidencias, documentos y evidencias sin cambiar la interfaz.",
+    sourceIds: ["source-mpp", "source-june-works"],
+    modules: [
+      { id: "unit-progress", label: "Avance por apartamento", detail: "Superestructura disponible en las 156 fichas.", status: "live", sourceIds: ["source-mpp"] },
+      { id: "unit-disciplines", label: "Disciplinas interiores", detail: "Estructura preparada para albañilería, instalaciones y acabados.", status: "ready", sourceIds: [], pendingFields: ["Albañilería", "Electricidad", "Sanitaria", "Climatización", "Acabados"] },
+      { id: "unit-issues", label: "Incidencias y responsables", detail: "Responsable, criticidad, fecha objetivo y estado.", status: "ready", sourceIds: [], pendingFields: ["Responsable", "Incidencia", "Prioridad", "Fecha objetivo", "Estado"] },
+      { id: "unit-documents", label: "Documentación del apartamento", detail: "Espacio para planos, fotos, inspecciones y entrega.", status: "ready", sourceIds: [], pendingFields: ["Plano", "Fotografías", "Checklist", "Acta de entrega"] },
+    ],
+    connections: [{ label: "Edificios", view: "edificios" }, { label: "Implantación", view: "implantacion" }, { label: "Centro de datos", view: "fuentes" }],
+  },
+  urbanismo: {
+    kicker: "OBRAS EXTERIORES",
+    title: "Urbanismo por especialidad y zona",
+    description: "Las capas del plano, avances y demoras se conectan con el informe de obra y quedan listas para nuevos desgloses.",
+    sourceIds: ["source-dwg-implantacion", "source-xls", "source-june-works"],
+    modules: [
+      { id: "urban-progress", label: "Avance físico-financiero", detail: "Ejecutado y plan general de urbanismo.", status: "live", sourceIds: ["source-xls"] },
+      { id: "urban-specialties", label: "Especialidades", detail: "Movimiento de tierra, agua, electricidad, viales y otros frentes.", status: "live", sourceIds: ["source-june-works"] },
+      { id: "urban-map-layers", label: "Capas del plano", detail: "Viales, estacionamientos, paisajismo, acceso y equipamientos.", status: "partial", sourceIds: ["source-dwg-implantacion"], pendingFields: ["Cantidad", "Avance", "Responsable", "Fecha objetivo"] },
+      { id: "urban-delays", label: "Demoras de inicio", detail: "Actividades con retrasos de 10 a 70 días.", status: "live", sourceIds: ["source-june-works"], targetView: "planificacion" },
+    ],
+    connections: [{ label: "Implantación", view: "implantacion" }, { label: "Planificación", view: "planificacion" }, { label: "Informe de obra", view: "fuentes" }],
+  },
+  comercial: {
+    kicker: "GESTIÓN COMERCIAL",
+    title: "Ventas, vinculación y cobranza",
+    description: "Reservas, expedientes, contratos y morosidad quedan conectados con la presentación comercial de cada corte.",
+    sourceIds: ["source-june-sales", "source-june-consolidated", "source-june-pdf"],
+    modules: [
+      { id: "reservations", label: "Reservas y producto", detail: "Fases, modelos y ubicación de las reservas activas.", status: "live", sourceIds: ["source-june-sales"] },
+      { id: "linking", label: "Vinculación documental", detail: "Depuración, documentos, firma y vinculación.", status: "live", sourceIds: ["source-june-sales"] },
+      { id: "collections", label: "Cobranza", detail: "Contratos al día, pendientes y vencidos.", status: "live", sourceIds: ["source-june-sales", "source-june-consolidated"] },
+      { id: "customer-files", label: "Expedientes de clientes", detail: "Estructura preparada para abrir el expediente autorizado de cada cliente.", status: "ready", sourceIds: [], pendingFields: ["Cliente", "Apartamento", "Contrato", "Cobros", "Documentos"] },
+    ],
+    connections: [{ label: "Apartamentos", view: "viviendas" }, { label: "Finanzas", view: "metricas" }, { label: "Centro de datos", view: "fuentes" }],
+  },
+  metricas: {
+    kicker: "CONTROL FINANCIERO",
+    title: "Finanzas, fideicomiso y conciliaciones",
+    description: "Presupuesto, costes, CxP, anticipos, balance y caja se mantienen separados por fuente y moneda.",
+    sourceIds: ["source-june-finance", "source-antonely-june-finance", "source-may-cashflow", "source-june-consolidated"],
+    modules: [
+      { id: "budget-cost", label: "Presupuesto y costes", detail: "Control acumulado, ejecución mensual y cuentas de coste.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
+      { id: "payables", label: "Cuentas por pagar", detail: "Categorías, antigüedad, proveedores y facturas.", status: "live", sourceIds: ["source-antonely-june-finance"], targetView: "proveedores" },
+      { id: "advances", label: "Anticipos", detail: "26 anticipos y saldos pendientes.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
+      { id: "trust-balance", label: "Fideicomiso", detail: "Balance, resultados y conciliación patrimonial.", status: "live", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
+      { id: "cashflow", label: "Flujo de caja", detail: "Proyección y necesidades de financiación.", status: "live", sourceIds: ["source-june-finance", "source-may-cashflow"] },
+    ],
+    connections: [{ label: "Proveedores y facturas", view: "proveedores" }, { label: "Ventas y cobranza", view: "comercial" }, { label: "Centro de datos", view: "fuentes" }],
+  },
+  cronologia: {
+    kicker: "TRAZABILIDAD DEL PROYECTO",
+    title: "Cortes, hitos, entregas y decisiones",
+    description: "Cada evento puede enlazarse con su documento, área responsable y revisión viva.",
+    sourceIds: ["source-mpp", "source-xls", "source-june-consolidated", "source-june-works"],
+    modules: [
+      { id: "cutoffs", label: "Cortes documentales", detail: "Fechas y versiones de las fuentes integradas.", status: "live", sourceIds: ["source-xls", "source-mpp", "source-june-consolidated"], targetView: "fuentes" },
+      { id: "milestones", label: "Hitos del cronograma", detail: "Línea base, previsión y eventos relevantes.", status: "live", sourceIds: ["source-mpp"], targetView: "planificacion" },
+      { id: "deliveries", label: "Entregas y compromisos", detail: "Estructura preparada para suministros y responsables.", status: "ready", sourceIds: [], pendingFields: ["Entrega", "Proveedor", "Responsable", "Fecha", "Estado"] },
+      { id: "decisions", label: "Registro de decisiones", detail: "Estructura preparada para acuerdos de Dirección.", status: "ready", sourceIds: [], pendingFields: ["Decisión", "Responsable", "Fecha", "Seguimiento"] },
+    ],
+    connections: [{ label: "Planificación", view: "planificacion" }, { label: "Proveedores", view: "proveedores" }, { label: "Centro de datos", view: "fuentes" }],
+  },
+  proveedores: {
+    kicker: "CADENA DE SUMINISTRO",
+    title: "Proveedores, facturas y entregas",
+    description: "El listado financiero ya abre facturas; la estructura operativa admite contratos, pedidos y entregas futuras.",
+    sourceIds: ["source-antonely-june-finance", "source-june-finance", "source-june-works"],
+    modules: [
+      { id: "vendor-master", label: "Maestro de proveedores", detail: "Datos operativos, contacto, categoría y estado.", status: "partial", sourceIds: ["source-antonely-june-finance"] },
+      { id: "vendor-invoices", label: "Facturas", detail: "86 facturas consolidadas desde 96 líneas contables.", status: "live", sourceIds: ["source-antonely-june-finance"] },
+      { id: "vendor-contracts", label: "Contratos y pedidos", detail: "Estructura preparada para documentos y condiciones.", status: "ready", sourceIds: [], pendingFields: ["Contrato", "Pedido", "Importe", "Plazo", "Documento"] },
+      { id: "vendor-deliveries", label: "Entregas", detail: "Estructura preparada para fechas, albaranes y alertas.", status: "ready", sourceIds: [], pendingFields: ["Entrega prevista", "Entrega real", "Albarán", "Incidencia"] },
+    ],
+    connections: [{ label: "Edificios", view: "edificios" }, { label: "Finanzas", view: "metricas" }, { label: "Cronología", view: "cronologia" }],
+  },
+  control: {
+    kicker: "CONTROL TRANSVERSAL",
+    title: "Seguridad, permisos y gestiones",
+    description: "Cada indicador y trámite queda preparado para abrir su evidencia, responsable, fecha y siguiente paso.",
+    sourceIds: ["source-june-works", "source-june-consolidated", "source-june-pdf"],
+    modules: [
+      { id: "safety", label: "Seguridad y salud", detail: "Indicadores, hallazgos y brechas semanales.", status: "partial", sourceIds: ["source-june-works"], pendingFields: ["Evidencia", "Responsable", "Cierre del hallazgo"] },
+      { id: "permits", label: "Permisos", detail: "Matriz de entidades, referencias y estados.", status: "live", sourceIds: ["source-june-consolidated"] },
+      { id: "inspections", label: "Inspecciones", detail: "Estructura preparada para actas y no conformidades.", status: "ready", sourceIds: [], pendingFields: ["Acta", "Inspector", "Resultado", "Acción correctiva"] },
+      { id: "financing-control", label: "Gestiones financieras", detail: "Procesos y decisiones pendientes de financiación.", status: "partial", sourceIds: ["source-june-consolidated"], targetView: "metricas" },
+    ],
+    connections: [{ label: "Planificación", view: "planificacion" }, { label: "Finanzas", view: "metricas" }, { label: "Centro de datos", view: "fuentes" }],
+  },
+  fuentes: {
+    kicker: "GOBIERNO DEL DATO",
+    title: "Documentos, versiones y actualización",
+    description: "El repositorio conserva originales, responsables, cortes y cambios; cada nueva carga alimenta las vistas relacionadas.",
+    sourceIds: dataSources.map((source) => source.id),
+    modules: [
+      { id: "repository", label: "Repositorio documental", detail: "Archivos originales y descargas autorizadas.", status: "live", sourceIds: dataSources.map((source) => source.id) },
+      { id: "ingestion", label: "Carga y clasificación", detail: "Recepción, área, moneda, corte y responsable.", status: "live", sourceIds: [] },
+      { id: "normalization", label: "Normalización", detail: "Modelo único para actualizar todas las pantallas.", status: "live", sourceIds: [] },
+      { id: "history", label: "Historial y versiones", detail: "Cambios, archivos y procedencia de cada revisión.", status: "live", sourceIds: [] },
+    ],
+    connections: [{ label: "Resumen ejecutivo", view: "resumen" }, { label: "Cronología", view: "cronologia" }, { label: "Agente IA", view: "agente" }],
+  },
+};
+
+const statCardLinks: Record<string, { view: View; sourceIds: string[] }> = {
+  "Plan operativo": { view: "planificacion", sourceIds: ["source-xls", "source-june-works"] },
+  "Cronograma MPP": { view: "planificacion", sourceIds: ["source-mpp"] },
+  "Alcance residencial": { view: "edificios", sourceIds: ["source-mpp", "source-dwg-implantacion"] },
+  "Previsión final": { view: "planificacion", sourceIds: ["source-mpp"] },
+  "Avance físico": { view: "planificacion", sourceIds: ["source-xls", "source-june-works"] },
+  "Fin previsto": { view: "planificacion", sourceIds: ["source-mpp"] },
+  "Paquetes": { view: "planificacion", sourceIds: ["source-mpp"] },
+  "Camino crítico": { view: "planificacion", sourceIds: ["source-mpp"] },
+  "Apartamentos integrados": { view: "viviendas", sourceIds: ["source-mpp"] },
+  "Edificios relacionados": { view: "edificios", sourceIds: ["source-mpp"] },
+  "Dato disponible": { view: "viviendas", sourceIds: ["source-mpp"] },
+  "Próxima ampliación": { view: "viviendas", sourceIds: [] },
+  "Reservas activas": { view: "comercial", sourceIds: ["source-june-sales"] },
+  "Fase I": { view: "comercial", sourceIds: ["source-june-sales"] },
+  "Fase II": { view: "comercial", sourceIds: ["source-june-sales"] },
+  "Cartera vencida": { view: "comercial", sourceIds: ["source-june-sales", "source-june-consolidated"] },
+  "Medición físico-financiera": { view: "urbanismo", sourceIds: ["source-xls"] },
+  "Actividades terminadas": { view: "urbanismo", sourceIds: ["source-june-works"] },
+  "Mayor avance": { view: "urbanismo", sourceIds: ["source-june-works"] },
+  "Arranques demorados": { view: "urbanismo", sourceIds: ["source-june-works"] },
+  "Proveedores operativos": { view: "proveedores", sourceIds: [] },
+  "Facturas consolidadas": { view: "proveedores", sourceIds: ["source-antonely-june-finance"] },
+  "Mayor exposición": { view: "proveedores", sourceIds: ["source-antonely-june-finance"] },
+  "CxP departamental": { view: "proveedores", sourceIds: ["source-antonely-june-finance"] },
+  "Presupuesto de control": { view: "metricas", sourceIds: ["source-june-finance"] },
+  "Coste acumulado": { view: "metricas", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
+  "Cuentas por pagar": { view: "metricas", sourceIds: ["source-june-finance", "source-antonely-june-finance"] },
+  "Caja proyectada · dic": { view: "metricas", sourceIds: ["source-june-finance", "source-may-cashflow"] },
+  "Fuentes visibles": { view: "fuentes", sourceIds: [] },
+  "Registros MPP": { view: "fuentes", sourceIds: ["source-mpp"] },
+  "Alertas de calidad": { view: "fuentes", sourceIds: ["source-june-consolidated", "source-june-finance"] },
+  "Corte declarado": { view: "fuentes", sourceIds: ["source-june-consolidated", "source-xls", "source-mpp"] },
 };
 
 const liveDataTargets: Record<string, unknown> = {
@@ -809,6 +1052,230 @@ function Header({
   );
 }
 
+function sourceRequiresFinance(source: (typeof dataSources)[number]) {
+  return /financ|balance|flujo|cxp|antonely/i.test(`${source.kind} ${source.file}`);
+}
+
+function sourceWorkspaceDetail(source: (typeof dataSources)[number]): WorkspaceDetail {
+  return {
+    id: `source-${source.id}`,
+    kicker: source.kind,
+    title: source.file,
+    summary: `Documento con corte ${source.declaredCutoff}. ${source.records}.`,
+    status: source.status === "validada" ? "live" : "observed",
+    metrics: [
+      { label: "Corte declarado", value: source.declaredCutoff },
+      { label: "Guardado", value: source.savedAt },
+      { label: "Contenido", value: source.records },
+    ],
+    notes: source.notes,
+    sourceIds: [source.id],
+    actions: [{ label: "Abrir Centro de datos", view: "fuentes" }],
+  };
+}
+
+function AreaWorkspaceDock({
+  view,
+  canAccessFinance,
+  onNavigate,
+  onUpload,
+}: {
+  view: View;
+  canAccessFinance: boolean;
+  onNavigate: (view: View) => void;
+  onUpload: () => void;
+}) {
+  const config = workspaceAreaConfigs[view];
+  const workspace = useContext(WorkspaceDetailContext);
+  if (!config) return null;
+  const sources = config.sourceIds
+    .map((id) => dataSources.find((source) => source.id === id))
+    .filter((source): source is (typeof dataSources)[number] => Boolean(source))
+    .filter((source) => canAccessFinance || !sourceRequiresFinance(source));
+
+  return (
+    <section className="panel area-workspace-dock">
+      <div className="area-workspace-heading">
+        <div>
+          <span className="section-kicker">{config.kicker}</span>
+          <h3>{config.title}</h3>
+          <p>{config.description}</p>
+        </div>
+        <button className="button primary" type="button" onClick={onUpload}>Añadir datos a esta área</button>
+      </div>
+      <div className="area-workspace-layout">
+        <div className="workspace-module-grid">
+          {config.modules.map((module) => (
+            <button
+              type="button"
+              key={module.id}
+              className="workspace-module-card"
+              onClick={() => workspace.openDetail({
+                id: `${view}-${module.id}`,
+                kicker: config.kicker,
+                title: module.label,
+                summary: module.detail,
+                status: module.status,
+                sourceIds: module.sourceIds,
+                pendingFields: module.pendingFields,
+                actions: [
+                  ...(module.targetView && module.targetView !== view
+                    ? [{ label: `Abrir ${navItems.find((item) => item.id === module.targetView)?.label ?? "sección relacionada"}`, view: module.targetView }]
+                    : []),
+                  { label: "Abrir Centro de datos", view: "fuentes" },
+                ],
+              })}
+            >
+              <span className={`workspace-status ${module.status}`}>
+                {module.status === "live" ? "Datos vivos" : module.status === "partial" ? "Parcial" : module.status === "observed" ? "Observado" : "Preparado"}
+              </span>
+              <strong>{module.label}</strong>
+              <small>{module.detail}</small>
+              <em>Abrir ficha →</em>
+            </button>
+          ))}
+        </div>
+        <aside className="workspace-document-column">
+          <div>
+            <span className="section-kicker">DOCUMENTACIÓN VINCULADA</span>
+            <strong>{sources.length} {sources.length === 1 ? "fuente visible" : "fuentes visibles"}</strong>
+          </div>
+          <div className="workspace-document-list">
+            {sources.slice(0, 5).map((source) => (
+              <button type="button" key={source.id} onClick={() => workspace.openDetail(sourceWorkspaceDetail(source))}>
+                <span>{source.kind}</span>
+                <strong>{source.file}</strong>
+                <small>{source.declaredCutoff}</small>
+                <i aria-hidden="true">→</i>
+              </button>
+            ))}
+            {sources.length === 0 && <p>Los próximos documentos cargados en esta área aparecerán aquí automáticamente.</p>}
+          </div>
+          <div className="workspace-connections">
+            <span>SECCIONES CONECTADAS</span>
+            {config.connections
+              .filter((connection) => canAccessFinance || connection.view !== "metricas")
+              .map((connection) => (
+                <button type="button" key={connection.view} onClick={() => onNavigate(connection.view)}>
+                  {connection.label}<i aria-hidden="true">↗</i>
+                </button>
+              ))}
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function WorkspaceDetailPanel({
+  detail,
+  canAccessFinance,
+  onClose,
+  onNavigate,
+  onUpload,
+}: {
+  detail: WorkspaceDetail;
+  canAccessFinance: boolean;
+  onClose: () => void;
+  onNavigate: (view: View) => void;
+  onUpload: () => void;
+}) {
+  const sources = (detail.sourceIds ?? [])
+    .map((id) => dataSources.find((source) => source.id === id))
+    .filter((source): source is (typeof dataSources)[number] => Boolean(source))
+    .filter((source) => canAccessFinance || !sourceRequiresFinance(source));
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [onClose]);
+
+  const statusLabel =
+    detail.status === "live" ? "Datos vivos" :
+    detail.status === "partial" ? "Cobertura parcial" :
+    detail.status === "observed" ? "Fuente observada" :
+    "Preparado para datos";
+
+  return (
+    <div className="workspace-detail-backdrop" role="presentation" onMouseDown={onClose}>
+      <aside
+        className="workspace-detail-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Detalle de ${detail.title}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="workspace-detail-header">
+          <div>
+            <span className="section-kicker">{detail.kicker}</span>
+            <h2>{detail.title}</h2>
+            <p>{detail.summary}</p>
+          </div>
+          <button className="close-button" type="button" onClick={onClose} aria-label="Cerrar ficha">×</button>
+        </header>
+        <div className={`workspace-detail-state ${detail.status ?? "ready"}`}>{statusLabel}</div>
+        {detail.metrics && detail.metrics.length > 0 && (
+          <section className="workspace-detail-metrics">
+            {detail.metrics.map((metric) => <span key={metric.label}><small>{metric.label}</small><strong>{metric.value}</strong></span>)}
+          </section>
+        )}
+        {detail.notes && detail.notes.length > 0 && (
+          <section className="workspace-detail-section">
+            <div className="unit-section-heading"><span>LECTURA Y TRAZABILIDAD</span><small>{detail.notes.length} notas</small></div>
+            <ul>{detail.notes.map((note) => <li key={note}>{note}</li>)}</ul>
+          </section>
+        )}
+        {detail.pendingFields && detail.pendingFields.length > 0 && (
+          <section className="workspace-detail-section">
+            <div className="unit-section-heading"><span>CAMPOS PREPARADOS</span><small>Se activan con nuevas cargas</small></div>
+            <div className="workspace-pending-fields">
+              {detail.pendingFields.map((field) => <span key={field}>{field}</span>)}
+            </div>
+          </section>
+        )}
+        <section className="workspace-detail-section">
+          <div className="unit-section-heading"><span>DOCUMENTACIÓN RELACIONADA</span><small>{sources.length} archivos</small></div>
+          {sources.length > 0 ? (
+            <div className="workspace-detail-sources">
+              {sources.map((source) => (
+                <article key={source.id}>
+                  <div><span>{source.kind}</span><strong>{source.file}</strong><small>Corte {source.declaredCutoff}</small></div>
+                  {source.downloadUrl
+                    ? <a href={source.downloadUrl} target="_blank" rel="noreferrer">Abrir / descargar</a>
+                    : <button type="button" onClick={() => onNavigate("fuentes")}>Ver registro</button>}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="workspace-empty-source">
+              <strong>Sin documento específico vinculado todavía.</strong>
+              <p>La ficha está preparada para asociar automáticamente el próximo archivo normalizado de esta área.</p>
+            </div>
+          )}
+        </section>
+        <footer className="workspace-detail-actions">
+          <button className="button secondary" type="button" onClick={() => { onClose(); onUpload(); }}>Añadir actualización</button>
+          {(detail.actions ?? [])
+            .filter((action) => canAccessFinance || action.view !== "metricas")
+            .map((action) => (
+              <button className="button primary" type="button" key={`${action.view}-${action.label}`} onClick={() => { onClose(); onNavigate(action.view); }}>
+                {action.label}
+              </button>
+            ))}
+        </footer>
+      </aside>
+    </div>
+  );
+}
+
 function StatCard({
   eyebrow,
   value,
@@ -820,6 +1287,31 @@ function StatCard({
   detail: string;
   tone?: "neutral" | "warn" | "danger" | "good";
 }) {
+  const workspace = useContext(WorkspaceDetailContext);
+  const link = statCardLinks[eyebrow];
+  if (workspace.enabled && link) {
+    return (
+      <button
+        type="button"
+        className={`stat-card interactive ${tone}`}
+        onClick={() => workspace.openDetail({
+          id: `metric-${eyebrow.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+          kicker: "INDICADOR INTERACTIVO",
+          title: eyebrow,
+          summary: detail,
+          status: "live",
+          metrics: [{ label: "Valor actual", value }],
+          sourceIds: link.sourceIds,
+          actions: [{ label: `Abrir ${navItems.find((item) => item.id === link.view)?.label ?? "sección"}`, view: link.view }],
+        })}
+      >
+        <span>{eyebrow}</span>
+        <strong>{value}</strong>
+        <small>{detail}</small>
+        <em>Abrir detalle →</em>
+      </button>
+    );
+  }
   return (
     <article className={`stat-card ${tone}`}>
       <span>{eyebrow}</span>
@@ -1354,6 +1846,7 @@ function Overview({
 }
 
 function Planning() {
+  const workspace = useContext(WorkspaceDetailContext);
   return (
     <div className="view-stack">
       <section className="stat-grid wide">
@@ -1378,21 +1871,57 @@ function Planning() {
             <span>Paquete</span><span>Avance</span><span>Fin / línea base</span><span>Desviación</span>
           </div>
           {workPackages.map((item) => (
-            <div className="table-row" key={item.name}>
+            <button
+              type="button"
+              className="table-row workspace-data-row"
+              key={item.name}
+              onClick={() => workspace.openDetail({
+                id: `package-${item.name}`,
+                kicker: "PAQUETE DEL CRONOGRAMA",
+                title: item.name,
+                summary: item.critical ? "Paquete marcado como crítico en el cronograma maestro." : "Paquete de trabajo del cronograma maestro.",
+                status: "live",
+                metrics: [
+                  { label: "Avance", value: `${number.format(item.progress)}%` },
+                  { label: "Fin previsto", value: item.finish },
+                  { label: "Línea base", value: item.baselineFinish },
+                  { label: "Desviación", value: `+${item.deviationDays} días` },
+                ],
+                sourceIds: ["source-mpp"],
+                actions: [{ label: "Abrir Cronología", view: "cronologia" }],
+              })}
+            >
               <strong>{item.name}{item.critical ? " · crítico" : ""}</strong>
               <span>{number.format(item.progress)}%</span>
               <span>{item.finish} / {item.baselineFinish}</span>
               <span className={item.deviationDays >= 14 ? "danger-text" : "warn-text"}>
                 +{item.deviationDays} días
               </span>
-            </div>
+            </button>
           ))}
         </div>
       </section>
       <section className="panel">
         <div className="panel-heading"><div><span className="section-kicker">RECOMENDACIONES DEL INFORME</span><h3>Acciones de recuperación propuestas</h3></div><span className="data-note">No son compromisos confirmados</span></div>
         <div className="action-grid">
-          {managementActions.map((action, index) => <article key={action}><span>{String(index + 1).padStart(2, "0")}</span><p>{action}</p></article>)}
+          {managementActions.map((action, index) => (
+            <button
+              type="button"
+              key={action}
+              onClick={() => workspace.openDetail({
+                id: `recovery-action-${index + 1}`,
+                kicker: "ACCIÓN DE RECUPERACIÓN",
+                title: `Acción ${String(index + 1).padStart(2, "0")}`,
+                summary: action,
+                status: "partial",
+                sourceIds: ["source-june-works", "source-june-consolidated"],
+                pendingFields: ["Responsable", "Fecha objetivo", "Avance", "Evidencia de cierre"],
+                actions: [{ label: "Abrir Cronología", view: "cronologia" }],
+              })}
+            >
+              <span>{String(index + 1).padStart(2, "0")}</span><p>{action}</p><em>Abrir seguimiento →</em>
+            </button>
+          ))}
         </div>
       </section>
     </div>
@@ -1470,6 +1999,7 @@ function BuildingsView({
 }) {
   const [statusFilter, setStatusFilter] = useState("todos");
   const [selectedUnit, setSelectedUnit] = useState<Unit | null>(null);
+  const workspace = useContext(WorkspaceDetailContext);
   const units = selected.units.filter(
     (unit) => statusFilter === "todos" || visualUnitStatus(unit) === statusFilter,
   );
@@ -1551,10 +2081,25 @@ function BuildingsView({
           <div className="panel-heading"><div><span className="section-kicker">CONJUNTO DE 26 EDIFICIOS</span><h3>Avance por disciplina</h3></div></div>
           <div className="rank-list compact">
             {constructionDisciplines.map((item) => (
-              <div key={item.name}>
+              <button
+                type="button"
+                className="workspace-data-row rank-data-row"
+                key={item.name}
+                onClick={() => workspace.openDetail({
+                  id: `discipline-${item.name}`,
+                  kicker: "DISCIPLINA DEL CONJUNTO",
+                  title: item.name,
+                  summary: "Avance consolidado de la disciplina en los 26 edificios integrados.",
+                  status: "live",
+                  metrics: [{ label: "Avance reportado", value: `${number.format(item.progress)}%` }],
+                  sourceIds: ["source-june-works", "source-mpp"],
+                  pendingFields: ["Desglose por edificio", "Responsable", "Fecha de actualización"],
+                  actions: [{ label: "Abrir Planificación", view: "planificacion" }],
+                })}
+              >
                 <span><strong>{item.name}</strong></span>
                 <div><i style={{ width: `${item.progress}%` }} /></div><b>{number.format(item.progress)}%</b>
-              </div>
+              </button>
             ))}
           </div>
         </article>
@@ -1562,9 +2107,24 @@ function BuildingsView({
           <div className="panel-heading"><div><span className="section-kicker">SUPERSTRUCTURA</span><h3>Demora proyectada por edificio</h3></div><span className="data-note">Informe de obra</span></div>
           <div className="delay-chip-grid">
             {structuralDelay.map((item) => (
-              <span key={item.building} className={item.days >= 15 ? "critical" : item.days >= 8 ? "warn" : ""}>
+              <button
+                type="button"
+                key={item.building}
+                className={`workspace-data-row ${item.days >= 15 ? "critical" : item.days >= 8 ? "warn" : ""}`}
+                onClick={() => workspace.openDetail({
+                  id: `structural-delay-${item.building}`,
+                  kicker: "DEMORA DE SUPERESTRUCTURA",
+                  title: item.building,
+                  summary: "Demora proyectada registrada en el informe de obra.",
+                  status: "observed",
+                  metrics: [{ label: "Demora", value: `+${item.days} días` }],
+                  sourceIds: ["source-june-works", "source-mpp"],
+                  pendingFields: ["Causa", "Responsable", "Acción de recuperación", "Fecha objetivo"],
+                  actions: [{ label: "Abrir Planificación", view: "planificacion" }],
+                })}
+              >
                 <strong>{item.building}</strong><b>+{item.days} d</b>
-              </span>
+              </button>
             ))}
           </div>
           <p className="quality-note">14 edificios tienen pedidos de materiales vencidos. Carpintería, ventanas y piezas sanitarias permanecen en 0% en los 26 edificios.</p>
@@ -1645,6 +2205,7 @@ function HousingView() {
 
 function CommercialView({ currency }: { currency: CurrencyCode }) {
   const [section, setSection] = useState<"reservas" | "vinculacion" | "cobranza">("reservas");
+  const workspace = useContext(WorkspaceDetailContext);
   return (
     <div className="view-stack">
       <section className="data-view-intro">
@@ -1679,11 +2240,28 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
             <div className="panel-heading"><div><span className="section-kicker">FASE II</span><h3>Mix de producto</h3></div><span className="data-note">Junio: 18 reservas</span></div>
             <div className="rank-list">
               {salesModels.map((model) => (
-                <div key={model.name}>
+                <button
+                  type="button"
+                  className="workspace-data-row rank-data-row"
+                  key={model.name}
+                  onClick={() => workspace.openDetail({
+                    id: `sales-model-${model.name}`,
+                    kicker: "MIX DE PRODUCTO",
+                    title: model.name,
+                    summary: "Reservas activas del modelo en Fase II.",
+                    status: "live",
+                    metrics: [
+                      { label: "Reservas activas", value: `${model.value}` },
+                      { label: "Reservas en junio", value: `${model.june}` },
+                    ],
+                    sourceIds: ["source-june-sales"],
+                    actions: [{ label: "Abrir Apartamentos", view: "viviendas" }],
+                  })}
+                >
                   <span><strong>{model.name}</strong><small>{model.june} en junio</small></span>
                   <div><i style={{ width: `${(model.value / 32) * 100}%` }} /></div>
                   <b>{model.value}</b>
-                </div>
+                </button>
               ))}
             </div>
           </article>
@@ -1692,9 +2270,28 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
             <div className="compact-table commercial-table">
               <div className="compact-row head"><span>Ubicación</span><span>Garden</span><span>Sunset</span><span>Balcony</span><span>Total</span></div>
               {salesLocations.map((row) => (
-                <div className="compact-row" key={row.name}>
+                <button
+                  type="button"
+                  className="compact-row workspace-data-row"
+                  key={row.name}
+                  onClick={() => workspace.openDetail({
+                    id: `sales-location-${row.name}`,
+                    kicker: "RESERVAS POR FRENTE",
+                    title: row.name,
+                    summary: "Distribución de reservas activas por tipología comercial.",
+                    status: "live",
+                    metrics: [
+                      { label: "Garden", value: `${row.garden}` },
+                      { label: "Sunset", value: `${row.sunset}` },
+                      { label: "Balcony", value: `${row.balcony}` },
+                      { label: "Total", value: `${row.total}` },
+                    ],
+                    sourceIds: ["source-june-sales"],
+                    actions: [{ label: "Abrir Implantación", view: "implantacion" }],
+                  })}
+                >
                   <strong>{row.name}</strong><span>{row.garden}</span><span>{row.sunset}</span><span>{row.balcony}</span><b>{row.total}</b>
-                </div>
+                </button>
               ))}
             </div>
           </article>
@@ -1742,11 +2339,29 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
             <div className="panel-heading"><div><span className="section-kicker">MOROSIDAD</span><h3>Composición de la cartera vencida</h3></div><strong>{formatMoney(juneReport.collections.overdueUsd, "USD", currency)}</strong></div>
             <div className="rank-list compact">
               {arrearsBreakdown.map((item) => (
-                <div key={item.name}>
+                <button
+                  type="button"
+                  className="workspace-data-row rank-data-row"
+                  key={item.name}
+                  onClick={() => workspace.openDetail({
+                    id: `arrears-${item.name}`,
+                    kicker: "CARTERA VENCIDA",
+                    title: item.name,
+                    summary: "Tramo de morosidad registrado en el último corte comercial disponible.",
+                    status: "observed",
+                    metrics: [
+                      { label: "Clientes", value: `${item.clients}` },
+                      { label: "Importe", value: formatMoney(item.amountUsd, "USD", currency) },
+                      { label: "Participación", value: `${number.format((item.amountUsd / juneReport.collections.overdueUsd) * 100)}%` },
+                    ],
+                    sourceIds: ["source-june-sales", "source-june-consolidated"],
+                    actions: [{ label: "Abrir Finanzas", view: "metricas" }],
+                  })}
+                >
                   <span><strong>{item.name}</strong><small>{item.clients} clientes</small></span>
                   <div><i style={{ width: `${(item.amountUsd / juneReport.collections.overdueUsd) * 100}%` }} /></div>
                   <b>{formatMoney(item.amountUsd, "USD", currency)}</b>
-                </div>
+                </button>
               ))}
             </div>
             <p className="quality-note">El desglose excede el total declarado en {formatMoney(0.05, "USD", currency)}; se conserva la cifra total de la fuente.</p>
@@ -1832,6 +2447,7 @@ function UrbanismView() {
 
 function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; canAccessFinance: boolean }) {
   const [section, setSection] = useState<"seguridad" | "permisos" | "financiacion">("seguridad");
+  const workspace = useContext(WorkspaceDetailContext);
   return (
     <div className="view-stack">
       <section className="data-view-intro">
@@ -1854,9 +2470,25 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
         <>
           <section className="safety-grid">
             {safetyMetrics.map((metric) => (
-              <article className="panel safety-card" key={metric.label}>
+              <button
+                type="button"
+                className="panel safety-card workspace-data-row"
+                key={metric.label}
+                onClick={() => workspace.openDetail({
+                  id: `safety-${metric.label}`,
+                  kicker: "SEGURIDAD Y SALUD",
+                  title: metric.label,
+                  summary: metric.detail,
+                  status: "partial",
+                  metrics: [{ label: "Valor reportado", value: metric.value }],
+                  sourceIds: ["source-june-works"],
+                  pendingFields: ["Evidencia", "Responsable", "Fecha", "Acción correctiva"],
+                  actions: [{ label: "Abrir Centro de datos", view: "fuentes" }],
+                })}
+              >
                 <span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.detail}</small>
-              </article>
+                <em>Abrir ficha →</em>
+              </button>
             ))}
           </section>
           <section className="report-grid">
@@ -1880,10 +2512,29 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
           <div className="compact-table permit-table">
             <div className="compact-row head"><span>Entidad</span><span>Referencia</span><span>Estado</span><span>Fecha / siguiente paso</span></div>
             {permits.map((permit) => (
-              <div className="compact-row" key={`${permit.entity}-${permit.reference}`}>
+              <button
+                type="button"
+                className="compact-row workspace-data-row"
+                key={`${permit.entity}-${permit.reference}`}
+                onClick={() => workspace.openDetail({
+                  id: `permit-${permit.entity}-${permit.reference}`,
+                  kicker: "PERMISO Y NO OBJECIÓN",
+                  title: permit.entity,
+                  summary: `Referencia ${permit.reference}. ${permit.status}.`,
+                  status: permit.status === "Aprobado" ? "live" : "partial",
+                  metrics: [
+                    { label: "Referencia", value: permit.reference },
+                    { label: "Estado", value: permit.status },
+                    { label: "Fecha / siguiente paso", value: permit.date },
+                  ],
+                  sourceIds: ["source-june-consolidated", "source-june-pdf"],
+                  pendingFields: permit.status === "Aprobado" ? undefined : ["Responsable", "Fecha objetivo", "Documento de cierre"],
+                  actions: [{ label: "Abrir Cronología", view: "cronologia" }],
+                })}
+              >
                 <strong>{permit.entity}</strong><span>{permit.reference}</span>
                 <b className={permit.status === "Aprobado" ? "good-text" : "warn-text"}>{permit.status}</b><span>{permit.date}</span>
-              </div>
+              </button>
             ))}
           </div>
         </section>
@@ -1894,10 +2545,28 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
           <article className="panel finance-processes">
             <div className="panel-heading"><div><span className="section-kicker">GESTIONES FINANCIERAS</span><h3>Procesos activos</h3></div></div>
             {financingProcesses.map((process) => (
-              <div className="finance-process" key={process.entity}>
+              <button
+                type="button"
+                className="finance-process workspace-data-row"
+                key={process.entity}
+                onClick={() => workspace.openDetail({
+                  id: `financing-${process.entity}`,
+                  kicker: "GESTIÓN FINANCIERA",
+                  title: process.entity,
+                  summary: process.detail,
+                  status: "partial",
+                  metrics: [
+                    { label: "Importe", value: formatMoneyMillions(process.amountDop, "DOP", currency) },
+                    { label: "Estado", value: process.status },
+                  ],
+                  sourceIds: ["source-june-consolidated", "source-june-finance"],
+                  pendingFields: ["Responsable", "Próximo paso", "Fecha objetivo", "Documento"],
+                  actions: [{ label: "Abrir Finanzas", view: "metricas" }],
+                })}
+              >
                 <span><strong>{process.entity}</strong><small>{process.detail}</small></span>
                 <b>{formatMoneyMillions(process.amountDop, "DOP", currency)}</b><i>{process.status}</i>
-              </div>
+              </button>
             ))}
           </article>
           <article className="panel decision-panel">
@@ -1915,6 +2584,7 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
 
 function TimelineView() {
   const [filter, setFilter] = useState("todos");
+  const workspace = useContext(WorkspaceDetailContext);
   const visible = timeline.filter((event) => filter === "todos" || event.type === filter);
   return (
     <section className="panel timeline-panel">
@@ -1933,7 +2603,32 @@ function TimelineView() {
       </div>
       <div className="timeline">
         {visible.map((event) => (
-          <article className="timeline-event" key={event.id}>
+          <button
+            type="button"
+            className="timeline-event workspace-data-row"
+            key={event.id}
+            onClick={() => workspace.openDetail({
+              id: event.id,
+              kicker: "EVENTO DE TRAZABILIDAD",
+              title: event.title,
+              summary: event.detail,
+              status: "live",
+              metrics: [
+                { label: "Fecha", value: event.date },
+                { label: "Hora", value: event.time },
+                { label: "Área / edificio", value: event.building },
+                { label: "Responsable", value: event.author },
+              ],
+              sourceIds: event.type === "avance"
+                ? ["source-xls", "source-june-works"]
+                : event.type === "hito"
+                  ? ["source-mpp"]
+                  : ["source-june-consolidated"],
+              actions: [
+                { label: event.type === "avance" ? "Abrir Planificación" : "Abrir Centro de datos", view: event.type === "avance" ? "planificacion" : "fuentes" },
+              ],
+            })}
+          >
             <div className={`timeline-marker ${event.type}`} />
             <div className="timeline-date"><strong>{event.date}</strong><span>{event.time}</span></div>
             <div className="timeline-copy">
@@ -1941,8 +2636,9 @@ function TimelineView() {
               <h4>{event.title}</h4>
               <p>{event.detail}</p>
               <small>{event.building} · {event.author}</small>
+              <em>Abrir evento →</em>
             </div>
-          </article>
+          </button>
         ))}
       </div>
     </section>
@@ -1950,6 +2646,7 @@ function TimelineView() {
 }
 
 function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppliers: Supplier[]; onAdd: () => void; currency: CurrencyCode; canAccessFinance: boolean }) {
+  const workspace = useContext(WorkspaceDetailContext);
   const [payables, setPayables] = useState<PayablesDataset | null>(null);
   const [payablesError, setPayablesError] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
@@ -2030,7 +2727,25 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
         ) : (
           <div className="supplier-grid">
             {suppliers.map((supplier) => (
-              <article className="supplier-card" key={supplier.id}>
+              <button
+                type="button"
+                className="supplier-card workspace-data-row"
+                key={supplier.id}
+                onClick={() => workspace.openDetail({
+                  id: `supplier-${supplier.id}`,
+                  kicker: "PROVEEDOR OPERATIVO",
+                  title: supplier.name,
+                  summary: supplier.category,
+                  status: supplier.status === "al_dia" ? "live" : supplier.status === "revision" ? "partial" : "observed",
+                  metrics: [
+                    { label: "Contacto", value: supplier.contact || "Sin dato" },
+                    { label: "Próxima entrega", value: supplier.nextDelivery || "Sin dato" },
+                    ...(canAccessFinance ? [{ label: "Contratado", value: supplier.amount || "Sin dato" }] : []),
+                  ],
+                  pendingFields: ["Contratos", "Pedidos", "Albaranes", "Incidencias de entrega"],
+                  actions: [{ label: "Abrir Cronología", view: "cronologia" }],
+                })}
+              >
                 <div className="supplier-head">
                   <div className="supplier-logo">{supplier.name.slice(0, 2).toUpperCase()}</div>
                   <div><strong>{supplier.name}</strong><span>{supplier.category}</span></div>
@@ -2041,7 +2756,8 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
                   <span>Próxima entrega<strong>{supplier.nextDelivery || "Sin dato"}</strong></span>
                   {canAccessFinance && <span>Contratado<strong>{supplier.amount || "Sin dato"}</strong></span>}
                 </div>
-              </article>
+                <em>Abrir ficha →</em>
+              </button>
             ))}
           </div>
         )}
@@ -2895,6 +3611,7 @@ function DataHistoryPanel() {
 }
 
 function SourcesView({ onUpload, canAccessFinance }: { onUpload: () => void; canAccessFinance: boolean }) {
+  const workspace = useContext(WorkspaceDetailContext);
   const visibleSources = canAccessFinance
     ? dataSources
     : dataSources.filter((source) => !/financ|balance|flujo|cxp|antonely/i.test(`${source.kind} ${source.file}`));
@@ -2947,13 +3664,16 @@ function SourcesView({ onUpload, canAccessFinance }: { onUpload: () => void; can
             <ul className="quality-list">
               {source.notes.map((note) => <li key={note}>{note}</li>)}
             </ul>
-            {source.downloadUrl && (
-              <div className="source-actions">
+            <div className="source-actions">
+              <button className="button primary" type="button" onClick={() => workspace.openDetail(sourceWorkspaceDetail(source))}>
+                Abrir ficha y conexiones
+              </button>
+              {source.downloadUrl && (
                 <a className="button secondary" href={source.downloadUrl} download={source.file}>
                   Descargar archivo
                 </a>
-              </div>
-            )}
+              )}
+            </div>
           </article>
         ))}
       </section>
@@ -3950,6 +4670,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   const [uploadOpen, setUploadOpen] = useState(false);
   const [reportBuilderOpen, setReportBuilderOpen] = useState(false);
   const [directionReport, setDirectionReport] = useState<DirectionReportPeriod | null>(null);
+  const [workspaceDetail, setWorkspaceDetail] = useState<WorkspaceDetail | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [notice, setNotice] = useState("");
@@ -4053,7 +4774,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     };
   }, [currentUser.financeAccess]);
 
-  const searchResults = useMemo(() => {
+  const searchResults = useMemo<WorkspaceSearchResult[]>(() => {
     const term = search.trim().toLowerCase();
     if (!term) return [];
     if (activeProjectId === "mirador") {
@@ -4087,11 +4808,22 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
           .filter((item) => item.name.toLowerCase().includes(term))
           .map((item) => ({ label: item.name, detail: `${item.value} ${item.unit}`, view: "metricas" as View, building: null }))
         : []),
+      ...dataSources
+        .filter((source) => currentUser.financeAccess || !sourceRequiresFinance(source))
+        .filter((source) => `${source.file} ${source.kind}`.toLowerCase().includes(term))
+        .map((source) => ({
+          label: source.file,
+          detail: `${source.kind} · corte ${source.declaredCutoff}`,
+          view: "fuentes" as View,
+          building: null,
+          sourceId: source.id,
+        })),
     ].slice(0, 8);
   }, [activeProjectId, search, supplierRows, metrics, currentUser.financeAccess]);
 
   function navigate(viewId: View) {
     setView(viewId);
+    setWorkspaceDetail(null);
     setMobileMenuOpen(false);
     if (viewId === "agente") setAgentOpen(false);
   }
@@ -4106,6 +4838,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     setUploadOpen(false);
     setReportBuilderOpen(false);
     setDirectionReport(null);
+    setWorkspaceDetail(null);
     setAgentOpen(projectId === "araya" && !window.matchMedia("(max-width: 1100px)").matches);
   }
 
@@ -4135,6 +4868,10 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   }
 
   return (
+    <WorkspaceDetailContext.Provider value={{
+      enabled: activeProjectId === "araya",
+      openDetail: setWorkspaceDetail,
+    }}>
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
@@ -4278,6 +5015,10 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
                   key={`${result.view}-${result.label}`}
                   onClick={() => {
                     if (result.building) setSelectedBuilding(result.building);
+                    if (result.sourceId) {
+                      const source = dataSources.find((item) => item.id === result.sourceId);
+                      if (source) setWorkspaceDetail(sourceWorkspaceDetail(source));
+                    }
                     setView(result.view);
                     setSearch("");
                   }}
@@ -4300,7 +5041,17 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
             </em>
           </div>
         )}
-        <div className="content">{content()}</div>
+        <div className="content">
+          {content()}
+          {activeProjectId === "araya" && !(view === "metricas" && !currentUser.financeAccess) && (
+            <AreaWorkspaceDock
+              view={view}
+              canAccessFinance={currentUser.financeAccess}
+              onNavigate={navigate}
+              onUpload={() => setUploadOpen(true)}
+            />
+          )}
+        </div>
       </main>
 
       {mobileMenuOpen && (
@@ -4440,7 +5191,18 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
         />
       )}
 
+      {activeProjectId === "araya" && workspaceDetail && (
+        <WorkspaceDetailPanel
+          detail={workspaceDetail}
+          canAccessFinance={currentUser.financeAccess}
+          onClose={() => setWorkspaceDetail(null)}
+          onNavigate={navigate}
+          onUpload={() => setUploadOpen(true)}
+        />
+      )}
+
       {notice && <div className="upload-toast" role="status"><strong>Archivo recibido</strong><span>{notice}</span></div>}
     </div>
+    </WorkspaceDetailContext.Provider>
   );
 }

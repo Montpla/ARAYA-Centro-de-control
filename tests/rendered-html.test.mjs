@@ -340,6 +340,44 @@ test("providers open a protected, live invoice ledger with auditable source reco
   assert.match(styles, /\.payable-supplier-row/);
 });
 
+test("every operational area exposes connected modules, documents and interactive drill-downs", async () => {
+  const [dashboard, styles] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/globals.css", "utf8"),
+  ]);
+  for (const view of [
+    "resumen",
+    "planificacion",
+    "implantacion",
+    "edificios",
+    "viviendas",
+    "urbanismo",
+    "comercial",
+    "metricas",
+    "cronologia",
+    "proveedores",
+    "control",
+    "fuentes",
+  ]) {
+    assert.match(dashboard, new RegExp(`\\b${view}: \\{`));
+  }
+  assert.match(dashboard, /function AreaWorkspaceDock/);
+  assert.match(dashboard, /function WorkspaceDetailPanel/);
+  assert.match(dashboard, /statCardLinks/);
+  assert.match(dashboard, /DOCUMENTACIÓN VINCULADA/);
+  assert.match(dashboard, /CAMPOS PREPARADOS/);
+  assert.match(dashboard, /Abrir \/ descargar/);
+  assert.match(dashboard, /sourceWorkspaceDetail/);
+  assert.match(dashboard, /dataSources[\s\S]*sourceId: source\.id/);
+  assert.match(dashboard, /workspace-data-row/);
+  assert.match(dashboard, /!\(view === "metricas" && !currentUser\.financeAccess\)/);
+  assert.match(styles, /\.area-workspace-dock/);
+  assert.match(styles, /\.workspace-module-card/);
+  assert.match(styles, /\.workspace-detail-panel/);
+  assert.match(styles, /\.stat-card\.interactive/);
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.workspace-detail-panel/);
+});
+
 test("direction can generate grounded weekly or monthly reports and export them to PDF", async () => {
   const [dashboard, styles] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),
