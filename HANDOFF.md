@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 28.
-- Commit desplegado: `eef00e7f0d6a6a22c87898992100f457bde95daa`.
+- Última versión publicada: 29.
+- Commit desplegado: `2fa700233491bc257ac86c704e799e6e3027d948`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_e5fe2c0afbb88191bbd393943bfe176b`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_d2c6e0c4f5188191a29d531757943923`.
 - Despliegue:
-  `appgdep_6a6b633fa6e0819193986dc8ff9c6b35` (`succeeded`).
+  `appgdep_6a6b68d9fd2c8191bce96dcd4837a568` (`succeeded`).
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
   en Sites. La solicitud de cambiarlo a `public` devolvió
   `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
@@ -374,7 +374,7 @@ Comando habitual:
 
 Este comando ejecuta el build de vinext y las pruebas. En el último corte:
 
-- 21 pruebas superadas.
+- 22 pruebas superadas.
 - 0 fallos.
 - La compilación de producción fue correcta.
 - `npm run lint` termina sin errores; mantiene ocho avisos conocidos por el
@@ -464,6 +464,21 @@ Nuevas vistas interactivas:
 
 Vistas ampliadas:
 
+- Las 12 áreas operativas de ARAYA incorporan un mapa de trabajo común con
+  módulos de datos, estado de cobertura, documentación vinculada, campos
+  preparados y navegación a las secciones relacionadas.
+- Los KPI principales abren una ficha contextual con valor, fuente y acción.
+  También son interactivos los paquetes y acciones de planificación, modelos y
+  ubicaciones comerciales, tramos de morosidad, disciplinas y demoras de
+  edificios, seguridad, permisos, financiación, eventos de cronología y
+  proveedores operativos.
+- El buscador global encuentra también documentos por nombre o tipo y abre su
+  ficha de trazabilidad. Cada documento visible puede abrirse o descargarse.
+- Las fichas contextuales son responsive, se cierran con `Escape`, enlazan los
+  documentos disponibles y permiten abrir la carga de una actualización en el
+  área correspondiente.
+- La capa conectada no se muestra sobre Finanzas cuando el usuario carece de
+  permiso financiero.
 - `Proveedores`: buscador, listado maestro interactivo, ficha de proveedor,
   facturas consolidadas, detalle de vencimiento e imputaciones. El API exige
   acceso financiero y se refresca cada cinco segundos.
