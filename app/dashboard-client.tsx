@@ -204,6 +204,43 @@ type OperationalAlert = {
   view: View;
 };
 
+type PayableInvoice = {
+  id: string;
+  vendorName: string;
+  reference: string | null;
+  invoiceDate: string;
+  dueDate: string;
+  amountDop: number;
+  agingIndex: number;
+  allocations: Array<{
+    category: string;
+    amountDop: number;
+    sourceRow: number;
+  }>;
+  documentUrl: string | null;
+};
+
+type PayablesDataset = {
+  cutoff: string;
+  sourceName: string;
+  sourceSheet: string;
+  sourceUrl: string;
+  updatedAt: string | null;
+  sourceLineCount: number;
+  invoiceCount: number;
+  vendorCount: number;
+  totalDop: number;
+  vendors: Array<{
+    name: string;
+    amountDop: number;
+    invoiceCount: number;
+    sourceLineCount: number;
+    documentCount: number;
+    oldestAgingIndex: number;
+  }>;
+  invoices: PayableInvoice[];
+};
+
 const liveDataTargets: Record<string, unknown> = {
   advances,
   antonelyAdvances,
@@ -458,6 +495,24 @@ function formatReportDate(value: string) {
   return new Intl.DateTimeFormat("es-ES", {
     day: "2-digit",
     month: "long",
+    year: "numeric",
+  }).format(new Date(`${value}T12:00:00`));
+}
+
+const payableAgingLabels = [
+  "Al corriente",
+  "Menos de 1 mes",
+  "1 mes",
+  "2 meses",
+  "3 meses",
+  "Más de 3 meses",
+] as const;
+
+function formatPayableDate(value: string) {
+  if (!value) return "Sin dato";
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "short",
     year: "numeric",
   }).format(new Date(`${value}T12:00:00`));
 }
@@ -1895,15 +1950,61 @@ function TimelineView() {
 }
 
 function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppliers: Supplier[]; onAdd: () => void; currency: CurrencyCode; canAccessFinance: boolean }) {
+  const [payables, setPayables] = useState<PayablesDataset | null>(null);
+  const [payablesError, setPayablesError] = useState("");
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [selectedVendorName, setSelectedVendorName] = useState("");
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
+
+  useEffect(() => {
+    if (!canAccessFinance) return;
+    let active = true;
+    const refreshPayables = async () => {
+      try {
+        const response = await fetch("/api/payables", { cache: "no-store" });
+        if (!response.ok) throw new Error("No se pudo consultar el detalle de facturas.");
+        const payload = await response.json() as PayablesDataset;
+        if (!active) return;
+        setPayables(payload);
+        setPayablesError("");
+      } catch (error) {
+        if (!active) return;
+        setPayablesError(error instanceof Error ? error.message : "No se pudo consultar el detalle de facturas.");
+      }
+    };
+    void refreshPayables();
+    const interval = window.setInterval(() => void refreshPayables(), 5_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [canAccessFinance]);
+
+  const visiblePayableVendors = useMemo(() => {
+    const query = supplierSearch.trim().toLocaleLowerCase("es");
+    if (!payables) return [];
+    if (!query) return payables.vendors;
+    return payables.vendors.filter((supplier) => supplier.name.toLocaleLowerCase("es").includes(query));
+  }, [payables, supplierSearch]);
+
+  const selectedVendor = payables?.vendors.find((supplier) => supplier.name === selectedVendorName) ?? null;
+  const selectedVendorInvoices = useMemo(
+    () => payables?.invoices.filter((invoice) => invoice.vendorName === selectedVendorName) ?? [],
+    [payables, selectedVendorName],
+  );
+  const selectedInvoice = selectedVendorInvoices.find((invoice) => invoice.id === selectedInvoiceId) ?? null;
+  const biggestVendorName = payables?.vendors[0]?.name ?? antonelyPayableVendorsAll[0].name;
+  const biggestVendorAmount = payables?.vendors[0]?.amountDop ?? antonelyPayableVendorsAll[0].amount;
+
   return (
     <div className="view-stack">
       <section className="stat-grid wide">
         <StatCard eyebrow="Proveedores operativos" value={`${suppliers.length}`} detail="Registros configurables del dashboard" />
         {canAccessFinance ? (
           <>
-            <StatCard eyebrow="Facturas en CxP" value="96" detail="Archivo departamental de Antonely" />
-            <StatCard eyebrow="Mayor exposición" value={formatMoneyMillions(antonelyPayableVendorsAll[0].amount, "DOP", currency)} detail={antonelyPayableVendorsAll[0].name} tone="warn" />
-            <StatCard eyebrow="CxP departamental" value={formatMoneyMillions(antonelyFinanceSource.payablesDetailDop, "DOP", currency)} detail="Pendiente de conciliación" tone="warn" />
+            <StatCard eyebrow="Facturas consolidadas" value={payables ? `${payables.invoiceCount}` : "…"} detail={`${payables?.sourceLineCount ?? 96} líneas contables`} />
+            <StatCard eyebrow="Mayor exposición" value={formatMoneyMillions(biggestVendorAmount, "DOP", currency)} detail={biggestVendorName} tone="warn" />
+            <StatCard eyebrow="CxP departamental" value={formatMoneyMillions(payables?.totalDop ?? antonelyFinanceSource.payablesDetailDop, "DOP", currency)} detail="Pendiente de conciliación" tone="warn" />
           </>
         ) : (
           <>
@@ -1945,25 +2046,171 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
           </div>
         )}
       </section>
-      {canAccessFinance && <section className="panel">
+      {canAccessFinance && <section className="panel payable-suppliers-panel">
         <div className="panel-heading">
           <div>
             <span className="section-kicker">CUENTAS POR PAGAR · ANTONELY</span>
-            <h3>Principales proveedores por saldo registrado</h3>
+            <h3>Proveedores y facturas registradas</h3>
           </div>
-          <span className="data-note">43 proveedores · {currency}</span>
+          <span className="data-note">{payables?.vendorCount ?? 43} proveedores · {payables?.invoiceCount ?? 86} facturas · {currency}</span>
         </div>
-        <div className="rank-list compact">
-          {antonelyPayableVendorsAll.map((supplier) => (
-            <div key={supplier.name}>
-              <span><strong>{supplier.name}</strong></span>
-              <div><i style={{ width: `${Math.max(0, (supplier.amount / antonelyPayableVendorsAll[0].amount) * 100)}%` }} /></div>
-              <b>{formatMoneyMillions(supplier.amount, "DOP", currency)}</b>
-            </div>
-          ))}
+        <div className="payable-supplier-toolbar">
+          <label>
+            <span>Buscar proveedor</span>
+            <input
+              type="search"
+              value={supplierSearch}
+              onChange={(event) => setSupplierSearch(event.target.value)}
+              placeholder="Nombre del proveedor"
+            />
+          </label>
+          <div>
+            <strong>{visiblePayableVendors.length}</strong>
+            <span>resultados</span>
+          </div>
         </div>
-        <p className="quality-note">Este ranking procede de 96 líneas de factura. Es una vista de obligaciones, no un catálogo contractual ni una evaluación del proveedor.</p>
+        {payablesError && !payables ? (
+          <div className="empty-state compact">
+            <strong>No se pudo cargar el detalle.</strong>
+            <p>{payablesError} El sistema volverá a intentarlo automáticamente.</p>
+          </div>
+        ) : (
+          <div className="payable-supplier-list">
+            {visiblePayableVendors.map((supplier) => (
+              <button
+                type="button"
+                key={supplier.name}
+                className="payable-supplier-row"
+                onClick={() => {
+                  setSelectedVendorName(supplier.name);
+                  setSelectedInvoiceId("");
+                }}
+              >
+                <span className="supplier-logo" aria-hidden="true">{supplier.name.slice(0, 2).toUpperCase()}</span>
+                <span className="payable-supplier-name">
+                  <strong>{supplier.name}</strong>
+                  <small>{supplier.invoiceCount} facturas · {supplier.sourceLineCount} líneas de origen</small>
+                </span>
+                <span className={`payable-aging age-${supplier.oldestAgingIndex}`}>
+                  {payableAgingLabels[supplier.oldestAgingIndex] ?? "En revisión"}
+                </span>
+                <b>{formatMoney(supplier.amountDop, "DOP", currency)}</b>
+                <span className="payable-open-label">Abrir proveedor <i aria-hidden="true">→</i></span>
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="quality-note">
+          Pulsa un proveedor para consultar sus facturas. El saldo procede de {payables?.sourceLineCount ?? 96} líneas contables,
+          consolidadas por proveedor, referencia y fecha sin duplicar las imputaciones a varias partidas.
+        </p>
       </section>}
+
+      {canAccessFinance && selectedVendor && payables && (
+        <div
+          className="supplier-ledger-backdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) {
+              setSelectedVendorName("");
+              setSelectedInvoiceId("");
+            }
+          }}
+        >
+          <aside className="supplier-ledger-panel" role="dialog" aria-modal="true" aria-label={`Facturas de ${selectedVendor.name}`}>
+            <div className="supplier-ledger-header">
+              <div>
+                <span className="section-kicker">{selectedInvoice ? "DETALLE DE FACTURA" : "FICHA DEL PROVEEDOR"}</span>
+                <h3>{selectedInvoice ? selectedInvoice.reference || "Registro sin referencia" : selectedVendor.name}</h3>
+                <p>{selectedInvoice ? selectedVendor.name : `Corte ${formatPayableDate(payables.cutoff)}`}</p>
+              </div>
+              <button
+                type="button"
+                className="close-button"
+                aria-label="Cerrar ficha del proveedor"
+                onClick={() => {
+                  setSelectedVendorName("");
+                  setSelectedInvoiceId("");
+                }}
+              >×</button>
+            </div>
+
+            {selectedInvoice ? (
+              <div className="payable-invoice-detail">
+                <button type="button" className="text-action" onClick={() => setSelectedInvoiceId("")}>← Volver a las facturas</button>
+                <div className="payable-invoice-summary">
+                  <span><small>Proveedor</small><strong>{selectedInvoice.vendorName}</strong></span>
+                  <span><small>Importe</small><strong>{formatMoney(selectedInvoice.amountDop, "DOP", currency)}</strong></span>
+                  <span><small>Fecha factura</small><strong>{formatPayableDate(selectedInvoice.invoiceDate)}</strong></span>
+                  <span><small>Vencimiento</small><strong>{formatPayableDate(selectedInvoice.dueDate)}</strong></span>
+                  <span><small>Antigüedad al corte</small><strong>{selectedInvoice.amountDop < 0 ? "Nota de crédito / ajuste" : payableAgingLabels[selectedInvoice.agingIndex]}</strong></span>
+                  <span><small>Referencia</small><strong>{selectedInvoice.reference || "Sin referencia en origen"}</strong></span>
+                </div>
+                <div className="payable-allocation-block">
+                  <div className="unit-section-heading">
+                    <span>IMPUTACIÓN CONTABLE</span>
+                    <small>{selectedInvoice.allocations.length} {selectedInvoice.allocations.length === 1 ? "partida" : "partidas"}</small>
+                  </div>
+                  <div className="payable-allocation-list">
+                    {selectedInvoice.allocations.map((allocation) => (
+                      <div key={`${allocation.category}-${allocation.sourceRow}`}>
+                        <span><strong>{allocation.category}</strong><small>Fila {allocation.sourceRow} · {payables.sourceSheet}</small></span>
+                        <b>{formatMoney(allocation.amountDop, "DOP", currency)}</b>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="payable-document-block">
+                  <div>
+                    <strong>Documento de la factura</strong>
+                    <p>
+                      {selectedInvoice.documentUrl
+                        ? "El archivo individual está vinculado a este registro."
+                        : "Documento individual pendiente de cargar. La información visible está verificada contra el archivo fuente."}
+                    </p>
+                  </div>
+                  <div className="payable-document-actions">
+                    {selectedInvoice.documentUrl ? (
+                      <a className="button primary" href={selectedInvoice.documentUrl} target="_blank" rel="noreferrer">Abrir factura</a>
+                    ) : (
+                      <span className="button disabled" aria-disabled="true">Factura no adjunta</span>
+                    )}
+                    <a className="button secondary" href={payables.sourceUrl} target="_blank" rel="noreferrer">Abrir archivo fuente</a>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="supplier-ledger-summary">
+                  <span><small>Saldo registrado</small><strong>{formatMoney(selectedVendor.amountDop, "DOP", currency)}</strong></span>
+                  <span><small>Facturas</small><strong>{selectedVendor.invoiceCount}</strong></span>
+                  <span><small>Líneas de origen</small><strong>{selectedVendor.sourceLineCount}</strong></span>
+                  <span><small>Documentos vinculados</small><strong>{selectedVendor.documentCount}</strong></span>
+                </div>
+                <div className="supplier-invoice-list">
+                  {selectedVendorInvoices.map((invoice) => (
+                    <button type="button" key={invoice.id} onClick={() => setSelectedInvoiceId(invoice.id)}>
+                      <span>
+                        <strong>{invoice.reference || "Sin referencia"}</strong>
+                        <small>Factura {formatPayableDate(invoice.invoiceDate)} · vence {formatPayableDate(invoice.dueDate)}</small>
+                      </span>
+                      <span className={`payable-aging age-${invoice.agingIndex}`}>
+                        {invoice.amountDop < 0 ? "Ajuste" : payableAgingLabels[invoice.agingIndex]}
+                      </span>
+                      <b>{formatMoney(invoice.amountDop, "DOP", currency)}</b>
+                      <i aria-hidden="true">→</i>
+                    </button>
+                  ))}
+                </div>
+                <p className="supplier-ledger-source">
+                  Fuente: <strong>{payables.sourceName}</strong> · hoja {payables.sourceSheet}.
+                  Cada factura puede abrirse para revisar sus fechas, importe e imputación.
+                </p>
+              </>
+            )}
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

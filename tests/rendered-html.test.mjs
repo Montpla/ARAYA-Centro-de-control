@@ -312,6 +312,34 @@ test("financial presentation defaults to USD and preserves DOP source values", a
   assert.match(financeDetail, /advancePendingDop: 9210448\.86/);
 });
 
+test("providers open a protected, live invoice ledger with auditable source records", async () => {
+  const [dashboard, route, invoiceData, liveData, styles] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/api/payables/route.ts", "utf8"),
+    readFile("app/antonely-payable-invoices.ts", "utf8"),
+    readFile("lib/live-data.ts", "utf8"),
+    readFile("app/globals.css", "utf8"),
+  ]);
+  const sourceRows = invoiceData.match(/^\s*\[\d+,\s*"\d{4}-\d{2}-\d{2}"/gm) ?? [];
+  assert.equal(sourceRows.length, 96);
+  assert.match(invoiceData, /buildPayablesDataset/);
+  assert.match(invoiceData, /invoiceMap/);
+  assert.match(invoiceData, /PAYABLE_SOURCE_URL/);
+  assert.match(route, /requireApiUser\(\{ finance: true \}\)/);
+  assert.match(route, /antonelyPayableInvoiceLines/);
+  assert.match(route, /Cache-Control", "private, no-store"/);
+  assert.match(liveData, /"antonelyPayableInvoiceLines"/);
+  assert.match(dashboard, /fetch\("\/api\/payables"/);
+  assert.match(dashboard, /window\.setInterval\(\(\) => void refreshPayables\(\), 5_000\)/);
+  assert.match(dashboard, /Proveedores y facturas registradas/);
+  assert.match(dashboard, /Abrir proveedor/);
+  assert.match(dashboard, /Documento individual pendiente de cargar/);
+  assert.match(dashboard, /Abrir archivo fuente/);
+  assert.match(styles, /\.supplier-ledger-panel/);
+  assert.match(styles, /\.supplier-invoice-list/);
+  assert.match(styles, /\.payable-supplier-row/);
+});
+
 test("direction can generate grounded weekly or monthly reports and export them to PDF", async () => {
   const [dashboard, styles] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),
