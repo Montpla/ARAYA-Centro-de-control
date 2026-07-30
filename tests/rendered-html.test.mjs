@@ -487,11 +487,54 @@ test("operational intelligence adds complete apartment cards, role focus, proces
   assert.match(historyRoute, /requireApiUser/);
   assert.match(historyRoute, /isFinancialLiveKey/);
   assert.match(liveRoute, /datos_publicados/);
-  assert.match(filesRoute, /processingStage: "clasificado"/);
+  assert.match(filesRoute, /processingStage: normalizedUpdates\.length/);
   assert.match(adminRoute, /isUserArea/);
   assert.match(migration, /CREATE TABLE `live_data_history`/);
   assert.match(migration, /ALTER TABLE `app_users` ADD `area`/);
   assert.match(migration, /processing_progress/);
+});
+
+test("point two adds a controlled ingestion queue with human approval and immutable provenance", async () => {
+  const [dashboard, styles, filesRoute, reviewRoute, ingestion, publisher, schema, migration, prompt] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/globals.css", "utf8"),
+    readFile("app/api/files/route.ts", "utf8"),
+    readFile("app/api/files/review/route.ts", "utf8"),
+    readFile("lib/ingestion.ts", "utf8"),
+    readFile("lib/publish-live-data.ts", "utf8"),
+    readFile("db/schema.ts", "utf8"),
+    readFile("drizzle/0007_ingestion_control_room.sql", "utf8"),
+    readFile("lib/agent-prompt.ts", "utf8"),
+  ]);
+  assert.match(dashboard, /BANDEJA DE VALIDACIÓN/);
+  assert.match(dashboard, /CAMBIOS CONTRASTADOS/);
+  assert.match(dashboard, /Valor vigente/);
+  assert.match(dashboard, /Valor propuesto/);
+  assert.match(dashboard, /Aprobar y publicar/);
+  assert.match(dashboard, /Solicitar cambios/);
+  assert.match(dashboard, /Preparar validación documental/);
+  assert.match(dashboard, /Identificación/);
+  assert.match(dashboard, /Contraste/);
+  assert.match(dashboard, /Sincronización/);
+  assert.match(styles, /\.file-review-panel/);
+  assert.match(styles, /\.review-proposals/);
+  assert.match(styles, /\.review-decision-bar/);
+  assert.match(filesRoute, /analyzeDocument/);
+  assert.match(filesRoute, /extractStructuredUpdates/);
+  assert.match(filesRoute, /documentDataProposals/);
+  assert.match(reviewRoute, /requireApiUser\(\{ admin: true \}\)/);
+  assert.match(reviewRoute, /action === "approve"/);
+  assert.match(reviewRoute, /action === "reject"/);
+  assert.match(reviewRoute, /publishLiveDataUpdates/);
+  assert.match(ingestion, /export function analyzeDocument/);
+  assert.match(ingestion, /extension !== "csv" && extension !== "json"/);
+  assert.match(publisher, /liveDataHistory/);
+  assert.match(publisher, /onConflictDoUpdate/);
+  assert.match(schema, /documentDataProposals/);
+  assert.match(schema, /fileReviews/);
+  assert.match(migration, /CREATE TABLE `document_data_proposals`/);
+  assert.match(migration, /CREATE TABLE `file_reviews`/);
+  assert.match(prompt, /nunca se publica sin aprobación/);
 });
 
 test("tablet and mobile mode provides app navigation, touch plan, camera upload and safe PWA metadata", async () => {

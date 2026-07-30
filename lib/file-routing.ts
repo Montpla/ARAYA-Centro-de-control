@@ -30,9 +30,31 @@ export function isUserArea(value: string): value is UserArea {
 
 export const uploadStatusLabels: Record<string, string> = {
   recibido: "Recibido",
-  pendiente_revision: "En normalización",
+  pendiente_revision: "Pendiente de validación",
   integrado: "Integrado",
   observado: "Observado",
+  rechazado: "Rechazado",
+};
+
+export const documentTypeLabels: Record<string, string> = {
+  estado_financiero: "Estado financiero",
+  avance_obra: "Avance de obra",
+  cronograma: "Cronograma y planificación",
+  ventas_cobranza: "Ventas y cobranza",
+  proveedores_compras: "Proveedores y compras",
+  plano_diseno: "Plano y diseño",
+  urbanismo: "Urbanismo",
+  seguridad_permisos: "Seguridad y permisos",
+  evidencia_fotografica: "Evidencia fotográfica",
+  documento_general: "Documento general",
+};
+
+export const reviewStatusLabels: Record<string, string> = {
+  pendiente_extraccion: "Pendiente de extracción",
+  listo_revision: "Listo para validar",
+  cambios_solicitados: "Cambios solicitados",
+  aprobado: "Aprobado",
+  rechazado: "Rechazado",
 };
 
 const areaKeywords: Record<Exclude<ClassifiedArea, "sin_clasificar">, string[]> = {

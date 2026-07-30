@@ -109,7 +109,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const auth = await authenticatedUser();
+  const auth = await requireApiUser({ admin: true });
   if (!auth.user) return auth.response;
 
   let payload: {
@@ -239,6 +239,12 @@ export async function POST(request: Request) {
           processingProgress: 100,
           processingSummary: `${normalized.length} datos normalizados y publicados en la revisión ${event.id}.`,
           requiresReview: false,
+          reviewStatus: "aprobado",
+          reviewedByEmail: auth.user.email,
+          reviewedByName: auth.user.displayName,
+          reviewedAt: updatedAt,
+          publicationRevision: event.id,
+          publishedAt: updatedAt,
           updatedAt,
         })
         .where(eq(uploadedFiles.id, fileId));

@@ -356,8 +356,18 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
         processingProgress: row.processingProgress,
         processingSummary: row.processingSummary,
         requiresReview: row.requiresReview,
+        project: row.projectId,
+        documentType: row.documentType,
+        detectedPeriod: row.detectedPeriod || "No identificado",
+        extractionMode: row.extractionMode,
+        extractionConfidence: row.extractionConfidence,
+        extractionSummary: row.extractionSummary,
+        discrepancyCount: row.discrepancyCount,
+        reviewStatus: row.reviewStatus,
+        reviewedBy: row.reviewedByName || "Pendiente",
+        publicationRevision: row.publicationRevision,
       })),
-      rule: "El archivo original aparece inmediatamente. Sus datos normalizados publican una nueva versión que actualiza todas las pantallas en menos de cinco segundos; las contradicciones quedan observadas.",
+      rule: "Recepción, identificación, extracción y contraste no cambian el dashboard. Sólo una aprobación en la bandeja de validación publica la revisión viva; finanzas y datos operativos nunca se aprueban de forma autónoma.",
     };
   }
   return {
@@ -391,7 +401,7 @@ async function fallbackAnswer(question: string, currency: CurrencyCode) {
   const usdValue = (value: number) => formatMoney(value, "USD", currency);
 
   if (normalized.includes("archivo") || normalized.includes("adjunt") || normalized.includes("subir") || normalized.includes("cargar")) {
-    return `Puedes adjuntar el archivo en este chat o usar “+ Cargar archivo” desde cualquier pestaña. El sistema sugiere el área, conserva el original y registra usuario y versión. Cuando sus datos quedan normalizados, publica una versión viva que actualiza gráficas, cifras, porcentajes, cronograma y avance en menos de cinco segundos; cualquier contradicción queda observada y no se sustituye silenciosamente.${source}`;
+    return `Puedes adjuntar el archivo en este chat o usar “+ Cargar archivo” desde cualquier pestaña. El sistema conserva el original, detecta duplicados e identifica proyecto, área, tipo, periodo y moneda. Después abre un expediente para extracción, contraste y validación. Ninguna cifra, porcentaje, fecha, apartamento, edificio o elemento urbano cambia hasta que el administrador aprueba las propuestas visibles; entonces se publica una revisión viva y todas las pantallas la reciben en menos de cinco segundos.${source}`;
   }
 
   if (normalized.includes("calidad") || normalized.includes("fuente") || normalized.includes("inconsisten")) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, FormEvent, createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, FormEvent, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Building,
   CustomMetric,
@@ -91,6 +91,8 @@ import {
   UploadArea,
   UserArea,
   areaLabels,
+  documentTypeLabels,
+  reviewStatusLabels,
   uploadAreas,
   uploadStatusLabels,
   userAreas,
@@ -159,6 +161,19 @@ type UploadedFileRecord = {
   processingProgress: number;
   processingSummary: string;
   requiresReview: boolean;
+  projectId: string;
+  documentType: string;
+  detectedPeriod: string;
+  extractionMode: string;
+  extractionConfidence: number;
+  extractionSummary: string;
+  discrepancyCount: number;
+  reviewStatus: string;
+  reviewedByName: string;
+  reviewedAt: string;
+  reviewNote: string;
+  publicationRevision: number | null;
+  publishedAt: string;
   createdAt: string;
   updatedAt: string;
   downloadUrl: string;
@@ -169,6 +184,71 @@ type UploadResult = {
   message?: string;
   error?: string;
   file?: UploadedFileRecord;
+};
+
+type DocumentDataProposal = {
+  id: string;
+  key: string;
+  label: string;
+  value: unknown;
+  previousValue: unknown;
+  valueType: string;
+  area: string;
+  sourceCurrency: CurrencyCode;
+  cutoff: string;
+  confidence: number;
+  discrepancy: boolean;
+  status: string;
+  notes: string;
+};
+
+type FileReviewDetail = {
+  file: Pick<
+    UploadedFileRecord,
+    | "id"
+    | "originalName"
+    | "area"
+    | "areaLabel"
+    | "documentType"
+    | "detectedPeriod"
+    | "extractionMode"
+    | "extractionConfidence"
+    | "extractionSummary"
+    | "discrepancyCount"
+    | "reviewStatus"
+    | "reviewNote"
+    | "reviewedByName"
+    | "reviewedAt"
+    | "publicationRevision"
+    | "publishedAt"
+    | "status"
+    | "sourceCurrency"
+    | "declaredCutoff"
+    | "classificationReason"
+    | "processingSummary"
+    | "downloadUrl"
+  >;
+  proposals: DocumentDataProposal[];
+  reviews: Array<{
+    id: number;
+    action: string;
+    note: string;
+    proposalCount: number;
+    publicationRevision: number | null;
+    actorName: string;
+    createdAt: string;
+  }>;
+  activity: Array<{
+    id: number;
+    eventType: string;
+    message: string;
+    actorName: string;
+    createdAt: string;
+  }>;
+  permissions: {
+    canReview: boolean;
+    canAccessFinance: boolean;
+  };
 };
 
 type ProjectId = "araya" | "mirador";
@@ -838,7 +918,9 @@ const fileSize = (bytes: number) => {
 const processingStageLabels: Record<string, string> = {
   recibido: "Original recibido",
   clasificado: "Clasificación completada",
-  normalizando: "Extracción y contraste",
+  extraccion_pendiente: "Extracción pendiente",
+  normalizando: "Extracción en curso",
+  contraste: "Contraste y validación",
   sincronizado: "Datos sincronizados",
   observado: "Revisión requerida",
 };
@@ -4123,10 +4205,314 @@ function UsersAdminView({
   );
 }
 
-function CollaborativeFileRegistry() {
+function proposalPreview(value: unknown) {
+  if (value === null) return "Sin valor";
+  if (typeof value === "string") return value;
+  const serialized = JSON.stringify(value);
+  return serialized.length > 160 ? `${serialized.slice(0, 157)}…` : serialized;
+}
+
+function parseProposalValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    if (/^-?\d+(?:[.,]\d+)?$/.test(trimmed)) return Number(trimmed.replace(",", "."));
+    if (/^(si|sí|true)$/i.test(trimmed)) return true;
+    if (/^(no|false)$/i.test(trimmed)) return false;
+    return trimmed;
+  }
+}
+
+function FileReviewPanel({
+  file,
+  currentUser,
+  onClose,
+  onUpdated,
+}: {
+  file: UploadedFileRecord;
+  currentUser: DashboardUser;
+  onClose: () => void;
+  onUpdated: () => void;
+}) {
+  const [detail, setDetail] = useState<FileReviewDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [working, setWorking] = useState("");
+  const [note, setNote] = useState("");
+  const [area, setArea] = useState(file.area);
+  const [cutoff, setCutoff] = useState(file.detectedPeriod || file.declaredCutoff);
+  const [documentType, setDocumentType] = useState(file.documentType);
+  const [draftKey, setDraftKey] = useState("");
+  const [draftValue, setDraftValue] = useState("");
+  const [draftUpdates, setDraftUpdates] = useState<Array<{ key: string; value: unknown }>>([]);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/files/review?file=${encodeURIComponent(file.id)}`, { cache: "no-store" });
+      const payload = await response.json() as FileReviewDetail & { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "No se pudo abrir la revisión.");
+      setDetail(payload);
+      setArea(payload.file.area);
+      setCutoff(payload.file.detectedPeriod || payload.file.declaredCutoff);
+      setDocumentType(payload.file.documentType);
+      setError("");
+    } catch (refreshError) {
+      setError(refreshError instanceof Error ? refreshError.message : "No se pudo abrir la revisión.");
+    } finally {
+      setLoading(false);
+    }
+  }, [file.id]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refresh(), 0);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseRef.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [refresh]);
+
+  async function review(action: "prepare" | "approve" | "observe" | "reject" | "reopen") {
+    if (working) return;
+    setWorking(action);
+    setError("");
+    try {
+      const response = await fetch("/api/files/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          fileId: file.id,
+          requestKey: crypto.randomUUID(),
+          note,
+          area,
+          cutoff,
+          documentType,
+          extractionSummary: note || undefined,
+          updates: action === "prepare"
+            ? draftUpdates.map((update) => ({
+                ...update,
+                area,
+                cutoff,
+                sourceCurrency: file.sourceCurrency,
+                sourceFileId: file.id,
+                sourceName: file.originalName,
+              }))
+            : undefined,
+        }),
+      });
+      const payload = await response.json() as { error?: string; message?: string };
+      if (!response.ok) throw new Error(payload.error ?? "No se pudo registrar la decisión.");
+      setNote("");
+      setDraftUpdates([]);
+      setDraftKey("");
+      setDraftValue("");
+      await refresh();
+      onUpdated();
+    } catch (reviewError) {
+      setError(reviewError instanceof Error ? reviewError.message : "No se pudo registrar la decisión.");
+    } finally {
+      setWorking("");
+    }
+  }
+
+  function addDraftUpdate() {
+    const key = draftKey.trim();
+    if (!key || !draftValue.trim()) {
+      setError("Indica la clave viva y el valor que debe contrastarse.");
+      return;
+    }
+    setDraftUpdates((current) => [
+      ...current.filter((update) => update.key !== key),
+      { key, value: parseProposalValue(draftValue) },
+    ]);
+    setDraftKey("");
+    setDraftValue("");
+    setError("");
+  }
+
+  const readyForDecision = detail?.file.reviewStatus === "listo_revision" || detail?.file.reviewStatus === "cambios_solicitados";
+  const closedReview = detail?.file.reviewStatus === "aprobado" || detail?.file.reviewStatus === "rechazado";
+
+  return (
+    <div className="file-review-backdrop" role="presentation" onMouseDown={onClose}>
+      <aside
+        className="file-review-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Revisión de ${file.originalName}`}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="file-review-header">
+          <div>
+            <span className="section-kicker">BANDEJA DE VALIDACIÓN · PROYECTO ARAYA</span>
+            <h3>{file.originalName}</h3>
+            <p>{file.areaLabel} · {documentTypeLabels[file.documentType] ?? file.documentType}</p>
+          </div>
+          <button type="button" className="close-button" onClick={onClose} aria-label="Cerrar revisión">×</button>
+        </div>
+        {loading ? (
+          <div className="empty-state"><strong>Abriendo expediente…</strong></div>
+        ) : error && !detail ? (
+          <div className="callout warn"><strong>No se pudo abrir</strong><p>{error}</p></div>
+        ) : detail && (
+          <div className="file-review-scroll">
+            <div className={`review-status-banner ${detail.file.reviewStatus}`}>
+              <span>{reviewStatusLabels[detail.file.reviewStatus] ?? detail.file.reviewStatus}</span>
+              <strong>{detail.file.publicationRevision ? `Revisión viva ${detail.file.publicationRevision}` : "Sin publicación"}</strong>
+            </div>
+            <div className="review-facts">
+              <span><small>Tipo detectado</small><strong>{documentTypeLabels[detail.file.documentType] ?? detail.file.documentType}</strong></span>
+              <span><small>Periodo</small><strong>{detail.file.detectedPeriod || detail.file.declaredCutoff || "Pendiente"}</strong></span>
+              <span><small>Moneda origen</small><strong>{detail.file.sourceCurrency}</strong></span>
+              <span><small>Confianza</small><strong>{number.format(detail.file.extractionConfidence * 100)}%</strong></span>
+              <span><small>Cambios propuestos</small><strong>{detail.proposals.length}</strong></span>
+              <span><small>Discrepancias</small><strong>{detail.file.discrepancyCount}</strong></span>
+            </div>
+            <div className="review-extraction-summary">
+              <strong>Resultado de extracción</strong>
+              <p>{detail.file.extractionSummary || detail.file.processingSummary}</p>
+              <small>{detail.file.classificationReason}</small>
+            </div>
+            <div className="review-source-actions">
+              <a className="button secondary" href={detail.file.downloadUrl}>Abrir original</a>
+              <span>El original es inmutable. Aprobar sólo publica los cambios visibles en esta ficha.</span>
+            </div>
+
+            <section className="review-proposals">
+              <div className="unit-section-heading">
+                <span>CAMBIOS CONTRASTADOS</span>
+                <small>{detail.proposals.length} propuestas</small>
+              </div>
+              {detail.proposals.length ? detail.proposals.map((proposal) => (
+                <article key={proposal.id} className={proposal.discrepancy ? "discrepancy" : ""}>
+                  <div>
+                    <strong>{proposal.label || proposal.key}</strong>
+                    <small>{proposal.key} · corte {proposal.cutoff || "pendiente"} · {proposal.sourceCurrency}</small>
+                  </div>
+                  <span><small>Valor vigente</small><b>{proposal.previousValue === null ? "Sin publicación previa" : proposalPreview(proposal.previousValue)}</b></span>
+                  <i aria-hidden="true">→</i>
+                  <span><small>Valor propuesto</small><b>{proposalPreview(proposal.value)}</b></span>
+                  {proposal.discrepancy && <em>Requiere decisión: cambia un dato vivo</em>}
+                </article>
+              )) : (
+                <div className="empty-state compact">
+                  <strong>Este expediente todavía no contiene cambios de datos.</strong>
+                  <p>Puede validarse como documento de consulta o prepararse con claves del modelo vivo.</p>
+                </div>
+              )}
+            </section>
+
+            {detail.permissions.canReview && !closedReview && (
+              <section className="review-preparation">
+                <div className="unit-section-heading">
+                  <span>PREPARAR VALIDACIÓN</span>
+                  <small>Administrador</small>
+                </div>
+                <div className="form-grid">
+                  <label>
+                    Área confirmada
+                    <select value={area} onChange={(event) => setArea(event.target.value)}>
+                      {uploadAreas
+                        .filter((option) => option.id !== "auto" && option.id !== "sin_clasificar")
+                        .filter((option) => detail.permissions.canAccessFinance || option.id !== "finanzas")
+                        .map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    Corte o periodo
+                    <input value={cutoff} onChange={(event) => setCutoff(event.target.value)} placeholder="Ej. 2026-07-30" />
+                  </label>
+                  <label className="wide-field">
+                    Tipo documental
+                    <select value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
+                      {Object.entries(documentTypeLabels).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className="proposal-builder">
+                  <label>
+                    Clave del dato vivo
+                    <input value={draftKey} onChange={(event) => setDraftKey(event.target.value)} placeholder="Ej. projectSnapshot.overallProgress" />
+                  </label>
+                  <label>
+                    Valor propuesto
+                    <input value={draftValue} onChange={(event) => setDraftValue(event.target.value)} placeholder='Ej. 18.9 o {"status":"..."}' />
+                  </label>
+                  <button type="button" className="button secondary" onClick={addDraftUpdate}>Añadir cambio</button>
+                </div>
+                {draftUpdates.length > 0 && (
+                  <div className="draft-update-list">
+                    {draftUpdates.map((update) => (
+                      <span key={update.key}>
+                        <strong>{update.key}</strong>
+                        <small>{proposalPreview(update.value)}</small>
+                        <button type="button" onClick={() => setDraftUpdates((current) => current.filter((item) => item.key !== update.key))}>Quitar</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <label className="review-note-field">
+                  Nota de revisión
+                  <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} placeholder="Criterio aplicado, discrepancia encontrada o instrucciones de corrección…" />
+                </label>
+                <button type="button" className="button secondary" disabled={Boolean(working)} onClick={() => void review("prepare")}>
+                  {working === "prepare" ? "Preparando…" : draftUpdates.length ? `Preparar ${draftUpdates.length} cambios` : "Preparar validación documental"}
+                </button>
+              </section>
+            )}
+
+            {detail.permissions.canReview && readyForDecision && (
+              <div className="review-decision-bar">
+                <button type="button" className="button primary" disabled={Boolean(working)} onClick={() => void review("approve")}>
+                  {working === "approve" ? "Publicando…" : detail.proposals.length ? "Aprobar y publicar" : "Aprobar documento"}
+                </button>
+                <button type="button" className="button secondary" disabled={Boolean(working) || !note.trim()} onClick={() => void review("observe")}>Solicitar cambios</button>
+                <button type="button" className="button danger" disabled={Boolean(working) || !note.trim()} onClick={() => void review("reject")}>Rechazar</button>
+              </div>
+            )}
+            {detail.permissions.canReview && closedReview && (
+              <button type="button" className="button secondary" disabled={Boolean(working)} onClick={() => void review("reopen")}>Reabrir expediente</button>
+            )}
+            {error && <div className="callout warn"><strong>La acción no se completó</strong><p>{error}</p></div>}
+
+            <section className="review-audit">
+              <div className="unit-section-heading"><span>HISTORIAL DE DECISIONES</span><small>{detail.reviews.length} registros</small></div>
+              {detail.reviews.length ? detail.reviews.map((reviewItem) => (
+                <article key={reviewItem.id}>
+                  <span>{reviewItem.action}</span>
+                  <div><strong>{reviewItem.actorName}</strong><small>{reviewItem.note || "Sin nota"} · {new Date(reviewItem.createdAt).toLocaleString("es-DO")}</small></div>
+                  <b>{reviewItem.publicationRevision ? `v${reviewItem.publicationRevision}` : `${reviewItem.proposalCount} cambios`}</b>
+                </article>
+              )) : <p>La primera decisión quedará registrada aquí.</p>}
+            </section>
+            {currentUser.role !== "admin" && (
+              <p className="quality-note">Puedes consultar el expediente y el original. La aprobación corresponde al administrador autorizado.</p>
+            )}
+          </div>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser }) {
   const [files, setFiles] = useState<UploadedFileRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [filter, setFilter] = useState<"pending" | "all" | "integrated" | "observed">("pending");
+  const [selectedFile, setSelectedFile] = useState<UploadedFileRecord | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -4158,26 +4544,41 @@ function CollaborativeFileRegistry() {
 
   const pendingReview = files.filter((file) => file.requiresReview).length;
   const synchronized = files.filter((file) => file.processingProgress >= 100).length;
+  const observed = files.filter((file) => file.status === "observado" || file.status === "rechazado").length;
   const averageProgress = files.length
     ? Math.round(files.reduce((total, file) => total + file.processingProgress, 0) / files.length)
     : 0;
+  const visibleFiles = files.filter((file) => {
+    if (filter === "pending") return file.requiresReview;
+    if (filter === "integrated") return file.status === "integrado";
+    if (filter === "observed") return file.status === "observado" || file.status === "rechazado";
+    return true;
+  });
 
   return (
+    <>
     <section className="panel live-file-registry" aria-live="polite">
       <div className="panel-heading">
         <div>
-          <span className="section-kicker">REGISTRO COLABORATIVO · ACTUALIZACIÓN CADA 5 S</span>
-          <h3>Últimos archivos recibidos</h3>
+          <span className="section-kicker">BANDEJA DOCUMENTAL · ACTUALIZACIÓN CADA 5 S</span>
+          <h3>Clasificación, contraste y publicación</h3>
         </div>
-        <span className="count-badge">{files.length}</span>
+        <span className="live-state"><span className="live-dot" /> {currentUser.role === "admin" ? "Validación habilitada" : "Consulta autorizada"}</span>
       </div>
       {files.length > 0 && (
         <div className="processing-overview">
           <span><strong>{pendingReview}</strong>Pendientes de revisión</span>
           <span><strong>{synchronized}</strong>Sincronizados</span>
+          <span><strong>{observed}</strong>Observados / rechazados</span>
           <span><strong>{averageProgress}%</strong>Progreso medio</span>
         </div>
       )}
+      <div className="review-filter-tabs" role="tablist" aria-label="Filtrar expedientes">
+        <button type="button" className={filter === "pending" ? "active" : ""} onClick={() => setFilter("pending")}>Por validar · {pendingReview}</button>
+        <button type="button" className={filter === "integrated" ? "active" : ""} onClick={() => setFilter("integrated")}>Integrados · {synchronized}</button>
+        <button type="button" className={filter === "observed" ? "active" : ""} onClick={() => setFilter("observed")}>Observados · {observed}</button>
+        <button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>Todos · {files.length}</button>
+      </div>
       {loading ? (
         <div className="empty-state compact"><strong>Actualizando registro…</strong></div>
       ) : error ? (
@@ -4187,15 +4588,17 @@ function CollaborativeFileRegistry() {
           <strong>Aún no hay cargas colaborativas.</strong>
           <p>Los archivos integrados históricamente aparecen debajo. Las nuevas cargas quedarán aquí con usuario, área, versión y estado.</p>
         </div>
+      ) : visibleFiles.length === 0 ? (
+        <div className="empty-state compact"><strong>No hay expedientes en este estado.</strong><p>Cambia el filtro para consultar el resto del registro.</p></div>
       ) : (
         <div className="uploaded-file-list">
-          {files.map((file) => (
+          {visibleFiles.map((file) => (
             <article key={file.id}>
               <div className="uploaded-file-icon">{file.extension.toUpperCase()}</div>
               <div className="uploaded-file-main">
                 <strong>{file.originalName}</strong>
                 <span>{file.areaLabel} · {fileSize(file.sizeBytes)} · v{file.version}</span>
-                <small>Moneda origen: {file.sourceCurrency} · visualización predeterminada: USD</small>
+                <small>{documentTypeLabels[file.documentType] ?? file.documentType} · periodo {file.detectedPeriod || file.declaredCutoff || "pendiente"} · moneda {file.sourceCurrency}</small>
                 <small>{file.classificationReason}</small>
                 <div className="file-processing-track">
                   <span>
@@ -4210,13 +4613,31 @@ function CollaborativeFileRegistry() {
                 <strong>{file.uploaderName}</strong>
                 <span>{new Date(file.createdAt).toLocaleString("es-DO", { dateStyle: "short", timeStyle: "short" })}</span>
               </div>
-              <span className={`upload-status ${file.status}`}>{uploadStatusLabels[file.status] ?? file.status}</span>
-              <a className="button secondary" href={file.downloadUrl}>Descargar</a>
+              <div className="uploaded-file-state">
+                <span className={`upload-status ${file.status}`}>{uploadStatusLabels[file.status] ?? file.status}</span>
+                <small>{reviewStatusLabels[file.reviewStatus] ?? file.reviewStatus}</small>
+                {file.discrepancyCount > 0 && <em>{file.discrepancyCount} discrepancias</em>}
+              </div>
+              <div className="uploaded-file-actions">
+                <button type="button" className="button primary" onClick={() => setSelectedFile(file)}>
+                  {currentUser.role === "admin" && file.requiresReview ? "Revisar" : "Abrir expediente"}
+                </button>
+                <a className="button secondary" href={file.downloadUrl}>Original</a>
+              </div>
             </article>
           ))}
         </div>
       )}
     </section>
+    {selectedFile && (
+      <FileReviewPanel
+        file={selectedFile}
+        currentUser={currentUser}
+        onClose={() => setSelectedFile(null)}
+        onUpdated={() => window.dispatchEvent(new CustomEvent("araya-files-updated"))}
+      />
+    )}
+    </>
   );
 }
 
@@ -4320,7 +4741,17 @@ function DataHistoryPanel() {
   );
 }
 
-function SourcesView({ onUpload, canAccessFinance, currency }: { onUpload: () => void; canAccessFinance: boolean; currency: CurrencyCode }) {
+function SourcesView({
+  onUpload,
+  canAccessFinance,
+  currency,
+  currentUser,
+}: {
+  onUpload: () => void;
+  canAccessFinance: boolean;
+  currency: CurrencyCode;
+  currentUser: DashboardUser;
+}) {
   const workspace = useContext(WorkspaceDetailContext);
   const visibleSources = canAccessFinance
     ? dataSources
@@ -4353,13 +4784,16 @@ function SourcesView({ onUpload, canAccessFinance, currency }: { onUpload: () =>
           <div><span className="section-kicker">CARGA COLABORATIVA</span><h3>Cómo entra un archivo al Centro de Control</h3></div>
           <span className="live-state"><span className="live-dot" /> Actualización cada 5 s</span>
         </div>
-        <div className="ingestion-steps">
+        <div className="ingestion-steps definitive">
           <div><b>01</b><strong>Recepción</strong><span>El original se guarda sin modificar.</span></div>
-          <div><b>02</b><strong>Clasificación</strong><span>Área sugerida por nombre y descripción.</span></div>
-          <div><b>03</b><strong>Normalización</strong><span>Los datos se convierten al modelo único del proyecto.</span></div>
-          <div><b>04</b><strong>Sincronización</strong><span>La nueva versión actualiza todas las pantallas.</span></div>
+          <div><b>02</b><strong>Identificación</strong><span>Proyecto, área, tipo, periodo y moneda.</span></div>
+          <div><b>03</b><strong>Extracción</strong><span>Importador automático o lectura asistida.</span></div>
+          <div><b>04</b><strong>Contraste</strong><span>Compara con el valor vivo y detecta discrepancias.</span></div>
+          <div><b>05</b><strong>Validación</strong><span>El responsable aprueba, observa o rechaza.</span></div>
+          <div><b>06</b><strong>Publicación</strong><span>Crea una revisión auditable sin borrar la anterior.</span></div>
+          <div><b>07</b><strong>Sincronización</strong><span>Todas las pantallas reciben la revisión en menos de 5 s.</span></div>
         </div>
-        <p className="governance-note">La identidad procede del acceso al dashboard. Cada dato normalizado se publica con fuente, corte, moneda de origen y versión; las contradicciones quedan observadas para evitar sustituciones silenciosas.</p>
+        <p className="governance-note">La identificación y el refresco son procesos del Centro de Control y no consumen tokens. El agente se usa sólo cuando hace falta interpretar un documento; finanzas, avance, cronograma y plano nunca se publican sin una validación humana trazable.</p>
       </section>
       <section className="panel data-authority-panel">
         <div className="panel-heading">
@@ -4395,7 +4829,7 @@ function SourcesView({ onUpload, canAccessFinance, currency }: { onUpload: () =>
         </div>
         {canAccessFinance && <p className="quality-note">Las cifras monetarias se conservan en su moneda fuente y se presentan en {currency}. Los estados del fideicomiso no sustituyen el presupuesto ni el flujo de gestión.</p>}
       </section>
-      <CollaborativeFileRegistry />
+      <CollaborativeFileRegistry currentUser={currentUser} />
       <DataHistoryPanel />
       <section className="source-grid">
         {visibleSources.map((source) => {
@@ -4458,7 +4892,7 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
     {
       id: "welcome",
       role: "assistant",
-      text: "Buenos días. Puedo consultar la versión viva y recibir archivos. Los importes se responden en USD por defecto; si una fuente no indica moneda, se registra como DOP. Los datos normalizados actualizan todas las pantallas en menos de cinco segundos y cualquier contradicción queda visible para conciliación.",
+      text: "Buenos días. Puedo consultar la versión viva y recibir archivos. Al cargar uno, el sistema identifica área, tipo, periodo y moneda; después lo envía a extracción y validación. Ningún cambio operativo o financiero se publica sin aprobación. Los importes se responden en USD por defecto y, si la fuente no indica moneda, se registra DOP.",
       mode: "source-data-engine",
     },
   ]);
@@ -4584,7 +5018,7 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
             <span>Adjuntar archivo</span>
             <input
               type="file"
-              accept=".xlsx,.xls,.csv,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
+              accept=".xlsx,.xls,.csv,.json,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
               onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
             />
           </label>
@@ -4618,7 +5052,7 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
         <textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Pregunta por cualquier dato del corte…" rows={2} />
         <button type="submit" disabled={loading || !question.trim()} aria-label="Enviar pregunta">↑</button>
       </form>
-      <div className="agent-foot">Cada respuesta consulta la versión viva. Las cargas conservan usuario, fuente y corte; las contradicciones quedan observadas.</div>
+      <div className="agent-foot">Cada respuesta consulta la versión viva. El agente prepara y explica; la bandeja de validación controla qué cambios llegan a producción.</div>
     </aside>
   );
 }
@@ -4949,16 +5383,16 @@ function UploadModal({
           <div><span className="section-kicker">CENTRO DE DATOS · CARGA SEGURA</span><h3>Añadir archivo al proyecto ARAYA</h3></div>
           <button className="close-button" type="button" onClick={onClose} aria-label="Cerrar">×</button>
         </div>
-        <p className="upload-intro">El original se conserva sin modificar. El sistema registra tu identidad y detecta duplicados; al normalizarse, sus datos actualizan todas las pantallas y cualquier contradicción queda observada.</p>
+        <p className="upload-intro">El original se conserva sin modificar. El sistema registra tu identidad, detecta duplicados e identifica área, tipo, periodo y moneda. Después abre un expediente de extracción y validación: ningún dato cambia hasta que un responsable lo aprueba.</p>
         <div className="upload-dropzone">
           <input
             type="file"
             required
-            accept=".xlsx,.xls,.csv,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
+            accept=".xlsx,.xls,.csv,.json,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
             onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
           />
           <strong>{selectedFile ? selectedFile.name : "Selecciona o arrastra un archivo"}</strong>
-          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV, PowerPoint, PDF, Word, MPP, DWG, imagen o ZIP · máximo 50 MB"}</span>
+          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON, PowerPoint, PDF, Word, MPP, DWG, imagen o ZIP · máximo 50 MB"}</span>
         </div>
         <div className="upload-source-actions" aria-label="Opciones de carga en móvil">
           <label>
@@ -5001,7 +5435,7 @@ function UploadModal({
         {error && <div className="callout warn"><strong>No se completó la carga</strong><p>{error}</p></div>}
         <div className="modal-actions">
           <button className="button secondary" type="button" onClick={onClose}>Cancelar</button>
-          <button className="button primary" type="submit" disabled={!selectedFile || saving}>{saving ? "Guardando…" : "Guardar y clasificar"}</button>
+          <button className="button primary" type="submit" disabled={!selectedFile || saving}>{saving ? "Guardando…" : "Crear expediente"}</button>
         </div>
       </form>
     </div>
@@ -5630,7 +6064,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     if (view === "cronologia") return <TimelineView />;
     if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => setModal("supplier")} currency={currency} canAccessFinance={currentUser.financeAccess} />;
     if (view === "metricas") return currentUser.financeAccess ? <MetricsView metrics={metrics} onAdd={() => setModal("metric")} currency={currency} /> : <FinanceLockedView />;
-    if (view === "fuentes") return <SourcesView onUpload={() => setUploadOpen(true)} canAccessFinance={currentUser.financeAccess} currency={currency} />;
+    if (view === "fuentes") return <SourcesView onUpload={() => setUploadOpen(true)} canAccessFinance={currentUser.financeAccess} currency={currency} currentUser={profileUser} />;
     return <AgentPanel expanded onClose={() => setView("resumen")} currency={currency} />;
   }
 

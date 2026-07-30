@@ -629,8 +629,8 @@ Archivo integrado:
 
 ## Punto 1 · consolidación y limpieza de datos
 
-Iniciado y completado el 30/07/2026. No iniciar el punto 2 hasta que el usuario
-valide expresamente este resultado.
+Iniciado y completado el 30/07/2026. El usuario validó el avance e indicó
+expresamente iniciar el punto 2.
 
 - El inventario maestro contiene 22 fuentes únicas registradas y 22 descargas
   verificadas. El Excel de avance físico y el MPP ya disponen de copia
@@ -664,6 +664,53 @@ valide expresamente este resultado.
   no reciben estos valores ni las fuentes financieras publicadas en vivo.
 - Pruebas del punto 1: compilación correcta, 27/27 pruebas aprobadas y lint sin
   errores; permanecen los nueve avisos conocidos de `<img>`.
+
+## Punto 2 · carga, extracción, validación y publicación
+
+Iniciado y completado el 30/07/2026.
+
+- El Centro de datos incorpora una bandeja documental con filtros `Por
+  validar`, `Integrados`, `Observados` y `Todos`.
+- Cada carga identifica de forma determinista proyecto, área, tipo documental,
+  periodo, moneda y modo de extracción. El conjunto de evaluación contiene 24
+  documentos de finanzas, obra, planificación, comercial, compras, diseño,
+  urbanismo, seguridad y permisos.
+- El recorrido visible tiene siete fases: recepción, identificación,
+  extracción, contraste, validación, publicación y sincronización.
+- Los formatos CSV y JSON con columnas o propiedades `key/clave` y
+  `value/valor` pueden preparar propuestas del contrato vivo automáticamente.
+  Se admiten separadores por coma o punto y coma y decimales con coma.
+- Excel, PDF, PowerPoint, Word, MPP, DWG, imágenes y ZIP quedan catalogados y
+  esperan su importador especializado o una lectura asistida. No se afirma que
+  almacenar el original equivalga a interpretar sus datos.
+- `document_data_proposals` conserva el valor vigente, valor propuesto, clave,
+  área, corte, moneda, confianza, discrepancia y estado de cada cambio.
+- `file_reviews` conserva cada preparación, aprobación, observación, rechazo o
+  reapertura con actor, fecha, nota, número de propuestas, revisión viva e
+  identificador idempotente.
+- La nueva ruta `GET/POST /api/files/review` permite consultar el expediente y
+  exige administrador para preparar o decidir. Los usuarios no administradores
+  sólo pueden consultar los expedientes visibles según sus permisos.
+- Finanzas mantiene el bloqueo existente. Ningún usuario sin permiso recibe el
+  original, el expediente ni las propuestas financieras.
+- La aprobación muestra explícitamente `Valor vigente → Valor propuesto`. Una
+  discrepancia nunca se sobrescribe silenciosamente.
+- Aprobar propuestas crea un evento, historial inmutable y puntos vivos
+  mediante `lib/publish-live-data.ts`; después todas las pantallas reciben la
+  revisión en menos de cinco segundos.
+- Un documento sin cambios numéricos puede aprobarse y catalogarse sin crear
+  una revisión viva ni alterar indicadores.
+- Los expedientes cerrados deben reabrirse antes de otra decisión. El endpoint
+  directo de escritura viva queda restringido a administradores.
+- ARAYA Copilot usa el prompt versionado
+  `araya-copilot-v7-ingestion-controlada`: puede orientar y consultar el
+  estado, pero no aprobar ni borrar desde el chat.
+- La clasificación y el refresco ordinarios no consumen tokens. El agente sólo
+  interviene cuando un formato necesita interpretación.
+- Migración: `drizzle/0007_ingestion_control_room.sql`.
+- Pruebas del punto 2: compilación correcta, 31/31 pruebas aprobadas, conjunto
+  de clasificación 24/24 y lint sin errores; permanecen los nueve avisos
+  conocidos de `<img>`.
 
 ## Criterios de continuidad
 

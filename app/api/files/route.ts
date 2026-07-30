@@ -1,10 +1,17 @@
 import { env } from "cloudflare:workers";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { fileActivity, uploadedFiles } from "../../../db/schema";
+import {
+  documentDataProposals,
+  fileActivity,
+  liveDataPoints,
+  uploadedFiles,
+} from "../../../db/schema";
 import { requireApiUser } from "../../../lib/access-control";
 import { resolveSourceCurrency } from "../../../lib/currency";
 import { areaLabels, classifyUpload, safeFileName } from "../../../lib/file-routing";
+import { analyzeDocument, extractStructuredUpdates } from "../../../lib/ingestion";
+import { normalizeLiveDataUpdates } from "../../../lib/publish-live-data";
 
 export const runtime = "edge";
 
@@ -16,6 +23,7 @@ const allowedExtensions = new Set([
   "dwg",
   "jpeg",
   "jpg",
+  "json",
   "mpp",
   "pdf",
   "png",
@@ -86,6 +94,19 @@ function publicFileRow(row: typeof uploadedFiles.$inferSelect) {
     processingProgress: row.processingProgress,
     processingSummary: row.processingSummary,
     requiresReview: row.requiresReview,
+    projectId: row.projectId,
+    documentType: row.documentType,
+    detectedPeriod: row.detectedPeriod,
+    extractionMode: row.extractionMode,
+    extractionConfidence: row.extractionConfidence,
+    extractionSummary: row.extractionSummary,
+    discrepancyCount: row.discrepancyCount,
+    reviewStatus: row.reviewStatus,
+    reviewedByName: row.reviewedByName,
+    reviewedAt: row.reviewedAt,
+    reviewNote: row.reviewNote,
+    publicationRevision: row.publicationRevision,
+    publishedAt: row.publishedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     downloadUrl: `/api/files?download=${encodeURIComponent(row.id)}`,
@@ -153,7 +174,7 @@ export async function POST(request: Request) {
   const extension = extensionOf(candidate.name);
   if (!allowedExtensions.has(extension)) {
     return Response.json(
-      { error: "Formato no admitido. Usa Excel, CSV, PowerPoint, PDF, Word, MPP, DWG, imagen o ZIP." },
+      { error: "Formato no admitido. Usa Excel, CSV/JSON, PowerPoint, PDF, Word, MPP, DWG, imagen o ZIP." },
       { status: 415 },
     );
   }
@@ -177,6 +198,14 @@ export async function POST(request: Request) {
   }
   const safeName = safeFileName(candidate.name);
   const bytes = await candidate.arrayBuffer();
+  const analysis = analyzeDocument({
+    fileName: candidate.name,
+    description,
+    extension,
+    declaredCutoff,
+    area: classification.area,
+    classificationConfidence: classification.confidence,
+  });
   const sha256 = hexDigest(await crypto.subtle.digest("SHA-256", bytes));
   const db = getDb();
 
@@ -205,6 +234,38 @@ export async function POST(request: Request) {
   ].join("/");
   const mimeType = candidate.type || "application/octet-stream";
   const bucket = getFileBucket();
+  const extraction = extractStructuredUpdates(bytes, extension, {
+    area: classification.area,
+    cutoff: analysis.detectedPeriod || declaredCutoff,
+    sourceCurrency: sourceCurrency === "USD" ? "USD" : "DOP",
+    sourceName: candidate.name,
+  });
+  const normalizedUpdates = extraction.updates.length
+    ? normalizeLiveDataUpdates({
+        updates: extraction.updates.map((update) => ({
+          ...update,
+          sourceFileId: id,
+          sourceName: candidate.name,
+        })),
+        area: classification.area,
+        cutoff: analysis.detectedPeriod || declaredCutoff,
+        sourceFileId: id,
+        sourceName: candidate.name,
+      })
+    : [];
+  const existingPoints = normalizedUpdates.length
+    ? await db.select().from(liveDataPoints).where(inArray(liveDataPoints.key, normalizedUpdates.map((update) => update.key)))
+    : [];
+  const previousByKey = new Map(existingPoints.map((point) => [point.key, point.valueJson]));
+  const discrepancyCount = normalizedUpdates.filter((update) => {
+    const previous = previousByKey.get(update.key);
+    return previous !== undefined && previous !== update.valueJson;
+  }).length;
+  const extractionSummary = [
+    analysis.summary,
+    extraction.summary,
+    extraction.warnings.length ? `${extraction.warnings.length} advertencias de estructura.` : "",
+  ].filter(Boolean).join(" ");
 
   await bucket.put(storageKey, bytes, {
     httpMetadata: { contentType: mimeType },
@@ -241,29 +302,64 @@ export async function POST(request: Request) {
         declaredCutoff,
         classificationConfidence: classification.confidence,
         classificationReason: classification.reason,
-        processingStage: "clasificado",
-        processingProgress: classification.confidence > 0 ? 25 : 10,
+        processingStage: normalizedUpdates.length ? "contraste" : classification.confidence > 0 ? "extraccion_pendiente" : "clasificado",
+        processingProgress: normalizedUpdates.length ? 75 : classification.confidence > 0 ? 40 : 20,
         processingSummary: classification.confidence > 0
-          ? "Recepción y clasificación completadas. Pendiente de extracción, contraste y publicación."
+          ? extractionSummary
           : "Original recibido. Requiere asignación de área antes de normalizar sus datos.",
         requiresReview: true,
+        projectId: "araya",
+        documentType: analysis.documentType,
+        detectedPeriod: analysis.detectedPeriod,
+        extractionMode: analysis.extractionMode,
+        extractionConfidence: normalizedUpdates.length ? 1 : analysis.confidence,
+        extractionSummary,
+        discrepancyCount,
+        reviewStatus: normalizedUpdates.length ? "listo_revision" : "pendiente_extraccion",
       })
       .returning();
+    for (const update of normalizedUpdates) {
+      const previousValueJson = previousByKey.get(update.key) ?? null;
+      await db.insert(documentDataProposals).values({
+        id: crypto.randomUUID(),
+        fileId: id,
+        key: update.key,
+        label: update.key,
+        valueJson: update.valueJson,
+        previousValueJson,
+        valueType: update.valueType,
+        area: update.area,
+        sourceCurrency: update.sourceCurrency,
+        cutoff: update.cutoff,
+        confidence: 1,
+        discrepancy: previousValueJson !== null && previousValueJson !== update.valueJson,
+        status: "pendiente",
+        notes: extraction.warnings.join(" ").slice(0, 1000),
+        createdByEmail: auth.user.email,
+        createdByName: auth.user.displayName,
+      });
+    }
     await db.insert(fileActivity).values({
       fileId: id,
       eventType: "archivo_recibido",
-      message: `Archivo dirigido a ${areaLabels[classification.area]}. En cola de normalización; todo dato publicado conservará fuente, corte, moneda y versión.`,
+      message: normalizedUpdates.length
+        ? `${normalizedUpdates.length} cambios extraídos y enviados a contraste en ${areaLabels[classification.area]}.`
+        : `Archivo dirigido a ${areaLabels[classification.area]}. En cola de extracción; todo dato publicado conservará fuente, corte, moneda y versión.`,
       actorEmail: auth.user.email,
       actorName: auth.user.displayName,
     });
     return Response.json(
       {
         file: publicFileRow(row),
-        message: `Archivo registrado en ${areaLabels[classification.area]}. El original aparece de inmediato; sus datos normalizados actualizarán todas las pantallas automáticamente y las contradicciones quedarán observadas.`,
+        message: normalizedUpdates.length
+          ? `Archivo registrado en ${areaLabels[classification.area]}. Se han preparado ${normalizedUpdates.length} cambios para revisión; nada se publicará antes de aprobarlos.`
+          : `Archivo registrado en ${areaLabels[classification.area]}. El original aparece de inmediato y queda en extracción; nada se publicará sin validación.`,
       },
       { status: 201 },
     );
   } catch {
+    await db.delete(documentDataProposals).where(eq(documentDataProposals.fileId, id));
+    await db.delete(uploadedFiles).where(eq(uploadedFiles.id, id));
     await bucket.delete(storageKey);
     return Response.json({ error: "No se pudo completar el registro del archivo." }, { status: 500 });
   }
