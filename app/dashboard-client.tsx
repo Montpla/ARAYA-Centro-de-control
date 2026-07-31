@@ -1590,7 +1590,12 @@ function WorkspaceDetailPanel({
                 <article key={source.id}>
                   <div><span>{source.kind}</span><strong>{source.file}</strong><small>Corte {source.declaredCutoff}</small></div>
                   {source.downloadUrl
-                    ? <a href={source.downloadUrl} target="_blank" rel="noreferrer">Abrir / descargar</a>
+                    ? (
+                      <div className="workspace-source-file-actions">
+                        <a href={source.downloadUrl} data-file-title={source.file}>Abrir documento</a>
+                        <a href={source.downloadUrl} download={source.file} data-file-viewer-bypass="true">Descargar</a>
+                      </div>
+                    )
                     : <button type="button" onClick={() => onNavigate("fuentes")}>Ver registro</button>}
                 </article>
               ))}
@@ -1617,7 +1622,19 @@ function WorkspaceDetailPanel({
   );
 }
 
-const inlineFileExtensions = new Set(["pdf", "png", "jpg", "jpeg", "webp", "gif", "txt"]);
+const inlineFileExtensions = new Set([
+  "pdf",
+  "png",
+  "jpg",
+  "jpeg",
+  "webp",
+  "gif",
+  "txt",
+  "csv",
+  "json",
+  "xml",
+  "md",
+]);
 
 function fileExtension(title: string, url: string) {
   const candidate = `${title} ${url.split("?")[0]}`;
@@ -1638,22 +1655,22 @@ function fileViewerTitle(anchor: HTMLAnchorElement, url: URL) {
   return anchor.textContent?.trim() || "Archivo del Centro de Control";
 }
 
+function fileDeliveryUrl(url: string, mode: "preview" | "download") {
+  const parsed = new URL(url, window.location.origin);
+  if (parsed.pathname !== "/api/files") return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  const uploadedFileId = parsed.searchParams.get("preview") ?? parsed.searchParams.get("download");
+  if (!uploadedFileId) return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  parsed.searchParams.delete("preview");
+  parsed.searchParams.delete("download");
+  parsed.searchParams.set(mode, uploadedFileId);
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+}
+
 function FileViewer({ file, onClose }: { file: FileViewerState; onClose: () => void }) {
   const extension = fileExtension(file.title, file.url);
   const canPreview = inlineFileExtensions.has(extension);
-  let previewUrl = file.url;
-
-  if (canPreview) {
-    const parsed = new URL(file.url, window.location.origin);
-    const uploadedFileId = parsed.pathname === "/api/files"
-      ? parsed.searchParams.get("download")
-      : null;
-    if (uploadedFileId) {
-      parsed.searchParams.delete("download");
-      parsed.searchParams.set("preview", uploadedFileId);
-      previewUrl = `${parsed.pathname}${parsed.search}${parsed.hash}`;
-    }
-  }
+  const previewUrl = fileDeliveryUrl(file.url, "preview");
+  const downloadUrl = fileDeliveryUrl(file.url, "download");
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
@@ -1672,8 +1689,17 @@ function FileViewer({ file, onClose }: { file: FileViewerState; onClose: () => v
         </div>
         <div className="file-viewer-actions">
           <a
+            className="button secondary file-viewer-open-external"
+            href={previewUrl}
+            target="_blank"
+            rel="noreferrer"
+            data-file-viewer-bypass="true"
+          >
+            Abrir aparte
+          </a>
+          <a
             className="button secondary"
-            href={file.url}
+            href={downloadUrl}
             download
             data-file-viewer-bypass="true"
           >
@@ -1691,16 +1717,28 @@ function FileViewer({ file, onClose }: { file: FileViewerState; onClose: () => v
         ) : (
           <div className="file-viewer-unavailable">
             <span>{extension ? extension.toUpperCase() : "ARCHIVO"}</span>
-            <h2>Este formato se abre en su aplicación habitual.</h2>
-            <p>Descarga el archivo para consultarlo. El Centro de Control permanecerá abierto y podrás volver con la X de esta pantalla.</p>
-            <a
-              className="button primary"
-              href={file.url}
-              download
-              data-file-viewer-bypass="true"
-            >
-              Descargar {extension ? extension.toUpperCase() : "archivo"}
-            </a>
+            <h2>Abrir con el visor del dispositivo</h2>
+            <p>Este formato necesita el visor compatible del móvil, tablet u ordenador. Puedes abrirlo directamente; la descarga queda como opción independiente.</p>
+            <div className="file-viewer-unavailable-actions">
+              <a
+                className="button primary"
+                href={previewUrl}
+                target="_blank"
+                rel="noreferrer"
+                data-file-viewer-bypass="true"
+              >
+                Abrir {extension ? extension.toUpperCase() : "documento"}
+              </a>
+              <a
+                className="button secondary"
+                href={downloadUrl}
+                download
+                data-file-viewer-bypass="true"
+              >
+                Descargar copia
+              </a>
+            </div>
+            <small>Si el dispositivo no reconoce el formato, te permitirá elegir una aplicación compatible sin cerrar Bricket Control.</small>
           </div>
         )}
       </div>
@@ -2336,9 +2374,15 @@ function Overview({
           <h3>{focus.title}</h3>
           <p>{focus.detail}</p>
         </div>
-        <button className="button secondary" onClick={() => onNavigate(focusView)}>
-          Abrir prioridad del área
-        </button>
+        {focusView === "resumen" ? (
+          <a className="button secondary" href="#control-room-priority">
+            Abrir prioridad del área
+          </a>
+        ) : (
+          <button className="button secondary" onClick={() => onNavigate(focusView)}>
+            Abrir prioridad del área
+          </button>
+        )}
       </section>
       <section className="hero-grid">
         <article className="project-pulse panel">
@@ -5047,6 +5091,31 @@ function SourcesView({
         </div>
         <button className="button primary" onClick={onUpload}>+ Añadir archivo</button>
       </section>
+      <section className="panel staff-guide-card">
+        <div className="staff-guide-mark" aria-hidden="true">PDF</div>
+        <div>
+          <span className="section-kicker">GUÍA CORPORATIVA · PERSONAL DE OBRA</span>
+          <h3>Funciones, uso diario e instalación de Bricket Control</h3>
+          <p>Manual breve de 7 páginas para móvil, tablet y ordenador, con acceso, navegación, permisos, carga documental y seguridad.</p>
+        </div>
+        <div className="staff-guide-actions">
+          <a
+            className="button primary"
+            href="/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf"
+            data-file-title="Guía corporativa Bricket Control · personal de obra.pdf"
+          >
+            Abrir guía
+          </a>
+          <a
+            className="button secondary"
+            href="/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf"
+            download="guia-corporativa-bricket-control-personal-obra.pdf"
+            data-file-viewer-bypass="true"
+          >
+            Descargar PDF
+          </a>
+        </div>
+      </section>
       <section className="stat-grid wide">
         <StatCard eyebrow="Fuentes visibles" value={`${visibleSources.length}`} detail={canAccessFinance ? "Repositorio completo autorizado" : "Documentación operativa autorizada"} />
         <StatCard eyebrow="Datos gobernados" value={`${visibleAuthorityMatrix.length}`} detail="Indicadores con fuente principal y regla de prevalencia" />
@@ -5132,9 +5201,14 @@ function SourcesView({
                   Abrir ficha y conexiones
                 </button>
                 {source.downloadUrl && (
-                  <a className="button secondary" href={source.downloadUrl} download={source.file}>
-                    Descargar archivo
-                  </a>
+                  <>
+                    <a className="button secondary" href={source.downloadUrl} data-file-title={source.file}>
+                      Abrir documento
+                    </a>
+                    <a className="button secondary compact-download" href={source.downloadUrl} download={source.file} data-file-viewer-bypass="true">
+                      Descargar
+                    </a>
+                  </>
                 )}
               </div>
             </article>
@@ -6863,7 +6937,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     if (view === "resumen") {
       return (
         <div className="view-stack">
-          <Overview onNavigate={setView} onSelectBuilding={setSelectedBuilding} currency={currency} canAccessFinance={currentUser.financeAccess} currentUser={profileUser} />
+          <Overview onNavigate={navigate} onSelectBuilding={setSelectedBuilding} currency={currency} canAccessFinance={currentUser.financeAccess} currentUser={profileUser} />
           <ControlRoomPanel
             snapshot={controlRoom}
             loading={controlRoomLoading}
@@ -7184,6 +7258,18 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
                 }}
               >
                 <i>●</i><span><strong>Avisos y seguridad</strong><small>{unreadNotifications ? `${unreadNotifications} avisos sin leer` : "Biometría y modo sin conexión"}</small></span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  setFileViewer({
+                    url: "/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf",
+                    title: "Guía corporativa Bricket Control · personal de obra.pdf",
+                  });
+                }}
+              >
+                <i>PDF</i><span><strong>Guía de uso</strong><small>Funciones e instalación</small></span>
               </button>
               <button
                 type="button"

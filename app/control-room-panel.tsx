@@ -314,7 +314,7 @@ export function ControlRoomPanel({
 
   if (!snapshot) {
     return (
-      <section className="control-room-shell">
+      <section id="control-room-priority" className="control-room-shell" tabIndex={-1}>
         <div className="control-room-empty">
           <span>SALA OPERATIVA</span>
           <h2>{loading ? "Sincronizando controles…" : "Control operativo no disponible"}</h2>
@@ -326,7 +326,7 @@ export function ControlRoomPanel({
   }
 
   return (
-    <section className="control-room-shell" aria-label="Sala operativa del Centro de Control">
+    <section id="control-room-priority" className="control-room-shell" tabIndex={-1} aria-label="Sala operativa del Centro de Control">
       <div className="control-room-heading">
         <div>
           <span>CONTROL OPERATIVO · CORTE {snapshot.cutoff}</span>

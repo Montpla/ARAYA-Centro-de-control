@@ -14,6 +14,21 @@ El refresco de cinco segundos consulta la base de datos y no usa tokens. El
 agente sólo consume recursos de IA cuando se le formula una consulta o se le
 pide interpretar un formato no estructurado.
 
+## Visor documental y guía de uso
+
+- Pulsar `Abrir documento` muestra los formatos compatibles dentro del Centro
+  de Control, sin abandonar la sección de trabajo.
+- En Office, DWG o MPP, pulsar `Abrir con el visor del dispositivo` entrega el
+  archivo al visor o aplicación compatible instalada.
+- `Descargar` y `Descargar copia` son acciones independientes y opcionales.
+- La X de la esquina, `Cerrar` o la tecla `Escape` recuperan la pantalla desde
+  la que se abrió el archivo.
+- La guía resumida para el personal está en `Centro de datos` y, en móvil, en
+  `Más → Guía de uso`. Incluye funciones, flujo documental, permisos,
+  instalación, cámara, avisos, biometría y trabajo parcial sin conexión.
+- Los documentos financieros siguen exigiendo el permiso correspondiente,
+  tanto al abrirlos como al descargarlos.
+
 ## Sala operativa
 
 La Sala operativa se encuentra debajo del Resumen ejecutivo y se actualiza cada

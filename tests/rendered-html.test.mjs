@@ -28,7 +28,8 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /156 apartamentos/);
   assert.match(source, /araya-site-plan-clean\.png/);
   assert.match(source, /planCoordinates/);
-  assert.match(source, /Descargar archivo/);
+  assert.match(source, /Abrir documento/);
+  assert.match(source, /Descargar/);
   assert.match(source, /araya-visual-masterplan-v3\.png/);
   assert.match(source, /Plano visual interactivo/);
   assert.match(source, /Plano técnico/);
@@ -407,7 +408,8 @@ test("every operational area exposes connected modules, documents and interactiv
   assert.match(dashboard, /statCardLinks/);
   assert.match(dashboard, /DOCUMENTACIÓN VINCULADA/);
   assert.match(dashboard, /CAMPOS PREPARADOS/);
-  assert.match(dashboard, /Abrir \/ descargar/);
+  assert.match(dashboard, /Abrir documento/);
+  assert.match(dashboard, /Descargar/);
   assert.match(dashboard, /sourceWorkspaceDetail/);
   assert.match(dashboard, /dataSources[\s\S]*sourceId: source\.id/);
   assert.match(dashboard, /workspace-data-row/);
@@ -588,15 +590,17 @@ test("points three to eight add a live operational control room without autonomo
 });
 
 test("tablet and mobile mode provides navigation, camera, notifications, biometrics and protected offline access", async () => {
-  const [dashboard, deviceCenter, styles, filesRoute, layout, routeError, manifest, serviceWorker] = await Promise.all([
+  const [dashboard, deviceCenter, controlRoomPanel, styles, filesRoute, layout, routeError, manifest, serviceWorker, staffGuide] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),
     readFile("app/device-center.tsx", "utf8"),
+    readFile("app/control-room-panel.tsx", "utf8"),
     readFile("app/globals.css", "utf8"),
     readFile("app/api/files/route.ts", "utf8"),
     readFile("app/layout.tsx", "utf8"),
     readFile("app/error.tsx", "utf8"),
     readFile("public/manifest.webmanifest", "utf8"),
     readFile("public/sw.js", "utf8"),
+    readFile("public/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf"),
   ]);
   assert.match(dashboard, /mobile-bottom-nav/);
   assert.match(dashboard, /mobile-menu-sheet/);
@@ -610,6 +614,14 @@ test("tablet and mobile mode provides navigation, camera, notifications, biometr
   assert.match(dashboard, /CLEAR_PRIVATE_CACHE/);
   assert.match(dashboard, /CACHE_APP_SHELL/);
   assert.match(dashboard, /Modo sin conexión · solo lectura/);
+  assert.match(dashboard, /href="#control-room-priority"/);
+  assert.match(dashboard, /<Overview onNavigate=\{navigate\}/);
+  assert.match(controlRoomPanel, /id="control-room-priority"/);
+  assert.match(dashboard, /Abrir documento/);
+  assert.match(dashboard, /Abrir con el visor del dispositivo/);
+  assert.match(dashboard, /Descargar copia/);
+  assert.match(dashboard, /Guía corporativa Bricket Control/);
+  assert.ok(staffGuide.byteLength > 100_000);
   assert.match(dashboard, /register\("\/sw\.js", \{ updateViaCache: "none" \}\)/);
   assert.match(dashboard, /class AppErrorBoundary/);
   assert.match(dashboard, /RECUPERACIÓN SEGURA/);
@@ -638,7 +650,9 @@ test("tablet and mobile mode provides navigation, camera, notifications, biometr
   assert.match(styles, /z-index: 400/);
   assert.match(filesRoute, /searchParams\.get\("preview"\)/);
   assert.match(filesRoute, /inlinePreview \? "inline" : "attachment"/);
-  assert.match(filesRoute, /contentType === "application\/pdf"/);
+  assert.match(filesRoute, /inlinePreviewExtensions/);
+  assert.match(filesRoute, /canonicalMimeByExtension/);
+  assert.match(filesRoute, /application\/vnd\.openxmlformats-officedocument/);
   assert.match(layout, /manifest: "\/manifest\.webmanifest"/);
   assert.match(layout, /viewportFit: "cover"/);
   assert.match(layout, /applicationName: "Bricket Control"/);

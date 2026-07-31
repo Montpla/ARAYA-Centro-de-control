@@ -33,6 +33,38 @@ const allowedExtensions = new Set([
   "xlsx",
   "zip",
 ]);
+const inlinePreviewExtensions = new Set([
+  "csv",
+  "doc",
+  "docx",
+  "dwg",
+  "jpeg",
+  "jpg",
+  "json",
+  "mpp",
+  "pdf",
+  "png",
+  "ppt",
+  "pptx",
+  "xls",
+  "xlsx",
+]);
+const canonicalMimeByExtension: Record<string, string> = {
+  csv: "text/csv",
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  dwg: "image/vnd.dwg",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  json: "application/json",
+  mpp: "application/vnd.ms-project",
+  pdf: "application/pdf",
+  png: "image/png",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
 
 type StoredObject = {
   body: ReadableStream;
@@ -136,9 +168,13 @@ export async function GET(request: Request) {
 
     const object = await getFileBucket().get(row.storageKey);
     if (!object) return Response.json({ error: "El original no está disponible en el almacenamiento." }, { status: 404 });
-    const contentType = object.httpMetadata?.contentType || row.mimeType;
+    const storedContentType = object.httpMetadata?.contentType || row.mimeType;
+    const extension = row.extension.toLowerCase();
+    const contentType = previewId
+      ? canonicalMimeByExtension[extension] ?? storedContentType
+      : storedContentType;
     const inlinePreview = Boolean(previewId && (
-      contentType === "application/pdf" ||
+      inlinePreviewExtensions.has(extension) ||
       contentType === "text/plain" ||
       /^image\/(?:png|jpe?g|webp|gif)$/i.test(contentType)
     ));

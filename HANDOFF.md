@@ -23,8 +23,8 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 40, con notificaciones, cámara, biometría y
-  funcionamiento parcial sin conexión. El commit desplegado es el `HEAD` de
+- Última versión publicada: 41, con apertura documental directa, descarga
+  opcional y guía corporativa para el personal. El commit desplegado es el `HEAD` de
   `main`; el identificador opaco debe consultarse en Sites por número de versión
   y no reconstruirse manualmente.
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
@@ -866,6 +866,32 @@ Implementadas y publicadas el 31/07/2026:
   despertar una aplicación completamente cerrada.
 - Validación: build correcto, 32/32 pruebas aprobadas, lint sin errores y los
   nueve avisos históricos de `<img>` sin cambios.
+
+## Apertura documental y guía corporativa de la versión 41
+
+Implementado y publicado el 31/07/2026:
+
+- El botón `Abrir prioridad del área` de Dirección ya no intenta volver a
+  cargar el propio Resumen. Ahora desplaza la pantalla hasta la Sala operativa,
+  donde se concentran calidad del dato, conciliaciones, decisiones y
+  seguimiento.
+- Los documentos se abren primero desde el Centro de Control. PDF, imágenes,
+  texto, CSV, JSON, XML y Markdown se muestran dentro del visor propio.
+- Los formatos de trabajo que el navegador no representa directamente, como
+  Office, DWG o MPP, ofrecen `Abrir con el visor del dispositivo` sin convertir
+  la descarga en el paso principal.
+- `Descargar` permanece disponible como una acción separada y voluntaria en
+  las fichas, las fuentes y el visor. Las cargas privadas siguen pasando por
+  autorización y conservan la restricción financiera.
+- Se incorporó la guía de siete páginas
+  `public/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`.
+  Se puede abrir o descargar desde `Centro de datos` y desde `Más → Guía de
+  uso` en móvil.
+- El original editable se genera con
+  `scripts/generate_staff_guide_pdf.py`; la entrega local está también en
+  `output/pdf/guia_corporativa_bricket_control_personal_obra.pdf`.
+- Validación: compilación correcta, 32/32 pruebas aprobadas y lint sin errores;
+  permanecen únicamente los nueve avisos históricos de `<img>`.
 
 ## Criterios de continuidad
 

@@ -8144,6 +8144,38 @@ button.financial-detail-row:focus-visible {
   line-height: 1.6;
 }
 
+.file-viewer-unavailable-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 9px;
+}
+
+.file-viewer-unavailable > small {
+  max-width: 420px;
+  color: #8b8f8b;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.workspace-source-file-actions {
+  display: flex !important;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px !important;
+}
+
+.workspace-source-file-actions a:last-child {
+  color: #6f756f;
+  background: transparent;
+}
+
+.source-actions .compact-download {
+  min-width: auto;
+  color: #6d736e;
+  background: transparent;
+}
+
 @media (max-width: 760px) {
   .file-viewer-toolbar {
     align-items: flex-start;
@@ -8169,6 +8201,10 @@ button.financial-detail-row:focus-visible {
     min-height: 44px;
     padding: 0 11px;
     font-size: 8px;
+  }
+
+  .file-viewer-open-external {
+    display: none !important;
   }
 
   .file-viewer-close {
@@ -8204,6 +8240,16 @@ button.financial-detail-row:focus-visible {
     width: calc(100% - 24px);
     margin-top: 32px;
     padding: 28px 20px;
+  }
+
+  .file-viewer-unavailable-actions {
+    width: 100%;
+    display: grid;
+  }
+
+  .file-viewer-unavailable-actions .button {
+    justify-content: center;
+    min-height: 44px;
   }
 }
 
@@ -11319,6 +11365,56 @@ button.financial-detail-row:focus-visible {
 }
 
 /* Device layer: notifications, camera, biometrics and protected offline access */
+.staff-guide-card {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  border-color: rgba(22, 47, 79, 0.18);
+  background: #f7f3eb;
+}
+
+.staff-guide-mark {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  color: white;
+  background: #173454;
+  box-shadow: 0 12px 30px rgba(23, 52, 84, 0.18);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.staff-guide-card h3 {
+  margin: 4px 0 5px;
+  font-family: var(--font-display, Georgia, serif);
+  font-size: clamp(19px, 2.2vw, 28px);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+.staff-guide-card p {
+  max-width: 720px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.staff-guide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.staff-guide-actions a {
+  text-decoration: none;
+}
+
 .notification-button {
   position: relative;
   width: 42px;
@@ -11332,6 +11428,10 @@ button.financial-detail-row:focus-visible {
   background: #fffefa;
   box-shadow: 0 8px 20px rgba(29, 35, 31, 0.08);
   cursor: pointer;
+}
+
+#control-room-priority {
+  scroll-margin-top: 110px;
 }
 
 .notification-button > span {
@@ -11826,6 +11926,28 @@ button.financial-detail-row:focus-visible {
 }
 
 @media (max-width: 760px) {
+  .staff-guide-card {
+    grid-template-columns: 48px 1fr;
+    gap: 13px;
+  }
+
+  .staff-guide-mark {
+    width: 48px;
+    height: 48px;
+    border-radius: 13px;
+  }
+
+  .staff-guide-actions {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .staff-guide-actions .button {
+    justify-content: center;
+    min-height: 42px;
+  }
+
   .notification-button {
     width: 38px;
     height: 38px;
@@ -11883,6 +12005,10 @@ button.financial-detail-row:focus-visible {
 }
 
 @media (max-width: 420px) {
+  .staff-guide-actions {
+    grid-template-columns: 1fr;
+  }
+
   .device-capability-card > p,
   .device-capability-actions {
     margin-left: 0;
