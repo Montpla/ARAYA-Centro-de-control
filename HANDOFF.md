@@ -23,12 +23,10 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 39.
-- Commit desplegado: `34bbcffc0ba92f584af3bb7a0367b485461ba6d2`.
-- Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_87663e0b4ddc8191b9e72b0ff54b5b2a`.
-- Despliegue:
-  `appgdep_6a6ca0b3754c8191b116574b429e256a` (`succeeded`).
+- Última versión publicada: 40, con notificaciones, cámara, biometría y
+  funcionamiento parcial sin conexión. El commit desplegado es el `HEAD` de
+  `main`; el identificador opaco debe consultarse en Sites por número de versión
+  y no reconstruirse manualmente.
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
   en Sites. La solicitud de cambiarlo a `public` devolvió
   `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
@@ -245,14 +243,29 @@ específica para pantallas de hasta 1.100 px:
   adaptados a la altura disponible y respetan las zonas seguras del dispositivo.
 - Las tablas, gráficos, pestañas y filtros extensos se desplazan horizontalmente
   cuando no caben; los controles principales tienen objetivos táctiles.
-- La carga normal y la carga mediante el agente permiten tomar una foto con la
-  cámara trasera del móvil.
+- La carga normal, el agente y la acción rápida `Hacer foto` permiten abrir la
+  cámara trasera. La fotografía queda preseleccionada en el expediente para
+  completar área, corte, moneda y descripción antes de enviarla.
 - `public/manifest.webmanifest` y `public/sw.js` permiten instalar el Centro de
-  Control desde el navegador compatible. El service worker sólo conserva el
-  manifiesto y activos de marca: no cachea HTML, API, cifras, archivos privados
-  ni respuestas del agente.
+  Control desde el navegador compatible. El service worker v3 conserva el
+  shell visitado y activos de la interfaz para consulta local, pero excluye
+  rutas API, autenticación y respuestas vivas. En modo sin conexión no se
+  permiten cargas, cambios ni generación de informes.
 - `app/layout.tsx` declara el manifiesto, icono Bricket, modo Apple web app,
   color de interfaz y `viewport-fit=cover`.
+- La campana abre `Avisos y seguridad`: combina revisiones vivas, actividad,
+  conciliaciones, documentos pendientes y acciones vencidas. El usuario puede
+  activar los avisos del sistema desde un gesto explícito y enviar una prueba.
+- `app/device-center.tsx` añade una puerta WebAuthn local con autenticador de
+  plataforma y verificación de usuario obligatoria. Puede usar Face ID, Touch
+  ID, huella, PIN o el método seguro que exponga el dispositivo. Es una segunda
+  barrera local; no sustituye la sesión ni los permisos financieros del
+  servidor.
+- Tras 30 segundos fuera de la aplicación, una instalación con biometría vuelve
+  a bloquearse. La recuperación exige conexión y un nuevo inicio de sesión; no
+  permite saltarse la comprobación biométrica.
+- La consulta offline sólo se abre cuando este dispositivo ya tiene una
+  credencial local. Al cerrar sesión se eliminan las cachés privadas.
 
 ## Datos actualmente integrados
 
@@ -808,9 +821,9 @@ Revisado y publicado el 31/07/2026.
   `Imprimir / Guardar PDF`.
 - El nombre instalable es `Bricket Control` en el manifiesto, los metadatos de
   aplicación y la configuración de iPhone/iPad.
-- El Service Worker usa la caché `bricket-control-shell-v2`, fuerza la
-  actualización de su registro y obtiene el manifiesto mediante red antes de
-  usar la copia local.
+- El Service Worker vigente usa `bricket-control-shell-v3` y una caché privada
+  separada. Prepara el shell visitado, nunca responde desde caché a rutas API o
+  de autenticación y borra ambas cachés al cerrar sesión.
 - Validación final: compilación correcta, 32/32 pruebas aprobadas y lint sin
   errores; permanecen los nueve avisos conocidos de `<img>`.
 
@@ -834,6 +847,25 @@ Revisado y publicado el 31/07/2026 en la versión 39.
 - Se verificó en producción a 390 × 844: apertura del PDF oficial
   `balance-general-junio-2026.pdf`, X visible, cierre correcto y retorno a
   Finanzas. Compilación correcta, 32/32 pruebas y lint sin errores.
+
+## Funciones de dispositivo de la versión 40
+
+Implementadas y publicadas el 31/07/2026:
+
+- Centro de notificaciones dentro de la aplicación y avisos del sistema
+  opcionales para nuevas revisiones.
+- Captura directa con cámara desde el menú móvil, con previsualización antes de
+  crear el expediente documental.
+- Desbloqueo WebAuthn local, cierre automático al volver después de 30 segundos
+  y recuperación mediante nuevo inicio de sesión.
+- PWA parcialmente offline: última interfaz visitada y activos ya cargados en
+  modo de consulta. No se almacenan respuestas de API ni se permiten
+  mutaciones sin conexión.
+- Las notificaciones del sistema se generan mientras Bricket Control está
+  activo o en segundo plano. No existe todavía un servidor de Web Push para
+  despertar una aplicación completamente cerrada.
+- Validación: build correcto, 32/32 pruebas aprobadas, lint sin errores y los
+  nueve avisos históricos de `<img>` sin cambios.
 
 ## Criterios de continuidad
 

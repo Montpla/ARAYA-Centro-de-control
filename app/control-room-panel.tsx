@@ -228,6 +228,7 @@ export function ControlRoomPanel({
   onCreateReport,
   onOpenReport,
   onRefresh,
+  readOnly = false,
 }: {
   snapshot: ControlRoomSnapshot | null;
   loading: boolean;
@@ -237,6 +238,7 @@ export function ControlRoomPanel({
   onCreateReport: () => void;
   onOpenReport: (report: ControlRoomSnapshot["reports"][number]) => void;
   onRefresh: () => void;
+  readOnly?: boolean;
 }) {
   const [tab, setTab] = useState<ControlTab>("quality");
   const [showActionForm, setShowActionForm] = useState(false);
@@ -260,6 +262,10 @@ export function ControlRoomPanel({
   );
 
   async function mutate(payload: Record<string, unknown>) {
+    if (readOnly) {
+      setMessage("Modo sin conexión: la Sala operativa está disponible únicamente para consulta.");
+      return false;
+    }
     setWorking(true);
     setMessage("");
     try {
@@ -475,8 +481,8 @@ export function ControlRoomPanel({
             <button
               type="button"
               onClick={onCreateReport}
-              disabled={!snapshot.currentUser.financeAccess}
-              title={!snapshot.currentUser.financeAccess ? "Requiere acceso financiero" : undefined}
+              disabled={!snapshot.currentUser.financeAccess || readOnly}
+              title={readOnly ? "Necesita conexión" : !snapshot.currentUser.financeAccess ? "Requiere acceso financiero" : undefined}
             >
               Crear informe
             </button>
@@ -502,7 +508,7 @@ export function ControlRoomPanel({
         <div className="control-room-body">
           <div className="control-room-table-head">
             <div><strong>Acciones y decisiones</strong><small>Responsable, vencimiento, comentarios e historial.</small></div>
-            <button type="button" onClick={() => setShowActionForm((open) => !open)}>
+            <button type="button" disabled={readOnly} onClick={() => setShowActionForm((open) => !open)}>
               {showActionForm ? "Cerrar formulario" : "Nueva acción"}
             </button>
           </div>
@@ -523,7 +529,7 @@ export function ControlRoomPanel({
                 </select></label>
               )}
               <label className="wide">Descripción<textarea value={actionForm.description} onChange={(event) => setActionForm((current) => ({ ...current, description: event.target.value }))} /></label>
-              <button type="submit" disabled={working}>{working ? "Guardando…" : "Registrar acción"}</button>
+              <button type="submit" disabled={working || readOnly}>{working ? "Guardando…" : "Registrar acción"}</button>
             </form>
           )}
           <div className="control-actions-layout">
@@ -559,7 +565,7 @@ export function ControlRoomPanel({
                       <button
                         key={status}
                         type="button"
-                        disabled={working || selectedAction.status === status}
+                        disabled={working || readOnly || selectedAction.status === status}
                         onClick={() => void mutate({ operation: "update_action", actionId: selectedAction.id, status })}
                       >
                         {label}
@@ -575,7 +581,7 @@ export function ControlRoomPanel({
                     if (saved) setComment("");
                   }}>
                     <textarea placeholder="Añadir comentario o evidencia…" value={comment} onChange={(event) => setComment(event.target.value)} />
-                    <button type="submit" disabled={working || !comment.trim()}>Registrar comentario</button>
+                    <button type="submit" disabled={working || readOnly || !comment.trim()}>Registrar comentario</button>
                   </form>
                 )}
                 <div className="control-action-activity">

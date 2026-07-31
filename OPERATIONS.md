@@ -65,6 +65,24 @@ cinco segundos.
 6. Si el problema continúa, conservar la hora, la sección, el archivo y la
    revisión para diagnóstico.
 
+## Funciones del móvil y la tablet
+
+- `Avisos y seguridad` se abre desde la campana superior o desde el menú
+  `Más`. La autorización de notificaciones siempre la concede la persona desde
+  el propio dispositivo.
+- `Hacer foto` abre la cámara trasera y lleva la imagen al formulario de carga.
+  Hay que revisar el área, fecha de corte y descripción antes de crear el
+  expediente.
+- La biometría se activa por dispositivo. Usa el método seguro que ofrezca el
+  sistema operativo y no altera la sesión ni los permisos financieros.
+- Si se necesita recuperar el acceso biométrico, la aplicación exige conexión,
+  elimina la copia local y obliga a iniciar sesión de nuevo.
+- Sin internet, la aplicación permite consultar la última interfaz preparada.
+  Las API, cargas, cambios, informes y agente permanecen desactivados hasta que
+  vuelva la conexión.
+- Cerrar sesión elimina las cachés locales privadas. Las notificaciones del
+  sistema no usan tokens del agente.
+
 ## Continuidad
 
 El estado técnico, las fuentes incorporadas, las decisiones de diseño y la

@@ -104,6 +104,22 @@ import {
   ControlRoomPanel,
   ControlRoomSnapshot,
 } from "./control-room-panel";
+import {
+  BiometricGate,
+  DeviceBootScreen,
+  DeviceCenter,
+  OfflineAccessGate,
+  enrollPlatformBiometric,
+  platformBiometricAvailable,
+  readBiometricRecord,
+  removeBiometricRecord,
+  verifyPlatformBiometric,
+} from "./device-center";
+import type {
+  DeviceNotificationItem,
+  DeviceNotificationPermission,
+  LocalBiometricRecord,
+} from "./device-center";
 
 type View =
   | "resumen"
@@ -1272,6 +1288,9 @@ function Header({
   liveSync,
   currentUser,
   canAccessFinance,
+  online,
+  unreadNotifications,
+  onOpenDeviceCenter,
 }: {
   view: View;
   onAsk: () => void;
@@ -1284,6 +1303,9 @@ function Header({
   liveSync: LiveSyncState;
   currentUser: DashboardUser;
   canAccessFinance: boolean;
+  online: boolean;
+  unreadNotifications: number;
+  onOpenDeviceCenter: () => void;
 }) {
   const label = navItems.find((item) => item.id === view)?.label;
   return (
@@ -1315,7 +1337,7 @@ function Header({
           </div>
         )}
         <div
-          className={`live-state live-sync ${project.demo ? "demo" : liveSync.status}`}
+          className={`live-state live-sync ${project.demo ? "demo" : online ? liveSync.status : "offline"}`}
           title={
             project.demo
               ? `Corte documental ${project.cutoff}`
@@ -1325,20 +1347,31 @@ function Header({
           <span className="live-dot" />
           {project.demo
             ? `Corte documental · ${project.cutoff}`
+            : !online
+              ? "Sin conexión · solo lectura"
             : liveSync.status === "connected"
               ? `Tiempo real · v${liveSync.revision || "base"} · 5 s`
               : liveSync.status === "syncing"
                 ? "Sincronizando datos…"
                 : "Reconectando datos…"}
         </div>
-        <button className="button secondary" onClick={onAsk} disabled={project.demo}>
+        <button className="button secondary" onClick={onAsk} disabled={project.demo || !online}>
           Preguntar al agente
         </button>
-        <button className="button report-button" onClick={onReport} disabled={project.demo || !canAccessFinance} title={!canAccessFinance ? "Requiere acceso financiero" : undefined}>
+        <button className="button report-button" onClick={onReport} disabled={project.demo || !canAccessFinance || !online} title={!online ? "Necesita conexión" : !canAccessFinance ? "Requiere acceso financiero" : undefined}>
           Crear informe
         </button>
-        <button className="button primary" onClick={onUpload} disabled={project.demo}>
+        <button className="button primary" onClick={onUpload} disabled={project.demo || !online}>
           + Cargar archivo
+        </button>
+        <button
+          className="notification-button"
+          type="button"
+          onClick={onOpenDeviceCenter}
+          aria-label={`Abrir avisos y seguridad${unreadNotifications ? ` · ${unreadNotifications} sin leer` : ""}`}
+        >
+          <span aria-hidden="true">●</span>
+          {unreadNotifications > 0 && <b>{Math.min(unreadNotifications, 99)}</b>}
         </button>
         <div className="account-control">
           <div className="account-copy">
@@ -1348,7 +1381,7 @@ function Header({
           </div>
           <UserAvatar
             user={currentUser}
-            editable
+            editable={online}
             className="header-user-avatar"
             onUploaded={onAvatarUpdated}
           />
@@ -1673,6 +1706,96 @@ function FileViewer({ file, onClose }: { file: FileViewerState; onClose: () => v
       </div>
     </section>
   );
+}
+
+const notificationAreaViews: Record<string, View> = {
+  direccion: "resumen",
+  planificacion: "planificacion",
+  obra: "edificios",
+  urbanismo: "urbanismo",
+  comercial: "comercial",
+  finanzas: "metricas",
+  compras: "proveedores",
+  seguridad: "control",
+  legal: "control",
+  diseno: "implantacion",
+  fuentes: "fuentes",
+};
+
+function notificationTime(value: string) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("es-DO", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function buildDeviceNotifications(
+  snapshot: ControlRoomSnapshot | null,
+  liveSync: LiveSyncState,
+): DeviceNotificationItem[] {
+  const items: DeviceNotificationItem[] = [];
+  if (liveSync.latestEvent) {
+    items.push({
+      id: `live-${liveSync.latestEvent.revision}`,
+      title: `Nueva revisión viva · v${liveSync.latestEvent.revision}`,
+      detail: liveSync.latestEvent.message || `Actualización recibida desde ${liveSync.latestEvent.sourceName}.`,
+      timestamp: notificationTime(liveSync.latestEvent.createdAt),
+      tone: "success",
+      view: "resumen",
+    });
+  }
+  if (!snapshot) return items;
+
+  for (const activity of snapshot.actionActivity.slice(0, 4)) {
+    items.push({
+      id: `activity-${activity.id}`,
+      title: activity.actionTitle || "Actividad operativa",
+      detail: activity.message,
+      timestamp: notificationTime(activity.createdAt),
+      tone: "info",
+      view: notificationAreaViews[activity.area ?? ""] ?? "resumen",
+    });
+  }
+
+  for (const issue of snapshot.reconciliations.filter((item) => !item.restricted).slice(0, 4)) {
+    items.push({
+      id: `reconciliation-${issue.id}`,
+      title: issue.title,
+      detail: issue.detail,
+      timestamp: `Corte ${snapshot.cutoff}`,
+      tone: issue.severity === "critical" ? "critical" : issue.severity === "medium" ? "warning" : "info",
+      view: issue.view,
+    });
+  }
+
+  if (snapshot.documents.pending > 0) {
+    items.push({
+      id: `documents-pending-${snapshot.documents.pending}-${snapshot.documents.lastUploadAt}`,
+      title: `${snapshot.documents.pending} documentos pendientes de validación`,
+      detail: `${snapshot.documents.pendingProposals} propuestas esperan revisión antes de actualizar el Centro de Control.`,
+      timestamp: notificationTime(snapshot.documents.lastUploadAt),
+      tone: snapshot.documents.discrepancies > 0 ? "warning" : "info",
+      view: "fuentes",
+    });
+  }
+
+  if (snapshot.actionSummary.overdue > 0 || snapshot.actionSummary.blocked > 0) {
+    items.push({
+      id: `actions-alert-${snapshot.actionSummary.overdue}-${snapshot.actionSummary.blocked}`,
+      title: "Acciones que requieren atención",
+      detail: `${snapshot.actionSummary.overdue} vencidas · ${snapshot.actionSummary.blocked} bloqueadas.`,
+      timestamp: notificationTime(snapshot.generatedAt),
+      tone: snapshot.actionSummary.overdue > 0 ? "critical" : "warning",
+      view: "resumen",
+    });
+  }
+
+  return items.slice(0, 12);
 }
 
 function StatCard({
@@ -5563,16 +5686,23 @@ function DirectionReport({
 
 function UploadModal({
   initialArea,
+  initialFile,
   canAccessFinance,
+  online,
   onClose,
   onComplete,
 }: {
   initialArea: UploadArea;
+  initialFile: File | null;
   canAccessFinance: boolean;
+  online: boolean;
   onClose: () => void;
   onComplete: (message: string) => void;
 }) {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(initialFile);
+  const [previewUrl, setPreviewUrl] = useState(() =>
+    initialFile?.type.startsWith("image/") ? URL.createObjectURL(initialFile) : "",
+  );
   const [area, setArea] = useState<UploadArea>(initialArea);
   const [description, setDescription] = useState("");
   const [declaredCutoff, setDeclaredCutoff] = useState("");
@@ -5580,9 +5710,25 @@ function UploadModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  function chooseFile(file: File | null) {
+    setSelectedFile(file);
+    setPreviewUrl(file?.type.startsWith("image/") ? URL.createObjectURL(file) : "");
+    setError("");
+  }
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedFile || saving) return;
+    if (!online) {
+      setError("La carga queda desactivada en modo sin conexión. Conserva la foto y vuelve a intentarlo cuando recuperes internet.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -5610,13 +5756,21 @@ function UploadModal({
           <button className="close-button" type="button" onClick={onClose} aria-label="Cerrar">×</button>
         </div>
         <p className="upload-intro">El original se conserva sin modificar. El sistema registra tu identidad, detecta duplicados e identifica área, tipo, periodo y moneda. Después abre un expediente de extracción y validación: ningún dato cambia hasta que un responsable lo aprueba.</p>
-        <div className="upload-dropzone">
+        <div className={`upload-dropzone ${previewUrl ? "with-preview" : ""}`}>
           <input
             type="file"
             required
             accept=".xlsx,.xls,.csv,.json,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
-            onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+            onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
           />
+          {previewUrl && (
+            <div
+              className="upload-image-preview"
+              role="img"
+              aria-label={`Vista previa de ${selectedFile?.name ?? "la fotografía"}`}
+              style={{ backgroundImage: `url("${previewUrl}")` }}
+            />
+          )}
           <strong>{selectedFile ? selectedFile.name : "Selecciona o arrastra un archivo"}</strong>
           <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON, PowerPoint, PDF, Word, MPP, DWG, imagen o ZIP · máximo 50 MB"}</span>
         </div>
@@ -5627,11 +5781,12 @@ function UploadModal({
               type="file"
               accept="image/*"
               capture="environment"
-              onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
             />
           </label>
           <small>Ideal para avance de obra, incidencias, albaranes y evidencias de campo.</small>
         </div>
+        {!online && <div className="callout warn"><strong>Modo sin conexión</strong><p>Puedes consultar datos, pero las nuevas cargas se reactivarán cuando vuelva internet.</p></div>}
         <div className="form-grid">
           <label>
             Área de destino
@@ -5661,7 +5816,7 @@ function UploadModal({
         {error && <div className="callout warn"><strong>No se completó la carga</strong><p>{error}</p></div>}
         <div className="modal-actions">
           <button className="button secondary" type="button" onClick={onClose}>Cancelar</button>
-          <button className="button primary" type="submit" disabled={!selectedFile || saving}>{saving ? "Guardando…" : "Crear expediente"}</button>
+          <button className="button primary" type="submit" disabled={!selectedFile || saving || !online}>{saving ? "Guardando…" : online ? "Crear expediente" : "Esperando conexión"}</button>
         </div>
       </form>
     </div>
@@ -6104,9 +6259,30 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   const [controlRoom, setControlRoom] = useState<ControlRoomSnapshot | null>(null);
   const [controlRoomLoading, setControlRoomLoading] = useState(true);
   const [controlRoomError, setControlRoomError] = useState("");
+  const [deviceCenterOpen, setDeviceCenterOpen] = useState(false);
+  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
+  const [online, setOnline] = useState(true);
+  const [offlineReady, setOfflineReady] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<DeviceNotificationPermission>("unsupported");
+  const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const [deviceSecurityReady, setDeviceSecurityReady] = useState(false);
+  const [biometricSupported, setBiometricSupported] = useState(false);
+  const [biometricRecord, setBiometricRecord] = useState<LocalBiometricRecord | null>(null);
+  const [biometricLocked, setBiometricLocked] = useState(false);
+  const [biometricBusy, setBiometricBusy] = useState(false);
+  const [biometricError, setBiometricError] = useState("");
+  const hiddenAtRef = useRef(0);
+  const lastNotifiedRevisionRef = useRef<number | null>(null);
   const activeProject = projects[activeProjectId];
   const availableNavItems = navItems.filter((item) => item.id !== "usuarios" || currentUser.role === "admin");
   const arayaLiveSummary = `${buildings.length} edificios · ${buildings.reduce((total, building) => total + building.units.length, 0)} apartamentos`;
+  const deviceNotifications = useMemo(
+    () => buildDeviceNotifications(controlRoom, liveSync),
+    [controlRoom, liveSync],
+  );
+  const unreadNotifications = deviceNotifications.filter(
+    (item) => !readNotificationIds.includes(item.id),
+  ).length;
 
   const refreshControlRoom = useCallback(async () => {
     try {
@@ -6123,6 +6299,90 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       setControlRoomLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      await Promise.resolve();
+      const readKey = `bricket-notifications-read-v1:${currentUser.id}`;
+      let storedReadIds: string[] = [];
+      try {
+        const stored = JSON.parse(window.localStorage.getItem(readKey) ?? "[]") as unknown;
+        if (Array.isArray(stored)) {
+          storedReadIds = stored
+            .filter((item): item is string => typeof item === "string")
+            .slice(0, 100);
+        }
+      } catch {
+        storedReadIds = [];
+      }
+      const record = readBiometricRecord(currentUser.id);
+      let supported = false;
+      try {
+        supported = await platformBiometricAvailable();
+      } catch {
+        supported = false;
+      }
+      if (!active) return;
+      setReadNotificationIds(storedReadIds);
+      setOnline(navigator.onLine);
+      setNotificationPermission("Notification" in window ? Notification.permission : "unsupported");
+      setBiometricRecord(record);
+      setBiometricLocked(Boolean(record));
+      setBiometricSupported(supported);
+      setDeviceSecurityReady(true);
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [currentUser.id]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setOnline(true);
+      setNotice("Conexión recuperada · sincronización en tiempo real reactivada.");
+    };
+    const handleOffline = () => {
+      setOnline(false);
+      setNotice("Modo sin conexión · consulta local en solo lectura.");
+    };
+    const handleServiceWorkerMessage = (event: MessageEvent<{ type?: string }>) => {
+      if (event.data?.type === "OFFLINE_READY") setOfflineReady(true);
+    };
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    navigator.serviceWorker?.addEventListener("message", handleServiceWorkerMessage);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      navigator.serviceWorker?.removeEventListener("message", handleServiceWorkerMessage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(""), 6_000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!biometricRecord) return;
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAtRef.current = Date.now();
+        return;
+      }
+      if (hiddenAtRef.current && Date.now() - hiddenAtRef.current >= 30_000) {
+        setBiometricLocked(true);
+        setDeviceCenterOpen(false);
+        setFileViewer(null);
+      }
+      hiddenAtRef.current = 0;
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [biometricRecord]);
 
   useEffect(() => {
     if (!window.matchMedia("(max-width: 760px)").matches) return;
@@ -6153,7 +6413,27 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     if ("serviceWorker" in navigator) {
       void navigator.serviceWorker
         .register("/sw.js", { updateViaCache: "none" })
-        .then((registration) => registration.update())
+        .then(async (registration) => {
+          await registration.update();
+          const ready = await navigator.serviceWorker.ready;
+          const resourceUrls = Array.from(
+            document.querySelectorAll<HTMLLinkElement | HTMLScriptElement | HTMLImageElement>(
+              'link[rel="stylesheet"][href], script[src], img[src]',
+            ),
+          )
+            .map((element) => {
+              const source = element instanceof HTMLLinkElement ? element.href : element.src;
+              const url = new URL(source, window.location.href);
+              return url.origin === window.location.origin && !url.pathname.startsWith("/api/")
+                ? `${url.pathname}${url.search}`
+                : "";
+            })
+            .filter(Boolean);
+          (ready.active ?? registration.active)?.postMessage({
+            type: "CACHE_APP_SHELL",
+            resourceUrls: ["/", ...resourceUrls],
+          });
+        })
         .catch(() => undefined);
     }
 
@@ -6178,7 +6458,8 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       reportBuilderOpen ||
       directionReport ||
       workspaceDetail ||
-      fileViewer,
+      fileViewer ||
+      deviceCenterOpen,
     );
     if (!hasBlockingLayer) return;
     const previousOverflow = document.documentElement.style.overflow;
@@ -6186,7 +6467,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     return () => {
       document.documentElement.style.overflow = previousOverflow;
     };
-  }, [directionReport, fileViewer, mobileMenuOpen, modal, reportBuilderOpen, uploadOpen, workspaceDetail]);
+  }, [deviceCenterOpen, directionReport, fileViewer, mobileMenuOpen, modal, reportBuilderOpen, uploadOpen, workspaceDetail]);
 
   useEffect(() => {
     let active = true;
@@ -6252,6 +6533,33 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     };
   }, [currentUser.financeAccess]);
 
+  useEffect(() => {
+    if (!deviceSecurityReady || liveSync.revision <= 0) return;
+    const storageKey = `bricket-last-notified-revision-v1:${currentUser.id}`;
+    const storedRevision = Number(window.localStorage.getItem(storageKey) ?? 0);
+    if (lastNotifiedRevisionRef.current === null) {
+      lastNotifiedRevisionRef.current = storedRevision || liveSync.revision;
+      if (!storedRevision) window.localStorage.setItem(storageKey, String(liveSync.revision));
+      return;
+    }
+    if (liveSync.revision <= lastNotifiedRevisionRef.current) return;
+
+    lastNotifiedRevisionRef.current = liveSync.revision;
+    window.localStorage.setItem(storageKey, String(liveSync.revision));
+    if (notificationPermission === "granted") {
+      void showDeviceNotification(
+        `Bricket Control · revisión v${liveSync.revision}`,
+        liveSync.latestEvent?.message ?? "El Centro de Control ha recibido nuevos datos.",
+      );
+    }
+  }, [
+    currentUser.id,
+    deviceSecurityReady,
+    liveSync.latestEvent?.message,
+    liveSync.revision,
+    notificationPermission,
+  ]);
+
   const searchResults = useMemo<WorkspaceSearchResult[]>(() => {
     const term = search.trim().toLowerCase();
     if (!term) return [];
@@ -6299,11 +6607,152 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     ].slice(0, 8);
   }, [activeProjectId, search, supplierRows, metrics, currentUser.financeAccess]);
 
+  function persistReadNotificationIds(ids: string[]) {
+    const uniqueIds = Array.from(new Set(ids)).slice(0, 100);
+    setReadNotificationIds(uniqueIds);
+    window.localStorage.setItem(
+      `bricket-notifications-read-v1:${currentUser.id}`,
+      JSON.stringify(uniqueIds),
+    );
+  }
+
+  function readNotification(id: string) {
+    persistReadNotificationIds([...readNotificationIds, id]);
+  }
+
+  function readAllNotifications() {
+    persistReadNotificationIds([
+      ...readNotificationIds,
+      ...deviceNotifications.map((item) => item.id),
+    ]);
+  }
+
+  async function showDeviceNotification(title: string, body: string) {
+    if (!("serviceWorker" in navigator) || !("Notification" in window) || Notification.permission !== "granted") return;
+    const registration = await navigator.serviceWorker.ready;
+    await registration.showNotification(title, {
+      body,
+      icon: "/bricket-mark.png",
+      badge: "/bricket-mark.png",
+      tag: "bricket-control-live",
+      data: { url: "/" },
+    });
+  }
+
+  async function enableDeviceNotifications() {
+    if (!("Notification" in window)) {
+      setNotificationPermission("unsupported");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    if (permission === "granted") {
+      setNotice("Notificaciones activadas en este dispositivo.");
+      await showDeviceNotification(
+        "Bricket Control listo",
+        "Recibirás avisos de nuevas revisiones y alertas operativas.",
+      );
+    } else {
+      setNotice("El dispositivo no ha autorizado las notificaciones.");
+    }
+  }
+
+  async function testDeviceNotification() {
+    await showDeviceNotification(
+      "Aviso de prueba · Bricket Control",
+      "Las notificaciones del Centro de Control funcionan correctamente.",
+    );
+  }
+
+  async function enableBiometricUnlock() {
+    setBiometricBusy(true);
+    setBiometricError("");
+    try {
+      const record = await enrollPlatformBiometric(currentUser.id, profileUser.displayName);
+      setBiometricRecord(record);
+      setBiometricLocked(false);
+      setNotice("Desbloqueo biométrico activado en este dispositivo.");
+    } catch (error) {
+      setBiometricError(
+        error instanceof Error
+          ? error.message
+          : "No se ha podido configurar la protección biométrica.",
+      );
+    } finally {
+      setBiometricBusy(false);
+    }
+  }
+
+  async function unlockWithBiometrics() {
+    if (!biometricRecord) return;
+    setBiometricBusy(true);
+    setBiometricError("");
+    try {
+      await verifyPlatformBiometric(biometricRecord);
+      setBiometricLocked(false);
+    } catch {
+      setBiometricError("No se ha podido verificar la identidad. Vuelve a intentarlo.");
+    } finally {
+      setBiometricBusy(false);
+    }
+  }
+
+  function disableBiometricUnlock() {
+    if (!online) {
+      setBiometricError("Conéctate a internet antes de retirar la protección de este dispositivo.");
+      return;
+    }
+    removeBiometricRecord(currentUser.id);
+    setBiometricRecord(null);
+    setBiometricLocked(false);
+    setBiometricError("");
+    setNotice("Protección biométrica desactivada en este dispositivo.");
+  }
+
+  function recoverBiometricAccess() {
+    if (!online) return;
+    removeBiometricRecord(currentUser.id);
+    navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
+    window.location.assign("/signout-with-chatgpt?return_to=/");
+  }
+
+  function lockDeviceNow() {
+    if (!biometricRecord) return;
+    setDeviceCenterOpen(false);
+    setFileViewer(null);
+    setBiometricLocked(true);
+  }
+
+  function requestUpload(file: File | null = null) {
+    if (!online) {
+      setNotice("La carga de archivos necesita conexión. La consulta local sigue disponible.");
+      return;
+    }
+    setPendingUploadFile(file);
+    setUploadOpen(true);
+  }
+
+  function handleDirectCameraFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+    setMobileMenuOpen(false);
+    requestUpload(file);
+  }
+
+  function openDeviceNotification(item: DeviceNotificationItem) {
+    setDeviceCenterOpen(false);
+    if (item.view && navItems.some((navItem) => navItem.id === item.view)) {
+      navigate(item.view as View);
+    }
+  }
+
   function navigate(viewId: View) {
     setView(viewId);
     setWorkspaceDetail(null);
     setFileViewer(null);
     setMobileMenuOpen(false);
+    setDeviceCenterOpen(false);
     if (viewId === "agente") setAgentOpen(false);
   }
 
@@ -6319,6 +6768,8 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     setDirectionReport(null);
     setWorkspaceDetail(null);
     setFileViewer(null);
+    setDeviceCenterOpen(false);
+    setPendingUploadFile(null);
     setAgentOpen(projectId === "araya" && !window.matchMedia("(max-width: 1100px)").matches);
   }
 
@@ -6334,13 +6785,17 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     ) return;
 
     const anchor = event.target.closest<HTMLAnchorElement>("a[href]");
-    if (
-      !anchor ||
-      anchor.hasAttribute("download") ||
-      anchor.dataset.fileViewerBypass === "true"
-    ) return;
+    if (!anchor) return;
 
     const url = new URL(anchor.href, window.location.href);
+    if (
+      url.origin === window.location.origin &&
+      url.pathname.startsWith("/signout-with-chatgpt")
+    ) {
+      navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
+      return;
+    }
+    if (anchor.hasAttribute("download") || anchor.dataset.fileViewerBypass === "true") return;
     const isStaticProjectFile = url.origin === window.location.origin && url.pathname.startsWith("/data-center/");
     const isUploadedProjectFile = url.origin === window.location.origin &&
       url.pathname === "/api/files" &&
@@ -6428,6 +6883,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
               archivedSnapshot: report.snapshot,
             })}
             onRefresh={() => void refreshControlRoom()}
+            readOnly={!online}
           />
         </div>
       );
@@ -6440,10 +6896,35 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     if (view === "urbanismo") return <UrbanismView />;
     if (view === "control") return <ControlView currency={currency} canAccessFinance={currentUser.financeAccess} />;
     if (view === "cronologia") return <TimelineView />;
-    if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => setModal("supplier")} currency={currency} canAccessFinance={currentUser.financeAccess} />;
-    if (view === "metricas") return currentUser.financeAccess ? <MetricsView metrics={metrics} onAdd={() => setModal("metric")} currency={currency} /> : <FinanceLockedView />;
-    if (view === "fuentes") return <SourcesView onUpload={() => setUploadOpen(true)} canAccessFinance={currentUser.financeAccess} currency={currency} currentUser={profileUser} />;
+    if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => online ? setModal("supplier") : setNotice("Modo sin conexión · no se pueden crear registros.")} currency={currency} canAccessFinance={currentUser.financeAccess} />;
+    if (view === "metricas") return currentUser.financeAccess ? <MetricsView metrics={metrics} onAdd={() => online ? setModal("metric") : setNotice("Modo sin conexión · no se pueden crear registros.")} currency={currency} /> : <FinanceLockedView />;
+    if (view === "fuentes") return <SourcesView onUpload={() => requestUpload()} canAccessFinance={currentUser.financeAccess} currency={currency} currentUser={profileUser} />;
     return <AgentPanel expanded onClose={() => setView("resumen")} currency={currency} />;
+  }
+
+  if (!deviceSecurityReady) return <DeviceBootScreen />;
+  if (!online && !biometricRecord) {
+    return (
+      <OfflineAccessGate
+        onRetry={() => {
+          const connectionAvailable = navigator.onLine;
+          setOnline(connectionAvailable);
+          if (connectionAvailable) window.location.reload();
+        }}
+      />
+    );
+  }
+  if (biometricRecord && biometricLocked) {
+    return (
+      <BiometricGate
+        displayName={profileUser.displayName}
+        busy={biometricBusy}
+        error={biometricError}
+        online={online}
+        onUnlock={() => void unlockWithBiometrics()}
+        onRecover={recoverBiometricAccess}
+      />
+    );
   }
 
   return (
@@ -6572,7 +7053,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
           view={view}
           project={activeProject}
           onAsk={() => setAgentOpen(true)}
-          onUpload={() => setUploadOpen(true)}
+          onUpload={() => requestUpload()}
           onReport={() => setReportBuilderOpen(true)}
           onAvatarUpdated={(avatarUrl) =>
             setProfileUser((current) => ({ ...current, avatarUrl }))
@@ -6582,6 +7063,9 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
           liveSync={liveSync}
           currentUser={profileUser}
           canAccessFinance={currentUser.financeAccess}
+          online={online}
+          unreadNotifications={unreadNotifications}
+          onOpenDeviceCenter={() => setDeviceCenterOpen(true)}
         />
         <div className="global-search">
           <span>⌕</span>
@@ -6612,12 +7096,14 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
           )}
         </div>
         {activeProjectId === "araya" && (
-          <div className={`live-data-ribbon ${liveSync.status}`} role="status" aria-live="polite">
+          <div className={`live-data-ribbon ${online ? liveSync.status : "offline"}`} role="status" aria-live="polite">
             <span className="live-dot" />
-            <strong>Centro de Control sincronizado</strong>
-            <span>Gráficas, cifras, porcentajes, cronograma y avance se actualizan automáticamente cada 5 segundos.</span>
+            <strong>{online ? "Centro de Control sincronizado" : "Modo sin conexión · solo lectura"}</strong>
+            <span>{online ? "Gráficas, cifras, porcentajes, cronograma y avance se actualizan automáticamente cada 5 segundos." : "Puedes consultar la última copia protegida. Cargas, informes y cambios se reactivarán al recuperar internet."}</span>
             <em>
-              {liveSync.latestEvent?.sourceName
+              {!online
+                ? offlineReady ? "Copia local preparada en este dispositivo" : "Conexión no disponible"
+                : liveSync.latestEvent?.sourceName
                 ? `Última fuente: ${liveSync.latestEvent.sourceName}${liveSync.latestEvent.cutoff ? ` · corte ${liveSync.latestEvent.cutoff}` : ""}`
                 : "Base consolidada con trazabilidad por fuente, fecha y versión"}
             </em>
@@ -6634,7 +7120,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
                 view={view}
                 canAccessFinance={currentUser.financeAccess}
                 onNavigate={navigate}
-                onUpload={() => setUploadOpen(true)}
+                onUpload={() => requestUpload()}
               />
             )}
           </AppErrorBoundary>
@@ -6669,13 +7155,24 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
               </div>
             </div>
             <div className="mobile-quick-actions">
+              <label className={`mobile-camera-action ${activeProject.demo || !online ? "disabled" : ""}`}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  disabled={activeProject.demo || !online}
+                  onChange={handleDirectCameraFile}
+                />
+                <i aria-hidden="true">◉</i>
+                <span><strong>Hacer foto</strong><small>Subir evidencia desde la cámara</small></span>
+              </label>
               <button
                 type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  setUploadOpen(true);
+                  requestUpload();
                 }}
-                disabled={activeProject.demo}
+                disabled={activeProject.demo || !online}
               >
                 <i>＋</i><span><strong>Cargar archivo</strong><small>Documento, plano o foto</small></span>
               </button>
@@ -6683,9 +7180,18 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
                 type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
+                  setDeviceCenterOpen(true);
+                }}
+              >
+                <i>●</i><span><strong>Avisos y seguridad</strong><small>{unreadNotifications ? `${unreadNotifications} avisos sin leer` : "Biometría y modo sin conexión"}</small></span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
                   setAgentOpen(true);
                 }}
-                disabled={activeProject.demo}
+                disabled={activeProject.demo || !online}
               >
                 <i>AI</i><span><strong>Preguntar al agente</strong><small>Consulta los datos vivos</small></span>
               </button>
@@ -6696,7 +7202,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
                     setMobileMenuOpen(false);
                     setReportBuilderOpen(true);
                   }}
-                  disabled={activeProject.demo}
+                  disabled={activeProject.demo || !online}
                 >
                   <i>↗</i><span><strong>Crear informe</strong><small>Semanal o mensual</small></span>
                 </button>
@@ -6725,7 +7231,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
             <div className="mobile-account">
               <UserAvatar
                 user={profileUser}
-                editable
+                editable={online}
                 className="mobile-user-avatar"
                 onUploaded={(avatarUrl) =>
                   setProfileUser((current) => ({ ...current, avatarUrl }))
@@ -6739,6 +7245,35 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
             </div>
           </aside>
         </>
+      )}
+
+      {deviceCenterOpen && (
+        <AppErrorBoundary
+          resetKey={`device-center-${deviceCenterOpen}`}
+          variant="overlay"
+          onRecover={() => setDeviceCenterOpen(false)}
+        >
+          <DeviceCenter
+            notifications={deviceNotifications}
+            readIds={readNotificationIds}
+            notificationPermission={notificationPermission}
+            biometricSupported={biometricSupported}
+            biometricConfigured={Boolean(biometricRecord)}
+            biometricBusy={biometricBusy}
+            biometricError={biometricError}
+            online={online}
+            offlineReady={offlineReady}
+            onClose={() => setDeviceCenterOpen(false)}
+            onRead={readNotification}
+            onReadAll={readAllNotifications}
+            onOpenNotification={openDeviceNotification}
+            onEnableNotifications={() => void enableDeviceNotifications()}
+            onTestNotification={() => void testDeviceNotification()}
+            onEnableBiometric={() => void enableBiometricUnlock()}
+            onDisableBiometric={disableBiometricUnlock}
+            onLockNow={lockDeviceNow}
+          />
+        </AppErrorBoundary>
       )}
 
       {activeProjectId === "araya" && agentOpen && view !== "agente" && <AgentPanel expanded={false} onClose={() => setAgentOpen(false)} currency={currency} />}
@@ -6755,12 +7290,17 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       {activeProjectId === "araya" && uploadOpen && (
         <UploadModal
           initialArea={!currentUser.financeAccess && defaultUploadArea[view] === "finanzas" ? "auto" : defaultUploadArea[view]}
+          initialFile={pendingUploadFile}
           canAccessFinance={currentUser.financeAccess}
-          onClose={() => setUploadOpen(false)}
+          online={online}
+          onClose={() => {
+            setUploadOpen(false);
+            setPendingUploadFile(null);
+          }}
           onComplete={(message) => {
             setUploadOpen(false);
+            setPendingUploadFile(null);
             setNotice(message);
-            window.setTimeout(() => setNotice(""), 6000);
           }}
         />
       )}
@@ -6812,7 +7352,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
             canAccessFinance={currentUser.financeAccess}
             onClose={() => setWorkspaceDetail(null)}
             onNavigate={navigate}
-            onUpload={() => setUploadOpen(true)}
+            onUpload={() => requestUpload()}
           />
         )}
       </AppErrorBoundary>
@@ -6827,7 +7367,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
         )}
       </AppErrorBoundary>
 
-      {notice && <div className="upload-toast" role="status"><strong>Archivo recibido</strong><span>{notice}</span></div>}
+      {notice && <div className="upload-toast" role="status"><strong>Bricket Control</strong><span>{notice}</span></div>}
     </div>
     </WorkspaceDetailContext.Provider>
   );

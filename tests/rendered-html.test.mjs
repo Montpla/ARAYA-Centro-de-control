@@ -587,9 +587,10 @@ test("points three to eight add a live operational control room without autonomo
   assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.control-room-heading/);
 });
 
-test("tablet and mobile mode provides app navigation, touch plan, camera upload and safe PWA metadata", async () => {
-  const [dashboard, styles, filesRoute, layout, routeError, manifest, serviceWorker] = await Promise.all([
+test("tablet and mobile mode provides navigation, camera, notifications, biometrics and protected offline access", async () => {
+  const [dashboard, deviceCenter, styles, filesRoute, layout, routeError, manifest, serviceWorker] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/device-center.tsx", "utf8"),
     readFile("app/globals.css", "utf8"),
     readFile("app/api/files/route.ts", "utf8"),
     readFile("app/layout.tsx", "utf8"),
@@ -602,6 +603,13 @@ test("tablet and mobile mode provides app navigation, touch plan, camera upload 
   assert.match(dashboard, /Pantalla completa/);
   assert.match(dashboard, /site-plan-canvas-scroll/);
   assert.match(dashboard, /capture="environment"/);
+  assert.match(dashboard, /handleDirectCameraFile/);
+  assert.match(dashboard, /buildDeviceNotifications/);
+  assert.match(dashboard, /Notification\.requestPermission/);
+  assert.match(dashboard, /showDeviceNotification/);
+  assert.match(dashboard, /CLEAR_PRIVATE_CACHE/);
+  assert.match(dashboard, /CACHE_APP_SHELL/);
+  assert.match(dashboard, /Modo sin conexión · solo lectura/);
   assert.match(dashboard, /register\("\/sw\.js", \{ updateViaCache: "none" \}\)/);
   assert.match(dashboard, /class AppErrorBoundary/);
   assert.match(dashboard, /RECUPERACIÓN SEGURA/);
@@ -610,6 +618,12 @@ test("tablet and mobile mode provides app navigation, touch plan, camera upload 
   assert.match(dashboard, /onClickCapture=\{openFileInViewer\}/);
   assert.match(dashboard, /aria-label="Cerrar archivo"/);
   assert.match(dashboard, /data-file-viewer-bypass="true"/);
+  assert.match(deviceCenter, /navigator\.credentials\.create/);
+  assert.match(deviceCenter, /navigator\.credentials\.get/);
+  assert.match(deviceCenter, /userVerification: "required"/);
+  assert.match(deviceCenter, /Desbloquear Bricket Control/);
+  assert.match(deviceCenter, /Funcionamiento sin conexión/);
+  assert.match(deviceCenter, /Notificaciones del dispositivo/);
   assert.match(styles, /@media \(max-width: 1100px\)/);
   assert.match(styles, /\.mobile-bottom-nav/);
   assert.match(styles, /\.site-plan-canvas-scroll\.expanded/);
@@ -618,6 +632,9 @@ test("tablet and mobile mode provides app navigation, touch plan, camera upload 
   assert.match(styles, /\.direction-report-toolbar \.button\.secondary\s*\{[^}]*display: inline-flex/s);
   assert.match(styles, /\.file-viewer-overlay/);
   assert.match(styles, /\.file-viewer-close/);
+  assert.match(styles, /\.device-center-panel/);
+  assert.match(styles, /\.biometric-unlock-button/);
+  assert.match(styles, /\.notification-button/);
   assert.match(styles, /z-index: 400/);
   assert.match(filesRoute, /searchParams\.get\("preview"\)/);
   assert.match(filesRoute, /inlinePreview \? "inline" : "attachment"/);
@@ -630,10 +647,12 @@ test("tablet and mobile mode provides app navigation, touch plan, camera upload 
   assert.match(routeError, /Reintentar/);
   assert.match(manifest, /"display": "standalone"/);
   assert.match(manifest, /"short_name": "Bricket Control"/);
-  assert.match(serviceWorker, /bricket-control-shell-v2/);
-  assert.match(serviceWorker, /url\.pathname === "\/manifest\.webmanifest"/);
-  assert.doesNotMatch(serviceWorker, /\/api\//);
-  assert.doesNotMatch(serviceWorker, /caches\.match\(event\.request\).*fetch\(event\.request\).*navigation/s);
+  assert.match(serviceWorker, /bricket-control-shell-v3/);
+  assert.match(serviceWorker, /CACHE_APP_SHELL/);
+  assert.match(serviceWorker, /CLEAR_PRIVATE_CACHE/);
+  assert.match(serviceWorker, /event\.request\.mode === "navigate"/);
+  assert.match(serviceWorker, /url\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(serviceWorker, /notificationclick/);
 });
 
 test("July supplier, procurement, budget and IFC sources are audited and connected", async () => {

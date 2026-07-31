@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "b8937a8dccda381af75badb1de3ba46b11b1799a",
-    "indexed_at": "2026-07-31T13:15:46Z",
+    "commit": "d277e35441e595cb8f2dd0c67988a98f51fc2caa",
+    "indexed_at": "2026-07-31T14:03:58Z",
     "project": "ARAYA_Transformacion_Digital_Dashboard",
-    "nodes": 1480,
-    "edges": 2599,
-    "original_size": 4915200,
-    "compressed_size": 693967,
+    "nodes": 1523,
+    "edges": 2718,
+    "original_size": 5111808,
+    "compressed_size": 753210,
     "compression_level": 3
 }
