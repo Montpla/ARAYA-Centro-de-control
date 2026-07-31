@@ -122,10 +122,13 @@ export async function GET(request: Request) {
   const auth = await authenticatedUser();
   if (!auth.user) return auth.response;
 
-  const downloadId = new URL(request.url).searchParams.get("download");
+  const searchParams = new URL(request.url).searchParams;
+  const previewId = searchParams.get("preview");
+  const downloadId = searchParams.get("download");
+  const requestedFileId = previewId || downloadId;
   const db = getDb();
-  if (downloadId) {
-    const [row] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, downloadId)).limit(1);
+  if (requestedFileId) {
+    const [row] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, requestedFileId)).limit(1);
     if (!row) return Response.json({ error: "Archivo no encontrado." }, { status: 404 });
     if (row.area === "finanzas" && !auth.user.financeAccess) {
       return Response.json({ error: "No tienes acceso a documentos financieros." }, { status: 403 });
@@ -133,11 +136,18 @@ export async function GET(request: Request) {
 
     const object = await getFileBucket().get(row.storageKey);
     if (!object) return Response.json({ error: "El original no está disponible en el almacenamiento." }, { status: 404 });
+    const contentType = object.httpMetadata?.contentType || row.mimeType;
+    const inlinePreview = Boolean(previewId && (
+      contentType === "application/pdf" ||
+      contentType === "text/plain" ||
+      /^image\/(?:png|jpe?g|webp|gif)$/i.test(contentType)
+    ));
     return new Response(object.body, {
       headers: {
-        "Content-Type": object.httpMetadata?.contentType || row.mimeType,
-        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(row.originalName)}`,
+        "Content-Type": contentType,
+        "Content-Disposition": `${inlinePreview ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(row.originalName)}`,
         "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   }

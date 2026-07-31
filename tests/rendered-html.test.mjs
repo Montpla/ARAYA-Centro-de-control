@@ -588,9 +588,10 @@ test("points three to eight add a live operational control room without autonomo
 });
 
 test("tablet and mobile mode provides app navigation, touch plan, camera upload and safe PWA metadata", async () => {
-  const [dashboard, styles, layout, routeError, manifest, serviceWorker] = await Promise.all([
+  const [dashboard, styles, filesRoute, layout, routeError, manifest, serviceWorker] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),
     readFile("app/globals.css", "utf8"),
+    readFile("app/api/files/route.ts", "utf8"),
     readFile("app/layout.tsx", "utf8"),
     readFile("app/error.tsx", "utf8"),
     readFile("public/manifest.webmanifest", "utf8"),
@@ -605,12 +606,22 @@ test("tablet and mobile mode provides app navigation, touch plan, camera upload 
   assert.match(dashboard, /class AppErrorBoundary/);
   assert.match(dashboard, /RECUPERACIÓN SEGURA/);
   assert.match(dashboard, /Array\.isArray\(archived\?\.monthlyPlan\)/);
+  assert.match(dashboard, /function FileViewer/);
+  assert.match(dashboard, /onClickCapture=\{openFileInViewer\}/);
+  assert.match(dashboard, /aria-label="Cerrar archivo"/);
+  assert.match(dashboard, /data-file-viewer-bypass="true"/);
   assert.match(styles, /@media \(max-width: 1100px\)/);
   assert.match(styles, /\.mobile-bottom-nav/);
   assert.match(styles, /\.site-plan-canvas-scroll\.expanded/);
   assert.match(styles, /\.app-recovery\.overlay/);
   assert.match(styles, /height: 100dvh/);
   assert.match(styles, /\.direction-report-toolbar \.button\.secondary\s*\{[^}]*display: inline-flex/s);
+  assert.match(styles, /\.file-viewer-overlay/);
+  assert.match(styles, /\.file-viewer-close/);
+  assert.match(styles, /z-index: 400/);
+  assert.match(filesRoute, /searchParams\.get\("preview"\)/);
+  assert.match(filesRoute, /inlinePreview \? "inline" : "attachment"/);
+  assert.match(filesRoute, /contentType === "application\/pdf"/);
   assert.match(layout, /manifest: "\/manifest\.webmanifest"/);
   assert.match(layout, /viewportFit: "cover"/);
   assert.match(layout, /applicationName: "Bricket Control"/);

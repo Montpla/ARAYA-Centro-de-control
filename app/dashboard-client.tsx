@@ -1,7 +1,7 @@
 "use client";
 
 import { Component, ChangeEvent, FormEvent, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import type { ErrorInfo, ReactNode } from "react";
+import type { ErrorInfo, MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import {
   Building,
   CustomMetric,
@@ -183,6 +183,11 @@ type UploadedFileRecord = {
   createdAt: string;
   updatedAt: string;
   downloadUrl: string;
+};
+
+type FileViewerState = {
+  url: string;
+  title: string;
 };
 
 type UploadResult = {
@@ -1576,6 +1581,97 @@ function WorkspaceDetailPanel({
         </footer>
       </aside>
     </div>
+  );
+}
+
+const inlineFileExtensions = new Set(["pdf", "png", "jpg", "jpeg", "webp", "gif", "txt"]);
+
+function fileExtension(title: string, url: string) {
+  const candidate = `${title} ${url.split("?")[0]}`;
+  return candidate.match(/\.([a-z0-9]+)(?:\s|$)/i)?.[1]?.toLowerCase() ?? "";
+}
+
+function fileViewerTitle(anchor: HTMLAnchorElement, url: URL) {
+  const explicitTitle = anchor.dataset.fileTitle?.trim();
+  if (explicitTitle) return explicitTitle;
+  const pathnameFile = url.pathname.split("/").filter(Boolean).at(-1);
+  if (pathnameFile && pathnameFile !== "files") {
+    try {
+      return decodeURIComponent(pathnameFile);
+    } catch {
+      return pathnameFile;
+    }
+  }
+  return anchor.textContent?.trim() || "Archivo del Centro de Control";
+}
+
+function FileViewer({ file, onClose }: { file: FileViewerState; onClose: () => void }) {
+  const extension = fileExtension(file.title, file.url);
+  const canPreview = inlineFileExtensions.has(extension);
+  let previewUrl = file.url;
+
+  if (canPreview) {
+    const parsed = new URL(file.url, window.location.origin);
+    const uploadedFileId = parsed.pathname === "/api/files"
+      ? parsed.searchParams.get("download")
+      : null;
+    if (uploadedFileId) {
+      parsed.searchParams.delete("download");
+      parsed.searchParams.set("preview", uploadedFileId);
+      previewUrl = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    }
+  }
+
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [onClose]);
+
+  return (
+    <section className="file-viewer-overlay" role="dialog" aria-modal="true" aria-label={`Archivo ${file.title}`}>
+      <header className="file-viewer-toolbar">
+        <div className="file-viewer-heading">
+          <span>ARCHIVO DEL CENTRO DE CONTROL</span>
+          <strong>{file.title}</strong>
+        </div>
+        <div className="file-viewer-actions">
+          <a
+            className="button secondary"
+            href={file.url}
+            download
+            data-file-viewer-bypass="true"
+          >
+            Descargar
+          </a>
+          <button className="file-viewer-close" type="button" onClick={onClose} aria-label="Cerrar archivo">
+            <i aria-hidden="true">×</i>
+            <span>Cerrar</span>
+          </button>
+        </div>
+      </header>
+      <div className="file-viewer-body">
+        {canPreview ? (
+          <iframe className="file-viewer-frame" src={previewUrl} title={file.title} />
+        ) : (
+          <div className="file-viewer-unavailable">
+            <span>{extension ? extension.toUpperCase() : "ARCHIVO"}</span>
+            <h2>Este formato se abre en su aplicación habitual.</h2>
+            <p>Descarga el archivo para consultarlo. El Centro de Control permanecerá abierto y podrás volver con la X de esta pantalla.</p>
+            <a
+              className="button primary"
+              href={file.url}
+              download
+              data-file-viewer-bypass="true"
+            >
+              Descargar {extension ? extension.toUpperCase() : "archivo"}
+            </a>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -4441,7 +4537,7 @@ function FileReviewPanel({
               <small>{detail.file.classificationReason}</small>
             </div>
             <div className="review-source-actions">
-              <a className="button secondary" href={detail.file.downloadUrl}>Abrir original</a>
+              <a className="button secondary" href={detail.file.downloadUrl} data-file-title={detail.file.originalName}>Abrir original</a>
               <span>El original es inmutable. Aprobar sólo publica los cambios visibles en esta ficha.</span>
             </div>
 
@@ -4677,7 +4773,7 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
                 <button type="button" className="button primary" onClick={() => setSelectedFile(file)}>
                   {currentUser.role === "admin" && file.requiresReview ? "Revisar" : "Abrir expediente"}
                 </button>
-                <a className="button secondary" href={file.downloadUrl}>Original</a>
+                <a className="button secondary" href={file.downloadUrl} data-file-title={file.originalName}>Original</a>
               </div>
             </article>
           ))}
@@ -5993,6 +6089,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   const [reportBuilderOpen, setReportBuilderOpen] = useState(false);
   const [directionReport, setDirectionReport] = useState<DirectionReportPeriod | null>(null);
   const [workspaceDetail, setWorkspaceDetail] = useState<WorkspaceDetail | null>(null);
+  const [fileViewer, setFileViewer] = useState<FileViewerState | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [notice, setNotice] = useState("");
@@ -6080,7 +6177,8 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       uploadOpen ||
       reportBuilderOpen ||
       directionReport ||
-      workspaceDetail,
+      workspaceDetail ||
+      fileViewer,
     );
     if (!hasBlockingLayer) return;
     const previousOverflow = document.documentElement.style.overflow;
@@ -6088,7 +6186,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     return () => {
       document.documentElement.style.overflow = previousOverflow;
     };
-  }, [directionReport, mobileMenuOpen, modal, reportBuilderOpen, uploadOpen, workspaceDetail]);
+  }, [directionReport, fileViewer, mobileMenuOpen, modal, reportBuilderOpen, uploadOpen, workspaceDetail]);
 
   useEffect(() => {
     let active = true;
@@ -6204,6 +6302,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   function navigate(viewId: View) {
     setView(viewId);
     setWorkspaceDetail(null);
+    setFileViewer(null);
     setMobileMenuOpen(false);
     if (viewId === "agente") setAgentOpen(false);
   }
@@ -6219,7 +6318,40 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     setReportBuilderOpen(false);
     setDirectionReport(null);
     setWorkspaceDetail(null);
+    setFileViewer(null);
     setAgentOpen(projectId === "araya" && !window.matchMedia("(max-width: 1100px)").matches);
+  }
+
+  function openFileInViewer(event: ReactMouseEvent<HTMLDivElement>) {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      !(event.target instanceof Element)
+    ) return;
+
+    const anchor = event.target.closest<HTMLAnchorElement>("a[href]");
+    if (
+      !anchor ||
+      anchor.hasAttribute("download") ||
+      anchor.dataset.fileViewerBypass === "true"
+    ) return;
+
+    const url = new URL(anchor.href, window.location.href);
+    const isStaticProjectFile = url.origin === window.location.origin && url.pathname.startsWith("/data-center/");
+    const isUploadedProjectFile = url.origin === window.location.origin &&
+      url.pathname === "/api/files" &&
+      (url.searchParams.has("download") || url.searchParams.has("preview"));
+    if (!isStaticProjectFile && !isUploadedProjectFile) return;
+
+    event.preventDefault();
+    setFileViewer({
+      url: `${url.pathname}${url.search}${url.hash}`,
+      title: fileViewerTitle(anchor, url),
+    });
   }
 
   async function installApp() {
@@ -6319,7 +6451,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       enabled: activeProjectId === "araya",
       openDetail: setWorkspaceDetail,
     }}>
-    <div className="app-shell">
+    <div className="app-shell" onClickCapture={openFileInViewer}>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
@@ -6682,6 +6814,16 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
             onNavigate={navigate}
             onUpload={() => setUploadOpen(true)}
           />
+        )}
+      </AppErrorBoundary>
+
+      <AppErrorBoundary
+        resetKey={`file-viewer-${fileViewer?.url ?? "closed"}`}
+        variant="overlay"
+        onRecover={() => setFileViewer(null)}
+      >
+        {activeProjectId === "araya" && fileViewer && (
+          <FileViewer file={fileViewer} onClose={() => setFileViewer(null)} />
         )}
       </AppErrorBoundary>
 
