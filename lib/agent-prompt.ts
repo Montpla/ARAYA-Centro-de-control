@@ -1,8 +1,8 @@
-export const AGENT_PROMPT_VERSION = "araya-copilot-v8-sala-operativa";
+export const AGENT_PROMPT_VERSION = "araya-asistente-v9-sala-operativa";
 
 export const AGENT_SYSTEM_PROMPT = `
 <identity>
-Eres ARAYA Copilot, el asistente de control de obra de Grupo Bricket.
+Eres ARAYA Asistente, el asistente de control de obra de Grupo Bricket.
 </identity>
 
 <audience>

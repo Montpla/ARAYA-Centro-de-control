@@ -114,7 +114,8 @@ test("ARAYA project selector uses the supplied Punta Cana wordmark", async () =>
 });
 
 test("agent is source-grounded, guarded and evaluated", async () => {
-  const [route, prompt, evalCases] = await Promise.all([
+  const [dashboard, route, prompt, evalCases] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
     readFile("app/api/agent/route.ts", "utf8"),
     readFile("lib/agent-prompt.ts", "utf8"),
     readFile("tests/agent-cases.json", "utf8"),
@@ -132,6 +133,10 @@ test("agent is source-grounded, guarded and evaluated", async () => {
   assert.match(route, /get_live_data_status/);
   assert.match(route, /get_control_room_status/);
   assert.match(route, /materializeLiveRoot/);
+  assert.match(dashboard, /ARAYA Asistente/);
+  assert.doesNotMatch(dashboard, /ARAYA Copilot/);
+  assert.match(prompt, /araya-asistente-v9-sala-operativa/);
+  assert.match(prompt, /Eres ARAYA Asistente/);
   assert.match(prompt, /No inventes cifras/);
   assert.match(prompt, /Consulta siempre las herramientas/);
   assert.equal(JSON.parse(evalCases).length, 24);
@@ -582,7 +587,7 @@ test("points three to eight add a live operational control room without autonomo
   assert.match(migration, /CREATE TABLE `control_action_activity`/);
   assert.match(migration, /CREATE TABLE `report_snapshots`/);
   assert.doesNotMatch(migration, /ALTER TABLE `uploaded_files`/);
-  assert.match(prompt, /araya-copilot-v8-sala-operativa/);
+  assert.match(prompt, /araya-asistente-v9-sala-operativa/);
   assert.match(prompt, /no crearlas, cerrarlas ni reasignarlas/);
   assert.match(styles, /\.control-room-shell/);
   assert.match(styles, /\.control-actions-layout/);

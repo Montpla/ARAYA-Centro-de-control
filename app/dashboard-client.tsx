@@ -5299,7 +5299,7 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
     try {
       const result = await uploadProjectFile(pendingFile, {
         area: attachmentArea,
-        description: "Archivo cargado mediante ARAYA Copilot.",
+        description: "Archivo cargado mediante ARAYA Asistente.",
         section: "Agente IA",
         source: "agent",
         sourceCurrency: attachmentCurrency,
@@ -5335,7 +5335,7 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
     <aside className={`agent-panel ${expanded ? "expanded" : ""}`}>
       <div className="agent-header">
         <div className="agent-mark">AI</div>
-        <div><strong>ARAYA Copilot</strong><span><i /> Consulta y carga documental</span></div>
+        <div><strong>ARAYA Asistente</strong><span><i /> Consulta y carga documental</span></div>
         {!expanded && <button className="close-button" onClick={onClose} aria-label="Cerrar agente">×</button>}
       </div>
       <div className="agent-suggestions">

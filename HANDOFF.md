@@ -23,8 +23,8 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 41, con apertura documental directa, descarga
-  opcional y guía corporativa para el personal. El commit desplegado es el `HEAD` de
+- Última versión publicada: 42, con el agente renombrado como
+  `ARAYA Asistente`. El commit desplegado es el `HEAD` de
   `main`; el identificador opaco debe consultarse en Sites por número de versión
   y no reconstruirse manualmente.
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
@@ -715,7 +715,7 @@ Iniciado y completado el 30/07/2026.
   una revisión viva ni alterar indicadores.
 - Los expedientes cerrados deben reabrirse antes de otra decisión. El endpoint
   directo de escritura viva queda restringido a administradores.
-- ARAYA Copilot usa el prompt versionado
+- En aquella versión, ARAYA Copilot usaba el prompt versionado
   `araya-copilot-v7-ingestion-controlada`: puede orientar y consultar el
   estado, pero no aprobar ni borrar desde el chat.
 - La clasificación y el refresco ordinarios no consumen tokens. El agente sólo
@@ -791,7 +791,7 @@ Completado el 30/07/2026.
 - Nueva migración: `drizzle/0007_rapid_black_queen.sql`. Sólo crea
   `control_actions`, `control_action_activity` y `report_snapshots`; no repite
   la migración documental del punto 2.
-- ARAYA Copilot usa el prompt
+- En aquella versión, ARAYA Copilot usaba el prompt
   `araya-copilot-v8-sala-operativa` y la herramienta de consulta
   `get_control_room_status`. Puede explicar, pero no crear, cerrar, reasignar
   ni aprobar.
@@ -890,6 +890,23 @@ Implementado y publicado el 31/07/2026:
 - El original editable se genera con
   `scripts/generate_staff_guide_pdf.py`; la entrega local está también en
   `output/pdf/guia_corporativa_bricket_control_personal_obra.pdf`.
+- Validación: compilación correcta, 32/32 pruebas aprobadas y lint sin errores;
+  permanecen únicamente los nueve avisos históricos de `<img>`.
+
+## ARAYA Asistente · versión 42
+
+Implementado y publicado el 31/07/2026:
+
+- El agente de IA se muestra como `ARAYA Asistente` en el panel flotante y en
+  la vista completa.
+- Las cargas realizadas desde su chat conservan la procedencia
+  `Archivo cargado mediante ARAYA Asistente`.
+- La identidad interna del agente y su versión activa cambian a
+  `araya-asistente-v9-sala-operativa`; las reglas, herramientas, permisos y
+  límites de aprobación permanecen sin cambios.
+- Los identificadores `araya-copilot-v7-ingestion-controlada` y
+  `araya-copilot-v8-sala-operativa` se conservan únicamente como referencias
+  históricas de las versiones anteriores.
 - Validación: compilación correcta, 32/32 pruebas aprobadas y lint sin errores;
   permanecen únicamente los nueve avisos históricos de `<img>`.
 
