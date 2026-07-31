@@ -610,6 +610,7 @@ test("tablet and mobile mode provides app navigation, touch plan, camera upload 
   assert.match(styles, /\.site-plan-canvas-scroll\.expanded/);
   assert.match(styles, /\.app-recovery\.overlay/);
   assert.match(styles, /height: 100dvh/);
+  assert.match(styles, /\.direction-report-toolbar \.button\.secondary\s*\{[^}]*display: inline-flex/s);
   assert.match(layout, /manifest: "\/manifest\.webmanifest"/);
   assert.match(layout, /viewportFit: "cover"/);
   assert.match(layout, /applicationName: "Bricket Control"/);

@@ -5717,9 +5717,27 @@ button.financial-detail-row:focus-visible {
     background: #fffefa;
   }
 
-  .direction-report-toolbar > div:first-child,
-  .direction-report-toolbar .button.secondary {
+  .direction-report-toolbar > div:first-child {
     display: none;
+  }
+
+  .direction-report-toolbar > div:last-child {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(92px, 0.8fr) minmax(170px, 1.2fr);
+    gap: 8px;
+  }
+
+  .direction-report-toolbar .button {
+    min-height: 44px;
+    justify-content: center;
+    padding-right: 10px;
+    padding-left: 10px;
+    white-space: nowrap;
+  }
+
+  .direction-report-toolbar .button.secondary {
+    display: inline-flex;
   }
 
   .direction-report-document {
