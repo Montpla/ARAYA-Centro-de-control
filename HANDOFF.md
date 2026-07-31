@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 38.
-- Commit desplegado: `4a07f0841454175bec12113e369c955615d3db1a`.
+- Última versión publicada: 39.
+- Commit desplegado: `34bbcffc0ba92f584af3bb7a0367b485461ba6d2`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_2938df7d1b5481919352dc942f43d1a8`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_87663e0b4ddc8191b9e72b0ff54b5b2a`.
 - Despliegue:
-  `appgdep_6a6c9bf62fbc819194c38921e49b344e` (`succeeded`).
+  `appgdep_6a6ca0b3754c8191b116574b429e256a` (`succeeded`).
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
   en Sites. La solicitud de cambiarlo a `public` devolvió
   `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
@@ -813,6 +813,27 @@ Revisado y publicado el 31/07/2026.
   usar la copia local.
 - Validación final: compilación correcta, 32/32 pruebas aprobadas y lint sin
   errores; permanecen los nueve avisos conocidos de `<img>`.
+
+## Visor de archivos con cierre seguro
+
+Revisado y publicado el 31/07/2026 en la versión 39.
+
+- Los PDF, imágenes y archivos de texto se abren dentro de una capa propia del
+  Centro de Control; ya no sustituyen la pantalla principal de la aplicación.
+- La barra superior del visor mantiene una X naranja de 44 × 44 px visible en
+  móvil, además del texto `Cerrar` en tablet y escritorio.
+- Al cerrar, se recupera exactamente la sección desde la que se abrió el
+  documento. La URL del Centro de Control no cambia.
+- Los formatos que el navegador no puede representar con seguridad, como
+  Excel, MPP, DWG o PowerPoint, muestran una pantalla de descarga sin abandonar
+  la aplicación.
+- `Escape` también cierra el visor en ordenador.
+- Las cargas privadas admiten `GET /api/files?preview=...` únicamente para PDF,
+  texto e imágenes raster autorizadas; los demás MIME conservan disposición de
+  descarga. El control financiero sigue aplicándose en el servidor.
+- Se verificó en producción a 390 × 844: apertura del PDF oficial
+  `balance-general-junio-2026.pdf`, X visible, cierre correcto y retorno a
+  Finanzas. Compilación correcta, 32/32 pruebas y lint sin errores.
 
 ## Criterios de continuidad
 
