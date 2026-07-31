@@ -16,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "Centro de Control ARAYA",
     description,
-    applicationName: "ARAYA Control",
+    applicationName: "Bricket Control",
     manifest: "/manifest.webmanifest",
     icons: {
       icon: [{ url: "/bricket-mark.png", type: "image/png", sizes: "225x225" }],
@@ -25,7 +25,7 @@ export async function generateMetadata(): Promise<Metadata> {
     appleWebApp: {
       capable: true,
       statusBarStyle: "black-translucent",
-      title: "ARAYA Control",
+      title: "Bricket Control",
     },
     formatDetection: {
       telephone: false,

@@ -1,6 +1,7 @@
 "use client";
 
-import { ChangeEvent, FormEvent, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { Component, ChangeEvent, FormEvent, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import type { ErrorInfo, ReactNode } from "react";
 import {
   Building,
   CustomMetric,
@@ -292,6 +293,51 @@ type InstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
+
+type AppErrorBoundaryProps = {
+  children: ReactNode;
+  resetKey: string;
+  variant?: "view" | "overlay";
+  onRecover: () => void;
+};
+
+class AppErrorBoundary extends Component<AppErrorBoundaryProps, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("La vista del Centro de Control no pudo renderizarse.", error, info);
+  }
+
+  componentDidUpdate(previous: AppErrorBoundaryProps) {
+    if (this.state.failed && previous.resetKey !== this.props.resetKey) {
+      this.setState({ failed: false });
+    }
+  }
+
+  private recover = () => {
+    this.setState({ failed: false });
+    this.props.onRecover();
+  };
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <section className={`app-recovery ${this.props.variant === "overlay" ? "overlay" : ""}`} role="alert">
+        <span>RECUPERACIÓN SEGURA</span>
+        <h2>Esta pantalla no ha podido mostrarse.</h2>
+        <p>Los datos siguen guardados. Puedes volver al Centro de Control o recargar la aplicación.</p>
+        <div>
+          <button className="button primary" type="button" onClick={this.recover}>Volver al inicio</button>
+          <button className="button secondary" type="button" onClick={() => window.location.reload()}>Recargar</button>
+        </div>
+      </section>
+    );
+  }
+}
 
 type HistoryChange = {
   id: number;
@@ -5198,29 +5244,48 @@ function DirectionReport({
     permits?: typeof permits;
   } | undefined;
   const reportExecutive = archived?.executive;
-  const reportPlan = archived?.monthlyPlan ?? monthlyPlan;
-  const reportDisciplines = archivedProduction?.constructionDisciplines ?? constructionDisciplines;
-  const reportStructuralDelay = archivedProduction?.structuralDelay ?? structuralDelay;
-  const reportUrbanismAreas = archivedProduction?.urbanismReportAreas ?? urbanismReportAreas;
-  const reportDelayedUrbanism = archivedProduction?.delayedUrbanismStarts ?? delayedUrbanismStarts;
-  const reportWorkPackages = archivedProduction?.workPackages ?? workPackages;
-  const reportSales = archivedCommercial?.sales ?? juneReport.sales;
-  const reportCollections = archivedCommercial?.collections ?? juneReport.collections;
+  const reportPlan = Array.isArray(archived?.monthlyPlan) ? archived.monthlyPlan : monthlyPlan;
+  const reportDisciplines = Array.isArray(archivedProduction?.constructionDisciplines)
+    ? archivedProduction.constructionDisciplines
+    : constructionDisciplines;
+  const reportStructuralDelay = Array.isArray(archivedProduction?.structuralDelay)
+    ? archivedProduction.structuralDelay
+    : structuralDelay;
+  const reportUrbanismAreas = Array.isArray(archivedProduction?.urbanismReportAreas)
+    ? archivedProduction.urbanismReportAreas
+    : urbanismReportAreas;
+  const reportDelayedUrbanism = Array.isArray(archivedProduction?.delayedUrbanismStarts)
+    ? archivedProduction.delayedUrbanismStarts
+    : delayedUrbanismStarts;
+  const reportWorkPackages = Array.isArray(archivedProduction?.workPackages)
+    ? archivedProduction.workPackages
+    : workPackages;
+  const reportSales = archivedCommercial?.sales && typeof archivedCommercial.sales === "object"
+    ? { ...juneReport.sales, ...archivedCommercial.sales }
+    : juneReport.sales;
+  const reportCollections = archivedCommercial?.collections && typeof archivedCommercial.collections === "object"
+    ? { ...juneReport.collections, ...archivedCommercial.collections }
+    : juneReport.collections;
   const reportFinance = archived
     ? (archived.finance as typeof juneReport.finance | null)
     : juneReport.finance;
-  const reportSafetyMetrics = archivedSafety?.metrics ?? safetyMetrics;
-  const reportPermits = archivedSafety?.permits ?? permits;
-  const reportManagementActions = archived?.managementActions ?? managementActions;
+  const reportSafetyMetrics = Array.isArray(archivedSafety?.metrics) ? archivedSafety.metrics : safetyMetrics;
+  const reportPermits = Array.isArray(archivedSafety?.permits) ? archivedSafety.permits : permits;
+  const reportManagementActions = Array.isArray(archived?.managementActions)
+    ? archived.managementActions
+    : managementActions;
   const reportSourceCutoff = period.sourceCutoff || archived?.cutoff || juneReport.cutoff;
   const includesSourceCutoff =
     period.startDate <= REPORT_SOURCE_CUTOFF && period.endDate >= REPORT_SOURCE_CUTOFF;
   const approvedPermits = reportPermits.filter((permit) => permit.status === "Aprobado").length;
   const criticalPackages = reportWorkPackages.filter((item) => item.critical);
-  const generatedAt = new Intl.DateTimeFormat("es-ES", {
-    dateStyle: "long",
-    timeStyle: "short",
-  }).format(new Date(period.generatedAt));
+  const generatedDate = new Date(period.generatedAt);
+  const generatedAt = Number.isNaN(generatedDate.getTime())
+    ? "Fecha de generación no disponible"
+    : new Intl.DateTimeFormat("es-ES", {
+      dateStyle: "long",
+      timeStyle: "short",
+    }).format(generatedDate);
   const reportKind = period.frequency === "weekly" ? "Informe semanal" : "Informe mensual";
   const dop = (value: number) => formatMoneyMillions(value, "DOP", currency);
   const overdue = formatMoney(reportCollections.overdueUsd, "USD", currency);
@@ -5989,7 +6054,10 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
 
   useEffect(() => {
     if ("serviceWorker" in navigator) {
-      void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+      void navigator.serviceWorker
+        .register("/sw.js", { updateViaCache: "none" })
+        .then((registration) => registration.update())
+        .catch(() => undefined);
     }
 
     const handleInstallPrompt = (event: Event) => {
@@ -6004,6 +6072,23 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       window.removeEventListener("appinstalled", handleInstalled);
     };
   }, []);
+
+  useEffect(() => {
+    const hasBlockingLayer = Boolean(
+      mobileMenuOpen ||
+      modal ||
+      uploadOpen ||
+      reportBuilderOpen ||
+      directionReport ||
+      workspaceDetail,
+    );
+    if (!hasBlockingLayer) return;
+    const previousOverflow = document.documentElement.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.documentElement.style.overflow = previousOverflow;
+    };
+  }, [directionReport, mobileMenuOpen, modal, reportBuilderOpen, uploadOpen, workspaceDetail]);
 
   useEffect(() => {
     let active = true;
@@ -6407,15 +6492,20 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
           </div>
         )}
         <div className="content">
-          {content()}
-          {activeProjectId === "araya" && !(view === "metricas" && !currentUser.financeAccess) && (
-            <AreaWorkspaceDock
-              view={view}
-              canAccessFinance={currentUser.financeAccess}
-              onNavigate={navigate}
-              onUpload={() => setUploadOpen(true)}
-            />
-          )}
+          <AppErrorBoundary
+            resetKey={`${activeProjectId}-${view}`}
+            onRecover={() => navigate("resumen")}
+          >
+            {content()}
+            {activeProjectId === "araya" && !(view === "metricas" && !currentUser.financeAccess) && (
+              <AreaWorkspaceDock
+                view={view}
+                canAccessFinance={currentUser.financeAccess}
+                onNavigate={navigate}
+                onUpload={() => setUploadOpen(true)}
+              />
+            )}
+          </AppErrorBoundary>
         </div>
       </main>
 
@@ -6543,30 +6633,57 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
         />
       )}
 
-      {activeProjectId === "araya" && reportBuilderOpen && (
-        <ReportBuilder
-          onClose={() => setReportBuilderOpen(false)}
-          onGenerate={generateDirectionReport}
-        />
-      )}
+      <AppErrorBoundary
+        resetKey={`report-builder-${reportBuilderOpen}`}
+        variant="overlay"
+        onRecover={() => {
+          setReportBuilderOpen(false);
+          navigate("resumen");
+        }}
+      >
+        {activeProjectId === "araya" && reportBuilderOpen && (
+          <ReportBuilder
+            onClose={() => setReportBuilderOpen(false)}
+            onGenerate={generateDirectionReport}
+          />
+        )}
+      </AppErrorBoundary>
 
-      {activeProjectId === "araya" && directionReport && (
-        <DirectionReport
-          period={directionReport}
-          currency={currency}
-          onClose={() => setDirectionReport(null)}
-        />
-      )}
+      <AppErrorBoundary
+        resetKey={`direction-report-${directionReport?.archivedReportId ?? directionReport?.generatedAt ?? "closed"}`}
+        variant="overlay"
+        onRecover={() => {
+          setDirectionReport(null);
+          navigate("resumen");
+        }}
+      >
+        {activeProjectId === "araya" && directionReport && (
+          <DirectionReport
+            period={directionReport}
+            currency={currency}
+            onClose={() => setDirectionReport(null)}
+          />
+        )}
+      </AppErrorBoundary>
 
-      {activeProjectId === "araya" && workspaceDetail && (
-        <WorkspaceDetailPanel
-          detail={workspaceDetail}
-          canAccessFinance={currentUser.financeAccess}
-          onClose={() => setWorkspaceDetail(null)}
-          onNavigate={navigate}
-          onUpload={() => setUploadOpen(true)}
-        />
-      )}
+      <AppErrorBoundary
+        resetKey={`workspace-detail-${workspaceDetail?.id ?? "closed"}`}
+        variant="overlay"
+        onRecover={() => {
+          setWorkspaceDetail(null);
+          navigate("resumen");
+        }}
+      >
+        {activeProjectId === "araya" && workspaceDetail && (
+          <WorkspaceDetailPanel
+            detail={workspaceDetail}
+            canAccessFinance={currentUser.financeAccess}
+            onClose={() => setWorkspaceDetail(null)}
+            onNavigate={navigate}
+            onUpload={() => setUploadOpen(true)}
+          />
+        )}
+      </AppErrorBoundary>
 
       {notice && <div className="upload-toast" role="status"><strong>Archivo recibido</strong><span>{notice}</span></div>}
     </div>

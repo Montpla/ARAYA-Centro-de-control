@@ -588,10 +588,11 @@ test("points three to eight add a live operational control room without autonomo
 });
 
 test("tablet and mobile mode provides app navigation, touch plan, camera upload and safe PWA metadata", async () => {
-  const [dashboard, styles, layout, manifest, serviceWorker] = await Promise.all([
+  const [dashboard, styles, layout, routeError, manifest, serviceWorker] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),
     readFile("app/globals.css", "utf8"),
     readFile("app/layout.tsx", "utf8"),
+    readFile("app/error.tsx", "utf8"),
     readFile("public/manifest.webmanifest", "utf8"),
     readFile("public/sw.js", "utf8"),
   ]);
@@ -600,13 +601,25 @@ test("tablet and mobile mode provides app navigation, touch plan, camera upload 
   assert.match(dashboard, /Pantalla completa/);
   assert.match(dashboard, /site-plan-canvas-scroll/);
   assert.match(dashboard, /capture="environment"/);
-  assert.match(dashboard, /serviceWorker\.register\("\/sw\.js"\)/);
+  assert.match(dashboard, /register\("\/sw\.js", \{ updateViaCache: "none" \}\)/);
+  assert.match(dashboard, /class AppErrorBoundary/);
+  assert.match(dashboard, /RECUPERACIÓN SEGURA/);
+  assert.match(dashboard, /Array\.isArray\(archived\?\.monthlyPlan\)/);
   assert.match(styles, /@media \(max-width: 1100px\)/);
   assert.match(styles, /\.mobile-bottom-nav/);
   assert.match(styles, /\.site-plan-canvas-scroll\.expanded/);
+  assert.match(styles, /\.app-recovery\.overlay/);
+  assert.match(styles, /height: 100dvh/);
   assert.match(layout, /manifest: "\/manifest\.webmanifest"/);
   assert.match(layout, /viewportFit: "cover"/);
+  assert.match(layout, /applicationName: "Bricket Control"/);
+  assert.match(layout, /title: "Bricket Control"/);
+  assert.match(routeError, /No se ha podido abrir esta pantalla/);
+  assert.match(routeError, /Reintentar/);
   assert.match(manifest, /"display": "standalone"/);
+  assert.match(manifest, /"short_name": "Bricket Control"/);
+  assert.match(serviceWorker, /bricket-control-shell-v2/);
+  assert.match(serviceWorker, /url\.pathname === "\/manifest\.webmanifest"/);
   assert.doesNotMatch(serviceWorker, /\/api\//);
   assert.doesNotMatch(serviceWorker, /caches\.match\(event\.request\).*fetch\(event\.request\).*navigation/s);
 });

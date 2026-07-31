@@ -3490,6 +3490,68 @@ button {
   background: rgba(23, 26, 41, 0.55);
 }
 
+.app-recovery {
+  min-height: 420px;
+  display: grid;
+  place-content: center;
+  gap: 10px;
+  padding: 34px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.route-error-screen {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom));
+}
+
+.route-error-screen .app-recovery {
+  width: min(720px, 100%);
+}
+
+.app-recovery.overlay {
+  position: fixed;
+  z-index: 320;
+  inset: 0;
+  min-height: 100dvh;
+  border: 0;
+  border-radius: 0;
+}
+
+.app-recovery > span {
+  color: var(--orange);
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+}
+
+.app-recovery h2 {
+  margin: 0;
+  font-family: var(--font-editorial);
+  font-size: clamp(26px, 5vw, 42px);
+  font-weight: 600;
+}
+
+.app-recovery p {
+  max-width: 520px;
+  margin: 0 auto;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.app-recovery > div {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .modal {
   width: min(520px, 100%);
   padding: 24px;
@@ -5640,12 +5702,19 @@ button.financial-detail-row:focus-visible {
   }
 
   .direction-report-overlay {
-    padding: 76px 0 0;
+    width: 100vw;
+    height: 100dvh;
+    padding: calc(72px + env(safe-area-inset-top)) 0 env(safe-area-inset-bottom);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   .direction-report-toolbar {
-    min-height: 64px;
-    padding: 9px 12px;
+    min-height: calc(64px + env(safe-area-inset-top));
+    padding: calc(9px + env(safe-area-inset-top)) 12px 9px;
+    background: #fffefa;
   }
 
   .direction-report-toolbar > div:first-child,
@@ -5654,6 +5723,7 @@ button.financial-detail-row:focus-visible {
   }
 
   .direction-report-document {
+    min-height: calc(100dvh - 72px - env(safe-area-inset-top));
     border: 0;
     border-radius: 0;
   }
@@ -5723,6 +5793,24 @@ button.financial-detail-row:focus-visible {
 
   .report-frequency {
     grid-template-columns: 1fr;
+  }
+
+  .app-recovery {
+    min-height: calc(100dvh - var(--mobile-nav-height) - env(safe-area-inset-bottom));
+    padding: 26px 18px;
+  }
+
+  .app-recovery > div {
+    width: min(340px, 100%);
+    display: grid;
+    grid-template-columns: 1fr;
+    margin-right: auto;
+    margin-left: auto;
+  }
+
+  .app-recovery .button {
+    min-height: 46px;
+    justify-content: center;
   }
 }
 
