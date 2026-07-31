@@ -1,6 +1,6 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 30/07/2026
+Actualizado: 31/07/2026
 Zona horaria del usuario: America/La_Paz
 Idioma de trabajo: español
 
@@ -23,12 +23,12 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 36.
-- Commit desplegado: `ece0322e1c951e8e00fa5e13e9cb499e804d6760`.
+- Última versión publicada: 38.
+- Commit desplegado: `4a07f0841454175bec12113e369c955615d3db1a`.
 - Versión de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_40c8ab09754c81918abae5217c9ab424`.
+  `appgprj_6a68f2b048e48191840a253b2285feb7~appgver_2938df7d1b5481919352dc942f43d1a8`.
 - Despliegue:
-  `appgdep_6a6ba87c2abc819186ab5ad0cf18e75e` (`succeeded`).
+  `appgdep_6a6c9bf62fbc819194c38921e49b344e` (`succeeded`).
 - Acceso de infraestructura: privado, únicamente para el propietario configurado
   en Sites. La solicitud de cambiarlo a `public` devolvió
   `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
@@ -786,6 +786,32 @@ Completado el 30/07/2026.
 - `OPERATIONS.md` documenta el uso diario, los permisos, las reglas de datos y
   el diagnóstico de incidencias.
 - Pruebas del cierre: compilación correcta, 32/32 pruebas aprobadas y lint sin
+  errores; permanecen los nueve avisos conocidos de `<img>`.
+
+## Estabilidad móvil y nombre instalable
+
+Revisado y publicado el 31/07/2026.
+
+- Se probaron en producción las vistas de Centro de datos, fichas interactivas,
+  archivo de informes y vista previa completa con tamaños de móvil
+  (390 × 844) e iPad (820 × 1180).
+- Los informes archivados validan las matrices y fechas de su instantánea antes
+  de renderizarse. Un dato histórico incompleto ya no puede derribar toda la
+  pantalla.
+- Las vistas principales, fichas e informes tienen recuperación segura: ante un
+  fallo aislado se muestran acciones para volver al inicio o recargar, sin
+  perder datos.
+- Las capas modales bloquean correctamente el desplazamiento de fondo y lo
+  restauran al cerrarse.
+- La vista del informe usa el alto dinámico del dispositivo, respeta las zonas
+  seguras y mantiene visibles en móvil tanto `Cerrar` como
+  `Imprimir / Guardar PDF`.
+- El nombre instalable es `Bricket Control` en el manifiesto, los metadatos de
+  aplicación y la configuración de iPhone/iPad.
+- El Service Worker usa la caché `bricket-control-shell-v2`, fuerza la
+  actualización de su registro y obtiene el manifiesto mediante red antes de
+  usar la copia local.
+- Validación final: compilación correcta, 32/32 pruebas aprobadas y lint sin
   errores; permanecen los nueve avisos conocidos de `<img>`.
 
 ## Criterios de continuidad
