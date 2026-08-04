@@ -7,6 +7,7 @@ import {
   CustomMetric,
   Supplier,
   Unit,
+  UnitDiscipline,
   UrbanismArea,
   buildings,
   cubicaciones,
@@ -785,14 +786,41 @@ function visualUnitStatus(unit: Unit): Unit["status"] {
   return "pendiente";
 }
 
-function unitDisciplines(unit: Unit) {
-  if (unit.disciplines?.length) return unit.disciplines;
-  return [
-    { id: "superestructura", name: "Superestructura", progress: unit.progress, status: "integrado" },
-    { id: "albanileria", name: "Albañilería", progress: null, status: "pendiente" },
-    { id: "instalaciones", name: "Instalaciones", progress: null, status: "pendiente" },
-    { id: "acabados", name: "Acabados", progress: null, status: "pendiente" },
-  ] as const;
+const unitDisciplineConjunctoSource: Partial<Record<UnitDiscipline["id"], string>> = {
+  albanileria: "Albañilería",
+  instalaciones: "Inst. eléctricas, sanitarias y gas",
+};
+
+function unitDisciplines(unit: Unit): UnitDiscipline[] {
+  const base: UnitDiscipline[] = unit.disciplines?.length
+    ? unit.disciplines
+    : [
+        { id: "superestructura", name: "Superestructura", progress: unit.progress, status: "integrado" },
+        { id: "albanileria", name: "Albañilería", progress: null, status: "pendiente" },
+        { id: "instalaciones", name: "Instalaciones", progress: null, status: "pendiente" },
+        { id: "acabados", name: "Acabados", progress: null, status: "pendiente" },
+      ];
+  return base.map((discipline) => {
+    if (discipline.progress !== null) return discipline;
+    const conjuntoName = unitDisciplineConjunctoSource[discipline.id];
+    const conjuntoMatch = conjuntoName
+      ? constructionDisciplines.find((item) => item.name === conjuntoName)
+      : undefined;
+    if (!conjuntoMatch) return discipline;
+    return { ...discipline, progress: conjuntoMatch.progress, status: "conjunto" };
+  });
+}
+
+function disciplineClassName(discipline: UnitDiscipline) {
+  if (discipline.status === "conjunto") return "aggregate";
+  if (discipline.progress === null) return "pending";
+  return "";
+}
+
+function disciplineLabel(discipline: UnitDiscipline) {
+  if (discipline.progress === null) return "Pendiente";
+  if (discipline.status === "conjunto") return `${number.format(discipline.progress)}% · Conjunto`;
+  return `${number.format(discipline.progress)}%`;
 }
 
 const profileFocus: Record<UserArea, { title: string; detail: string; view: View }> = {
@@ -2307,8 +2335,8 @@ function SitePlan({
           </div>
           <div className="unit-mini-disciplines">
             {unitDisciplines(selectedUnit.unit).map((discipline) => (
-              <span key={discipline.id} className={discipline.progress === null ? "pending" : ""}>
-                {discipline.name}<strong>{discipline.progress === null ? "Pendiente" : `${number.format(discipline.progress)}%`}</strong>
+              <span key={discipline.id} className={disciplineClassName(discipline)}>
+                {discipline.name}<strong>{disciplineLabel(discipline)}</strong>
               </span>
             ))}
           </div>
@@ -2559,10 +2587,10 @@ function UnitDetailPanel({
         </div>
         <div className="unit-discipline-list">
           {disciplines.map((discipline) => (
-            <div key={discipline.id} className={discipline.progress === null ? "pending" : ""}>
+            <div key={discipline.id} className={disciplineClassName(discipline)}>
               <span>{discipline.name}</span>
               <i><b style={{ width: `${discipline.progress ?? 0}%` }} /></i>
-              <strong>{discipline.progress === null ? "Pendiente" : `${number.format(discipline.progress)}%`}</strong>
+              <strong>{disciplineLabel(discipline)}</strong>
             </div>
           ))}
         </div>

@@ -6720,6 +6720,14 @@ button.financial-detail-row:focus-visible {
   background: #c7c2b9;
 }
 
+.unit-discipline-list .aggregate {
+  color: var(--amber);
+}
+
+.unit-discipline-list .aggregate i b {
+  background: var(--amber);
+}
+
 .unit-accountability-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -6765,6 +6773,11 @@ button.financial-detail-row:focus-visible {
 .unit-mini-disciplines .pending {
   color: var(--muted);
   background: #f6f4ef;
+}
+
+.unit-mini-disciplines .aggregate {
+  color: var(--amber);
+  background: #fbf3e5;
 }
 
 .unit-issues > p,

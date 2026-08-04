@@ -4,7 +4,7 @@ export type UnitDiscipline = {
   id: "superestructura" | "albanileria" | "instalaciones" | "acabados";
   name: string;
   progress: number | null;
-  status: "integrado" | "pendiente";
+  status: "integrado" | "pendiente" | "conjunto";
 };
 
 export type UnitIssue = {

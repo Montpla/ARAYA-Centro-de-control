@@ -1,6 +1,6 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 31/07/2026
+Actualizado: 04/08/2026
 Zona horaria del usuario: America/La_Paz
 Idioma de trabajo: español
 
@@ -909,6 +909,44 @@ Implementado y publicado el 31/07/2026:
   históricas de las versiones anteriores.
 - Validación: compilación correcta, 32/32 pruebas aprobadas y lint sin errores;
   permanecen únicamente los nueve avisos históricos de `<img>`.
+
+## Ficha del apartamento: promedio del conjunto por disciplina
+
+Implementado el 04/08/2026, pendiente de publicar.
+
+- El usuario reportó que la ficha de apartamento mostraba `Superestructura`
+  con dato real pero `Albañilería`, `Instalaciones` y `Acabados` siempre como
+  `Pendiente`, mientras que en la misma pestaña `Edificios`, justo debajo, el
+  panel `Avance por disciplina` ya mostraba un porcentaje real de esas mismas
+  disciplinas para el conjunto de 26 edificios.
+- `unitDisciplines()` (`app/dashboard-client.tsx`) ahora completa
+  `Albañilería` e `Instalaciones` con el valor vigente de
+  `constructionDisciplines` (el mismo dato vivo que ya usa el panel `Avance
+  por disciplina`) cuando no existe evidencia propia del apartamento. El
+  nuevo estado `conjunto` (`UnitDiscipline.status`, `app/demo-data.ts`) marca
+  ese valor como `NN% · Conjunto` con un estilo propio, distinto de
+  `Pendiente` y de un dato `integrado` por apartamento, para no presentarlo
+  como si fuera específico de la vivienda.
+- `Acabados` continúa mostrando `Pendiente`: no existe una única cifra real
+  para esa etiqueta en `constructionDisciplines` (solo existen por separado
+  Pintura, Revestimientos y cerámica, Misceláneos, Herrería y Carpintería).
+  Promediarlas habría sido inventar una fórmula ausente en la fuente, así que
+  se dejó sin cambios a propósito.
+- Si en el futuro una publicación de datos vivos añade un valor real por
+  apartamento (`buildings.*.units.*.disciplines.*.progress`), ese valor real
+  sigue teniendo prioridad y sustituye automáticamente al promedio del
+  conjunto.
+- Validación: `npm test` con 32/32 pruebas aprobadas y compilación correcta;
+  `npm run lint` sin errores, con los nueve avisos históricos conocidos de
+  `<img>`. Se confirmó además que la etiqueta `% · Conjunto` quedó presente
+  en el bundle cliente y SSR compilados (`dist/client` y `dist/server/ssr`).
+- La comprobación visual en navegador local quedó bloqueada porque el D1
+  local (`.wrangler`) no tiene las migraciones aplicadas ni usuarios
+  `app_users`, y la app exige identidad ChatGPT antes de renderizar
+  (`GET /` intenta `select ... from app_users` y falla con la tabla
+  inexistente). Mismo patrón ya documentado en la integración del
+  30/07/2026: pendiente de revisar visualmente en la URL publicada tras el
+  próximo despliegue.
 
 ## Criterios de continuidad
 
