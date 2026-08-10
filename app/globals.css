@@ -6474,6 +6474,12 @@ button.financial-detail-row:focus-visible {
   font-size: 10px;
 }
 
+.access-message.error {
+  border-left-color: var(--red);
+  color: #7f342d;
+  background: var(--red-soft);
+}
+
 .access-user-list {
   display: grid;
 }
@@ -6534,6 +6540,120 @@ button.financial-detail-row:focus-visible {
   font-size: 9px;
 }
 
+.user-record-meta {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.user-record-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.user-record-actions .button {
+  min-height: 38px;
+  flex: 1 1 70px;
+  padding-inline: 10px;
+  font-size: 8px;
+}
+
+.user-editor-modal {
+  width: min(660px, 100%);
+  max-height: calc(100dvh - 40px);
+  display: grid;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+.user-editor-modal > .panel-heading,
+.user-editor-modal > .upload-intro,
+.user-editor-modal > .access-message {
+  margin-bottom: 0;
+}
+
+.user-editor-modal select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--ink);
+  background: #fbfaf7;
+  font: inherit;
+  font-size: 10px;
+}
+
+.user-editor-modal label > small {
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.delete-user-modal {
+  width: min(520px, 100%);
+}
+
+.delete-user-summary {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+  border: 1px solid #ead0cb;
+  border-radius: 12px;
+  background: #fff8f6;
+}
+
+.delete-user-summary strong {
+  font-size: 13px;
+}
+
+.delete-user-summary span {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.delete-user-summary p {
+  margin: 8px 0 0;
+  color: #6e4b45;
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.archived-user-directory {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.archived-user-directory summary {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.archived-user-directory > div {
+  display: grid;
+}
+
+.archived-user-directory article {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, auto) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.archived-user-directory article > small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
 .permission-toggle {
   min-height: 42px;
   display: grid;
@@ -6583,8 +6703,10 @@ button.financial-detail-row:focus-visible {
     grid-template-columns: minmax(220px, 1fr) repeat(4, 125px);
   }
 
-  .last-access {
+  .user-record-meta {
     grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
   }
 }
 
@@ -6973,8 +7095,29 @@ button.financial-detail-row:focus-visible {
   }
 
   .user-identity,
-  .last-access {
+  .user-record-meta {
     grid-column: 1 / -1;
+  }
+
+  .user-record-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .user-record-actions .button {
+    min-height: 44px;
+  }
+
+  .user-editor-modal input,
+  .user-editor-modal select {
+    font-size: 16px;
+  }
+
+  .archived-user-directory article {
+    grid-template-columns: 1fr;
+  }
+
+  .archived-user-directory .button {
+    min-height: 44px;
   }
 
   .access-user-list label {

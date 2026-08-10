@@ -1,7 +1,7 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 04/08/2026
-Zona horaria del usuario: America/La_Paz
+Actualizado: 11/08/2026
+Zona horaria del usuario: Europe/Madrid
 Idioma de trabajo: español
 
 ## Instrucción para el próximo LLM
@@ -23,14 +23,14 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 42, con el agente renombrado como
-  `ARAYA Asistente`. El commit desplegado es el `HEAD` de
+- Última versión publicada: 43, con administración completa de usuarios y
+  acceso exterior público protegido por la autorización interna. El agente
+  permanece como `ARAYA Asistente`. El commit desplegado es el `HEAD` de
   `main`; el identificador opaco debe consultarse en Sites por número de versión
   y no reconstruirse manualmente.
-- Acceso de infraestructura: privado, únicamente para el propietario configurado
-  en Sites. La solicitud de cambiarlo a `public` devolvió
-  `sites_publish_disabled`: este espacio de trabajo todavía no permite publicar
-  Sites hacia Internet.
+- Acceso de infraestructura: `public` desde el 11/08/2026. La URL puede abrirse
+  sin figurar en una lista externa de invitados, pero el contenido continúa
+  protegido por inicio de sesión y por la tabla interna `app_users`.
 - Rama y remoto de publicación: rama `main`, remoto `sites`.
 
 ## Estado funcional
@@ -62,8 +62,17 @@ contraseñas propias:
 
 - El administrador inicial se aprovisiona desde la variable de producción
   `BOOTSTRAP_ADMIN_EMAIL`.
-- Un administrador puede crear, activar o desactivar usuarios y promoverlos a
-  administrador desde `Usuarios y accesos`.
+- Sólo un administrador puede crear, editar, activar, desactivar, eliminar,
+  restaurar o promover usuarios desde `Usuarios y accesos`.
+- La edición se realiza por identificador estable y permite cambiar nombre,
+  correo, perfil, área, Finanzas y estado. El correo propio, el rol propio y el
+  acceso propio están protegidos para evitar autobloqueos.
+- `Eliminar acceso` es un archivado seguro: deja `active=false`, conserva la
+  trazabilidad histórica, limpia la fotografía de R2 y permite restaurar la
+  ficha. Una condición atómica impide eliminar o degradar al último
+  administrador activo.
+- Cuando una sesión abierta recibe `401` o `403` en la sincronización, borra la
+  caché privada y la credencial biométrica local y vuelve a validar el acceso.
 - Cada usuario tiene un área principal. El resumen ejecutivo adapta su bloque
   de prioridad y ordena las alertas para Dirección, Planificación, Obra,
   Urbanismo, Comercial, Finanzas, Compras, Seguridad, Legal o Diseño.
@@ -72,7 +81,8 @@ contraseñas propias:
 - Sin ese permiso, Finanzas muestra una pantalla de acceso restringido y las
   API de cifras, archivos y respuestas financieras devuelven `403`; no es sólo
   una pestaña ocultada en el navegador.
-- `access_audit` conserva cada alta y cambio de perfil, estado o permiso.
+- `access_audit` conserva alta, edición, eliminación y restauración con estados
+  anterior y posterior.
 - Cada usuario puede pulsar su avatar para cargar o sustituir su fotografía.
   El administrador puede hacerlo para cualquier persona desde `Usuarios y
   accesos`. Si no existe foto, la interfaz conserva las iniciales.
@@ -192,14 +202,12 @@ el contrato normalizado. No afirmar que un documento arbitrario se integra sin
 esta fase. Los datos ya estructurados pueden publicarse directamente y se
 propagan en menos de cinco segundos.
 
-La aplicación ya exige identidad ChatGPT y pertenencia activa a `app_users`
-antes de renderizar el dashboard. Sin embargo, Sites conserva de momento una
-segunda barrera externa limitada al propietario porque la publicación a Internet
-está deshabilitada para el workspace. Para que los usuarios creados por el
-administrador puedan alcanzar el inicio de sesión, un administrador del espacio
-de trabajo deberá habilitar esa política; después, cambiar Sites a `public`.
-Aunque Sites sea público, el contenido seguirá cerrado por la autenticación y el
-allowlist de D1 de la propia aplicación.
+La aplicación exige identidad ChatGPT y pertenencia activa a `app_users` antes
+de renderizar el dashboard. Desde el 11/08/2026 Sites está en modo `public`, de
+modo que cualquier persona puede alcanzar el inicio de sesión sin depender de
+una segunda lista externa. El contenido sigue cerrado por la autenticación y el
+allowlist de D1 de la propia aplicación; sólo los administradores gestionan ese
+directorio.
 
 La implantación general incluye:
 
@@ -948,6 +956,32 @@ Implementado el 04/08/2026, pendiente de publicar.
   30/07/2026: pendiente de revisar visualmente en la URL publicada tras el
   próximo despliegue.
 
+## Administración completa de usuarios
+
+Implementado y publicado el 11/08/2026.
+
+- `Usuarios y accesos` permite editar nombre, correo, perfil, área principal,
+  permiso financiero y estado general mediante un formulario accesible que se
+  adapta a ordenador, tablet, móvil y orientación apaisada.
+- `Eliminar acceso` no destruye atribuciones históricas: archiva la cuenta con
+  `deleted_at` y `deleted_by_email`, la desactiva, limpia su avatar de R2 y la
+  mueve al directorio de eliminados, desde el que puede restaurarse.
+- El servidor exige `requireApiUser({ admin: true })` para alta, edición,
+  eliminación y restauración. También impide el autoborrado y usa una condición
+  SQL en la propia escritura para que dos operaciones simultáneas nunca puedan
+  dejar el sistema sin administrador activo.
+- Cada operación registra estado anterior y posterior en `access_audit`. Si la
+  escritura de auditoría falla después del cambio, la API informa honestamente
+  de que la operación se aplicó y requiere revisión técnica, sin devolver un
+  falso conflicto de correo.
+- Una sesión revocada detecta `401/403` en el refresco de cinco segundos, borra
+  la caché privada y la biometría local y vuelve a validar el acceso.
+- Migración: `drizzle/0008_puzzling_the_captain.sql`.
+- Política de Sites: `public`, revisión 2. El acceso real a los datos continúa
+  dependiendo de identidad ChatGPT y `app_users`.
+- Validación: compilación correcta, 33/33 pruebas aprobadas y lint sin errores;
+  permanecen los nueve avisos históricos de `<img>`.
+
 ## Criterios de continuidad
 
 - Mostrar únicamente datos aportados o derivados de las fuentes.
@@ -959,7 +993,9 @@ Implementado el 04/08/2026, pendiente de publicar.
 - Usar siempre `apartamento` y `apartamentos` en la interfaz, los informes y
   las respuestas del agente. `vivienda` se conserva únicamente como alias
   técnico interno para clasificar documentos o reconocer consultas antiguas.
-- Conservar el dashboard privado salvo instrucción explícita del usuario.
+- Mantener Sites en modo público y conservar el contenido protegido por inicio
+  de sesión, `app_users` y permisos server-side. Sólo un administrador puede
+  gestionar usuarios.
 - Mantener USD como moneda de visualización inicial y DOP como regla de
   origen cuando un archivo no indique moneda. Cada nueva carga debe persistir
   `source_currency`.

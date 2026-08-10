@@ -49,8 +49,17 @@ cinco segundos.
 
 ## Permisos
 
+- El enlace exterior del Centro de Control es público para evitar una segunda
+  lista de invitados. El contenido continúa protegido: cada persona debe
+  iniciar sesión y su correo debe figurar activo en `Usuarios y accesos`.
 - Todos los usuarios autorizados pueden consultar controles no financieros y
   crear acciones dentro de su ámbito.
+- Sólo un administrador puede crear, editar, desactivar, eliminar o restaurar
+  usuarios. También es el único que puede conceder el rol de administrador o
+  el acceso financiero.
+- `Eliminar acceso` revoca la entrada y archiva la ficha; conserva la actividad
+  y la auditoría. El propio administrador no puede eliminarse ni dejar el
+  sistema sin al menos un administrador activo.
 - El creador, la persona asignada o un administrador pueden actualizar una
   acción.
 - Sólo un administrador puede asignar una acción a otra persona.

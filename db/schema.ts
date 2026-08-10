@@ -233,6 +233,8 @@ export const appUsers = sqliteTable(
     avatarUpdatedAt: text("avatar_updated_at").notNull().default(""),
     createdByEmail: text("created_by_email").notNull().default(""),
     lastLoginAt: text("last_login_at").notNull().default(""),
+    deletedAt: text("deleted_at").notNull().default(""),
+    deletedByEmail: text("deleted_by_email").notNull().default(""),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
@@ -240,6 +242,7 @@ export const appUsers = sqliteTable(
     uniqueIndex("app_users_email_idx").on(table.email),
     index("app_users_active_idx").on(table.active),
     index("app_users_role_idx").on(table.role),
+    index("app_users_deleted_at_idx").on(table.deletedAt),
   ],
 );
 

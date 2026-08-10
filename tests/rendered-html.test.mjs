@@ -234,6 +234,47 @@ test("dashboard requires verified membership and provides administrator-managed 
   assert.match(migration, /CREATE TABLE `access_audit`/);
 });
 
+test("administrators can edit, safely remove, audit and restore users", async () => {
+  const [dashboard, styles, route, access, schema, migration] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/globals.css", "utf8"),
+    readFile("app/api/admin/users/route.ts", "utf8"),
+    readFile("lib/access-control.ts", "utf8"),
+    readFile("db/schema.ts", "utf8"),
+    readFile("drizzle/0008_puzzling_the_captain.sql", "utf8"),
+  ]);
+  assert.match(route, /export async function PATCH/);
+  assert.match(route, /export async function DELETE/);
+  assert.match(route, /requireApiUser\(\{ admin: true \}\)/);
+  assert.match(route, /activeAdminSafetyCondition/);
+  assert.match(route, /No puedes eliminar tu propia cuenta/);
+  assert.match(route, /último administrador activo/);
+  assert.match(route, /usuario_creado/);
+  assert.match(route, /usuario_editado/);
+  assert.match(route, /usuario_eliminado/);
+  assert.match(route, /usuario_restaurado/);
+  assert.match(route, /before: auditSnapshot\(existing\)/);
+  assert.match(route, /expectedUpdatedAt/);
+  assert.match(route, /removeAvatar/);
+  assert.match(dashboard, /function UserEditorModal/);
+  assert.match(dashboard, /function DeleteUserModal/);
+  assert.match(dashboard, /aria-labelledby="user-editor-title"/);
+  assert.match(dashboard, /aria-describedby="delete-user-description"/);
+  assert.match(dashboard, />Editar</);
+  assert.match(dashboard, />\s*Eliminar\s*</);
+  assert.match(dashboard, /Restaurar acceso/);
+  assert.match(dashboard, /status === 401 \|\| status === 403/);
+  assert.match(dashboard, /CLEAR_PRIVATE_CACHE/);
+  assert.match(styles, /\.user-record-actions/);
+  assert.match(styles, /\.archived-user-directory/);
+  assert.match(styles, /\.delete-user-modal/);
+  assert.match(schema, /deletedAt: text\("deleted_at"\)/);
+  assert.match(schema, /deletedByEmail: text\("deleted_by_email"\)/);
+  assert.match(migration, /ADD `deleted_at`/);
+  assert.match(migration, /ADD `deleted_by_email`/);
+  assert.match(access, /!row\.active \|\| row\.deletedAt/);
+});
+
 test("user initials can be replaced by protected persistent profile photos", async () => {
   const [dashboard, styles, avatarRoute, adminRoute, access, schema, migration] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),

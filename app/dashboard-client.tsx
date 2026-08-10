@@ -151,6 +151,8 @@ type DashboardUser = {
 
 type ManagedUser = DashboardUser & {
   lastLoginAt: string;
+  deletedAt: string;
+  deletedByEmail: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -4343,6 +4345,175 @@ async function fetchManagedUsers() {
   return payload.users ?? [];
 }
 
+function UserEditorModal({
+  user,
+  currentUser,
+  saving,
+  error,
+  onClose,
+  onSave,
+}: {
+  user: ManagedUser;
+  currentUser: DashboardUser;
+  saving: boolean;
+  error: string;
+  onClose: () => void;
+  onSave: (input: ManagedUser) => Promise<boolean>;
+}) {
+  const nameRef = useRef<HTMLInputElement>(null);
+  const isSelf = user.id === currentUser.id;
+  const [form, setForm] = useState(user);
+
+  useEffect(() => {
+    nameRef.current?.focus();
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !saving) onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose, saving]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await onSave(form);
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={() => { if (!saving) onClose(); }}>
+      <form
+        className="modal user-editor-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="user-editor-title"
+        aria-describedby="user-editor-description"
+        aria-busy={saving}
+        onSubmit={submit}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="panel-heading">
+          <div>
+            <span className="section-kicker">USUARIOS Y ACCESOS</span>
+            <h3 id="user-editor-title">Editar usuario</h3>
+          </div>
+          <button className="close-button" type="button" onClick={onClose} disabled={saving} aria-label="Cerrar">×</button>
+        </div>
+        <p className="upload-intro" id="user-editor-description">
+          Actualiza la identidad, el área y los permisos. Los cambios quedan registrados en la auditoría del Centro de Control.
+        </p>
+        <div className="form-grid">
+          <label>
+            Nombre y apellidos
+            <input ref={nameRef} required value={form.displayName} onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))} />
+          </label>
+          <label>
+            Correo de acceso
+            <input type="email" required value={form.email} disabled={isSelf} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
+            {isSelf && <small>Tu correo no puede cambiarse desde tu propia sesión.</small>}
+          </label>
+          <label>
+            Perfil
+            <select
+              value={form.role}
+              disabled={isSelf}
+              onChange={(event) => setForm((current) => ({
+                ...current,
+                role: event.target.value as "admin" | "member",
+                financeAccess: event.target.value === "admin" ? true : current.financeAccess,
+              }))}
+            >
+              <option value="member">Usuario</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </label>
+          <label>
+            Área principal
+            <select value={form.area} onChange={(event) => setForm((current) => ({ ...current, area: event.target.value as UserArea }))}>
+              {userAreas.map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
+            </select>
+          </label>
+        </div>
+        <label className="permission-check">
+          <input
+            type="checkbox"
+            checked={form.financeAccess}
+            disabled={form.role === "admin"}
+            onChange={(event) => setForm((current) => ({ ...current, financeAccess: event.target.checked }))}
+          />
+          <span><strong>Acceso a Finanzas</strong><small>Los administradores siempre conservan este permiso.</small></span>
+        </label>
+        <label className="permission-check">
+          <input
+            type="checkbox"
+            checked={form.active}
+            disabled={isSelf}
+            onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))}
+          />
+          <span><strong>Acceso general activo</strong><small>Al desactivarlo no podrá volver a entrar hasta que un administrador lo reactive.</small></span>
+        </label>
+        {error && <div className="access-message error" role="alert">{error}</div>}
+        <div className="modal-actions">
+          <button className="button secondary" type="button" onClick={onClose} disabled={saving}>Cancelar</button>
+          <button className="button primary" type="submit" disabled={saving}>{saving ? "Guardando…" : "Guardar cambios"}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function DeleteUserModal({
+  user,
+  deleting,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  user: ManagedUser;
+  deleting: boolean;
+  error: string;
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+}) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    cancelRef.current?.focus();
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !deleting) onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [deleting, onClose]);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={() => { if (!deleting) onClose(); }}>
+      <section
+        className="modal delete-user-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-user-title"
+        aria-describedby="delete-user-description"
+        aria-busy={deleting}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="panel-heading">
+          <div><span className="section-kicker">CONFIRMACIÓN NECESARIA</span><h3 id="delete-user-title">Eliminar acceso</h3></div>
+          <button className="close-button" type="button" onClick={onClose} disabled={deleting} aria-label="Cerrar">×</button>
+        </div>
+        <div className="delete-user-summary" id="delete-user-description">
+          <strong>{user.displayName}</strong>
+          <span>{user.email}</span>
+          <p>Perderá el acceso inmediatamente. Su actividad y la auditoría se conservarán, y un administrador podrá restaurarlo más adelante.</p>
+        </div>
+        {error && <div className="access-message error" role="alert">{error}</div>}
+        <div className="modal-actions">
+          <button ref={cancelRef} className="button secondary" type="button" onClick={onClose} disabled={deleting}>Cancelar</button>
+          <button className="button danger" type="button" onClick={() => void onConfirm()} disabled={deleting}>{deleting ? "Eliminando…" : "Eliminar acceso"}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function UsersAdminView({
   currentUser,
   onCurrentAvatarUpdated,
@@ -4354,6 +4525,9 @@ function UsersAdminView({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState("");
   const [message, setMessage] = useState("");
+  const [editingUser, setEditingUser] = useState<ManagedUser | null>(null);
+  const [deletingUser, setDeletingUser] = useState<ManagedUser | null>(null);
+  const [dialogError, setDialogError] = useState("");
   const [form, setForm] = useState({
     email: "",
     displayName: "",
@@ -4392,28 +4566,35 @@ function UsersAdminView({
   }, []);
 
   async function saveUser(input: {
+    id?: number;
     email: string;
     displayName: string;
     role: "admin" | "member";
     area: UserArea;
     financeAccess: boolean;
     active: boolean;
+    updatedAt?: string;
   }) {
-    setSaving(input.email);
+    const operationKey = input.id ? String(input.id) : "create";
+    setSaving(operationKey);
     setMessage("");
+    setDialogError("");
     try {
       const response = await fetch("/api/admin/users", {
-        method: "POST",
+        method: input.id ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(input),
+        body: JSON.stringify(input.id ? { ...input, expectedUpdatedAt: input.updatedAt } : input),
       });
       const payload = await response.json() as { user?: ManagedUser; message?: string; error?: string };
       if (!response.ok) throw new Error(payload.error ?? "No se pudo guardar el acceso.");
       setMessage(payload.message ?? "Acceso actualizado.");
       await refreshUsers();
+      setEditingUser(null);
       return true;
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo guardar el acceso.");
+      const errorMessage = error instanceof Error ? error.message : "No se pudo guardar el acceso.";
+      if (input.id && editingUser?.id === input.id) setDialogError(errorMessage);
+      else setMessage(errorMessage);
       return false;
     } finally {
       setSaving("");
@@ -4427,6 +4608,48 @@ function UsersAdminView({
       setForm({ email: "", displayName: "", role: "member", area: "direccion", financeAccess: false });
     }
   }
+
+  async function deleteUser(user: ManagedUser) {
+    setSaving(String(user.id));
+    setMessage("");
+    setDialogError("");
+    try {
+      const query = new URLSearchParams({ id: String(user.id), expectedUpdatedAt: user.updatedAt });
+      const response = await fetch(`/api/admin/users?${query}`, { method: "DELETE" });
+      const payload = await response.json() as { message?: string; error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "No se pudo eliminar el acceso.");
+      setMessage(payload.message ?? "Acceso eliminado.");
+      setDeletingUser(null);
+      await refreshUsers();
+    } catch (error) {
+      setDialogError(error instanceof Error ? error.message : "No se pudo eliminar el acceso.");
+    } finally {
+      setSaving("");
+    }
+  }
+
+  async function restoreUser(user: ManagedUser) {
+    setSaving(String(user.id));
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: user.id, restore: true, expectedUpdatedAt: user.updatedAt }),
+      });
+      const payload = await response.json() as { message?: string; error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "No se pudo restaurar el acceso.");
+      setMessage(payload.message ?? "Acceso restaurado.");
+      await refreshUsers();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo restaurar el acceso.");
+    } finally {
+      setSaving("");
+    }
+  }
+
+  const configuredUsers = users.filter((user) => !user.deletedAt);
+  const archivedUsers = users.filter((user) => Boolean(user.deletedAt));
 
   return (
     <div className="view-stack">
@@ -4481,7 +4704,7 @@ function UsersAdminView({
 
       <section className="panel access-directory">
         <div className="panel-heading">
-          <div><span className="section-kicker">DIRECTORIO AUTORIZADO</span><h3>{users.length} usuarios configurados</h3></div>
+          <div><span className="section-kicker">DIRECTORIO AUTORIZADO</span><h3>{configuredUsers.length} usuarios configurados</h3></div>
           <span className="data-note">{currentUser.email}</span>
         </div>
         {message && <div className="access-message" role="status">{message}</div>}
@@ -4489,7 +4712,7 @@ function UsersAdminView({
           <div className="empty-state compact"><strong>Cargando usuarios…</strong></div>
         ) : (
           <div className="access-user-list">
-            {users.map((user) => {
+            {configuredUsers.map((user) => {
               const isSelf = user.email === currentUser.email;
               return (
                 <article key={user.email} className={!user.active ? "disabled" : ""}>
@@ -4510,7 +4733,7 @@ function UsersAdminView({
                   <label>Perfil
                     <select
                       value={user.role}
-                      disabled={isSelf || saving === user.email}
+                      disabled={isSelf || saving === String(user.id)}
                       onChange={(event) => void saveUser({ ...user, role: event.target.value as "admin" | "member", financeAccess: event.target.value === "admin" ? true : user.financeAccess })}
                     >
                       <option value="member">Usuario</option>
@@ -4520,7 +4743,7 @@ function UsersAdminView({
                   <label>Área
                     <select
                       value={user.area}
-                      disabled={saving === user.email}
+                      disabled={saving === String(user.id)}
                       onChange={(event) => void saveUser({ ...user, area: event.target.value as UserArea })}
                     >
                       {userAreas.map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
@@ -4528,25 +4751,77 @@ function UsersAdminView({
                   </label>
                   <button
                     className={`permission-toggle ${user.financeAccess ? "granted" : ""}`}
-                    disabled={user.role === "admin" || saving === user.email}
+                    disabled={user.role === "admin" || saving === String(user.id)}
                     onClick={() => void saveUser({ ...user, financeAccess: !user.financeAccess })}
                   >
                     <span>Finanzas</span><strong>{user.financeAccess ? "Permitido" : "Bloqueado"}</strong>
                   </button>
                   <button
                     className={`permission-toggle ${user.active ? "granted" : "revoked"}`}
-                    disabled={isSelf || saving === user.email}
+                    disabled={isSelf || saving === String(user.id)}
                     onClick={() => void saveUser({ ...user, active: !user.active })}
                   >
                     <span>Acceso general</span><strong>{user.active ? "Activo" : "Desactivado"}</strong>
                   </button>
-                  <small className="last-access">{user.lastLoginAt ? `Último acceso ${new Date(user.lastLoginAt).toLocaleString("es-DO")}` : "Aún no ha iniciado sesión"}</small>
+                  <div className="user-record-meta">
+                    <small className="last-access">{user.lastLoginAt ? `Último acceso ${new Date(user.lastLoginAt).toLocaleString("es-DO")}` : "Aún no ha iniciado sesión"}</small>
+                    <div className="user-record-actions">
+                      <button className="button secondary" type="button" onClick={() => { setDialogError(""); setEditingUser(user); }}>Editar</button>
+                      <button
+                        className="button danger"
+                        type="button"
+                        disabled={isSelf || saving === String(user.id)}
+                        title={isSelf ? "No puedes eliminar tu propia cuenta" : undefined}
+                        onClick={() => { setDialogError(""); setDeletingUser(user); }}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
+                  </div>
                 </article>
               );
             })}
           </div>
         )}
+        {!loading && archivedUsers.length > 0 && (
+          <details className="archived-user-directory">
+            <summary>{archivedUsers.length} {archivedUsers.length === 1 ? "usuario eliminado" : "usuarios eliminados"}</summary>
+            <div>
+              {archivedUsers.map((user) => (
+                <article key={user.id}>
+                  <div className="user-identity">
+                    <UserAvatar user={user} />
+                    <div><strong>{user.displayName}</strong><small>{user.email}</small></div>
+                  </div>
+                  <small>Eliminado {new Date(user.deletedAt).toLocaleString("es-DO")}</small>
+                  <button className="button secondary" type="button" disabled={saving === String(user.id)} onClick={() => void restoreUser(user)}>
+                    {saving === String(user.id) ? "Restaurando…" : "Restaurar acceso"}
+                  </button>
+                </article>
+              ))}
+            </div>
+          </details>
+        )}
       </section>
+      {editingUser && (
+        <UserEditorModal
+          user={editingUser}
+          currentUser={currentUser}
+          saving={saving === String(editingUser.id)}
+          error={dialogError}
+          onClose={() => { if (!saving) setEditingUser(null); }}
+          onSave={saveUser}
+        />
+      )}
+      {deletingUser && (
+        <DeleteUserModal
+          user={deletingUser}
+          deleting={saving === String(deletingUser.id)}
+          error={dialogError}
+          onClose={() => { if (!saving) setDeletingUser(null); }}
+          onConfirm={() => deleteUser(deletingUser)}
+        />
+      )}
     </div>
   );
 }
@@ -6583,6 +6858,12 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
           fetch("/api/live-data", { cache: "no-store" }),
           fetch("/api/dashboard", { cache: "no-store" }),
         ]);
+        if ([liveResponse.status, dashboardResponse.status].some((status) => status === 401 || status === 403)) {
+          removeBiometricRecord(currentUser.id);
+          navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
+          window.location.assign("/signout-with-chatgpt?return_to=/");
+          return;
+        }
         if (!liveResponse.ok || !dashboardResponse.ok) throw new Error("Sincronización no disponible");
         const [liveData, dashboardData] = await Promise.all([
           liveResponse.json() as Promise<{
@@ -6633,7 +6914,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       window.clearInterval(interval);
       window.removeEventListener("araya-files-updated", handleFileUpdate);
     };
-  }, [currentUser.financeAccess]);
+  }, [currentUser.financeAccess, currentUser.id]);
 
   useEffect(() => {
     if (!deviceSecurityReady || liveSync.revision <= 0) return;

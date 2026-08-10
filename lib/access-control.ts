@@ -57,7 +57,7 @@ export async function resolveAuthorizedUser(identity: ChatGPTUser) {
     [row] = await db.select().from(appUsers).where(eq(appUsers.email, email)).limit(1);
   }
 
-  if (!row || !row.active) return null;
+  if (!row || !row.active || row.deletedAt) return null;
   const now = new Date();
   const previousLoginAt = row.lastLoginAt ? Date.parse(row.lastLoginAt) : Number.NaN;
   const shouldRefreshLogin =
