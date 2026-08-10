@@ -23,37 +23,37 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 43, con administración completa de usuarios y
-  acceso exterior público protegido por la autorización interna. El agente
-  permanece como `ARAYA Asistente`. El commit desplegado es el `HEAD` de
+- Última versión publicada: 44, con navegación agrupada en cinco áreas,
+  administración completa de usuarios y acceso exterior público protegido por
+  la autorización interna. El agente permanece como `ARAYA Asistente`. El commit desplegado es el `HEAD` de
   `main`; el identificador opaco debe consultarse en Sites por número de versión
   y no reconstruirse manualmente.
 - Acceso de infraestructura: `public` desde el 11/08/2026. La URL puede abrirse
   sin figurar en una lista externa de invitados, pero el contenido continúa
   protegido por inicio de sesión y por la tabla interna `app_users`.
 - Rama y remoto de publicación: rama `main`, remoto `sites`.
+- Sites no ofrece un alias público sin el espacio personal del propietario. Para
+  disponer de una dirección corporativa neutra hay que conectar un subdominio
+  controlado por Bricket (por ejemplo, `control.dominio-corporativo.com`) y
+  completar los registros DNS que devuelva Sites. No hay dominio personalizado
+  configurado actualmente.
 
 ## Estado funcional
 
-El dashboard dispone de estas vistas:
+El dashboard conserva catorce vistas funcionales, presentadas en cinco grupos:
 
-1. Resumen ejecutivo.
-2. Planificación.
-3. Implantación general.
-4. Edificios.
-5. Apartamentos.
-6. Urbanismo.
-7. Ventas y cobranza.
-8. Finanzas.
-9. Cronología.
-10. Proveedores.
-11. Seguridad y permisos.
-12. Centro de datos.
-13. Agente IA de consulta y carga documental controlada.
-14. Usuarios y accesos, visible únicamente para administradores.
+1. `Resumen ejecutivo`, acceso directo.
+2. `Obra`: Planificación, Implantación general, Edificios, Apartamentos,
+   Urbanismo, Proveedores y Seguridad y permisos.
+3. `Finanzas`: Finanzas y Ventas y cobranza.
+4. `Datos`: Centro de datos, Cronología y Usuarios y accesos; esta última sólo
+   aparece para administradores.
+5. `Agente IA`, acceso directo a ARAYA Asistente.
 
-`navItems` es la única fuente de este orden. Alimenta tanto la barra lateral de
-ordenador como el panel completo de navegación de tablet y móvil. No mantener
+`navItems` continúa siendo el catálogo de vistas para títulos, búsquedas y
+enlaces cruzados. `navigationGroups` es la fuente única del orden agrupado que
+alimentan el acordeón lateral de ordenador y los cinco accesos de tablet y
+móvil. No mantener
 listas duplicadas con orden diferente.
 
 El acceso al Centro de Control requiere una identidad verificada de ChatGPT y
@@ -981,6 +981,26 @@ Implementado y publicado el 11/08/2026.
   dependiendo de identidad ChatGPT y `app_users`.
 - Validación: compilación correcta, 33/33 pruebas aprobadas y lint sin errores;
   permanecen los nueve avisos históricos de `<img>`.
+
+## Navegación agrupada
+
+Implementada y publicada el 11/08/2026 en la versión 44.
+
+- Orden principal único en ordenador, tablet y móvil: `01 Resumen ejecutivo`,
+  `02 Obra`, `03 Finanzas`, `04 Datos` y `05 Agente IA`.
+- En ordenador, Obra, Finanzas y Datos funcionan como acordeones accesibles y
+  conservan abierto el grupo de la vista seleccionada.
+- En tablet y móvil, la barra inferior contiene exactamente los cinco grupos;
+  los tres grupos compuestos abren una hoja con sus subpestañas antes de las
+  acciones rápidas de cámara, carga, avisos, guía e informes.
+- El permiso financiero sigue señalando Finanzas como bloqueada sin ocultar
+  Ventas y cobranza. Usuarios y accesos se filtra únicamente para perfiles no
+  administradores.
+- La navegación procedente de búsquedas, avisos, fichas y el plano pasa por la
+  función común `navigate`, por lo que abre el grupo correcto y limpia paneles
+  transitorios de forma coherente.
+- Validación: compilación y 33/33 pruebas correctas; lint sin errores y con los
+  nueve avisos históricos de `<img>`.
 
 ## Criterios de continuidad
 

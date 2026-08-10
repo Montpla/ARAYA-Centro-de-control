@@ -42,33 +42,84 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /INFORME FINANCIERO · JUNIO 2026/);
 });
 
-test("desktop, tablet and mobile share the requested navigation order", async () => {
+test("desktop, tablet and mobile share the requested grouped navigation", async () => {
   const source = await readFile("app/dashboard-client.tsx", "utf8");
   const navBlock = source.match(/const navItems:[\s\S]*?= \[([\s\S]*?)\n\];/)?.[1] ?? "";
-  const orderedItems = [
-    ['"resumen"', '"Resumen ejecutivo"', '"01"'],
-    ['"planificacion"', '"Planificación"', '"02"'],
-    ['"implantacion"', '"Implantación general"', '"03"'],
-    ['"edificios"', '"Edificios"', '"04"'],
-    ['"viviendas"', '"Apartamentos"', '"05"'],
-    ['"urbanismo"', '"Urbanismo"', '"06"'],
-    ['"comercial"', '"Ventas y cobranza"', '"07"'],
-    ['"metricas"', '"Finanzas"', '"08"'],
-    ['"cronologia"', '"Cronología"', '"09"'],
-    ['"proveedores"', '"Proveedores"', '"10"'],
-    ['"control"', '"Seguridad y permisos"', '"11"'],
-    ['"fuentes"', '"Centro de datos"', '"12"'],
-    ['"agente"', '"Agente IA"', '"AI"'],
-    ['"usuarios"', '"Usuarios y accesos"', '"AD"'],
+  const catalogItems = [
+    ['"resumen"', '"Resumen ejecutivo"'],
+    ['"planificacion"', '"Planificación"'],
+    ['"implantacion"', '"Implantación general"'],
+    ['"edificios"', '"Edificios"'],
+    ['"viviendas"', '"Apartamentos"'],
+    ['"urbanismo"', '"Urbanismo"'],
+    ['"comercial"', '"Ventas y cobranza"'],
+    ['"metricas"', '"Finanzas"'],
+    ['"cronologia"', '"Cronología"'],
+    ['"proveedores"', '"Proveedores"'],
+    ['"control"', '"Seguridad y permisos"'],
+    ['"fuentes"', '"Centro de datos"'],
+    ['"agente"', '"Agente IA"'],
+    ['"usuarios"', '"Usuarios y accesos"'],
   ];
-  let previousIndex = -1;
-  for (const [id, label, mark] of orderedItems) {
-    const entry = `{ id: ${id}, label: ${label}, mark: ${mark} }`;
-    const index = navBlock.indexOf(entry);
-    assert.ok(index > previousIndex, `${entry} debe conservar el orden solicitado`);
-    previousIndex = index;
+  for (const [id, label] of catalogItems) {
+    assert.match(navBlock, new RegExp(`id: ${id}, label: ${label}`));
   }
-  assert.match(source, /availableNavItems\.map/);
+
+  const groupsBlock = source.match(/const navigationGroups[\s\S]*?= \[([\s\S]*?)\n\];/)?.[1] ?? "";
+  const orderedGroups = [
+    ['"Resumen ejecutivo"', '"01"'],
+    ['"Obra"', '"02"'],
+    ['"Finanzas"', '"03"'],
+    ['"Datos"', '"04"'],
+    ['"Agente IA"', '"05"'],
+  ];
+  let previousGroupIndex = -1;
+  for (const [label, mark] of orderedGroups) {
+    const labelIndex = groupsBlock.indexOf(`label: ${label}`);
+    assert.ok(labelIndex > previousGroupIndex, `${label} debe conservar el orden solicitado`);
+    assert.match(groupsBlock.slice(labelIndex), new RegExp(`mark: ${mark}`));
+    previousGroupIndex = labelIndex;
+  }
+
+  const summaryGroup = groupsBlock.slice(
+    groupsBlock.indexOf('label: "Resumen ejecutivo"'),
+    groupsBlock.indexOf('label: "Obra"'),
+  );
+  const workGroup = groupsBlock.slice(
+    groupsBlock.indexOf('label: "Obra"'),
+    groupsBlock.indexOf('label: "Finanzas"'),
+  );
+  const financeGroup = groupsBlock.slice(
+    groupsBlock.indexOf('label: "Finanzas"'),
+    groupsBlock.indexOf('label: "Datos"'),
+  );
+  const dataGroup = groupsBlock.slice(
+    groupsBlock.indexOf('label: "Datos"'),
+    groupsBlock.indexOf('label: "Agente IA"'),
+  );
+  const agentGroup = groupsBlock.slice(groupsBlock.indexOf('label: "Agente IA"'));
+
+  assert.match(summaryGroup, /directView:\s*"resumen"/);
+  assert.match(agentGroup, /directView:\s*"agente"/);
+  for (const [group, ids] of [
+    [workGroup, ["planificacion", "implantacion", "edificios", "viviendas", "urbanismo", "proveedores", "control"]],
+    [financeGroup, ["metricas", "comercial"]],
+    [dataGroup, ["fuentes", "cronologia", "usuarios"]],
+  ]) {
+    let previousItemIndex = -1;
+    for (const id of ids) {
+      const itemIndex = group.indexOf(`"${id}"`);
+      assert.ok(itemIndex > previousItemIndex, `${id} debe pertenecer a su grupo y conservar el orden`);
+      previousItemIndex = itemIndex;
+    }
+  }
+
+  assert.match(source, /availableNavItems\s*=\s*navItems\.filter\(\(item\)\s*=>\s*item\.id\s*!==\s*"usuarios"\s*\|\|\s*currentUser\.role\s*===\s*"admin"\)/);
+  assert.ok((source.match(/availableNavigationGroups\.map/g) ?? []).length >= 2);
+  assert.match(source, /className="nav-group/);
+  assert.match(source, /className="nav-group-children"/);
+  assert.match(source, /className="mobile-bottom-nav"/);
+  assert.match(source, /className="mobile-menu-links"/);
 });
 
 test("normalized source data contains 26 buildings and 156 apartments", async () => {

@@ -750,7 +750,18 @@ const projects: Record<ProjectId, {
   },
 };
 
-const navItems: Array<{ id: View; label: string; mark: string }> = [
+type NavItem = { id: View; label: string; mark: string };
+type NavigationGroupId = "resumen" | "obra" | "finanzas" | "datos" | "agente";
+type NavigationGroup = {
+  id: NavigationGroupId;
+  label: string;
+  mobileLabel: string;
+  mark: string;
+  directView?: View;
+  itemIds?: View[];
+};
+
+const navItems: NavItem[] = [
   { id: "resumen", label: "Resumen ejecutivo", mark: "01" },
   { id: "planificacion", label: "Planificación", mark: "02" },
   { id: "implantacion", label: "Implantación general", mark: "03" },
@@ -767,12 +778,35 @@ const navItems: Array<{ id: View; label: string; mark: string }> = [
   { id: "usuarios", label: "Usuarios y accesos", mark: "AD" },
 ];
 
-const mobilePrimaryNav: Array<{ id: View; label: string; mark: string }> = [
-  { id: "resumen", label: "Inicio", mark: "IN" },
-  { id: "implantacion", label: "Plano", mark: "PL" },
-  { id: "viviendas", label: "Apartamentos", mark: "AP" },
-  { id: "fuentes", label: "Datos", mark: "DT" },
+const navigationGroups: NavigationGroup[] = [
+  { id: "resumen", label: "Resumen ejecutivo", mobileLabel: "Resumen", mark: "01", directView: "resumen" },
+  {
+    id: "obra",
+    label: "Obra",
+    mobileLabel: "Obra",
+    mark: "02",
+    itemIds: ["planificacion", "implantacion", "edificios", "viviendas", "urbanismo", "proveedores", "control"],
+  },
+  {
+    id: "finanzas",
+    label: "Finanzas",
+    mobileLabel: "Finanzas",
+    mark: "03",
+    itemIds: ["metricas", "comercial"],
+  },
+  {
+    id: "datos",
+    label: "Datos",
+    mobileLabel: "Datos",
+    mark: "04",
+    itemIds: ["fuentes", "cronologia", "usuarios"],
+  },
+  { id: "agente", label: "Agente IA", mobileLabel: "Agente IA", mark: "05", directView: "agente" },
 ];
+
+function navigationGroupContainsView(group: NavigationGroup, view: View) {
+  return group.directView === view || Boolean(group.itemIds?.includes(view));
+}
 
 const statusLabel = {
   terminada: "Terminada",
@@ -6622,6 +6656,8 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   const [directionReport, setDirectionReport] = useState<DirectionReportPeriod | null>(null);
   const [workspaceDetail, setWorkspaceDetail] = useState<WorkspaceDetail | null>(null);
   const [fileViewer, setFileViewer] = useState<FileViewerState | null>(null);
+  const [expandedNavGroup, setExpandedNavGroup] = useState<NavigationGroupId | null>(null);
+  const [mobileNavigationGroup, setMobileNavigationGroup] = useState<NavigationGroupId>("obra");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [notice, setNotice] = useState("");
@@ -6652,6 +6688,16 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   const lastNotifiedRevisionRef = useRef<number | null>(null);
   const activeProject = projects[activeProjectId];
   const availableNavItems = navItems.filter((item) => item.id !== "usuarios" || currentUser.role === "admin");
+  const availableNavigationGroups = navigationGroups.map((group) => ({
+    ...group,
+    items: (group.itemIds ?? [])
+      .map((itemId) => availableNavItems.find((item) => item.id === itemId))
+      .filter((item): item is NavItem => Boolean(item)),
+  }));
+  const activeNavigationGroup = navigationGroups.find((group) => navigationGroupContainsView(group, view));
+  const selectedMobileNavigationGroup = availableNavigationGroups.find((group) => group.id === mobileNavigationGroup)
+    ?? availableNavigationGroups.find((group) => group.items.length > 0)
+    ?? availableNavigationGroups[0];
   const arayaLiveSummary = `${buildings.length} edificios · ${buildings.reduce((total, building) => total + building.units.length, 0)} apartamentos`;
   const deviceNotifications = useMemo(
     () => buildDeviceNotifications(controlRoom, liveSync),
@@ -7131,6 +7177,8 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   }
 
   function navigate(viewId: View) {
+    const targetGroup = navigationGroups.find((group) => navigationGroupContainsView(group, viewId));
+    if (targetGroup?.itemIds?.length) setExpandedNavGroup(targetGroup.id);
     setView(viewId);
     setWorkspaceDetail(null);
     setFileViewer(null);
@@ -7142,6 +7190,8 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   function selectProject(projectId: ProjectId) {
     setActiveProjectId(projectId);
     setProjectMenuOpen(false);
+    setExpandedNavGroup(null);
+    setMobileNavigationGroup("obra");
     setMobileMenuOpen(false);
     setView("resumen");
     setSearch("");
@@ -7242,7 +7292,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
         />
       );
     }
-    if (activeProjectId === "mirador") return <DemoProjectContent view={view} onNavigate={setView} />;
+    if (activeProjectId === "mirador") return <DemoProjectContent view={view} onNavigate={navigate} />;
     if (view === "resumen") {
       return (
         <div className="view-stack">
@@ -7272,7 +7322,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       );
     }
     if (view === "planificacion") return <Planning />;
-    if (view === "implantacion") return <div className="view-stack"><SitePlan onNavigate={setView} onSelectBuilding={setSelectedBuilding} /></div>;
+    if (view === "implantacion") return <div className="view-stack"><SitePlan onNavigate={navigate} onSelectBuilding={setSelectedBuilding} /></div>;
     if (view === "edificios") return <BuildingsView selected={selectedBuilding} setSelected={setSelectedBuilding} />;
     if (view === "viviendas") return <HousingView />;
     if (view === "comercial") return <CommercialView currency={currency} />;
@@ -7282,7 +7332,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => online ? setModal("supplier") : setNotice("Modo sin conexión · no se pueden crear registros.")} currency={currency} canAccessFinance={currentUser.financeAccess} />;
     if (view === "metricas") return currentUser.financeAccess ? <MetricsView metrics={metrics} onAdd={() => online ? setModal("metric") : setNotice("Modo sin conexión · no se pueden crear registros.")} currency={currency} /> : <FinanceLockedView />;
     if (view === "fuentes") return <SourcesView onUpload={() => requestUpload()} canAccessFinance={currentUser.financeAccess} currency={currency} currentUser={profileUser} />;
-    return <AgentPanel expanded onClose={() => setView("resumen")} currency={currency} />;
+    return <AgentPanel expanded onClose={() => navigate("resumen")} currency={currency} />;
   }
 
   if (!deviceSecurityReady) return <DeviceBootScreen />;
@@ -7379,21 +7429,58 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
         </div>
         <nav>
           <span className="nav-label">NAVEGACIÓN</span>
-          {availableNavItems.map((item) => (
-            <button
-              key={item.id}
-              className={view === item.id ? "active" : ""}
-              onClick={() => navigate(item.id)}
-            >
-              <i>{item.mark}</i><span>{item.label}</span>
-              {item.id === "fuentes" && <em>{activeProjectId === "araya"
-                ? currentUser.financeAccess
-                  ? dataSources.length
-                  : dataSources.filter((source) => !sourceRequiresFinance(source)).length
-                : 3}</em>}
-              {item.id === "metricas" && !currentUser.financeAccess && <em className="restricted">BLOQUEADO</em>}
-            </button>
-          ))}
+          {availableNavigationGroups.map((group) => {
+            const groupIsActive = navigationGroupContainsView(group, view);
+            const expandable = group.items.length > 0;
+            const expanded = expandable && expandedNavGroup === group.id;
+            if (!expandable && group.directView) {
+              return (
+                <div className="sidebar-nav-group" key={group.id}>
+                  <button
+                    type="button"
+                    className={`nav-group-trigger ${groupIsActive ? "active" : ""}`}
+                    onClick={() => navigate(group.directView as View)}
+                  >
+                    <i>{group.mark}</i><span>{group.label}</span>
+                  </button>
+                </div>
+              );
+            }
+            return (
+              <div className={`sidebar-nav-group ${groupIsActive ? "current" : ""}`} key={group.id}>
+                <button
+                  type="button"
+                  className={`nav-group-trigger ${expanded ? "expanded" : ""}`}
+                  aria-expanded={expanded}
+                  aria-controls={`desktop-nav-${group.id}`}
+                  onClick={() => setExpandedNavGroup((current) => current === group.id ? null : group.id)}
+                >
+                  <i>{group.mark}</i><span>{group.label}</span>
+                  <b className="nav-group-chevron" aria-hidden="true">⌄</b>
+                </button>
+                {expanded && (
+                  <div className="nav-group-children" id={`desktop-nav-${group.id}`}>
+                    {group.items.map((item, itemIndex) => (
+                      <button
+                        type="button"
+                        key={item.id}
+                        className={`nav-child ${view === item.id ? "active" : ""}`}
+                        onClick={() => navigate(item.id)}
+                      >
+                        <i>{String(itemIndex + 1).padStart(2, "0")}</i><span>{item.label}</span>
+                        {item.id === "fuentes" && <em>{activeProjectId === "araya"
+                          ? currentUser.financeAccess
+                            ? dataSources.length
+                            : dataSources.filter((source) => !sourceRequiresFinance(source)).length
+                          : 3}</em>}
+                        {item.id === "metricas" && !currentUser.financeAccess && <em className="restricted">BLOQUEADO</em>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
         <div className="sidebar-foot">
           <span><i className="live-dot" /> {activeProjectId === "araya" ? "Datos vivos conectados" : "Fuentes integradas"}</span>
@@ -7408,27 +7495,31 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       </aside>
 
       <nav className="mobile-bottom-nav" aria-label="Navegación principal móvil">
-        {mobilePrimaryNav.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={view === item.id ? "active" : ""}
-            aria-current={view === item.id ? "page" : undefined}
-            onClick={() => navigate(item.id)}
-          >
-            <i>{item.mark}</i>
-            <span>{item.label}</span>
-          </button>
-        ))}
-        <button
-          type="button"
-          className={mobileMenuOpen || !mobilePrimaryNav.some((item) => item.id === view) ? "active" : ""}
-          aria-expanded={mobileMenuOpen}
-          onClick={() => setMobileMenuOpen((open) => !open)}
-        >
-          <i>•••</i>
-          <span>Más</span>
-        </button>
+        {availableNavigationGroups.map((group) => {
+          const groupIsActive = activeNavigationGroup?.id === group.id;
+          const expandable = group.items.length > 0;
+          const submenuOpen = expandable && mobileMenuOpen && mobileNavigationGroup === group.id;
+          return (
+            <button
+              key={group.id}
+              type="button"
+              className={groupIsActive || submenuOpen ? "active" : ""}
+              aria-current={groupIsActive ? "page" : undefined}
+              aria-expanded={expandable ? submenuOpen : undefined}
+              onClick={() => {
+                if (group.directView) {
+                  navigate(group.directView);
+                  return;
+                }
+                setMobileNavigationGroup(group.id);
+                setMobileMenuOpen(true);
+              }}
+            >
+              <i>{group.mark}</i>
+              <span>{group.mobileLabel}</span>
+            </button>
+          );
+        })}
       </nav>
 
       <main className={`main-area ${agentOpen && view !== "agente" ? "with-agent" : ""}`}>
@@ -7464,11 +7555,11 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
                   key={`${result.view}-${result.label}`}
                   onClick={() => {
                     if (result.building) setSelectedBuilding(result.building);
-                    if (result.sourceId) {
-                      const source = dataSources.find((item) => item.id === result.sourceId);
-                      if (source) setWorkspaceDetail(sourceWorkspaceDetail(source));
-                    }
-                    setView(result.view);
+                    const source = result.sourceId
+                      ? dataSources.find((item) => item.id === result.sourceId)
+                      : undefined;
+                    navigate(result.view);
+                    if (source) setWorkspaceDetail(sourceWorkspaceDetail(source));
                     setSearch("");
                   }}
                 >
@@ -7521,6 +7612,30 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
               </div>
               <button type="button" onClick={() => setMobileMenuOpen(false)} aria-label="Cerrar menú">×</button>
             </div>
+            <div className="mobile-group-heading">
+              <i>{selectedMobileNavigationGroup.mark}</i>
+              <div><span>SECCIÓN</span><strong>{selectedMobileNavigationGroup.label}</strong></div>
+            </div>
+            <nav className="mobile-menu-links" aria-label={`Subsecciones de ${selectedMobileNavigationGroup.label}`}>
+              {selectedMobileNavigationGroup.items.map((item, itemIndex) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={view === item.id ? "active" : ""}
+                  onClick={() => navigate(item.id)}
+                >
+                  <i>{String(itemIndex + 1).padStart(2, "0")}</i>
+                  <span>{item.label}</span>
+                  {item.id === "metricas" && !currentUser.financeAccess && <em>Bloqueado</em>}
+                  {item.id === "fuentes" && <em className="mobile-data-count">{activeProjectId === "araya"
+                    ? currentUser.financeAccess
+                      ? dataSources.length
+                      : dataSources.filter((source) => !sourceRequiresFinance(source)).length
+                    : 3}</em>}
+                  <b>›</b>
+                </button>
+              ))}
+            </nav>
             <div className="mobile-project-switch">
               <span>Proyecto activo</span>
               <div>
@@ -7608,21 +7723,6 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
                 </button>
               )}
             </div>
-            <nav className="mobile-menu-links" aria-label="Todas las secciones">
-              {availableNavItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={view === item.id ? "active" : ""}
-                  onClick={() => navigate(item.id)}
-                >
-                  <i>{item.mark}</i>
-                  <span>{item.label}</span>
-                  {item.id === "metricas" && !currentUser.financeAccess && <em>Bloqueado</em>}
-                  <b>›</b>
-                </button>
-              ))}
-            </nav>
             <div className="mobile-account">
               <UserAvatar
                 user={profileUser}

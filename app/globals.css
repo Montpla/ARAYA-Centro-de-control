@@ -5963,6 +5963,68 @@ button.financial-detail-row:focus-visible {
   background: rgba(214, 198, 166, 0.1);
 }
 
+.sidebar-nav-group {
+  display: grid;
+}
+
+.sidebar nav .nav-group-trigger {
+  position: relative;
+}
+
+.sidebar-nav-group.current > .nav-group-trigger {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.sidebar-nav-group.current > .nav-group-trigger > i {
+  color: #e29a7e;
+}
+
+.sidebar nav button .nav-group-chevron {
+  width: 18px;
+  color: #787e8d;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1;
+  text-align: center;
+  transition: transform 160ms ease, color 160ms ease;
+}
+
+.sidebar nav .nav-group-trigger.expanded .nav-group-chevron {
+  color: #d8d9de;
+  transform: rotate(180deg);
+}
+
+.nav-group-children {
+  display: grid;
+  margin: 1px 0 6px;
+  padding: 2px 0 2px 13px;
+  border-left: 1px solid rgba(255, 255, 255, 0.11);
+}
+
+.sidebar nav .nav-child {
+  width: calc(100% - 5px);
+  min-height: 37px;
+  margin: 1px 0 1px 5px;
+  padding: 0 9px;
+  border-radius: 6px;
+}
+
+.sidebar nav .nav-child i {
+  width: 20px;
+  font-size: 8px;
+}
+
+.sidebar nav .nav-child span {
+  font-size: 10.5px;
+  font-weight: 560;
+}
+
+.sidebar nav .nav-child.active {
+  background: rgba(255, 255, 255, 0.085);
+  box-shadow: inset 2px 0 var(--orange);
+}
+
 .button {
   min-height: 40px;
   border-radius: 7px;
@@ -7506,9 +7568,56 @@ button.financial-detail-row:focus-visible {
     white-space: nowrap;
   }
 
+  .mobile-group-heading {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    margin-top: 18px;
+    padding: 12px 13px;
+    border: 1px solid rgba(185, 130, 108, 0.28);
+    border-radius: 9px 9px 0 0;
+    background: #fffefa;
+  }
+
+  .mobile-group-heading > i {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 7px;
+    color: #fff;
+    background: var(--ink);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-style: normal;
+    font-weight: 900;
+  }
+
+  .mobile-group-heading > div {
+    display: grid;
+    gap: 2px;
+  }
+
+  .mobile-group-heading span {
+    color: var(--orange);
+    font-size: 7px;
+    font-weight: 900;
+    letter-spacing: 0.13em;
+  }
+
+  .mobile-group-heading strong {
+    font-family: var(--font-editorial);
+    font-size: 19px;
+    font-weight: 600;
+  }
+
   .mobile-menu-links {
     display: grid;
-    border-top: 1px solid var(--line);
+    border: 1px solid var(--line);
+    border-top: 0;
+    border-radius: 0 0 9px 9px;
+    overflow: hidden;
   }
 
   .mobile-menu-links button {
@@ -7517,7 +7626,7 @@ button.financial-detail-row:focus-visible {
     grid-template-columns: 28px 1fr auto auto;
     align-items: center;
     gap: 8px;
-    padding: 0 8px;
+    padding: 0 10px;
     border: 0;
     border-bottom: 1px solid var(--line);
     color: var(--muted);
@@ -7553,6 +7662,11 @@ button.financial-detail-row:focus-visible {
     font-style: normal;
     font-weight: 900;
     text-transform: uppercase;
+  }
+
+  .mobile-menu-links em.mobile-data-count {
+    color: #5e614f;
+    background: #ece9df;
   }
 
   .mobile-menu-links b {
