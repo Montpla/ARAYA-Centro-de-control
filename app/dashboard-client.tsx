@@ -1137,6 +1137,7 @@ async function uploadProjectFile(
   formData.set("section", input.section ?? "");
   formData.set("source", input.source);
   formData.set("sourceCurrency", input.sourceCurrency ?? "auto");
+  formData.set("autoPublish", "true");
   const response = await fetch("/api/files", { method: "POST", body: formData });
   const result = (await response.json()) as UploadResult;
   if (!response.ok) throw new Error(result.error ?? "No se pudo cargar el archivo.");
@@ -1686,19 +1687,8 @@ function WorkspaceDetailPanel({
   );
 }
 
-const inlineFileExtensions = new Set([
-  "pdf",
-  "png",
-  "jpg",
-  "jpeg",
-  "webp",
-  "gif",
-  "txt",
-  "csv",
-  "json",
-  "xml",
-  "md",
-]);
+const imageFileExtensions = new Set(["png", "jpg", "jpeg", "webp", "gif"]);
+const textFileExtensions = new Set(["txt", "csv", "json", "xml", "md"]);
 
 function fileExtension(title: string, url: string) {
   const candidate = `${title} ${url.split("?")[0]}`;
@@ -1730,19 +1720,201 @@ function fileDeliveryUrl(url: string, mode: "preview" | "download") {
   return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
-function FileViewer({ file, onClose }: { file: FileViewerState; onClose: () => void }) {
-  const extension = fileExtension(file.title, file.url);
-  const canPreview = inlineFileExtensions.has(extension);
-  const previewUrl = fileDeliveryUrl(file.url, "preview");
-  const downloadUrl = fileDeliveryUrl(file.url, "download");
+type PdfViewport = { width: number; height: number };
+type PdfRenderTask = { promise: Promise<void>; cancel: () => void };
+type PdfPageHandle = {
+  getViewport: (options: { scale: number }) => PdfViewport;
+  render: (options: {
+    canvas: HTMLCanvasElement;
+    canvasContext: CanvasRenderingContext2D;
+    viewport: PdfViewport;
+  }) => PdfRenderTask;
+};
+type PdfDocumentHandle = {
+  numPages: number;
+  getPage: (pageNumber: number) => Promise<PdfPageHandle>;
+  destroy: () => Promise<void>;
+};
+type PdfLoadingTask = {
+  promise: Promise<PdfDocumentHandle>;
+  destroy?: () => Promise<void>;
+};
+
+function PdfDocumentPreview({ url, title }: { url: string; title: string }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [documentHandle, setDocumentHandle] = useState<PdfDocumentHandle | null>(null);
+  const [pageNumber, setPageNumber] = useState(1);
+  const [zoom, setZoom] = useState(1);
+  const [renderWidth, setRenderWidth] = useState(0);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+    const container = containerRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver((entries) => {
+      const width = Math.round(entries[0]?.contentRect.width ?? 0);
+      setRenderWidth((current) => current === width ? current : width);
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const abortController = new AbortController();
+    let disposed = false;
+    let loadingTask: PdfLoadingTask | null = null;
+    void (async () => {
+      try {
+        const response = await fetch(url, { credentials: "same-origin", cache: "no-store", signal: abortController.signal });
+        if (!response.ok) throw new Error(`No se pudo cargar el PDF (${response.status}).`);
+        const bytes = await response.arrayBuffer();
+        const [pdfjs, workerModule] = await Promise.all([
+          import("pdfjs-dist"),
+          import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
+        ]);
+        pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
+        const task = pdfjs.getDocument({ data: bytes }) as unknown as PdfLoadingTask;
+        loadingTask = task;
+        const loadedDocument = await task.promise;
+        if (disposed) {
+          await loadedDocument.destroy();
+          return;
+        }
+        setDocumentHandle(loadedDocument);
+        setStatus("ready");
+      } catch (loadError) {
+        if (disposed || abortController.signal.aborted) return;
+        setStatus("error");
+        setError(loadError instanceof Error ? loadError.message : "El PDF no se pudo mostrar.");
+      }
+    })();
+    return () => {
+      disposed = true;
+      abortController.abort();
+      void loadingTask?.destroy?.();
     };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [url]);
+
+  useEffect(() => {
+    if (!documentHandle || !canvasRef.current || !containerRef.current || status !== "ready") return;
+    let cancelled = false;
+    let renderTask: PdfRenderTask | null = null;
+    void (async () => {
+      try {
+        const page = await documentHandle.getPage(pageNumber);
+        if (cancelled || !canvasRef.current || !containerRef.current) return;
+        const baseViewport = page.getViewport({ scale: 1 });
+        const availableWidth = Math.max(280, (renderWidth || containerRef.current.clientWidth) - 32);
+        const cssScale = Math.max(0.45, Math.min(1.8, availableWidth / baseViewport.width)) * zoom;
+        const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+        const viewport = page.getViewport({ scale: cssScale * pixelRatio });
+        const canvas = canvasRef.current;
+        const context = canvas.getContext("2d", { alpha: false });
+        if (!context) throw new Error("El dispositivo no permite dibujar el PDF.");
+        canvas.width = Math.max(1, Math.floor(viewport.width));
+        canvas.height = Math.max(1, Math.floor(viewport.height));
+        canvas.style.width = `${Math.floor(viewport.width / pixelRatio)}px`;
+        canvas.style.height = `${Math.floor(viewport.height / pixelRatio)}px`;
+        renderTask = page.render({ canvas, canvasContext: context, viewport });
+        await renderTask.promise;
+      } catch (renderError) {
+        if (cancelled || (renderError instanceof Error && renderError.name === "RenderingCancelledException")) return;
+        setStatus("error");
+        setError(renderError instanceof Error ? renderError.message : "No se pudo dibujar esta página.");
+      }
+    })();
+    return () => {
+      cancelled = true;
+      renderTask?.cancel();
+    };
+  }, [documentHandle, pageNumber, renderWidth, status, zoom]);
+
+  return (
+    <div className="pdf-document-viewer" ref={containerRef}>
+      {status === "loading" && <div className="file-preview-state"><i /><strong>Preparando PDF…</strong><span>El documento se abrirá aquí, sin descargarlo.</span></div>}
+      {status === "error" && <div className="file-preview-state error"><strong>No se pudo representar el PDF</strong><span>{error}</span><small>El visor permanece abierto; puedes cerrarlo o descargar una copia desde la barra superior.</small></div>}
+      {status === "ready" && documentHandle && (
+        <>
+          <div className="pdf-page-stage"><canvas ref={canvasRef} aria-label={`Página ${pageNumber} de ${title}`} /></div>
+          <div className="pdf-viewer-controls" role="group" aria-label="Controles del PDF">
+            <button type="button" disabled={pageNumber <= 1} onClick={() => setPageNumber((current) => Math.max(1, current - 1))}>‹</button>
+            <span>Página <strong>{pageNumber}</strong> de {documentHandle.numPages}</span>
+            <button type="button" disabled={pageNumber >= documentHandle.numPages} onClick={() => setPageNumber((current) => Math.min(documentHandle.numPages, current + 1))}>›</button>
+            <button type="button" onClick={() => setZoom((current) => Math.max(0.75, Number((current - 0.25).toFixed(2))))} aria-label="Reducir PDF">−</button>
+            <button type="button" onClick={() => setZoom((current) => Math.min(2.5, Number((current + 0.25).toFixed(2))))} aria-label="Ampliar PDF">＋</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function TextDocumentPreview({ url }: { url: string }) {
+  const [text, setText] = useState("");
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  useEffect(() => {
+    const abortController = new AbortController();
+    void fetch(url, { credentials: "same-origin", cache: "no-store", signal: abortController.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`No se pudo cargar el texto (${response.status}).`);
+        return response.text();
+      })
+      .then((content) => {
+        setText(content.length > 500_000 ? `${content.slice(0, 500_000)}\n\n… vista previa limitada a 500.000 caracteres.` : content);
+        setStatus("ready");
+      })
+      .catch((loadError) => {
+        if (abortController.signal.aborted) return;
+        setText(loadError instanceof Error ? loadError.message : "No se pudo mostrar el archivo.");
+        setStatus("error");
+      });
+    return () => abortController.abort();
+  }, [url]);
+  if (status === "loading") return <div className="file-preview-state"><i /><strong>Abriendo documento…</strong></div>;
+  return <pre className={`text-document-preview ${status === "error" ? "error" : ""}`}>{text}</pre>;
+}
+
+function ImageDocumentPreview({ url, title }: { url: string; title: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <div className="file-preview-state error"><strong>No se pudo mostrar la imagen</strong><span>Puedes cerrar el visor o descargar una copia desde la barra superior.</span></div>;
+  return <div className="image-document-preview"><img src={url} alt={title} onError={() => setFailed(true)} /></div>;
+}
+
+function FileViewer({ file, onClose }: { file: FileViewerState; onClose: () => void }) {
+  const extension = fileExtension(file.title, file.url);
+  const previewUrl = fileDeliveryUrl(file.url, "preview");
+  const downloadUrl = fileDeliveryUrl(file.url, "download");
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
   }, [onClose]);
+
+  const requestClose = useCallback(() => {
+    if (window.history.state?.bricketFileViewer === file.url) {
+      window.history.back();
+      return;
+    }
+    onCloseRef.current();
+  }, [file.url]);
+
+  useEffect(() => {
+    if (window.history.state?.bricketFileViewer !== file.url) {
+      window.history.pushState({ ...(window.history.state ?? {}), bricketFileViewer: file.url }, "");
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") requestClose();
+    };
+    const closeOnBack = () => onCloseRef.current();
+    window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("popstate", closeOnBack);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("popstate", closeOnBack);
+    };
+  }, [file.url, requestClose]);
 
   return (
     <section className="file-viewer-overlay" role="dialog" aria-modal="true" aria-label={`Archivo ${file.title}`}>
@@ -1753,15 +1925,6 @@ function FileViewer({ file, onClose }: { file: FileViewerState; onClose: () => v
         </div>
         <div className="file-viewer-actions">
           <a
-            className="button secondary file-viewer-open-external"
-            href={previewUrl}
-            target="_blank"
-            rel="noreferrer"
-            data-file-viewer-bypass="true"
-          >
-            Abrir aparte
-          </a>
-          <a
             className="button secondary"
             href={downloadUrl}
             download
@@ -1769,32 +1932,27 @@ function FileViewer({ file, onClose }: { file: FileViewerState; onClose: () => v
           >
             Descargar
           </a>
-          <button className="file-viewer-close" type="button" onClick={onClose} aria-label="Cerrar archivo">
+          <button className="file-viewer-close" type="button" onClick={requestClose} aria-label="Cerrar archivo">
             <i aria-hidden="true">×</i>
             <span>Cerrar</span>
           </button>
         </div>
       </header>
       <div className="file-viewer-body">
-        {canPreview ? (
-          <iframe className="file-viewer-frame" src={previewUrl} title={file.title} />
+        {extension === "pdf" ? (
+          <PdfDocumentPreview key={previewUrl} url={previewUrl} title={file.title} />
+        ) : imageFileExtensions.has(extension) ? (
+          <ImageDocumentPreview url={previewUrl} title={file.title} />
+        ) : textFileExtensions.has(extension) ? (
+          <TextDocumentPreview url={previewUrl} />
         ) : (
           <div className="file-viewer-unavailable">
             <span>{extension ? extension.toUpperCase() : "ARCHIVO"}</span>
-            <h2>Abrir con el visor del dispositivo</h2>
-            <p>Este formato necesita el visor compatible del móvil, tablet u ordenador. Puedes abrirlo directamente; la descarga queda como opción independiente.</p>
+            <h2>Archivo abierto en Bricket Control</h2>
+            <p>El original está cargado y protegido. Este formato no dispone de representación gráfica fiable dentro del navegador, por lo que no se abrirá otra pestaña ni se iniciará una descarga automática.</p>
             <div className="file-viewer-unavailable-actions">
               <a
                 className="button primary"
-                href={previewUrl}
-                target="_blank"
-                rel="noreferrer"
-                data-file-viewer-bypass="true"
-              >
-                Abrir {extension ? extension.toUpperCase() : "documento"}
-              </a>
-              <a
-                className="button secondary"
                 href={downloadUrl}
                 download
                 data-file-viewer-bypass="true"
@@ -1802,7 +1960,7 @@ function FileViewer({ file, onClose }: { file: FileViewerState; onClose: () => v
                 Descargar copia
               </a>
             </div>
-            <small>Si el dispositivo no reconoce el formato, te permitirá elegir una aplicación compatible sin cerrar Bricket Control.</small>
+            <small>La descarga sólo comienza si pulsas expresamente el botón. La X y el botón Atrás cierran siempre esta vista.</small>
           </div>
         )}
       </div>
@@ -3251,7 +3409,7 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
           <article className="panel ifc-compliance-panel">
             <div className="panel-heading">
               <div><span className="section-kicker">PRÉSTAMO IFC · ANÁLISIS 29/07/2026</span><h3>Matriz operativa de obligaciones</h3></div>
-              <a className="button secondary" href="/data-center/julio-2026/informe-analisis-ifc-2026-07-29.pdf" target="_blank" rel="noreferrer">Abrir informe</a>
+              <a className="button secondary" href="/data-center/julio-2026/informe-analisis-ifc-2026-07-29.pdf">Abrir informe</a>
             </div>
             <div className="ifc-compliance-grid">
               {ifcComplianceGroups.map((group) => (
@@ -3427,7 +3585,7 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
             <span className="section-kicker">MAESTRO DE PROVEEDORES · 30/07/2026</span>
             <h3>Directorio operativo verificado</h3>
           </div>
-          <a className="button secondary" href="/data-center/julio-2026/contactos-proveedores-araya.xls" target="_blank" rel="noreferrer">Abrir archivo fuente</a>
+          <a className="button secondary" href="/data-center/julio-2026/contactos-proveedores-araya.xls">Abrir archivo fuente</a>
         </div>
         <div className="payable-supplier-toolbar">
           <label>
@@ -3761,11 +3919,11 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
                   </div>
                   <div className="payable-document-actions">
                     {selectedInvoice.documentUrl ? (
-                      <a className="button primary" href={selectedInvoice.documentUrl} target="_blank" rel="noreferrer">Abrir factura</a>
+                      <a className="button primary" href={selectedInvoice.documentUrl}>Abrir factura</a>
                     ) : (
                       <span className="button disabled" aria-disabled="true">Factura no adjunta</span>
                     )}
-                    <a className="button secondary" href={payables.sourceUrl} target="_blank" rel="noreferrer">Abrir archivo fuente</a>
+                    <a className="button secondary" href={payables.sourceUrl}>Abrir archivo fuente</a>
                   </div>
                 </div>
               </div>
@@ -3867,7 +4025,7 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
           <article className="panel">
             <div className="panel-heading">
               <div><span className="section-kicker">FASE I · CORTE 30/06/2026</span><h3>Flujo de obra real y reprogramado</h3></div>
-              <a className="button secondary" href="/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx" target="_blank" rel="noreferrer">Abrir Excel</a>
+              <a className="button secondary" href="/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx">Abrir Excel</a>
             </div>
             <div className="budget-summary-grid compact work-flow-summary">
               <span><small>Alcance total</small><strong>{rd(reprogrammedFlowAudit.reprogrammedTotalDop)}</strong></span>
@@ -3980,7 +4138,7 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
           <article className="panel">
             <div className="panel-heading">
               <div><span className="section-kicker">EDIFICIO TIPO A · 209 HOJAS VERIFICADAS</span><h3>Presupuesto original frente a actualización</h3></div>
-              <a className="button secondary" href="/data-center/julio-2026/comparativo-presupuesto-edificio-tipo-a.xls" target="_blank" rel="noreferrer">Abrir presupuesto</a>
+              <a className="button secondary" href="/data-center/julio-2026/comparativo-presupuesto-edificio-tipo-a.xls">Abrir presupuesto</a>
             </div>
             <div className="budget-summary-grid">
               <span><small>Original por edificio</small><strong>{rd(typeABudgetSummary.originalPerBuildingDop)}</strong></span>
@@ -4010,7 +4168,7 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
           <article className="panel">
             <div className="panel-heading">
               <div><span className="section-kicker">DESVIACIÓN MENSUAL · JUNIO 2026</span><h3>Impacto por partida y alcance real</h3></div>
-              <a className="button secondary" href="/data-center/julio-2026/desviacion-mensual-junio-2026.xlsx" target="_blank" rel="noreferrer">Abrir desviaciones</a>
+              <a className="button secondary" href="/data-center/julio-2026/desviacion-mensual-junio-2026.xlsx">Abrir desviaciones</a>
             </div>
             <div className="budget-summary-grid compact">
               <span><small>Actualizado por edificio</small><strong>{rd(juneDeviationSummary.updatedPerBuildingDop)}</strong></span>
@@ -4128,10 +4286,10 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
             </div>
             <p className="section-copy">Esta pestaña conserva la contabilidad emitida por la Fiduciaria separada del control interno de presupuesto, costes, caja y obligaciones operativas.</p>
             <div className="source-actions fiduciary-doc-actions">
-              <a className="button secondary" href="/data-center/junio-2026/fideicomiso/balance-comprobacion-junio-2026.pdf" target="_blank" rel="noreferrer">Balance de comprobación</a>
-              <a className="button secondary" href="/data-center/junio-2026/fideicomiso/balance-general-junio-2026.pdf" target="_blank" rel="noreferrer">Balance general</a>
-              <a className="button secondary" href="/data-center/junio-2026/fideicomiso/estado-resultados-acumulado-junio-2026.pdf" target="_blank" rel="noreferrer">Resultados acumulados</a>
-              <a className="button secondary" href="/data-center/junio-2026/fideicomiso/estado-resultados-junio-2026.pdf" target="_blank" rel="noreferrer">Resultados de junio</a>
+              <a className="button secondary" href="/data-center/junio-2026/fideicomiso/balance-comprobacion-junio-2026.pdf">Balance de comprobación</a>
+              <a className="button secondary" href="/data-center/junio-2026/fideicomiso/balance-general-junio-2026.pdf">Balance general</a>
+              <a className="button secondary" href="/data-center/junio-2026/fideicomiso/estado-resultados-acumulado-junio-2026.pdf">Resultados acumulados</a>
+              <a className="button secondary" href="/data-center/junio-2026/fideicomiso/estado-resultados-junio-2026.pdf">Resultados de junio</a>
             </div>
             <div className="balance-equation fiduciary-equation">
               <span>Activos<strong>{rd(fiduciaryStatementSummary.balance.assetsDop)}</strong></span>
@@ -5162,6 +5320,59 @@ function FileReviewPanel({
   );
 }
 
+const uploadArchiveMonthNames = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
+function uploadArchivePeriod(createdAt: string) {
+  const match = createdAt.match(/^(\d{4})-(\d{2})/);
+  const monthNumber = match ? Number(match[2]) : 0;
+  if (!match || monthNumber < 1 || monthNumber > 12) {
+    return {
+      yearKey: "sin-fecha",
+      yearLabel: "Sin fecha",
+      monthKey: "sin-fecha",
+      monthLabel: "Fecha pendiente",
+      sortValue: 0,
+    };
+  }
+  return {
+    yearKey: match[1],
+    yearLabel: match[1],
+    monthKey: `${match[1]}-${match[2]}`,
+    monthLabel: uploadArchiveMonthNames[monthNumber - 1],
+    sortValue: Number(`${match[1]}${match[2]}`),
+  };
+}
+
+function ArchiveDisclosure({
+  children,
+  className,
+  initialOpen,
+}: {
+  children: ReactNode;
+  className: string;
+  initialOpen: boolean;
+}) {
+  const [open, setOpen] = useState(initialOpen);
+  return (
+    <details className={className} open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
+      {children}
+    </details>
+  );
+}
+
 function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser }) {
   const [files, setFiles] = useState<UploadedFileRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -5203,12 +5414,50 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
   const averageProgress = files.length
     ? Math.round(files.reduce((total, file) => total + file.processingProgress, 0) / files.length)
     : 0;
-  const visibleFiles = files.filter((file) => {
+  const visibleFiles = useMemo(() => files.filter((file) => {
     if (filter === "pending") return file.requiresReview;
     if (filter === "integrated") return file.status === "integrado";
     if (filter === "observed") return file.status === "observado" || file.status === "rechazado";
     return true;
-  });
+  }), [files, filter]);
+  const archivedFiles = useMemo(() => {
+    const years = new Map<string, {
+      key: string;
+      label: string;
+      sortValue: number;
+      months: Map<string, { key: string; label: string; sortValue: number; files: UploadedFileRecord[] }>;
+    }>();
+    for (const file of visibleFiles) {
+      const period = uploadArchivePeriod(file.createdAt);
+      let year = years.get(period.yearKey);
+      if (!year) {
+        year = {
+          key: period.yearKey,
+          label: period.yearLabel,
+          sortValue: period.sortValue,
+          months: new Map(),
+        };
+        years.set(period.yearKey, year);
+      }
+      let month = year.months.get(period.monthKey);
+      if (!month) {
+        month = {
+          key: period.monthKey,
+          label: period.monthLabel,
+          sortValue: period.sortValue,
+          files: [],
+        };
+        year.months.set(period.monthKey, month);
+      }
+      month.files.push(file);
+    }
+    return [...years.values()]
+      .sort((left, right) => right.sortValue - left.sortValue)
+      .map((year) => ({
+        ...year,
+        months: [...year.months.values()].sort((left, right) => right.sortValue - left.sortValue),
+      }));
+  }, [visibleFiles]);
 
   return (
     <>
@@ -5246,41 +5495,64 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
       ) : visibleFiles.length === 0 ? (
         <div className="empty-state compact"><strong>No hay expedientes en este estado.</strong><p>Cambia el filtro para consultar el resto del registro.</p></div>
       ) : (
-        <div className="uploaded-file-list">
-          {visibleFiles.map((file) => (
-            <article key={file.id}>
-              <div className="uploaded-file-icon">{file.extension.toUpperCase()}</div>
-              <div className="uploaded-file-main">
-                <strong>{file.originalName}</strong>
-                <span>{file.areaLabel} · {fileSize(file.sizeBytes)} · v{file.version}</span>
-                <small>{documentTypeLabels[file.documentType] ?? file.documentType} · periodo {file.detectedPeriod || file.declaredCutoff || "pendiente"} · moneda {file.sourceCurrency}</small>
-                <small>{file.classificationReason}</small>
-                <div className="file-processing-track">
-                  <span>
-                    {processingStageLabels[file.processingStage] ?? file.processingStage}
-                    <strong>{file.processingProgress}%</strong>
-                  </span>
-                  <i><b style={{ width: `${file.processingProgress}%` }} /></i>
-                  <small>{file.processingSummary}</small>
+        <div className="document-archive">
+          {archivedFiles.map((year, yearIndex) => {
+            const yearCount = year.months.reduce((total, month) => total + month.files.length, 0);
+            return (
+              <ArchiveDisclosure className="archive-year" key={year.key} initialOpen={yearIndex === 0}>
+                <summary>
+                  <span><strong>{year.label}</strong><small>Archivos subidos</small></span>
+                  <em>{yearCount}</em>
+                </summary>
+                <div className="archive-months">
+                  {year.months.map((month, monthIndex) => (
+                    <ArchiveDisclosure className="archive-month" key={month.key} initialOpen={yearIndex === 0 && monthIndex === 0}>
+                      <summary>
+                        <span><strong>{month.label}</strong><small>{month.files.length === 1 ? "1 archivo" : `${month.files.length} archivos`}</small></span>
+                        <em>{month.files.length}</em>
+                      </summary>
+                      <div className="uploaded-file-list">
+                        {month.files.map((file) => (
+                          <article key={file.id}>
+                            <div className="uploaded-file-icon">{file.extension.toUpperCase()}</div>
+                            <div className="uploaded-file-main">
+                              <strong>{file.originalName}</strong>
+                              <span>{file.areaLabel} · {fileSize(file.sizeBytes)} · v{file.version}</span>
+                              <small>{documentTypeLabels[file.documentType] ?? file.documentType} · periodo {file.detectedPeriod || file.declaredCutoff || "pendiente"} · moneda {file.sourceCurrency}</small>
+                              <small>{file.classificationReason}</small>
+                              <div className="file-processing-track">
+                                <span>
+                                  {processingStageLabels[file.processingStage] ?? file.processingStage}
+                                  <strong>{file.processingProgress}%</strong>
+                                </span>
+                                <i><b style={{ width: `${file.processingProgress}%` }} /></i>
+                                <small>{file.processingSummary}</small>
+                              </div>
+                            </div>
+                            <div className="uploaded-file-owner">
+                              <strong>{file.uploaderName}</strong>
+                              <span>{new Date(file.createdAt).toLocaleString("es-DO", { dateStyle: "short", timeStyle: "short" })}</span>
+                            </div>
+                            <div className="uploaded-file-state">
+                              <span className={`upload-status ${file.status}`}>{uploadStatusLabels[file.status] ?? file.status}</span>
+                              <small>{reviewStatusLabels[file.reviewStatus] ?? file.reviewStatus}</small>
+                              {file.discrepancyCount > 0 && <em>{file.discrepancyCount} discrepancias</em>}
+                            </div>
+                            <div className="uploaded-file-actions">
+                              <button type="button" className="button primary" onClick={() => setSelectedFile(file)}>
+                                {currentUser.role === "admin" && file.requiresReview ? "Revisar" : "Abrir expediente"}
+                              </button>
+                              <a className="button secondary" href={file.downloadUrl} data-file-title={file.originalName}>Abrir original</a>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    </ArchiveDisclosure>
+                  ))}
                 </div>
-              </div>
-              <div className="uploaded-file-owner">
-                <strong>{file.uploaderName}</strong>
-                <span>{new Date(file.createdAt).toLocaleString("es-DO", { dateStyle: "short", timeStyle: "short" })}</span>
-              </div>
-              <div className="uploaded-file-state">
-                <span className={`upload-status ${file.status}`}>{uploadStatusLabels[file.status] ?? file.status}</span>
-                <small>{reviewStatusLabels[file.reviewStatus] ?? file.reviewStatus}</small>
-                {file.discrepancyCount > 0 && <em>{file.discrepancyCount} discrepancias</em>}
-              </div>
-              <div className="uploaded-file-actions">
-                <button type="button" className="button primary" onClick={() => setSelectedFile(file)}>
-                  {currentUser.role === "admin" && file.requiresReview ? "Revisar" : "Abrir expediente"}
-                </button>
-                <a className="button secondary" href={file.downloadUrl} data-file-title={file.originalName}>Original</a>
-              </div>
-            </article>
-          ))}
+              </ArchiveDisclosure>
+            );
+          })}
         </div>
       )}
     </section>
@@ -5465,15 +5737,13 @@ function SourcesView({
           <span className="live-state"><span className="live-dot" /> Actualización cada 5 s</span>
         </div>
         <div className="ingestion-steps definitive">
-          <div><b>01</b><strong>Recepción</strong><span>El original se guarda sin modificar.</span></div>
-          <div><b>02</b><strong>Identificación</strong><span>Proyecto, área, tipo, periodo y moneda.</span></div>
-          <div><b>03</b><strong>Extracción</strong><span>Importador automático o lectura asistida.</span></div>
-          <div><b>04</b><strong>Contraste</strong><span>Compara con el valor vivo y detecta discrepancias.</span></div>
-          <div><b>05</b><strong>Validación</strong><span>El responsable aprueba, observa o rechaza.</span></div>
-          <div><b>06</b><strong>Publicación</strong><span>Crea una revisión auditable sin borrar la anterior.</span></div>
-          <div><b>07</b><strong>Sincronización</strong><span>Todas las pantallas reciben la revisión en menos de 5 s.</span></div>
+          <div><b>01</b><strong>Subida</strong><span>Un archivo y un botón; el original se conserva.</span></div>
+          <div><b>02</b><strong>Detección</strong><span>Área, tipo, periodo y moneda se identifican automáticamente.</span></div>
+          <div><b>03</b><strong>Lectura</strong><span>Los formatos estructurados compatibles generan cambios fiables.</span></div>
+          <div><b>04</b><strong>Actualización</strong><span>Los datos válidos se publican; lo ambiguo queda pendiente de revisión.</span></div>
+          <div><b>05</b><strong>Sincronización</strong><span>Cifras, barras y gráficas reciben la revisión en menos de 5 s.</span></div>
         </div>
-        <p className="governance-note">La identificación y el refresco son procesos del Centro de Control y no consumen tokens. El agente se usa sólo cuando hace falta interpretar un documento; finanzas, avance, cronograma y plano nunca se publican sin una validación humana trazable.</p>
+        <p className="governance-note">La carga, clasificación y sincronización son procesos del Centro de Control y no consumen tokens. Las plantillas CSV y JSON con claves vivas, valores simples, periodo y área coherentes pueden publicarse automáticamente cuando las carga un administrador. Las cargas del personal y los demás formatos se guardan y catalogan de inmediato; sólo modifican indicadores tras una interpretación validada, para no inventar cifras.</p>
       </section>
       <section className="panel data-authority-panel">
         <div className="panel-heading">
@@ -5511,7 +5781,12 @@ function SourcesView({
       </section>
       <CollaborativeFileRegistry currentUser={currentUser} />
       <DataHistoryPanel />
-      <section className="source-grid">
+      <details className="panel integrated-source-archive">
+        <summary>
+          <span><strong>Archivo histórico integrado</strong><small>Fuentes anteriores conservadas con su ficha y conexiones</small></span>
+          <em>{visibleSources.length}</em>
+        </summary>
+        <section className="source-grid">
         {visibleSources.map((source) => {
           const governance = sourceGovernance[source.id];
           return (
@@ -5551,7 +5826,8 @@ function SourcesView({
             </article>
           );
         })}
-      </section>
+        </section>
+      </details>
       <section className="panel">
         <div className="panel-heading">
           <div><span className="section-kicker">CRITERIOS DE GOBIERNO DEL DATO</span><h3>Cómo se interpreta este corte</h3></div>
@@ -5577,15 +5853,13 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
     {
       id: "welcome",
       role: "assistant",
-      text: "Buenos días. Puedo consultar la versión viva y recibir archivos. Al cargar uno, el sistema identifica área, tipo, periodo y moneda; después lo envía a extracción y validación. Ningún cambio operativo o financiero se publica sin aprobación. Los importes se responden en USD por defecto y, si la fuente no indica moneda, se registra DOP.",
+      text: "Buenos días. Puedo consultar la versión viva y recibir archivos. Sólo tienes que adjuntar uno: el sistema identifica área, tipo, periodo y moneda. Las plantillas estructuradas verificadas que carga un administrador actualizan el dashboard; las cargas del resto del personal y los demás formatos quedan guardadas para interpretación segura. Los importes se responden en USD por defecto y, si la fuente no indica moneda, se registra DOP.",
       mode: "source-data-engine",
     },
   ]);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
-  const [attachmentArea, setAttachmentArea] = useState<UploadArea>("auto");
-  const [attachmentCurrency, setAttachmentCurrency] = useState<CurrencyCode | "auto">("auto");
   const [uploading, setUploading] = useState(false);
 
   async function ask(text: string) {
@@ -5635,11 +5909,11 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
     setUploading(true);
     try {
       const result = await uploadProjectFile(pendingFile, {
-        area: attachmentArea,
+        area: "auto",
         description: "Archivo cargado mediante ARAYA Asistente.",
         section: "Agente IA",
         source: "agent",
-        sourceCurrency: attachmentCurrency,
+        sourceCurrency: "auto",
       });
       setMessages((current) => [
         ...current,
@@ -5651,8 +5925,6 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
         },
       ]);
       setAttachment(null);
-      setAttachmentArea("auto");
-      setAttachmentCurrency("auto");
     } catch (uploadError) {
       setMessages((current) => [
         ...current,
@@ -5721,15 +5993,8 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
           <div className="agent-attachment-ready">
             <strong>{attachment.name}</strong>
             <small>{fileSize(attachment.size)}</small>
-            <select value={attachmentArea} onChange={(event) => setAttachmentArea(event.target.value as UploadArea)}>
-              {uploadAreas.map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
-            </select>
-            <select value={attachmentCurrency} onChange={(event) => setAttachmentCurrency(event.target.value as CurrencyCode | "auto")}>
-              <option value="auto">Moneda automática · sin indicar = DOP</option>
-              <option value="DOP">Origen DOP · peso dominicano</option>
-              <option value="USD">Origen USD · dólar estadounidense</option>
-            </select>
-            <button type="button" onClick={() => void sendAttachment()} disabled={uploading}>Registrar archivo</button>
+            <span>Área, periodo y moneda se detectan automáticamente.</span>
+            <button type="button" onClick={() => void sendAttachment()} disabled={uploading}>{uploading ? "Procesando…" : "Subir y procesar"}</button>
           </div>
         )}
       </div>
@@ -5737,7 +6002,7 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
         <textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Pregunta por cualquier dato del corte…" rows={2} />
         <button type="submit" disabled={loading || !question.trim()} aria-label="Enviar pregunta">↑</button>
       </form>
-      <div className="agent-foot">Cada respuesta consulta la versión viva. El agente prepara y explica; la bandeja de validación controla qué cambios llegan a producción.</div>
+      <div className="agent-foot">Cada respuesta consulta la versión viva. Los datos estructurados fiables se sincronizan; cualquier lectura ambigua queda visible para revisión.</div>
     </aside>
   );
 }
@@ -6163,10 +6428,10 @@ function UploadModal({
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
       <form className="modal upload-modal" role="dialog" aria-modal="true" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <div className="panel-heading">
-          <div><span className="section-kicker">CENTRO DE DATOS · CARGA SEGURA</span><h3>Añadir archivo al proyecto ARAYA</h3></div>
+          <div><span className="section-kicker">CENTRO DE DATOS · CARGA AUTOMÁTICA</span><h3>Subir archivo al proyecto ARAYA</h3></div>
           <button className="close-button" type="button" onClick={onClose} aria-label="Cerrar">×</button>
         </div>
-        <p className="upload-intro">El original se conserva sin modificar. El sistema registra tu identidad, detecta duplicados e identifica área, tipo, periodo y moneda. Después abre un expediente de extracción y validación: ningún dato cambia hasta que un responsable lo aprueba.</p>
+        <p className="upload-intro">Selecciona el archivo y pulsa <strong>Subir y procesar</strong>. El sistema conserva el original, registra tu identidad y detecta automáticamente el área, el periodo y la moneda. Las plantillas estructuradas verificadas cargadas por un administrador actualizan cifras y gráficas; el resto queda claramente señalado para revisión.</p>
         <div className={`upload-dropzone ${previewUrl ? "with-preview" : ""}`}>
           <input
             type="file"
@@ -6198,36 +6463,42 @@ function UploadModal({
           <small>Ideal para avance de obra, incidencias, albaranes y evidencias de campo.</small>
         </div>
         {!online && <div className="callout warn"><strong>Modo sin conexión</strong><p>Puedes consultar datos, pero las nuevas cargas se reactivarán cuando vuelva internet.</p></div>}
-        <div className="form-grid">
-          <label>
-            Área de destino
-            <select value={area} onChange={(event) => setArea(event.target.value as UploadArea)}>
-              {uploadAreas
-                .filter((option) => canAccessFinance || option.id !== "finanzas")
-                .map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-            </select>
-          </label>
-          <label>
-            Fecha de corte declarada
-            <input value={declaredCutoff} onChange={(event) => setDeclaredCutoff(event.target.value)} placeholder="Ej. 30/06/2026" />
-          </label>
-          <label>
-            Moneda de origen
-            <select value={sourceCurrency} onChange={(event) => setSourceCurrency(event.target.value as CurrencyCode | "auto")}>
-              <option value="auto">Automática · sin indicar = DOP</option>
-              <option value="DOP">DOP · peso dominicano</option>
-              <option value="USD">USD · dólar estadounidense</option>
-            </select>
-          </label>
-          <label className="wide-field">
-            Descripción o instrucciones para el agente
-            <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder="Qué contiene, qué periodo sustituye o con qué archivo debe conciliarse…" />
-          </label>
-        </div>
+        <details className="upload-advanced-options">
+          <summary>
+            <span><strong>Opciones avanzadas</strong><small>Normalmente no necesitas rellenarlas</small></span>
+            <em>Opcional</em>
+          </summary>
+          <div className="form-grid">
+            <label>
+              Área de destino
+              <select value={area} onChange={(event) => setArea(event.target.value as UploadArea)}>
+                {uploadAreas
+                  .filter((option) => canAccessFinance || option.id !== "finanzas")
+                  .map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+              </select>
+            </label>
+            <label>
+              Fecha de corte declarada
+              <input value={declaredCutoff} onChange={(event) => setDeclaredCutoff(event.target.value)} placeholder="Ej. 30/06/2026" />
+            </label>
+            <label>
+              Moneda de origen
+              <select value={sourceCurrency} onChange={(event) => setSourceCurrency(event.target.value as CurrencyCode | "auto")}>
+                <option value="auto">Automática · sin indicar = DOP</option>
+                <option value="DOP">DOP · peso dominicano</option>
+                <option value="USD">USD · dólar estadounidense</option>
+              </select>
+            </label>
+            <label className="wide-field">
+              Descripción o instrucciones para el agente
+              <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} placeholder="Qué contiene, qué periodo sustituye o con qué archivo debe conciliarse…" />
+            </label>
+          </div>
+        </details>
         {error && <div className="callout warn"><strong>No se completó la carga</strong><p>{error}</p></div>}
         <div className="modal-actions">
           <button className="button secondary" type="button" onClick={onClose}>Cancelar</button>
-          <button className="button primary" type="submit" disabled={!selectedFile || saving || !online}>{saving ? "Guardando…" : online ? "Crear expediente" : "Esperando conexión"}</button>
+          <button className="button primary" type="submit" disabled={!selectedFile || saving || !online}>{saving ? "Subiendo y procesando…" : online ? "Subir y procesar" : "Esperando conexión"}</button>
         </div>
       </form>
     </div>

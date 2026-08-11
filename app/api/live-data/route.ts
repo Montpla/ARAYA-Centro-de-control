@@ -45,6 +45,7 @@ function publicEvent(row: typeof liveDataEvents.$inferSelect | undefined) {
 export async function GET() {
   const auth = await authenticatedUser();
   if (!auth.user) return auth.response;
+  const user = auth.user;
 
   try {
     const db = getDb();
@@ -66,7 +67,7 @@ export async function GET() {
     rows.forEach((row) => {
       try {
         const parsed = JSON.parse(row.valueJson);
-        const visibleValue = auth.user.financeAccess
+        const visibleValue = user.financeAccess
           ? parsed
           : redactFinancialFields(row.key, parsed);
         if (visibleValue === undefined) return;

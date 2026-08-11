@@ -23,9 +23,10 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 44, con navegación agrupada en cinco áreas,
-  administración completa de usuarios y acceso exterior público protegido por
-  la autorización interna. El agente permanece como `ARAYA Asistente`. El commit desplegado es el `HEAD` de
+- Última versión publicada: 45, con archivo documental por año y mes, visor
+  interno móvil, carga simplificada, publicación estructurada segura y
+  protección directa de originales estáticos. El agente permanece como
+  `ARAYA Asistente`. El commit desplegado es el `HEAD` de
   `main`; el identificador opaco debe consultarse en Sites por número de versión
   y no reconstruirse manualmente.
 - Acceso de infraestructura: `public` desde el 11/08/2026. La URL puede abrirse
@@ -1001,6 +1002,52 @@ Implementada y publicada el 11/08/2026 en la versión 44.
   transitorios de forma coherente.
 - Validación: compilación y 33/33 pruebas correctas; lint sin errores y con los
   nueve avisos históricos de `<img>`.
+
+## Archivo documental, visor interno y carga simplificada
+
+Implementado y publicado el 11/08/2026 en la versión 45.
+
+- La bandeja de archivos colaborativos ya no trunca el histórico en 60
+  registros. Todos los originales aparecen agrupados mediante acordeones de
+  año y mes de subida; cada acordeón conserva su estado manual aunque la lista
+  se refresque cada cinco segundos. El almacenamiento R2 ya utilizaba la ruta
+  `araya/<area>/<YYYY>/<MM>/...`, por lo que no fue necesario mover ni perder
+  ningún original.
+- Las fuentes históricas integradas permanecen completas, pero se presentan en
+  un archivo secundario plegable para que el Centro de datos sea más compacto.
+- PDF se representa dentro de Bricket Control con PDF.js, navegación de
+  páginas, zoom y soporte de peticiones parciales. Imágenes y texto también se
+  muestran en el visor propio. La X, `Cerrar`, `Esc` y el botón Atrás recuperan
+  siempre la app. `Descargar` es una acción separada y voluntaria.
+- Office, DWG y MPP ya no abren una pestaña externa, no inician una descarga al
+  pulsar Abrir y nunca dejan una pantalla blanca: permanecen dentro de una
+  ficha estable del visor con cierre disponible y descarga opcional. Para
+  representar visualmente el contenido de esos formatos se necesitará una
+  conversión derivada a PDF/HTML en una iteración posterior.
+- Se eliminaron todos los `target="_blank"` de documentos del proyecto. Tanto
+  facturas y fuentes como informes financieros pasan por el visor común.
+- `proxy.ts` protege también los originales estáticos de `/data-center/*`:
+  exige identidad ChatGPT, usuario activo en `app_users` y `financeAccess` en
+  rutas financieras o del fideicomiso. Las respuestas privadas no se guardan
+  en caché pública ni en la caché offline.
+- La carga principal y la del agente se redujeron a seleccionar un archivo y
+  pulsar `Subir y procesar`; área, tipo, periodo y moneda se detectan. Los
+  campos manuales siguen disponibles dentro de `Opciones avanzadas`.
+- Todos los usuarios activos pueden subir; el original y su estado aparecen en
+  la bandeja compartida en el siguiente refresco. Por seguridad, sólo un
+  administrador puede publicar automáticamente una plantilla CSV/JSON del
+  contrato vivo, y únicamente si contiene valores escalares, claves hijas,
+  corte, área coherente y ninguna advertencia estructural. Las cargas de los
+  demás usuarios y PDF/Excel/PowerPoint/Word/MPP/DWG/imagen quedan registradas
+  para interpretación y revisión: no se afirma que cualquier documento libre
+  actualice cifras por sí solo.
+- Cuando una plantilla administrativa válida se publica, crea revisión,
+  procedencia e historial; `GET /api/live-data` propaga las nuevas cifras,
+  barras, gráficos, cronograma y elementos espaciales en un máximo de cinco
+  segundos según las claves incluidas.
+- Validación: build correcto, TypeScript sin errores, 36/36 pruebas aprobadas y
+  lint sin errores; permanecen diez avisos no bloqueantes de imágenes HTML ya
+  conocidas.
 
 ## Criterios de continuidad
 

@@ -516,7 +516,7 @@ export function ControlRoomPanel({
             <form className="control-action-form" onSubmit={createAction}>
               <label>Título<input required value={actionForm.title} onChange={(event) => setActionForm((current) => ({ ...current, title: event.target.value }))} /></label>
               <label>Área<select value={actionForm.area} onChange={(event) => setActionForm((current) => ({ ...current, area: event.target.value }))}>
-                {userAreas.filter((area) => snapshot.currentUser.financeAccess || area !== "finanzas").map((area) => <option key={area} value={area}>{areaName(area)}</option>)}
+                {userAreas.filter((area) => snapshot.currentUser.financeAccess || area.id !== "finanzas").map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
               </select></label>
               <label>Prioridad<select value={actionForm.severity} onChange={(event) => setActionForm((current) => ({ ...current, severity: event.target.value }))}>
                 <option value="critical">Crítica</option><option value="medium">Media</option><option value="low">Baja</option>

@@ -4,6 +4,7 @@ import { getDb } from "../../../db";
 import {
   documentDataProposals,
   fileActivity,
+  fileReviews,
   liveDataPoints,
   uploadedFiles,
 } from "../../../db/schema";
@@ -11,7 +12,8 @@ import { requireApiUser } from "../../../lib/access-control";
 import { resolveSourceCurrency } from "../../../lib/currency";
 import { areaLabels, classifyUpload, safeFileName } from "../../../lib/file-routing";
 import { analyzeDocument, extractStructuredUpdates } from "../../../lib/ingestion";
-import { normalizeLiveDataUpdates } from "../../../lib/publish-live-data";
+import { isFinancialLiveKey } from "../../../lib/live-data";
+import { normalizeLiveDataUpdates, publishLiveDataUpdates } from "../../../lib/publish-live-data";
 
 export const runtime = "edge";
 
@@ -35,19 +37,11 @@ const allowedExtensions = new Set([
 ]);
 const inlinePreviewExtensions = new Set([
   "csv",
-  "doc",
-  "docx",
-  "dwg",
   "jpeg",
   "jpg",
   "json",
-  "mpp",
   "pdf",
   "png",
-  "ppt",
-  "pptx",
-  "xls",
-  "xlsx",
 ]);
 const canonicalMimeByExtension: Record<string, string> = {
   csv: "text/csv",
@@ -80,7 +74,10 @@ type FileBucket = {
       customMetadata?: Record<string, string>;
     },
   ) => Promise<unknown>;
-  get: (key: string) => Promise<StoredObject | null>;
+  get: (
+    key: string,
+    options?: { range?: { offset: number; length: number } },
+  ) => Promise<StoredObject | null>;
   delete: (key: string) => Promise<void>;
 };
 
@@ -101,6 +98,55 @@ function hexDigest(buffer: ArrayBuffer) {
   return Array.from(new Uint8Array(buffer))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
+}
+
+function asciiFileName(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._ -]/g, "_")
+    .replace(/["\\]/g, "_")
+    .slice(0, 180) || "documento";
+}
+
+function parseByteRange(value: string | null, size: number) {
+  if (!value) return null;
+  const match = value.match(/^bytes=(\d*)-(\d*)$/i);
+  if (!match) return "invalid" as const;
+  const startText = match[1];
+  const endText = match[2];
+  if (!startText && !endText) return "invalid" as const;
+  let start: number;
+  let end: number;
+  if (!startText) {
+    const suffixLength = Number(endText);
+    if (!Number.isInteger(suffixLength) || suffixLength <= 0) return "invalid" as const;
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  } else {
+    start = Number(startText);
+    end = endText ? Number(endText) : size - 1;
+  }
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start >= size || end < start) {
+    return "invalid" as const;
+  }
+  end = Math.min(end, size - 1);
+  return { offset: start, length: end - start + 1, start, end };
+}
+
+function isSafeAutomaticStructuredUpdate(update: ReturnType<typeof normalizeLiveDataUpdates>[number]) {
+  const path = update.key.split(".");
+  if (path.length < 2 || path.length > 8 || !update.cutoff.trim()) return false;
+  if (path.some((segment) => /^\d+$/.test(segment) && Number(segment) > 500)) return false;
+  if (!(["number", "string", "boolean"] as string[]).includes(update.valueType)) return false;
+  try {
+    const value = JSON.parse(update.valueJson) as unknown;
+    if (typeof value === "number") return Number.isFinite(value);
+    if (typeof value === "string") return value.length <= 10_000;
+    return typeof value === "boolean";
+  } catch {
+    return false;
+  }
 }
 
 function publicFileRow(row: typeof uploadedFiles.$inferSelect) {
@@ -153,6 +199,7 @@ async function authenticatedUser() {
 export async function GET(request: Request) {
   const auth = await authenticatedUser();
   if (!auth.user) return auth.response;
+  const user = auth.user;
 
   const searchParams = new URL(request.url).searchParams;
   const previewId = searchParams.get("preview");
@@ -162,14 +209,26 @@ export async function GET(request: Request) {
   if (requestedFileId) {
     const [row] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, requestedFileId)).limit(1);
     if (!row) return Response.json({ error: "Archivo no encontrado." }, { status: 404 });
-    if (row.area === "finanzas" && !auth.user.financeAccess) {
+    if (row.area === "finanzas" && !user.financeAccess) {
       return Response.json({ error: "No tienes acceso a documentos financieros." }, { status: 403 });
     }
 
-    const object = await getFileBucket().get(row.storageKey);
+    const extension = row.extension.toLowerCase();
+    const requestedRange = previewId && extension === "pdf"
+      ? parseByteRange(request.headers.get("range"), row.sizeBytes)
+      : null;
+    if (requestedRange === "invalid") {
+      return new Response(null, {
+        status: 416,
+        headers: { "Content-Range": `bytes */${row.sizeBytes}` },
+      });
+    }
+    const object = await getFileBucket().get(
+      row.storageKey,
+      requestedRange ? { range: { offset: requestedRange.offset, length: requestedRange.length } } : undefined,
+    );
     if (!object) return Response.json({ error: "El original no está disponible en el almacenamiento." }, { status: 404 });
     const storedContentType = object.httpMetadata?.contentType || row.mimeType;
-    const extension = row.extension.toLowerCase();
     const contentType = previewId
       ? canonicalMimeByExtension[extension] ?? storedContentType
       : storedContentType;
@@ -178,19 +237,21 @@ export async function GET(request: Request) {
       contentType === "text/plain" ||
       /^image\/(?:png|jpe?g|webp|gif)$/i.test(contentType)
     ));
-    return new Response(object.body, {
-      headers: {
-        "Content-Type": contentType,
-        "Content-Disposition": `${inlinePreview ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(row.originalName)}`,
-        "Cache-Control": "private, no-store",
-        "X-Content-Type-Options": "nosniff",
-      },
+    const headers = new Headers({
+      "Content-Type": contentType,
+      "Content-Disposition": `${inlinePreview ? "inline" : "attachment"}; filename="${asciiFileName(row.originalName)}"; filename*=UTF-8''${encodeURIComponent(row.originalName)}`,
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Content-Length": String(requestedRange ? requestedRange.length : row.sizeBytes),
     });
+    if (extension === "pdf") headers.set("Accept-Ranges", "bytes");
+    if (requestedRange) headers.set("Content-Range", `bytes ${requestedRange.start}-${requestedRange.end}/${row.sizeBytes}`);
+    return new Response(object.body, { headers, status: requestedRange ? 206 : 200 });
   }
 
-  const rows = await db.select().from(uploadedFiles).orderBy(desc(uploadedFiles.createdAt)).limit(60);
+  const rows = await db.select().from(uploadedFiles).orderBy(desc(uploadedFiles.createdAt));
   return Response.json({
-    files: rows.filter((row) => auth.user.financeAccess || row.area !== "finanzas").map(publicFileRow),
+    files: rows.filter((row) => user.financeAccess || row.area !== "finanzas").map(publicFileRow),
     refreshedAt: new Date().toISOString(),
   });
 }
@@ -198,6 +259,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await authenticatedUser();
   if (!auth.user) return auth.response;
+  const user = auth.user;
 
   let formData: FormData;
   try {
@@ -234,12 +296,13 @@ export async function POST(request: Request) {
     description,
   });
   const declaredCutoff = String(formData.get("declaredCutoff") ?? "").trim().slice(0, 40);
+  const automaticPublicationRequested = formData.get("autoPublish") === "true";
   const classification = classifyUpload({
     fileName: candidate.name,
     description,
     declaredArea: String(formData.get("area") ?? "auto"),
   });
-  if (classification.area === "finanzas" && !auth.user.financeAccess) {
+  if (classification.area === "finanzas" && !user.financeAccess) {
     return Response.json({ error: "No tienes permiso para cargar documentos financieros." }, { status: 403 });
   }
   const safeName = safeFileName(candidate.name);
@@ -318,7 +381,7 @@ export async function POST(request: Request) {
     customMetadata: {
       originalName: candidate.name,
       area: classification.area,
-      uploader: auth.user.email,
+      uploader: user.email,
       sha256,
       sourceCurrency,
     },
@@ -342,8 +405,8 @@ export async function POST(request: Request) {
         source,
         sourceCurrency,
         status: "pendiente_revision",
-        uploaderEmail: auth.user.email,
-        uploaderName: auth.user.displayName,
+        uploaderEmail: user.email,
+        uploaderName: user.displayName,
         version,
         declaredCutoff,
         classificationConfidence: classification.confidence,
@@ -381,8 +444,8 @@ export async function POST(request: Request) {
         discrepancy: previousValueJson !== null && previousValueJson !== update.valueJson,
         status: "pendiente",
         notes: extraction.warnings.join(" ").slice(0, 1000),
-        createdByEmail: auth.user.email,
-        createdByName: auth.user.displayName,
+        createdByEmail: user.email,
+        createdByName: user.displayName,
       });
     }
     await db.insert(fileActivity).values({
@@ -391,15 +454,68 @@ export async function POST(request: Request) {
       message: normalizedUpdates.length
         ? `${normalizedUpdates.length} cambios extraídos y enviados a contraste en ${areaLabels[classification.area]}.`
         : `Archivo dirigido a ${areaLabels[classification.area]}. En cola de extracción; todo dato publicado conservará fuente, corte, moneda y versión.`,
-      actorEmail: auth.user.email,
-      actorName: auth.user.displayName,
+      actorEmail: user.email,
+      actorName: user.displayName,
     });
+    let automaticMessage = "";
+    const canPublishAutomatically =
+      automaticPublicationRequested &&
+      user.role === "admin" &&
+      (extension === "csv" || extension === "json") &&
+      classification.area !== "sin_clasificar" &&
+      extraction.warnings.length === 0 &&
+      normalizedUpdates.length > 0 &&
+      normalizedUpdates.every((update) =>
+        update.area === classification.area &&
+        (user.financeAccess || !isFinancialLiveKey(update.key)) &&
+        isSafeAutomaticStructuredUpdate(update),
+      );
+    if (canPublishAutomatically) {
+      try {
+        const publication = await publishLiveDataUpdates({
+          normalized: normalizedUpdates,
+          actor: user,
+          area: classification.area,
+          cutoff: analysis.detectedPeriod || declaredCutoff,
+          sourceFileId: id,
+          sourceName: candidate.name,
+          message: `${normalizedUpdates.length} datos estructurados publicados automáticamente desde ${candidate.name}.`,
+        });
+        await db
+          .update(documentDataProposals)
+          .set({ status: "publicado", updatedAt: new Date().toISOString() })
+          .where(eq(documentDataProposals.fileId, id));
+        await db.insert(fileReviews).values({
+          fileId: id,
+          action: "aprobado_automatico",
+          note: "Publicación automática administrativa de valores escalares, explícitos y validados por el contrato vivo.",
+          proposalCount: normalizedUpdates.length,
+          publicationRevision: publication.id,
+          requestKey: `auto:${id}`,
+          actorEmail: user.email,
+          actorName: user.displayName,
+        });
+        automaticMessage = `${normalizedUpdates.length} datos se han actualizado automáticamente en la revisión ${publication.id}; las cifras y gráficas se refrescarán en menos de 5 segundos.`;
+      } catch {
+        await db.update(uploadedFiles).set({
+          status: "pendiente_revision",
+          processingStage: "contraste",
+          processingProgress: 75,
+          processingSummary: "Los datos se extrajeron, pero la publicación automática no se completó. El original y las propuestas permanecen disponibles para revisión.",
+          requiresReview: true,
+          reviewStatus: "listo_revision",
+          updatedAt: new Date().toISOString(),
+        }).where(eq(uploadedFiles.id, id));
+        automaticMessage = "El archivo y sus cambios quedaron guardados, pero necesitan una revisión administrativa antes de actualizar el dashboard.";
+      }
+    }
+    const [currentRow] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, id)).limit(1);
     return Response.json(
       {
-        file: publicFileRow(row),
-        message: normalizedUpdates.length
-          ? `Archivo registrado en ${areaLabels[classification.area]}. Se han preparado ${normalizedUpdates.length} cambios para revisión; nada se publicará antes de aprobarlos.`
-          : `Archivo registrado en ${areaLabels[classification.area]}. El original aparece de inmediato y queda en extracción; nada se publicará sin validación.`,
+        file: publicFileRow(currentRow ?? row),
+        message: automaticMessage || (normalizedUpdates.length
+          ? `Archivo registrado en ${areaLabels[classification.area]}. Se han preparado ${normalizedUpdates.length} cambios para revisión.`
+          : `Archivo registrado en ${areaLabels[classification.area]}. El original aparece de inmediato y queda pendiente de interpretación; todavía no modifica cifras ni gráficas.`),
       },
       { status: 201 },
     );
