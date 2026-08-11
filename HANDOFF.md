@@ -23,7 +23,7 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 45, con archivo documental por año y mes, visor
+- Última versión publicada: 46, con archivo documental por año y mes, visor
   interno móvil, carga simplificada, publicación estructurada segura y
   protección directa de originales estáticos. El agente permanece como
   `ARAYA Asistente`. El commit desplegado es el `HEAD` de
@@ -1005,7 +1005,8 @@ Implementada y publicada el 11/08/2026 en la versión 44.
 
 ## Archivo documental, visor interno y carga simplificada
 
-Implementado y publicado el 11/08/2026 en la versión 45.
+Implementado y publicado el 11/08/2026; endurecimiento final de originales en
+la versión 46.
 
 - La bandeja de archivos colaborativos ya no trunca el histórico en 60
   registros. Todos los originales aparecen agrupados mediante acordeones de
@@ -1026,10 +1027,14 @@ Implementado y publicado el 11/08/2026 en la versión 45.
   conversión derivada a PDF/HTML en una iteración posterior.
 - Se eliminaron todos los `target="_blank"` de documentos del proyecto. Tanto
   facturas y fuentes como informes financieros pasan por el visor común.
-- `proxy.ts` protege también los originales estáticos de `/data-center/*`:
-  exige identidad ChatGPT, usuario activo en `app_users` y `financeAccess` en
-  rutas financieras o del fideicomiso. Las respuestas privadas no se guardan
-  en caché pública ni en la caché offline.
+- Cloudflare está configurado con `assets.run_worker_first` selectivo para
+  `/data-center/*`, evitando que su capa estática entregue un original antes
+  de ejecutar la autorización. `proxy.ts` y la ruta dinámica
+  `app/data-center/[...path]/route.ts` exigen identidad ChatGPT, usuario activo
+  en `app_users` y `financeAccess` en rutas financieras o del fideicomiso; la
+  ruta autorizada recupera entonces el original mediante el binding `ASSETS`.
+  Las respuestas privadas no se guardan en caché pública ni en la caché
+  offline.
 - La carga principal y la del agente se redujeron a seleccionar un archivo y
   pulsar `Subir y procesar`; área, tipo, periodo y moneda se detectan. Los
   campos manuales siguen disponibles dentro de `Opciones avanzadas`.
@@ -1045,7 +1050,7 @@ Implementado y publicado el 11/08/2026 en la versión 45.
   procedencia e historial; `GET /api/live-data` propaga las nuevas cifras,
   barras, gráficos, cronograma y elementos espaciales en un máximo de cinco
   segundos según las claves incluidas.
-- Validación: build correcto, TypeScript sin errores, 36/36 pruebas aprobadas y
+- Validación: build correcto, TypeScript sin errores, 37/37 pruebas aprobadas y
   lint sin errores; permanecen diez avisos no bloqueantes de imágenes HTML ya
   conocidas.
 

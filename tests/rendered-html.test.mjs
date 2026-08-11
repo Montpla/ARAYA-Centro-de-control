@@ -411,7 +411,7 @@ test("financial files, live values and agent answers enforce per-user authorizat
   assert.match(dashboardRoute, /No tienes acceso para modificar indicadores financieros/);
   assert.match(documentProxy, /matcher: \["\/data-center\/:path\*"\]/);
   assert.match(documentProxy, /resolveAuthorizedUser/);
-  assert.match(documentProxy, /requiresFinanceAccess/);
+  assert.match(documentProxy, /requiresFinanceDocumentAccess/);
   assert.match(documentProxy, /!user\.financeAccess/);
   assert.match(documentProxy, /private, no-store/);
 });
@@ -942,6 +942,27 @@ test("the in-app document viewer renders PDFs with PDF.js and downloads only on 
   assert.match(filesRoute, /status: requestedRange \? 206 : 200/);
   assert.match(styles, /\.pdf-document-viewer/);
   assert.match(styles, /\.file-viewer-close/);
+});
+
+test("historical originals always pass through authenticated worker-first delivery", async () => {
+  const [viteConfig, proxy, protectedRoute, accessRules] = await Promise.all([
+    readFile("vite.config.ts", "utf8"),
+    readFile("proxy.ts", "utf8"),
+    readFile("app/data-center/[...path]/route.ts", "utf8"),
+    readFile("lib/document-access.ts", "utf8"),
+  ]);
+
+  assert.match(viteConfig, /assets:\s*\{[\s\S]*binding:\s*"ASSETS"[\s\S]*run_worker_first:\s*\["\/data-center\/\*"\]/);
+  assert.match(proxy, /matcher:\s*\["\/data-center\/:path\*"\]/);
+  assert.match(proxy, /resolveAuthorizedUser/);
+  assert.match(protectedRoute, /requireApiUser\(\)/);
+  assert.match(protectedRoute, /requiresFinanceDocumentAccess\(pathname\)/);
+  assert.match(protectedRoute, /env as unknown as \{ ASSETS\?: Fetcher \}/);
+  assert.match(protectedRoute, /assets\.fetch\(request\)/);
+  assert.match(protectedRoute, /Cache-Control", "private, no-store, max-age=0"/);
+  assert.match(protectedRoute, /X-Robots-Tag", "noindex, noarchive, nosnippet"/);
+  assert.match(accessRules, /financeOnlyDocuments/);
+  assert.match(accessRules, /fideicomiso\|balance\|resultados/);
 });
 
 test("simple uploads request automatic publication only for extracted structured updates", async () => {
