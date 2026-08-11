@@ -27,6 +27,21 @@ type DocumentBucket = {
   ): Promise<StoredDocument | null>;
 };
 
+type DocumentManifest = {
+  version: 1;
+  size: number;
+  contentType: string;
+  fileName: string;
+  sha256: string;
+  chunks: Array<{ key: string; size: number; sha256: string }>;
+};
+
+type StoredSegment = {
+  key: string;
+  offset: number;
+  length: number;
+};
+
 const canonicalMimeByExtension: Record<string, string> = {
   csv: "text/csv; charset=utf-8",
   doc: "application/msword",
@@ -106,6 +121,99 @@ function asciiFileName(value: string) {
     .slice(0, 180) || "documento";
 }
 
+async function readDocumentManifest(bucket: DocumentBucket, pathname: string) {
+  const object = await bucket.get(`historical-manifest${pathname}`);
+  if (!object) return null;
+  try {
+    const candidate = JSON.parse(await new Response(object.body).text()) as Partial<DocumentManifest>;
+    if (
+      candidate.version !== 1 ||
+      !Number.isInteger(candidate.size) ||
+      Number(candidate.size) <= 0 ||
+      typeof candidate.contentType !== "string" ||
+      typeof candidate.fileName !== "string" ||
+      typeof candidate.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(candidate.sha256) ||
+      !Array.isArray(candidate.chunks) ||
+      candidate.chunks.length === 0 ||
+      candidate.chunks.length > 10_000
+    ) return null;
+
+    let totalSize = 0;
+    const chunks = candidate.chunks.map((chunk, index) => {
+      const expectedPrefix = `historical-chunks/${candidate.sha256}/`;
+      if (
+        typeof chunk?.key !== "string" ||
+        !chunk.key.startsWith(expectedPrefix) ||
+        !Number.isInteger(chunk.size) ||
+        chunk.size <= 0 ||
+        typeof chunk.sha256 !== "string" ||
+        !/^[a-f0-9]{64}$/.test(chunk.sha256)
+      ) throw new Error(`Invalid chunk ${index}`);
+      totalSize += chunk.size;
+      return { key: chunk.key, size: chunk.size, sha256: chunk.sha256 };
+    });
+    if (totalSize !== candidate.size) return null;
+    return {
+      version: 1,
+      size: candidate.size,
+      contentType: candidate.contentType,
+      fileName: candidate.fileName,
+      sha256: candidate.sha256,
+      chunks,
+    } satisfies DocumentManifest;
+  } catch {
+    return null;
+  }
+}
+
+function manifestSegments(
+  manifest: DocumentManifest,
+  range: { start: number; end: number } | null,
+) {
+  const segments: StoredSegment[] = [];
+  let cursor = 0;
+  for (const chunk of manifest.chunks) {
+    const chunkStart = cursor;
+    const chunkEnd = cursor + chunk.size - 1;
+    const requestedStart = range ? Math.max(range.start, chunkStart) : chunkStart;
+    const requestedEnd = range ? Math.min(range.end, chunkEnd) : chunkEnd;
+    if (requestedStart <= requestedEnd) {
+      segments.push({
+        key: chunk.key,
+        offset: requestedStart - chunkStart,
+        length: requestedEnd - requestedStart + 1,
+      });
+    }
+    cursor += chunk.size;
+  }
+  return segments;
+}
+
+function streamStoredSegments(bucket: DocumentBucket, segments: StoredSegment[]) {
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for (const segment of segments) {
+          const object = await bucket.get(segment.key, {
+            range: { offset: segment.offset, length: segment.length },
+          });
+          if (!object) throw new Error("Missing document chunk");
+          const reader = object.body.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (value) controller.enqueue(value as Uint8Array);
+          }
+        }
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+}
+
 async function serveProtectedDocument(request: Request, context: RouteContext) {
   const auth = await requireApiUser();
   if (!auth.user) {
@@ -138,38 +246,52 @@ async function serveProtectedDocument(request: Request, context: RouteContext) {
 
   const storageKey = `historical${pathname}`;
   const head = await bucket.head(storageKey);
-  if (!head) return errorResponse("Archivo no encontrado.", 404);
+  const manifest = head ? null : await readDocumentManifest(bucket, pathname);
+  if (!head && !manifest) return errorResponse("Archivo no encontrado.", 404);
+  const totalSize = head?.size ?? manifest?.size ?? 0;
 
-  const requestedRange = parseByteRange(request.headers.get("range"), head.size);
+  const requestedRange = parseByteRange(request.headers.get("range"), totalSize);
   if (requestedRange === "invalid") {
     return new Response(null, {
       status: 416,
-      headers: privateHeaders(new Headers({ "Content-Range": `bytes */${head.size}` })),
+      headers: privateHeaders(new Headers({ "Content-Range": `bytes */${totalSize}` })),
     });
   }
 
   const extension = pathname.split(".").at(-1)?.toLowerCase() ?? "";
-  const contentType = head.httpMetadata?.contentType || canonicalMimeByExtension[extension] || "application/octet-stream";
-  const fileName = safeFileName(pathname);
+  const contentType = head?.httpMetadata?.contentType || manifest?.contentType || canonicalMimeByExtension[extension] || "application/octet-stream";
+  const fileName = manifest?.fileName || safeFileName(pathname);
   const headers = privateHeaders(new Headers({
     "Accept-Ranges": "bytes",
     "Content-Disposition": `inline; filename="${asciiFileName(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
-    "Content-Length": String(requestedRange ? requestedRange.length : head.size),
+    "Content-Length": String(requestedRange ? requestedRange.length : totalSize),
     "Content-Type": contentType,
   }));
   if (requestedRange) {
-    headers.set("Content-Range", `bytes ${requestedRange.start}-${requestedRange.end}/${head.size}`);
+    headers.set("Content-Range", `bytes ${requestedRange.start}-${requestedRange.end}/${totalSize}`);
   }
 
   if (request.method === "HEAD") {
     return new Response(null, { status: 200, headers });
   }
-  const object = await bucket.get(
-    storageKey,
-    requestedRange ? { range: { offset: requestedRange.offset, length: requestedRange.length } } : undefined,
-  );
-  if (!object) return errorResponse("Archivo no encontrado.", 404);
-  return new Response(object.body, {
+  let body: ReadableStream;
+  if (manifest) {
+    body = streamStoredSegments(
+      bucket,
+      manifestSegments(
+        manifest,
+        requestedRange ? { start: requestedRange.start, end: requestedRange.end } : null,
+      ),
+    );
+  } else {
+    const object = await bucket.get(
+      storageKey,
+      requestedRange ? { range: { offset: requestedRange.offset, length: requestedRange.length } } : undefined,
+    );
+    if (!object) return errorResponse("Archivo no encontrado.", 404);
+    body = object.body;
+  }
+  return new Response(body, {
     status: requestedRange ? 206 : 200,
     headers,
   });

@@ -965,6 +965,8 @@ test("historical originals stay out of public assets and use authenticated R2 de
   assert.match(protectedRoute, /bucket\.head\(storageKey\)/);
   assert.match(protectedRoute, /bucket\.get\(/);
   assert.match(protectedRoute, /parseByteRange/);
+  assert.match(protectedRoute, /readDocumentManifest/);
+  assert.match(protectedRoute, /streamStoredSegments/);
   assert.match(protectedRoute, /Cache-Control", "private, no-store, max-age=0"/);
   assert.match(protectedRoute, /X-Robots-Tag", "noindex, noarchive, nosnippet"/);
   assert.match(accessRules, /financeOnlyDocuments/);
@@ -978,6 +980,9 @@ test("historical originals stay out of public assets and use authenticated R2 de
   assert.match(seedRoute, /createMultipartUpload/);
   assert.match(seedRoute, /resumeMultipartUpload/);
   assert.match(seedRoute, /multipart-complete/);
+  assert.match(seedRoute, /chunk-complete/);
+  assert.match(seedRoute, /historical-manifest/);
+  assert.match(seedRoute, /historical-chunks/);
 });
 
 test("simple uploads request automatic publication only for extracted structured updates", async () => {

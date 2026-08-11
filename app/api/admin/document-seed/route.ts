@@ -161,12 +161,87 @@ export async function POST(request: Request) {
     );
   }
 
+  if (action === "chunk-complete") {
+    const sha256 = String(formData.get("sha256") ?? "").toLowerCase();
+    const declaredSize = Number(formData.get("size"));
+    if (!/^[a-f0-9]{64}$/.test(sha256) || !Number.isInteger(declaredSize) || declaredSize <= 0) {
+      return Response.json({ error: "Manifiesto no válido." }, { status: 400 });
+    }
+    let parts: Array<{ partNumber: number; key: string; size: number; sha256: string }>;
+    try {
+      const candidate = JSON.parse(String(formData.get("parts") ?? "[]")) as unknown;
+      if (!Array.isArray(candidate) || candidate.length === 0 || candidate.length > 10_000) throw new Error();
+      parts = candidate.map((part, index) => {
+        const expectedPartNumber = index + 1;
+        const expectedKey = `historical-chunks/${sha256}/${String(expectedPartNumber).padStart(5, "0")}`;
+        if (
+          typeof part !== "object" ||
+          part === null ||
+          (part as { partNumber?: number }).partNumber !== expectedPartNumber ||
+          (part as { key?: string }).key !== expectedKey ||
+          !Number.isInteger((part as { size?: number }).size) ||
+          Number((part as { size?: number }).size) <= 0 ||
+          typeof (part as { sha256?: string }).sha256 !== "string" ||
+          !/^[a-f0-9]{64}$/.test((part as { sha256: string }).sha256)
+        ) throw new Error();
+        return {
+          partNumber: expectedPartNumber,
+          key: expectedKey,
+          size: Number((part as { size: number }).size),
+          sha256: (part as { sha256: string }).sha256,
+        };
+      });
+      if (parts.reduce((sum, part) => sum + part.size, 0) !== declaredSize) throw new Error();
+    } catch {
+      return Response.json({ error: "Partes no válidas." }, { status: 400 });
+    }
+
+    const manifest = {
+      version: 1,
+      size: declaredSize,
+      contentType: contentTypeFor(path),
+      fileName: path.split("/").at(-1) || "documento",
+      sha256,
+      chunks: parts.map(({ key, size, sha256: partSha256 }) => ({ key, size, sha256: partSha256 })),
+    };
+    await runtime.FILES.put(
+      `historical-manifest${path}`,
+      new TextEncoder().encode(JSON.stringify(manifest)).buffer,
+      { httpMetadata: { contentType: "application/json; charset=utf-8" } },
+    );
+    return Response.json(
+      { stored: true, path, chunked: true, partCount: parts.length, size: declaredSize, sha256 },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return Response.json({ error: "Ruta o archivo no válido." }, { status: 400 });
   }
   if (file.size > MAX_FILE_SIZE) {
     return Response.json({ error: "El archivo supera el límite permitido." }, { status: 413 });
+  }
+
+  if (action === "chunk-part") {
+    const sha256 = String(formData.get("sha256") ?? "").toLowerCase();
+    const partNumber = Number(formData.get("partNumber"));
+    if (!/^[a-f0-9]{64}$/.test(sha256) || !Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10_000) {
+      return Response.json({ error: "Parte no válida." }, { status: 400 });
+    }
+    const bytes = await file.arrayBuffer();
+    const partSha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    const key = `historical-chunks/${sha256}/${String(partNumber).padStart(5, "0")}`;
+    await runtime.FILES.put(key, bytes, {
+      httpMetadata: { contentType: "application/octet-stream" },
+      customMetadata: { sha256: partSha256 },
+    });
+    return Response.json(
+      { uploaded: true, path, partNumber, key, size: file.size, sha256: partSha256 },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
   }
 
   if (action === "multipart-part") {
