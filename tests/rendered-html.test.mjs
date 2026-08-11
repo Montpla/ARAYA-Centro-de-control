@@ -975,6 +975,9 @@ test("historical originals stay out of public assets and use authenticated R2 de
   assert.match(seedRoute, /DOCUMENT_SEED_TOKEN/);
   assert.match(seedRoute, /tokensMatch/);
   assert.match(seedRoute, /runtime\.FILES\.put\(`historical\$\{path\}`/);
+  assert.match(seedRoute, /createMultipartUpload/);
+  assert.match(seedRoute, /resumeMultipartUpload/);
+  assert.match(seedRoute, /multipart-complete/);
 });
 
 test("simple uploads request automatic publication only for extracted structured updates", async () => {

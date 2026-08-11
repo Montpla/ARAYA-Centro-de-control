@@ -13,6 +13,18 @@ type SeedBucket = {
       customMetadata?: Record<string, string>;
     },
   ): Promise<unknown>;
+  createMultipartUpload(
+    key: string,
+    options?: {
+      httpMetadata?: { contentType?: string };
+      customMetadata?: Record<string, string>;
+    },
+  ): Promise<{ uploadId: string }>;
+  resumeMultipartUpload(key: string, uploadId: string): {
+    uploadPart(partNumber: number, value: ArrayBuffer): Promise<{ partNumber: number; etag: string }>;
+    complete(parts: Array<{ partNumber: number; etag: string }>): Promise<unknown>;
+    abort(): Promise<void>;
+  };
 };
 
 const mimeByExtension: Record<string, string> = {
@@ -64,6 +76,15 @@ function validHistoricalPath(value: string) {
   );
 }
 
+function contentTypeFor(path: string, fallback = "") {
+  const extension = path.split(".").at(-1)?.toLowerCase() ?? "";
+  return mimeByExtension[extension] || fallback || "application/octet-stream";
+}
+
+function validUploadId(value: string) {
+  return value.length >= 16 && value.length <= 512 && /^[a-zA-Z0-9._-]+$/.test(value);
+}
+
 export async function POST(request: Request) {
   const runtime = env as unknown as {
     DOCUMENT_SEED_TOKEN?: string;
@@ -83,16 +104,86 @@ export async function POST(request: Request) {
     return Response.json({ error: "Carga no válida." }, { status: 400 });
   }
   const path = String(formData.get("path") ?? "");
+  const action = String(formData.get("action") ?? "put");
+  if (!validHistoricalPath(path)) {
+    return Response.json({ error: "Ruta no válida." }, { status: 400 });
+  }
+
+  if (action === "multipart-init") {
+    const sha256 = String(formData.get("sha256") ?? "").toLowerCase();
+    if (!/^[a-f0-9]{64}$/.test(sha256)) {
+      return Response.json({ error: "Hash no válido." }, { status: 400 });
+    }
+    const upload = await runtime.FILES.createMultipartUpload(`historical${path}`, {
+      httpMetadata: { contentType: contentTypeFor(path) },
+      customMetadata: { originalName: path.split("/").at(-1) || "documento", sha256 },
+    });
+    return Response.json(
+      { initialized: true, path, uploadId: upload.uploadId },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+
+  const uploadId = String(formData.get("uploadId") ?? "");
+  if (action === "multipart-abort") {
+    if (!validUploadId(uploadId)) return Response.json({ error: "Carga no válida." }, { status: 400 });
+    await runtime.FILES.resumeMultipartUpload(`historical${path}`, uploadId).abort();
+    return Response.json({ aborted: true, path }, { headers: { "Cache-Control": "private, no-store" } });
+  }
+
+  if (action === "multipart-complete") {
+    if (!validUploadId(uploadId)) return Response.json({ error: "Carga no válida." }, { status: 400 });
+    let parts: Array<{ partNumber: number; etag: string }>;
+    try {
+      const candidate = JSON.parse(String(formData.get("parts") ?? "[]")) as unknown;
+      if (!Array.isArray(candidate) || candidate.length === 0 || candidate.length > 10_000) throw new Error();
+      parts = candidate.map((part) => {
+        if (
+          typeof part !== "object" ||
+          part === null ||
+          !Number.isInteger((part as { partNumber?: number }).partNumber) ||
+          Number((part as { partNumber?: number }).partNumber) < 1 ||
+          typeof (part as { etag?: string }).etag !== "string" ||
+          !(part as { etag: string }).etag
+        ) throw new Error();
+        return {
+          partNumber: Number((part as { partNumber: number }).partNumber),
+          etag: (part as { etag: string }).etag,
+        };
+      });
+    } catch {
+      return Response.json({ error: "Partes no válidas." }, { status: 400 });
+    }
+    await runtime.FILES.resumeMultipartUpload(`historical${path}`, uploadId).complete(parts);
+    return Response.json(
+      { stored: true, path, multipart: true, partCount: parts.length },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+
   const file = formData.get("file");
-  if (!validHistoricalPath(path) || !(file instanceof File) || file.size === 0) {
+  if (!(file instanceof File) || file.size === 0) {
     return Response.json({ error: "Ruta o archivo no válido." }, { status: 400 });
   }
   if (file.size > MAX_FILE_SIZE) {
     return Response.json({ error: "El archivo supera el límite permitido." }, { status: 413 });
   }
 
-  const extension = path.split(".").at(-1)?.toLowerCase() ?? "";
-  const contentType = mimeByExtension[extension] || file.type || "application/octet-stream";
+  if (action === "multipart-part") {
+    const partNumber = Number(formData.get("partNumber"));
+    if (!validUploadId(uploadId) || !Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10_000) {
+      return Response.json({ error: "Parte no válida." }, { status: 400 });
+    }
+    const part = await runtime.FILES
+      .resumeMultipartUpload(`historical${path}`, uploadId)
+      .uploadPart(partNumber, await file.arrayBuffer());
+    return Response.json(
+      { uploaded: true, path, partNumber: part.partNumber, etag: part.etag, size: file.size },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+
+  const contentType = contentTypeFor(path, file.type);
   const bytes = await file.arrayBuffer();
   const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)))
     .map((byte) => byte.toString(16).padStart(2, "0"))
