@@ -768,11 +768,12 @@ test("tablet and mobile mode provides navigation, camera, notifications, biometr
   assert.match(routeError, /Reintentar/);
   assert.match(manifest, /"display": "standalone"/);
   assert.match(manifest, /"short_name": "Bricket Control"/);
-  assert.match(serviceWorker, /bricket-control-shell-v3/);
+  assert.match(serviceWorker, /bricket-control-shell-v4/);
   assert.match(serviceWorker, /CACHE_APP_SHELL/);
   assert.match(serviceWorker, /CLEAR_PRIVATE_CACHE/);
   assert.match(serviceWorker, /event\.request\.mode === "navigate"/);
   assert.match(serviceWorker, /url\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(serviceWorker, /isPrivateDocument[\s\S]*event\.respondWith\(fetch\(event\.request\)\)[\s\S]*return/);
   assert.match(serviceWorker, /notificationclick/);
 });
 

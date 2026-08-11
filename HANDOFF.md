@@ -23,7 +23,7 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 50, con archivo documental por año y mes, visor
+- Última versión publicada: 51, con archivo documental por año y mes, visor
   interno móvil, carga simplificada, publicación estructurada segura y
   protección directa de originales estáticos. El agente permanece como
   `ARAYA Asistente`. El commit desplegado es el `HEAD` de
@@ -1006,7 +1006,7 @@ Implementada y publicada el 11/08/2026 en la versión 44.
 ## Archivo documental, visor interno y carga simplificada
 
 Implementado y publicado el 11/08/2026; almacenamiento privado definitivo de
-originales en la versión 50.
+originales en la versión 51.
 
 - La bandeja de archivos colaborativos ya no trunca el histórico en 60
   registros. Todos los originales aparecen agrupados mediante acordeones de
@@ -1040,6 +1040,10 @@ originales en la versión 50.
   el límite de una petición se guardan en fragmentos privados y se transmiten
   de forma continua, con soporte de rangos y el mismo nombre/tipo del original.
   Las respuestas son `private, no-store` y no entran en la caché offline.
+- El Service Worker está en la generación `v4`: borra las cachés `v3` al
+  activarse y trata `/data-center/*` como red obligatoria, sin lectura ni
+  escritura en Cache Storage. Esto elimina también cualquier copia que una
+  instalación anterior hubiera conservado antes de privatizar los originales.
 - El endpoint y el secreto temporales utilizados para la siembra inicial se
   eliminaron después de verificar los 23 documentos. Las nuevas cargas deben
   seguir entrando exclusivamente por `POST /api/files` y quedan en R2 desde

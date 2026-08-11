@@ -1,5 +1,5 @@
-const SHELL_CACHE = "bricket-control-shell-v3";
-const PRIVATE_CACHE = "bricket-control-private-v3";
+const SHELL_CACHE = "bricket-control-shell-v4";
+const PRIVATE_CACHE = "bricket-control-private-v4";
 const CACHE_PREFIX = "bricket-control-";
 const STATIC_ASSETS = [
   "/manifest.webmanifest",
@@ -126,7 +126,11 @@ self.addEventListener("fetch", (event) => {
   }
 
   const isPrivateDocument = url.pathname.startsWith("/data-center/");
-  const targetCache = isPrivateDocument ? PRIVATE_CACHE : SHELL_CACHE;
+  if (isPrivateDocument) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+  const targetCache = SHELL_CACHE;
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
