@@ -37,6 +37,7 @@ export const uploadStatusLabels: Record<string, string> = {
 };
 
 export const documentTypeLabels: Record<string, string> = {
+  clasificacion_pendiente: "Clasificación confidencial en curso",
   estado_financiero: "Estado financiero",
   avance_obra: "Avance de obra",
   cronograma: "Cronograma y planificación",

@@ -1,6 +1,7 @@
-import { DashboardClient } from "./dashboard-client";
+import { DashboardShell } from "./dashboard-shell";
 import { chatGPTSignOutPath, requireChatGPTUser } from "./chatgpt-auth";
 import { resolveAuthorizedUser } from "../lib/access-control";
+import { buildDashboardBootstrap } from "../lib/dashboard-bootstrap";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function Home() {
     );
   }
 
-  return <DashboardClient currentUser={currentUser} />;
+  const bootstrap = buildDashboardBootstrap(currentUser.financeAccess);
+  return <DashboardShell currentUser={currentUser} bootstrap={bootstrap} />;
 }
 

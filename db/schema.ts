@@ -9,6 +9,8 @@ export const customMetrics = sqliteTable("custom_metrics", {
   unit: text("unit").notNull().default(""),
   owner: text("owner").notNull().default(""),
   trend: text("trend").notNull().default("flat"),
+  createdByEmail: text("created_by_email").notNull().default(""),
+  createdByName: text("created_by_name").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -22,6 +24,8 @@ export const suppliers = sqliteTable("suppliers", {
   score: real("score").notNull().default(0),
   nextDelivery: text("next_delivery").notNull().default(""),
   amount: text("amount").notNull().default(""),
+  createdByEmail: text("created_by_email").notNull().default(""),
+  createdByName: text("created_by_name").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -69,6 +73,7 @@ export const uploadedFiles = sqliteTable(
     extractionConfidence: real("extraction_confidence").notNull().default(0),
     extractionSummary: text("extraction_summary").notNull().default(""),
     discrepancyCount: integer("discrepancy_count").notNull().default(0),
+    proposalGeneration: text("proposal_generation").notNull().default(""),
     reviewStatus: text("review_status").notNull().default("pendiente_extraccion"),
     reviewedByEmail: text("reviewed_by_email").notNull().default(""),
     reviewedByName: text("reviewed_by_name").notNull().default(""),
@@ -76,13 +81,27 @@ export const uploadedFiles = sqliteTable(
     reviewNote: text("review_note").notNull().default(""),
     publicationRevision: integer("publication_revision"),
     publishedAt: text("published_at").notNull().default(""),
+    deletedAt: text("deleted_at").notNull().default(""),
+    deletedByEmail: text("deleted_by_email").notNull().default(""),
+    deletedByName: text("deleted_by_name").notNull().default(""),
+    deleteReason: text("delete_reason").notNull().default(""),
+    restoredAt: text("restored_at").notNull().default(""),
+    restoredByEmail: text("restored_by_email").notNull().default(""),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("uploaded_files_created_at_idx").on(table.createdAt),
+      index("uploaded_files_created_at_idx").on(table.createdAt),
+      index("uploaded_files_created_at_id_idx").on(table.createdAt, table.id),
+      index("uploaded_files_updated_at_id_idx").on(table.updatedAt, table.id),
     index("uploaded_files_area_idx").on(table.area),
     index("uploaded_files_sha256_idx").on(table.sha256),
+    uniqueIndex("uploaded_files_active_sha256_idx")
+      .on(table.sha256)
+      .where(sql`${table.deletedAt} = ''`),
+    uniqueIndex("uploaded_files_area_name_version_idx")
+      .on(table.area, table.safeName, table.version),
+    index("uploaded_files_deleted_at_idx").on(table.deletedAt),
   ],
 );
 
@@ -91,6 +110,7 @@ export const documentDataProposals = sqliteTable(
   {
     id: text("id").primaryKey(),
     fileId: text("file_id").notNull(),
+    generation: text("generation").notNull().default(""),
     key: text("key").notNull(),
     label: text("label").notNull().default(""),
     valueJson: text("value_json").notNull(),
@@ -109,7 +129,8 @@ export const documentDataProposals = sqliteTable(
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    uniqueIndex("document_data_proposals_file_key_idx").on(table.fileId, table.key),
+    uniqueIndex("document_data_proposals_file_generation_key_idx")
+      .on(table.fileId, table.generation, table.key),
     index("document_data_proposals_file_id_idx").on(table.fileId),
     index("document_data_proposals_status_idx").on(table.status),
   ],
@@ -125,6 +146,10 @@ export const fileReviews = sqliteTable(
     proposalCount: integer("proposal_count").notNull().default(0),
     publicationRevision: integer("publication_revision"),
     requestKey: text("request_key").notNull(),
+    previousReviewStatus: text("previous_review_status").notNull().default(""),
+    previousUpdatedAt: text("previous_updated_at").notNull().default(""),
+    claimedAt: text("claimed_at").notNull().default(""),
+    leaseExpiresAt: text("lease_expires_at").notNull().default(""),
     actorEmail: text("actor_email").notNull(),
     actorName: text("actor_name").notNull(),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -160,6 +185,7 @@ export const liveDataEvents = sqliteTable(
     cutoff: text("cutoff").notNull().default(""),
     changeCount: integer("change_count").notNull().default(0),
     message: text("message").notNull().default(""),
+    status: text("status").notNull().default("published"),
     actorEmail: text("actor_email").notNull(),
     actorName: text("actor_name").notNull(),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -167,6 +193,7 @@ export const liveDataEvents = sqliteTable(
   (table) => [
     index("live_data_events_created_at_idx").on(table.createdAt),
     index("live_data_events_source_file_id_idx").on(table.sourceFileId),
+    index("live_data_events_status_idx").on(table.status),
   ],
 );
 
@@ -211,9 +238,10 @@ export const liveDataHistory = sqliteTable(
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("live_data_history_event_idx").on(table.eventId),
-    index("live_data_history_key_idx").on(table.key),
-    index("live_data_history_created_at_idx").on(table.createdAt),
+      index("live_data_history_event_idx").on(table.eventId),
+      index("live_data_history_key_idx").on(table.key),
+      index("live_data_history_key_id_idx").on(table.key, table.id),
+      index("live_data_history_created_at_idx").on(table.createdAt),
     index("live_data_history_source_file_id_idx").on(table.sourceFileId),
   ],
 );
@@ -235,6 +263,10 @@ export const appUsers = sqliteTable(
     lastLoginAt: text("last_login_at").notNull().default(""),
     deletedAt: text("deleted_at").notNull().default(""),
     deletedByEmail: text("deleted_by_email").notNull().default(""),
+    notificationKind: text("notification_kind").notNull().default(""),
+    notificationNonce: text("notification_nonce").notNull().default(""),
+    notificationActorEmail: text("notification_actor_email").notNull().default(""),
+    notificationActorName: text("notification_actor_name").notNull().default(""),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
@@ -263,6 +295,118 @@ export const accessAudit = sqliteTable(
   ],
 );
 
+export const notificationEvents = sqliteTable(
+  "notification_events",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    kind: text("kind").notNull(),
+    projectId: text("project_id").notNull().default("araya"),
+    area: text("area").notNull().default("direccion"),
+    audience: text("audience").notNull().default("all"),
+    actorEmail: text("actor_email").notNull().default(""),
+    actorName: text("actor_name").notNull().default(""),
+    subjectType: text("subject_type").notNull().default(""),
+    subjectId: text("subject_id").notNull().default(""),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    view: text("view").notNull().default("resumen"),
+    payloadJson: text("payload_json").notNull().default("{}"),
+    fanoutStatus: text("fanout_status").notNull().default("pending"),
+    fanoutClaimedAt: text("fanout_claimed_at").notNull().default(""),
+    fanoutAt: text("fanout_at").notNull().default(""),
+    fanoutError: text("fanout_error").notNull().default(""),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("notification_events_created_at_idx").on(table.createdAt),
+    index("notification_events_audience_idx").on(table.audience),
+    index("notification_events_area_idx").on(table.area),
+    index("notification_events_fanout_idx").on(table.fanoutStatus, table.fanoutClaimedAt),
+  ],
+);
+
+export const notificationReads = sqliteTable(
+  "notification_reads",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    notificationId: integer("notification_id").notNull(),
+    userEmail: text("user_email").notNull(),
+    readAt: text("read_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    openedAt: text("opened_at").notNull().default(""),
+  },
+  (table) => [
+    uniqueIndex("notification_reads_event_user_idx").on(table.notificationId, table.userEmail),
+    index("notification_reads_user_idx").on(table.userEmail),
+  ],
+);
+
+export const notificationDeliveries = sqliteTable(
+  "notification_deliveries",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    notificationId: integer("notification_id").notNull(),
+    subscriptionId: text("subscription_id").notNull(),
+    status: text("status").notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    nextAttemptAt: text("next_attempt_at").notNull().default(""),
+    claimedAt: text("claimed_at").notNull().default(""),
+    deliveredAt: text("delivered_at").notNull().default(""),
+    lastError: text("last_error").notNull().default(""),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("notification_deliveries_event_subscription_idx").on(
+      table.notificationId,
+      table.subscriptionId,
+    ),
+    index("notification_deliveries_status_next_idx").on(table.status, table.nextAttemptAt),
+    index("notification_deliveries_event_idx").on(table.notificationId),
+  ],
+);
+
+export const userPresence = sqliteTable(
+  "user_presence",
+  {
+    sessionId: text("session_id").primaryKey(),
+    userEmail: text("user_email").notNull(),
+    userName: text("user_name").notNull().default(""),
+    deviceId: text("device_id").notNull().default(""),
+    platform: text("platform").notNull().default(""),
+    userAgent: text("user_agent").notNull().default(""),
+    connectedAt: text("connected_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastSeenAt: text("last_seen_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("user_presence_email_idx").on(table.userEmail),
+    index("user_presence_last_seen_idx").on(table.lastSeenAt),
+  ],
+);
+
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    userEmail: text("user_email").notNull(),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    expirationTime: text("expiration_time").notNull().default(""),
+    platform: text("platform").notNull().default(""),
+    userAgent: text("user_agent").notNull().default(""),
+    active: integer("active", { mode: "boolean" }).notNull().default(true),
+    failureCount: integer("failure_count").notNull().default(0),
+    lastSuccessAt: text("last_success_at").notNull().default(""),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("push_subscriptions_endpoint_idx").on(table.endpoint),
+    index("push_subscriptions_user_idx").on(table.userEmail),
+    index("push_subscriptions_active_idx").on(table.active),
+  ],
+);
+
 export const controlActions = sqliteTable(
   "control_actions",
   {
@@ -280,6 +424,9 @@ export const controlActions = sqliteTable(
     requestKey: text("request_key").notNull(),
     createdByEmail: text("created_by_email").notNull(),
     createdByName: text("created_by_name").notNull(),
+    notificationNonce: text("notification_nonce").notNull().default(""),
+    notificationActorEmail: text("notification_actor_email").notNull().default(""),
+    notificationActorName: text("notification_actor_name").notNull().default(""),
     completedAt: text("completed_at").notNull().default(""),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),

@@ -4,6 +4,7 @@ import { getDb } from "../../../../db";
 import { accessAudit, appUsers } from "../../../../db/schema";
 import { requireApiUser } from "../../../../lib/access-control";
 import { isUserArea } from "../../../../lib/file-routing";
+import { scheduleNotificationDispatch } from "../../../../lib/notification-dispatch";
 
 export const runtime = "edge";
 
@@ -187,6 +188,7 @@ export async function POST(request: Request) {
     actorEmail: auth.user.email,
     actorName: auth.identity.displayName,
   });
+  scheduleNotificationDispatch();
   return Response.json(
     {
       user: publicRow(row),
@@ -230,6 +232,10 @@ export async function PATCH(request: Request) {
         financeAccess: existing.role === "admin" || existing.financeAccess,
         deletedAt: "",
         deletedByEmail: "",
+        notificationKind: "user_restored",
+        notificationNonce: crypto.randomUUID(),
+        notificationActorEmail: auth.user.email,
+        notificationActorName: auth.identity.displayName,
         updatedAt: now,
       })
       .where(and(eq(appUsers.id, id), eq(appUsers.updatedAt, expectedUpdatedAt)))
@@ -245,6 +251,7 @@ export async function PATCH(request: Request) {
       actorEmail: auth.user.email,
       actorName: auth.identity.displayName,
     });
+    scheduleNotificationDispatch();
     return Response.json({
       user: publicRow(restored),
       message: auditedMessage(`${restored.displayName || restored.email} ha sido restaurado.`, auditRecorded),
@@ -283,6 +290,10 @@ export async function PATCH(request: Request) {
         area,
         financeAccess,
         active,
+        notificationKind: "user_updated",
+        notificationNonce: crypto.randomUUID(),
+        notificationActorEmail: auth.user.email,
+        notificationActorName: auth.identity.displayName,
         updatedAt: now,
       })
       .where(and(
@@ -308,6 +319,7 @@ export async function PATCH(request: Request) {
       actorEmail: auth.user.email,
       actorName: auth.identity.displayName,
     });
+    scheduleNotificationDispatch();
     return Response.json({
       user: publicRow(updated),
       message: auditedMessage(
@@ -350,6 +362,10 @@ export async function DELETE(request: Request) {
       avatarUpdatedAt: "",
       deletedAt: now,
       deletedByEmail: auth.user.email,
+      notificationKind: "user_removed",
+      notificationNonce: crypto.randomUUID(),
+      notificationActorEmail: auth.user.email,
+      notificationActorName: auth.identity.displayName,
       updatedAt: now,
     })
     .where(and(
@@ -376,6 +392,7 @@ export async function DELETE(request: Request) {
     actorName: auth.identity.displayName,
   });
   await removeAvatar(existing.avatarStorageKey);
+  scheduleNotificationDispatch();
   return Response.json({
     message: auditedMessage(
       `${existing.displayName || existing.email} ya no puede acceder. Su historial de actividad se conserva.`,

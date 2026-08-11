@@ -1,23 +1,67 @@
 import { env } from "cloudflare:workers";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import { getDb } from "../../../db";
 import {
   documentDataProposals,
   fileActivity,
-  fileReviews,
-  liveDataPoints,
   uploadedFiles,
 } from "../../../db/schema";
 import { requireApiUser } from "../../../lib/access-control";
 import { resolveSourceCurrency } from "../../../lib/currency";
 import { areaLabels, classifyUpload, safeFileName } from "../../../lib/file-routing";
 import { analyzeDocument, extractStructuredUpdates } from "../../../lib/ingestion";
-import { isFinancialLiveKey } from "../../../lib/live-data";
+import {
+  canAutomaticallyPublishExtraction,
+  extractDocumentWithAI,
+} from "../../../lib/ai-document-extraction";
+import {
+  financeProtectedAreaValues,
+  financeProtectedDocumentTypeValues,
+  isCommercialLiveKey,
+  isFinancialLiveKey,
+  requiresFinanceAccessForArea,
+  requiresFinanceAccessForDocument,
+} from "../../../lib/live-data";
+import {
+  decodeFileRegistryCursor,
+  encodeFileRegistryCursor,
+  latestFileRegistryCursor,
+  normalizeFilePageSize,
+} from "../../../lib/file-registry-pagination";
+import { scheduleNotificationDispatch } from "../../../lib/notification-dispatch";
+import {
+  D1JsonDatabase,
+  selectLivePointValues,
+  upsertDocumentProposalRows,
+} from "../../../lib/d1-json-bulk";
+import { assertLiveDataContracts } from "../../../lib/live-data-contract";
 import { normalizeLiveDataUpdates, publishLiveDataUpdates } from "../../../lib/publish-live-data";
+import { readEffectiveLiveData } from "../../../lib/effective-live-data";
+import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-upsert";
+import {
+  proposalPointerWasCommitted,
+  stagedGenerationMayBeDeleted,
+  uploadInsertWasCommitted,
+} from "../../../lib/upload-commit-recovery";
 
 export const runtime = "edge";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
+const PROVISIONAL_DOCUMENT_TYPE = "clasificacion_pendiente";
+const EXTRACTION_LEASE_MS = 5 * 60 * 1_000;
 const allowedExtensions = new Set([
   "csv",
   "doc",
@@ -89,6 +133,12 @@ function getFileBucket() {
   return bucket;
 }
 
+function getD1JsonDatabase() {
+  const database = (env as unknown as { DB?: D1JsonDatabase }).DB;
+  if (!database) throw new Error("La base de datos transaccional no está disponible.");
+  return database;
+}
+
 function extensionOf(fileName: string) {
   const dot = fileName.lastIndexOf(".");
   return dot >= 0 ? fileName.slice(dot + 1).toLowerCase() : "";
@@ -134,22 +184,53 @@ function parseByteRange(value: string | null, size: number) {
   return { offset: start, length: end - start + 1, start, end };
 }
 
+function isSafeLiveValue(value: unknown, depth = 0): boolean {
+  if (depth > 10) return false;
+  if (value === null) return false;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (typeof value === "string") return value.length <= 10_000;
+  if (typeof value === "boolean") return true;
+  if (Array.isArray(value)) {
+    return value.length <= 1_000 && value.every((item) => isSafeLiveValue(item, depth + 1));
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value);
+    return entries.length <= 500 && entries.every(([key, item]) =>
+      !["__proto__", "constructor", "prototype"].includes(key) &&
+      /^[A-Za-z][A-Za-z0-9_ -]{0,127}$/.test(key) &&
+      isSafeLiveValue(item, depth + 1));
+  }
+  return false;
+}
+
 function isSafeAutomaticStructuredUpdate(update: ReturnType<typeof normalizeLiveDataUpdates>[number]) {
   const path = update.key.split(".");
   if (path.length < 2 || path.length > 8 || !update.cutoff.trim()) return false;
   if (path.some((segment) => /^\d+$/.test(segment) && Number(segment) > 500)) return false;
-  if (!(["number", "string", "boolean"] as string[]).includes(update.valueType)) return false;
   try {
     const value = JSON.parse(update.valueJson) as unknown;
-    if (typeof value === "number") return Number.isFinite(value);
-    if (typeof value === "string") return value.length <= 10_000;
-    return typeof value === "boolean";
+    return isSafeLiveValue(value);
   } catch {
     return false;
   }
 }
 
-function publicFileRow(row: typeof uploadedFiles.$inferSelect) {
+function automaticContractIsSafe(
+  updates: ReturnType<typeof normalizeLiveDataUpdates>,
+  currentValues: Awaited<ReturnType<typeof readEffectiveLiveData>>["values"],
+) {
+  try {
+    assertLiveDataContracts(updates, currentValues);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function publicFileRow(
+  row: typeof uploadedFiles.$inferSelect,
+  user?: { email: string; role: string },
+) {
   return {
     id: row.id,
     originalName: row.originalName,
@@ -185,8 +266,13 @@ function publicFileRow(row: typeof uploadedFiles.$inferSelect) {
     reviewNote: row.reviewNote,
     publicationRevision: row.publicationRevision,
     publishedAt: row.publishedAt,
+    deletedAt: row.deletedAt,
+    deletedByName: row.deletedByName,
+    deleteReason: row.deleteReason,
+    restoredAt: row.restoredAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+    canManage: Boolean(user && (user.role === "admin" || user.email === row.uploaderEmail)),
     downloadUrl: `/api/files?download=${encodeURIComponent(row.id)}`,
   };
 }
@@ -196,7 +282,124 @@ async function authenticatedUser() {
   return { response: auth.response, user: auth.user };
 }
 
+function fileRequiresFinanceAccess(
+  row: Pick<typeof uploadedFiles.$inferSelect, "area" | "documentType">,
+) {
+  return requiresFinanceAccessForDocument(row.area, row.documentType);
+}
+
+type FileRegistryUser = NonNullable<Awaited<ReturnType<typeof requireApiUser>>["user"]>;
+
+function fileRegistryVisibilityCondition(
+  user: FileRegistryUser,
+  includeDeleted: boolean,
+) {
+  const financeCondition = user.financeAccess
+    ? sql`1 = 1`
+    : and(
+        notInArray(uploadedFiles.area, financeProtectedAreaValues()),
+        notInArray(uploadedFiles.documentType, financeProtectedDocumentTypeValues()),
+      );
+  const deletedCondition = !includeDeleted
+    ? eq(uploadedFiles.deletedAt, "")
+    : user.role === "admin"
+      ? sql`1 = 1`
+      : or(
+          eq(uploadedFiles.deletedAt, ""),
+          eq(uploadedFiles.uploaderEmail, user.email),
+        );
+  return and(financeCondition, deletedCondition);
+}
+
+function fileRegistryRowVisible(
+  row: Pick<typeof uploadedFiles.$inferSelect, "area" | "documentType" | "deletedAt" | "uploaderEmail">,
+  user: FileRegistryUser,
+  includeDeleted: boolean,
+) {
+  if (!user.financeAccess && fileRequiresFinanceAccess(row)) return false;
+  if (!row.deletedAt) return true;
+  return includeDeleted && (user.role === "admin" || row.uploaderEmail === user.email);
+}
+
+async function fileRegistrySummary(user: FileRegistryUser, includeDeleted: boolean) {
+  const [row] = await getDb()
+    .select({
+      total: sql<number>`count(*)`,
+      active: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' then 1 else 0 end), 0)`,
+      deleted: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} <> '' then 1 else 0 end), 0)`,
+      pendingReview: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.requiresReview} = 1 then 1 else 0 end), 0)`,
+      synchronized: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.processingProgress} >= 100 then 1 else 0 end), 0)`,
+      observed: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.status} in ('observado', 'rechazado') then 1 else 0 end), 0)`,
+      averageProgress: sql<number>`coalesce(round(avg(case when ${uploadedFiles.deletedAt} = '' then ${uploadedFiles.processingProgress} end)), 0)`,
+      discrepancies: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' then ${uploadedFiles.discrepancyCount} else 0 end), 0)`,
+      lastUploadAt: sql<string>`coalesce(max(case when ${uploadedFiles.deletedAt} = '' then ${uploadedFiles.createdAt} end), '')`,
+    })
+    .from(uploadedFiles)
+    .where(fileRegistryVisibilityCondition(user, includeDeleted));
+  return {
+    total: Number(row?.total ?? 0),
+    active: Number(row?.active ?? 0),
+    deleted: Number(row?.deleted ?? 0),
+    pendingReview: Number(row?.pendingReview ?? 0),
+    synchronized: Number(row?.synchronized ?? 0),
+    observed: Number(row?.observed ?? 0),
+    averageProgress: Number(row?.averageProgress ?? 0),
+    discrepancies: Number(row?.discrepancies ?? 0),
+    lastUploadAt: row?.lastUploadAt ?? "",
+  };
+}
+
+function privateJson(payload: unknown, status = 200) {
+  return Response.json(payload, {
+    status,
+    headers: { "Cache-Control": "private, no-store" },
+  });
+}
+
+function knownFileIds(value: string | null) {
+  if (!value) return [];
+  const ids = [...new Set(value.split(",").filter(Boolean))];
+  if (
+    ids.length > 100 ||
+    ids.some((id) => id.length > 160 || !/^[A-Za-z0-9._:-]+$/.test(id))
+  ) return null;
+  return ids;
+}
+
+function resolveExtractedProtection(input: {
+  area: string;
+  documentType: string;
+  summary: string;
+  warnings: string[];
+  updates: ReturnType<typeof normalizeLiveDataUpdates>;
+}) {
+  const extractedText = `${input.summary} ${input.warnings.join(" ")}`;
+  const commercial = input.documentType === "ventas_cobranza" ||
+    input.area === "comercial" ||
+    input.updates.some((update) =>
+      isCommercialLiveKey(update.key) || update.area === "comercial") ||
+    /\b(?:ventas?|cobranza|morosidad|reservas?|desistimientos?)\b/i.test(extractedText);
+  const financial = commercial ||
+    input.documentType === "estado_financiero" ||
+    input.area === "finanzas" ||
+    input.updates.some((update) =>
+      isFinancialLiveKey(update.key) || requiresFinanceAccessForArea(update.area)) ||
+    /\b(?:finanzas?|financiero|fideicomiso|balance|estado de resultados|cuentas por pagar|presupuesto|flujo de caja)\b/i.test(extractedText);
+  if (commercial) {
+    return { area: "comercial", documentType: "ventas_cobranza", protected: true } as const;
+  }
+  if (financial) {
+    return { area: "finanzas", documentType: "estado_financiero", protected: true } as const;
+  }
+  return {
+    area: input.area,
+    documentType: input.documentType,
+    protected: false,
+  } as const;
+}
+
 export async function GET(request: Request) {
+  const requestStartedAt = new Date().toISOString();
   const auth = await authenticatedUser();
   if (!auth.user) return auth.response;
   const user = auth.user;
@@ -209,8 +412,11 @@ export async function GET(request: Request) {
   if (requestedFileId) {
     const [row] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, requestedFileId)).limit(1);
     if (!row) return Response.json({ error: "Archivo no encontrado." }, { status: 404 });
-    if (row.area === "finanzas" && !user.financeAccess) {
-      return Response.json({ error: "No tienes acceso a documentos financieros." }, { status: 403 });
+    if (row.deletedAt && user.role !== "admin" && row.uploaderEmail !== user.email) {
+      return Response.json({ error: "Este archivo está eliminado." }, { status: 410 });
+    }
+    if (fileRequiresFinanceAccess(row) && !user.financeAccess) {
+      return Response.json({ error: "No tienes acceso a documentos financieros o comerciales." }, { status: 403 });
     }
 
     const extension = row.extension.toLowerCase();
@@ -249,9 +455,109 @@ export async function GET(request: Request) {
     return new Response(object.body, { headers, status: requestedRange ? 206 : 200 });
   }
 
-  const rows = await db.select().from(uploadedFiles).orderBy(desc(uploadedFiles.createdAt));
-  return Response.json({
-    files: rows.filter((row) => user.financeAccess || row.area !== "finanzas").map(publicFileRow),
+  const includeDeleted = searchParams.get("includeDeleted") === "1";
+  const pageSize = normalizeFilePageSize(searchParams.get("limit"));
+  const mode = searchParams.get("mode") === "changes" ? "changes" : "page";
+
+  if (mode === "changes") {
+    const afterValue = searchParams.get("after");
+    const after = decodeFileRegistryCursor(afterValue);
+    if (!afterValue || !after) {
+      return privateJson({ error: "El cursor de cambios no es válido." }, 400);
+    }
+    const knownIds = knownFileIds(searchParams.get("known"));
+    if (knownIds === null) {
+      return privateJson({ error: "La reconciliación documental solicitada no es válida." }, 400);
+    }
+    const summaryPromise = fileRegistrySummary(user, includeDeleted);
+    const [changedRows, knownRows] = await Promise.all([
+      db
+        .select()
+        .from(uploadedFiles)
+        .where(and(
+          fileRegistryVisibilityCondition(user, includeDeleted),
+          or(
+            gt(uploadedFiles.updatedAt, after.timestamp),
+            and(eq(uploadedFiles.updatedAt, after.timestamp), gt(uploadedFiles.id, after.id)),
+          ),
+        ))
+        .orderBy(asc(uploadedFiles.updatedAt), asc(uploadedFiles.id))
+        .limit(pageSize + 1),
+      knownIds.length
+        ? db
+            .select({
+              id: uploadedFiles.id,
+              area: uploadedFiles.area,
+              documentType: uploadedFiles.documentType,
+              deletedAt: uploadedFiles.deletedAt,
+              uploaderEmail: uploadedFiles.uploaderEmail,
+            })
+            .from(uploadedFiles)
+            .where(inArray(uploadedFiles.id, knownIds))
+        : Promise.resolve([]),
+    ]);
+    const hasMore = changedRows.length > pageSize;
+    const pageRows = changedRows.slice(0, pageSize);
+    const last = pageRows.at(-1);
+    const idleWatermark = { timestamp: requestStartedAt, id: "" };
+    const nextWatermark = hasMore && last
+      ? { timestamp: last.updatedAt, id: last.id }
+      : last
+        ? latestFileRegistryCursor(
+            { timestamp: last.updatedAt, id: last.id },
+            idleWatermark,
+          )
+        : idleWatermark;
+    const visibleKnownIds = new Set(
+      knownRows
+        .filter((row) => fileRegistryRowVisible(row, user, includeDeleted))
+        .map((row) => row.id),
+    );
+    const removedIds = knownIds.filter((id) => !visibleKnownIds.has(id));
+    return privateJson({
+      mode,
+      files: pageRows.map((row) => publicFileRow(row, user)),
+      removedIds,
+      hasMore,
+      nextChangeCursor: encodeFileRegistryCursor(nextWatermark),
+      summary: await summaryPromise,
+      refreshedAt: new Date().toISOString(),
+    });
+  }
+
+  const cursorValue = searchParams.get("cursor");
+  const cursor = decodeFileRegistryCursor(cursorValue);
+  if (cursorValue && !cursor) {
+    return privateJson({ error: "El cursor de página no es válido." }, 400);
+  }
+  const summaryPromise = fileRegistrySummary(user, includeDeleted);
+  const pageCondition = cursor
+    ? and(
+        fileRegistryVisibilityCondition(user, includeDeleted),
+        or(
+          lt(uploadedFiles.createdAt, cursor.timestamp),
+          and(eq(uploadedFiles.createdAt, cursor.timestamp), lt(uploadedFiles.id, cursor.id)),
+        ),
+      )
+    : fileRegistryVisibilityCondition(user, includeDeleted);
+  const rows = await db
+    .select()
+    .from(uploadedFiles)
+    .where(pageCondition)
+    .orderBy(desc(uploadedFiles.createdAt), desc(uploadedFiles.id))
+    .limit(pageSize + 1);
+  const hasMore = rows.length > pageSize;
+  const pageRows = rows.slice(0, pageSize);
+  const last = pageRows.at(-1);
+  return privateJson({
+    mode,
+    files: pageRows.map((row) => publicFileRow(row, user)),
+    hasMore,
+    nextCursor: hasMore && last
+      ? encodeFileRegistryCursor({ timestamp: last.createdAt, id: last.id })
+      : null,
+    changeCursor: encodeFileRegistryCursor({ timestamp: requestStartedAt, id: "" }),
+    summary: await summaryPromise,
     refreshedAt: new Date().toISOString(),
   });
 }
@@ -302,8 +608,8 @@ export async function POST(request: Request) {
     description,
     declaredArea: String(formData.get("area") ?? "auto"),
   });
-  if (classification.area === "finanzas" && !user.financeAccess) {
-    return Response.json({ error: "No tienes permiso para cargar documentos financieros." }, { status: 403 });
+  if (requiresFinanceAccessForArea(classification.area) && !user.financeAccess) {
+    return Response.json({ error: "No tienes permiso para cargar documentos financieros o comerciales." }, { status: 403 });
   }
   const safeName = safeFileName(candidate.name);
   const bytes = await candidate.arrayBuffer();
@@ -315,26 +621,91 @@ export async function POST(request: Request) {
     area: classification.area,
     classificationConfidence: classification.confidence,
   });
+  let initiallyProtectedUpload = requiresFinanceAccessForDocument(
+    classification.area,
+    analysis.documentType,
+  );
+  if (initiallyProtectedUpload && !user.financeAccess) {
+    return Response.json({ error: "El contenido detectado requiere acceso financiero y comercial." }, { status: 403 });
+  }
   const sha256 = hexDigest(await crypto.subtle.digest("SHA-256", bytes));
   const db = getDb();
 
-  const [duplicate] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.sha256, sha256)).limit(1);
+  const [duplicate] = await db
+    .select()
+    .from(uploadedFiles)
+    .where(and(eq(uploadedFiles.sha256, sha256), eq(uploadedFiles.deletedAt, "")))
+    .limit(1);
+  let resumedRow: typeof uploadedFiles.$inferSelect | null = null;
   if (duplicate) {
-    return Response.json({
-      duplicate: true,
-      message: "Este mismo archivo ya estaba registrado; se mantiene una sola copia.",
-      file: publicFileRow(duplicate),
-    });
+    const provisionalOwnedByUser = duplicate.documentType === PROVISIONAL_DOCUMENT_TYPE &&
+      duplicate.uploaderEmail.trim().toLowerCase() === user.email.trim().toLowerCase();
+    if (fileRequiresFinanceAccess(duplicate) && !user.financeAccess && !provisionalOwnedByUser) {
+      return Response.json({ error: "No tienes acceso al expediente ya registrado." }, { status: 403 });
+    }
+    const canResume = duplicate.publicationRevision === null &&
+      (duplicate.reviewStatus === "pendiente_extraccion" || duplicate.reviewStatus === "cambios_solicitados") &&
+      duplicate.status !== "integrado" &&
+      duplicate.status !== "rechazado";
+    if (!canResume) {
+      return Response.json({
+        duplicate: true,
+        message: "Este mismo archivo ya estaba registrado; se mantiene una sola copia.",
+        file: publicFileRow(duplicate, user),
+      });
+    }
+    const leaseStartedAt = Date.parse(duplicate.updatedAt);
+    const leaseIsActive = duplicate.processingStage === "extraccion_en_curso" &&
+      Number.isFinite(leaseStartedAt) &&
+      Date.now() - leaseStartedAt < EXTRACTION_LEASE_MS;
+    if (leaseIsActive) {
+      return Response.json({
+        duplicate: true,
+        processing: true,
+        message: "Este archivo ya se está procesando. El mismo expediente continuará sin crear otra copia.",
+      }, { status: 202 });
+    }
+    const leaseAt = new Date().toISOString();
+    const [claimedRow] = await db
+      .update(uploadedFiles)
+      .set({
+        processingStage: "extraccion_en_curso",
+        processingProgress: Math.max(45, duplicate.processingProgress),
+        processingSummary: "Reprocesamiento idempotente del expediente ya archivado.",
+        updatedAt: leaseAt,
+      })
+      .where(and(
+        eq(uploadedFiles.id, duplicate.id),
+        eq(uploadedFiles.deletedAt, ""),
+        eq(uploadedFiles.updatedAt, duplicate.updatedAt),
+      ))
+      .returning();
+    if (!claimedRow) {
+      return Response.json({
+        duplicate: true,
+        processing: true,
+        message: "Otra solicitud acaba de reanudar este expediente; no se creará una copia.",
+      }, { status: 202 });
+    }
+    resumedRow = claimedRow;
+    if (claimedRow.documentType !== PROVISIONAL_DOCUMENT_TYPE) {
+      initiallyProtectedUpload ||= requiresFinanceAccessForDocument(
+        claimedRow.area,
+        claimedRow.documentType,
+      );
+    }
   }
 
-  const previousVersions = await db
-    .select({ id: uploadedFiles.id })
-    .from(uploadedFiles)
-    .where(and(eq(uploadedFiles.safeName, safeName), eq(uploadedFiles.area, classification.area)));
-  const version = previousVersions.length + 1;
-  const id = crypto.randomUUID();
+  const previousVersions = resumedRow
+    ? []
+    : await db
+      .select({ id: uploadedFiles.id })
+      .from(uploadedFiles)
+      .where(and(eq(uploadedFiles.safeName, safeName), eq(uploadedFiles.area, classification.area)));
+  const version = resumedRow?.version ?? previousVersions.length + 1;
+  const id = resumedRow?.id ?? crypto.randomUUID();
   const now = new Date();
-  const storageKey = [
+  const storageKey = resumedRow?.storageKey ?? [
     "araya",
     classification.area,
     now.getUTCFullYear(),
@@ -343,52 +714,30 @@ export async function POST(request: Request) {
   ].join("/");
   const mimeType = candidate.type || "application/octet-stream";
   const bucket = getFileBucket();
-  const extraction = extractStructuredUpdates(bytes, extension, {
-    area: classification.area,
-    cutoff: analysis.detectedPeriod || declaredCutoff,
-    sourceCurrency: sourceCurrency === "USD" ? "USD" : "DOP",
-    sourceName: candidate.name,
-  });
-  const normalizedUpdates = extraction.updates.length
-    ? normalizeLiveDataUpdates({
-        updates: extraction.updates.map((update) => ({
-          ...update,
-          sourceFileId: id,
-          sourceName: candidate.name,
-        })),
-        area: classification.area,
-        cutoff: analysis.detectedPeriod || declaredCutoff,
-        sourceFileId: id,
-        sourceName: candidate.name,
-      })
-    : [];
-  const existingPoints = normalizedUpdates.length
-    ? await db.select().from(liveDataPoints).where(inArray(liveDataPoints.key, normalizedUpdates.map((update) => update.key)))
-    : [];
-  const previousByKey = new Map(existingPoints.map((point) => [point.key, point.valueJson]));
-  const discrepancyCount = normalizedUpdates.filter((update) => {
-    const previous = previousByKey.get(update.key);
-    return previous !== undefined && previous !== update.valueJson;
-  }).length;
-  const extractionSummary = [
-    analysis.summary,
-    extraction.summary,
-    extraction.warnings.length ? `${extraction.warnings.length} advertencias de estructura.` : "",
-  ].filter(Boolean).join(" ");
-
-  await bucket.put(storageKey, bytes, {
-    httpMetadata: { contentType: mimeType },
-    customMetadata: {
-      originalName: candidate.name,
-      area: classification.area,
-      uploader: user.email,
-      sha256,
-      sourceCurrency,
-    },
-  });
-
+  const effectiveCutoff = analysis.detectedPeriod || declaredCutoff || new Date().toISOString().slice(0, 10);
   try {
-    const [row] = await db
+    if (!resumedRow) {
+    await bucket.put(storageKey, bytes, {
+      httpMetadata: { contentType: mimeType },
+      customMetadata: {
+        originalName: candidate.name,
+        area: classification.area,
+        uploader: user.email,
+        sha256,
+        sourceCurrency,
+      },
+    });
+    }
+  } catch {
+    return Response.json({ error: "No se pudo archivar el original." }, { status: 500 });
+  }
+
+  let row: typeof uploadedFiles.$inferSelect;
+  try {
+    if (resumedRow) {
+      row = resumedRow;
+    } else {
+    const [createdRow] = await db
       .insert(uploadedFiles)
       .values({
         id,
@@ -411,118 +760,430 @@ export async function POST(request: Request) {
         declaredCutoff,
         classificationConfidence: classification.confidence,
         classificationReason: classification.reason,
+        processingStage: "extraccion_en_curso",
+        processingProgress: 45,
+        processingSummary: classification.confidence > 0
+          ? `${analysis.summary} Original archivado; interpretación en curso.`
+          : "Original recibido. Requiere asignación de área antes de normalizar sus datos.",
+        requiresReview: true,
+        projectId: "araya",
+        // A row exists before the potentially slow Office/PDF/image analysis
+        // completes. Keep that provisional record fail-closed at every reader.
+        documentType: PROVISIONAL_DOCUMENT_TYPE,
+        detectedPeriod: analysis.detectedPeriod,
+        extractionMode: analysis.extractionMode,
+        extractionConfidence: analysis.confidence,
+        extractionSummary: analysis.summary,
+        discrepancyCount: 0,
+        reviewStatus: "pendiente_extraccion",
+      })
+      .returning();
+    if (!createdRow) throw new Error("La fila inicial no se pudo crear.");
+    row = createdRow;
+    }
+  } catch {
+    // D1 may commit the insert and lose its response. Resolve that ambiguity
+    // before touching R2; deleting first would leave a durable row without its
+    // original object.
+    let exactRow: typeof uploadedFiles.$inferSelect | undefined;
+    let concurrentDuplicate: typeof uploadedFiles.$inferSelect | undefined;
+    try {
+      [[exactRow], [concurrentDuplicate]] = await Promise.all([
+        db.select().from(uploadedFiles).where(eq(uploadedFiles.id, id)).limit(1),
+        db.select().from(uploadedFiles)
+          .where(and(eq(uploadedFiles.sha256, sha256), eq(uploadedFiles.deletedAt, "")))
+          .limit(1),
+      ]);
+    } catch {
+      return Response.json({
+        error: "El original está archivado, pero no se pudo confirmar su registro. Reintenta sin volver a cargar otra copia.",
+      }, { status: 503 });
+    }
+    const insertWasCommitted = uploadInsertWasCommitted({
+      row: exactRow,
+      id,
+      sha256,
+      storageKey,
+    });
+    if (insertWasCommitted && exactRow) {
+      row = exactRow;
+    } else {
+      // Only the losing upload owns this key (the generated id is embedded in
+      // it), and the authoritative id lookup proved that no row references it.
+      if (!exactRow && !resumedRow) await bucket.delete(storageKey).catch(() => undefined);
+      if (concurrentDuplicate) {
+        if (fileRequiresFinanceAccess(concurrentDuplicate) && !user.financeAccess) {
+          return Response.json({
+            duplicate: true,
+            processing: true,
+            message: "El mismo original ya está archivado y se procesa de forma confidencial.",
+          }, { status: 202 });
+        }
+        return Response.json({
+          duplicate: true,
+          processing: concurrentDuplicate.reviewStatus !== "aprobado",
+          message: "Una carga simultánea ya registró este mismo archivo; no se ha creado otra copia.",
+          file: publicFileRow(concurrentDuplicate, user),
+        }, { status: concurrentDuplicate.reviewStatus === "aprobado" ? 200 : 202 });
+      }
+      return Response.json({
+        error: exactRow
+          ? "El identificador del archivo ya existe con otro original; no se ha eliminado ningún objeto."
+          : "Otra versión del mismo expediente se registró a la vez. Reintenta la carga para continuar sin duplicados.",
+      }, { status: exactRow ? 503 : 409 });
+    }
+  }
+
+  await db.insert(fileActivity).values({
+    fileId: id,
+    eventType: resumedRow ? "extraccion_reanudada" : "archivo_recibido",
+    message: resumedRow
+      ? "El expediente existente se ha reclamado con un lease idempotente para reanudar su extracción."
+      : `Original archivado en ${areaLabels[classification.area]}; la interpretación de datos continúa sobre el expediente durable.`,
+    actorEmail: user.email,
+    actorName: user.displayName,
+  }).catch(() => undefined);
+  scheduleNotificationDispatch();
+
+  let resolvedArea = row.area;
+  let resolvedDocumentType = row.documentType === PROVISIONAL_DOCUMENT_TYPE
+    ? analysis.documentType
+    : row.documentType;
+  let financeProtectedUpload = true;
+  let protectionResolved = false;
+  let publicationStarted = false;
+  let publicationCompleted = false;
+  let extractionGeneration = "";
+  let extractionCommitted = false;
+  try {
+    const deterministicExtraction = extractStructuredUpdates(bytes, extension, {
+      area: classification.area,
+      cutoff: effectiveCutoff,
+      sourceCurrency: sourceCurrency === "USD" ? "USD" : "DOP",
+      sourceName: candidate.name,
+    });
+    let extraction: Awaited<ReturnType<typeof extractDocumentWithAI>> = {
+      ...deterministicExtraction,
+      updateConfidences: deterministicExtraction.updates.map(() => 1),
+      confidence: deterministicExtraction.updates.length ? 1 : 0,
+      model: "deterministic",
+      promptVersion: "structured-file-v1",
+    };
+    if (!deterministicExtraction.updates.length) {
+      extraction = await extractDocumentWithAI({
+        bytes,
+        fileName: candidate.name,
+        mimeType: candidate.type || canonicalMimeByExtension[extension] || "application/octet-stream",
+        extension,
+        area: classification.area,
+        cutoff: effectiveCutoff,
+        sourceCurrency: sourceCurrency === "USD" ? "USD" : "DOP",
+        apiKey: process.env.OPENAI_API_KEY ?? "",
+      });
+    }
+    const currentLiveData = extraction.updates.length
+      ? await readEffectiveLiveData(true)
+      : null;
+    const identityResolvedUpdates = currentLiveData
+      ? resolveSpatialIdentityUpdates(extraction.updates, currentLiveData.values)
+      : extraction.updates;
+    const extractedUpdates = identityResolvedUpdates.length
+      ? normalizeLiveDataUpdates({
+          updates: identityResolvedUpdates.map((update) => ({
+            ...update,
+            sourceFileId: id,
+            sourceName: candidate.name,
+          })),
+          area: classification.area,
+          cutoff: effectiveCutoff,
+          sourceFileId: id,
+          sourceName: candidate.name,
+        })
+      : [];
+    const protection = resolveExtractedProtection({
+      area: resolvedArea,
+      documentType: resolvedDocumentType,
+      summary: extraction.summary,
+      warnings: extraction.warnings,
+      updates: extractedUpdates,
+    });
+    const affirmativeContentClassification = extractedUpdates.length > 0;
+    if (protection.protected || initiallyProtectedUpload) {
+      // Any financial/commercial signal elevates immediately, even when the
+      // extraction is incomplete or low confidence.
+      resolvedArea = protection.area;
+      resolvedDocumentType = protection.documentType;
+      financeProtectedUpload = true;
+      protectionResolved = true;
+    } else if (affirmativeContentClassification) {
+      resolvedArea = protection.area;
+      resolvedDocumentType = protection.documentType;
+      financeProtectedUpload = false;
+      protectionResolved = true;
+    } else {
+      // Missing API credentials, unsupported formats, operational failures and
+      // empty/zero-confidence results are not proof that a document is public.
+      resolvedDocumentType = PROVISIONAL_DOCUMENT_TYPE;
+      financeProtectedUpload = true;
+      protectionResolved = false;
+    }
+    // Once content has elevated a document to Finanzas or Ventas, every
+    // proposal inherits that protected area. Later metadata edits cannot make
+    // the persisted document public again.
+    const normalizedUpdates = financeProtectedUpload
+      ? extractedUpdates.map((update) => ({ ...update, area: resolvedArea }))
+      : extractedUpdates;
+    extractionGeneration = `ingest:${crypto.randomUUID()}`;
+    const existingPoints = await selectLivePointValues(
+      getD1JsonDatabase(),
+      normalizedUpdates.map((update) => update.key),
+    );
+    const previousByKey = new Map(existingPoints.map((point) => [point.key, point.valueJson]));
+    const discrepancyCount = normalizedUpdates.filter((update) => {
+      const previous = previousByKey.get(update.key);
+      return previous !== undefined && previous !== update.valueJson;
+    }).length;
+    const extractionSummary = [
+      analysis.summary,
+      extraction.summary,
+      extraction.model !== "deterministic" ? `Análisis documental: ${extraction.model}.` : "",
+      extraction.warnings.length ? `${extraction.warnings.length} advertencias de estructura.` : "",
+    ].filter(Boolean).join(" ");
+
+    const proposalsUpdatedAt = new Date().toISOString();
+    await upsertDocumentProposalRows(
+      getD1JsonDatabase(),
+      normalizedUpdates.map((update, index) => {
+        const previousValueJson = previousByKey.get(update.key) ?? null;
+        return {
+          id: crypto.randomUUID(),
+          fileId: id,
+          generation: extractionGeneration,
+          key: update.key,
+          label: update.key,
+          valueJson: update.valueJson,
+          previousValueJson,
+          valueType: update.valueType,
+          area: update.area,
+          sourceCurrency: update.sourceCurrency,
+          cutoff: update.cutoff,
+          confidence: extraction.updateConfidences[index] ?? 0,
+          discrepancy: previousValueJson !== null && previousValueJson !== update.valueJson,
+          status: "pendiente",
+          notes: extraction.warnings.join(" ").slice(0, 1000),
+          createdByEmail: user.email,
+          createdByName: user.displayName,
+          updatedAt: proposalsUpdatedAt,
+        };
+      }),
+    );
+    const classifiedAt = new Date().toISOString();
+    let classifiedFile: { id: string } | undefined;
+    try {
+      [classifiedFile] = await db.update(uploadedFiles).set({
+        area: resolvedArea,
+        documentType: resolvedDocumentType,
+        classificationConfidence: financeProtectedUpload
+          ? Math.max(classification.confidence, extraction.confidence)
+          : classification.confidence,
+        classificationReason: financeProtectedUpload && !initiallyProtectedUpload
+          ? `${classification.reason} El contenido extraído elevó el expediente a acceso financiero/comercial.`
+          : classification.reason,
         processingStage: normalizedUpdates.length ? "contraste" : classification.confidence > 0 ? "extraccion_pendiente" : "clasificado",
         processingProgress: normalizedUpdates.length ? 75 : classification.confidence > 0 ? 40 : 20,
         processingSummary: classification.confidence > 0
           ? extractionSummary
           : "Original recibido. Requiere asignación de área antes de normalizar sus datos.",
-        requiresReview: true,
-        projectId: "araya",
-        documentType: analysis.documentType,
-        detectedPeriod: analysis.detectedPeriod,
-        extractionMode: analysis.extractionMode,
-        extractionConfidence: normalizedUpdates.length ? 1 : analysis.confidence,
+        extractionMode: extraction.model === "deterministic" ? analysis.extractionMode : "openai_responses",
+        extractionConfidence: normalizedUpdates.length ? extraction.confidence : analysis.confidence,
         extractionSummary,
         discrepancyCount,
+        proposalGeneration: extractionGeneration,
         reviewStatus: normalizedUpdates.length ? "listo_revision" : "pendiente_extraccion",
-      })
-      .returning();
-    for (const update of normalizedUpdates) {
-      const previousValueJson = previousByKey.get(update.key) ?? null;
-      await db.insert(documentDataProposals).values({
-        id: crypto.randomUUID(),
-        fileId: id,
-        key: update.key,
-        label: update.key,
-        valueJson: update.valueJson,
-        previousValueJson,
-        valueType: update.valueType,
-        area: update.area,
-        sourceCurrency: update.sourceCurrency,
-        cutoff: update.cutoff,
-        confidence: 1,
-        discrepancy: previousValueJson !== null && previousValueJson !== update.valueJson,
-        status: "pendiente",
-        notes: extraction.warnings.join(" ").slice(0, 1000),
-        createdByEmail: user.email,
-        createdByName: user.displayName,
-      });
+        updatedAt: classifiedAt,
+      }).where(and(
+        eq(uploadedFiles.id, id),
+        eq(uploadedFiles.deletedAt, ""),
+        eq(uploadedFiles.processingStage, "extraccion_en_curso"),
+        eq(uploadedFiles.updatedAt, row.updatedAt),
+      )).returning({ id: uploadedFiles.id });
+    } catch (error) {
+      const [settledFile] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, id)).limit(1);
+      if (settledFile?.deletedAt === "" && proposalPointerWasCommitted({
+        row: settledFile,
+        generation: extractionGeneration,
+        committedAt: classifiedAt,
+      })) {
+        classifiedFile = { id: settledFile.id };
+      } else {
+        throw error;
+      }
     }
+    if (!classifiedFile) {
+      throw new Error("CONFLICT: el expediente cambió durante la extracción.");
+    }
+    extractionCommitted = true;
+    scheduleNotificationDispatch();
+    await db.delete(documentDataProposals).where(and(
+      eq(documentDataProposals.fileId, id),
+      ne(documentDataProposals.generation, extractionGeneration),
+    )).catch(() => undefined);
     await db.insert(fileActivity).values({
       fileId: id,
-      eventType: "archivo_recibido",
+      eventType: "extraccion_preparada",
       message: normalizedUpdates.length
-        ? `${normalizedUpdates.length} cambios extraídos y enviados a contraste en ${areaLabels[classification.area]}.`
-        : `Archivo dirigido a ${areaLabels[classification.area]}. En cola de extracción; todo dato publicado conservará fuente, corte, moneda y versión.`,
+        ? `${normalizedUpdates.length} cambios extraídos y enviados a contraste en ${areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea}.`
+        : `Archivo dirigido a ${areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea}. El original permanece disponible y la interpretación no modifica datos sin propuestas válidas.`,
       actorEmail: user.email,
       actorName: user.displayName,
-    });
+    }).catch(() => undefined);
     let automaticMessage = "";
+    const canPublishInArea = (
+      user.role === "admin" || resolvedArea === user.area
+    ) && (!financeProtectedUpload || user.financeAccess);
+    const extractionConfidenceIsSafe = canAutomaticallyPublishExtraction({
+      model: extraction.model,
+      confidence: extraction.confidence,
+      updateConfidences: extraction.updateConfidences,
+      warnings: extraction.warnings,
+      updateCount: normalizedUpdates.length,
+    });
     const canPublishAutomatically =
       automaticPublicationRequested &&
-      user.role === "admin" &&
-      (extension === "csv" || extension === "json") &&
-      classification.area !== "sin_clasificar" &&
-      extraction.warnings.length === 0 &&
+      canPublishInArea &&
+      resolvedArea !== "sin_clasificar" &&
+      extractionConfidenceIsSafe &&
       normalizedUpdates.length > 0 &&
+      Boolean(currentLiveData) &&
+      automaticContractIsSafe(normalizedUpdates, currentLiveData?.values ?? {}) &&
       normalizedUpdates.every((update) =>
-        update.area === classification.area &&
+        update.area === resolvedArea &&
         (user.financeAccess || !isFinancialLiveKey(update.key)) &&
         isSafeAutomaticStructuredUpdate(update),
       );
     if (canPublishAutomatically) {
-      try {
-        const publication = await publishLiveDataUpdates({
-          normalized: normalizedUpdates,
-          actor: user,
-          area: classification.area,
-          cutoff: analysis.detectedPeriod || declaredCutoff,
-          sourceFileId: id,
-          sourceName: candidate.name,
-          message: `${normalizedUpdates.length} datos estructurados publicados automáticamente desde ${candidate.name}.`,
-        });
-        await db
-          .update(documentDataProposals)
-          .set({ status: "publicado", updatedAt: new Date().toISOString() })
-          .where(eq(documentDataProposals.fileId, id));
-        await db.insert(fileReviews).values({
+      publicationStarted = true;
+      const publication = await publishLiveDataUpdates({
+        normalized: normalizedUpdates,
+        actor: user,
+        area: resolvedArea,
+        cutoff: effectiveCutoff,
+        sourceFileId: id,
+        sourceName: candidate.name,
+        message: `${normalizedUpdates.length} datos estructurados publicados automáticamente desde ${candidate.name}.`,
+        reviewClosure: {
+          mode: "insert",
           fileId: id,
-          action: "aprobado_automatico",
-          note: "Publicación automática administrativa de valores escalares, explícitos y validados por el contrato vivo.",
-          proposalCount: normalizedUpdates.length,
-          publicationRevision: publication.id,
+          proposalGeneration: extractionGeneration,
           requestKey: `auto:${id}`,
-          actorEmail: user.email,
-          actorName: user.displayName,
-        });
-        automaticMessage = `${normalizedUpdates.length} datos se han actualizado automáticamente en la revisión ${publication.id}; las cifras y gráficas se refrescarán en menos de 5 segundos.`;
-      } catch {
-        await db.update(uploadedFiles).set({
-          status: "pendiente_revision",
-          processingStage: "contraste",
-          processingProgress: 75,
-          processingSummary: "Los datos se extrajeron, pero la publicación automática no se completó. El original y las propuestas permanecen disponibles para revisión.",
-          requiresReview: true,
-          reviewStatus: "listo_revision",
-          updatedAt: new Date().toISOString(),
-        }).where(eq(uploadedFiles.id, id));
-        automaticMessage = "El archivo y sus cambios quedaron guardados, pero necesitan una revisión administrativa antes de actualizar el dashboard.";
-      }
+          completedAction: "aprobado_automatico",
+          note: "Publicación automática de hechos explícitos con alta confianza, validados por el contrato vivo y los permisos del usuario.",
+          proposalCount: normalizedUpdates.length,
+        },
+      });
+      publicationCompleted = true;
+      automaticMessage = `${normalizedUpdates.length} datos se han actualizado automáticamente en la revisión ${publication.id}; las cifras y gráficas se refrescarán en menos de 5 segundos.`;
     }
-    const [currentRow] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, id)).limit(1);
+    let currentRow = row;
+    try {
+      const [freshRow] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, id)).limit(1);
+      if (freshRow) currentRow = freshRow;
+    } catch {
+      // La fila inicial durable permite responder aunque falle esta lectura auxiliar.
+    }
+    if (financeProtectedUpload && !user.financeAccess) {
+      return Response.json({
+        restricted: true,
+        message: "El contenido se ha archivado y dirigido a Finanzas/Ventas. Solo las personas autorizadas pueden verlo o publicar sus datos.",
+      }, { status: 202 });
+    }
     return Response.json(
       {
-        file: publicFileRow(currentRow ?? row),
+        file: publicFileRow(currentRow, user),
         message: automaticMessage || (normalizedUpdates.length
-          ? `Archivo registrado en ${areaLabels[classification.area]}. Se han preparado ${normalizedUpdates.length} cambios para revisión.`
-          : `Archivo registrado en ${areaLabels[classification.area]}. El original aparece de inmediato y queda pendiente de interpretación; todavía no modifica cifras ni gráficas.`),
+          ? `Archivo registrado en ${areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea}. Se han preparado ${normalizedUpdates.length} cambios para revisión.`
+          : `Archivo registrado en ${areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea}. El original aparece de inmediato y queda pendiente de interpretación; todavía no modifica cifras ni gráficas.`),
       },
       { status: 201 },
     );
   } catch {
-    await db.delete(documentDataProposals).where(eq(documentDataProposals.fileId, id));
-    await db.delete(uploadedFiles).where(eq(uploadedFiles.id, id));
-    await bucket.delete(storageKey);
-    return Response.json({ error: "No se pudo completar el registro del archivo." }, { status: 500 });
+    let authoritativePointerReadSucceeded = false;
+    if (!extractionCommitted && extractionGeneration) {
+      try {
+        const [authoritativeFile] = await db.select().from(uploadedFiles)
+          .where(eq(uploadedFiles.id, id))
+          .limit(1);
+        authoritativePointerReadSucceeded = true;
+        extractionCommitted = proposalPointerWasCommitted({
+          row: authoritativeFile,
+          generation: extractionGeneration,
+        });
+      } catch {
+        // Unknown means preserve. A retry can safely reconcile the staged rows.
+      }
+    }
+    if (extractionGeneration && stagedGenerationMayBeDeleted({
+      authoritativeReadSucceeded: authoritativePointerReadSucceeded,
+      pointerCommitted: extractionCommitted,
+    })) {
+      await db.delete(documentDataProposals).where(and(
+        eq(documentDataProposals.fileId, id),
+        eq(documentDataProposals.generation, extractionGeneration),
+      )).catch(() => undefined);
+    }
+    const processingSummary = publicationCompleted
+      ? "Los datos llegaron a publicarse, pero el cierre administrativo quedó incompleto. El original, el historial y las propuestas se conservan para conciliación."
+      : publicationStarted
+        ? "La publicación automática no pudo confirmarse por completo. El original y todas las evidencias permanecen archivados para revisión."
+        : "El original quedó archivado, pero su extracción o preparación de propuestas necesita revisión manual.";
+    await db.update(uploadedFiles).set({
+      status: "observado",
+      processingStage: "observado",
+      processingProgress: publicationCompleted ? 95 : 60,
+      processingSummary,
+      requiresReview: true,
+      reviewStatus: "cambios_solicitados",
+      // If classification never completed, the provisional document type
+      // remains protected and can only be resolved by an authorized retry.
+      documentType: protectionResolved ? resolvedDocumentType : PROVISIONAL_DOCUMENT_TYPE,
+      updatedAt: new Date().toISOString(),
+    }).where(extractionCommitted
+      ? and(
+          eq(uploadedFiles.id, id),
+          eq(uploadedFiles.deletedAt, ""),
+          eq(uploadedFiles.proposalGeneration, extractionGeneration),
+          isNull(uploadedFiles.publicationRevision),
+        )
+      : and(
+          eq(uploadedFiles.id, id),
+          eq(uploadedFiles.deletedAt, ""),
+          eq(uploadedFiles.processingStage, "extraccion_en_curso"),
+          eq(uploadedFiles.updatedAt, row.updatedAt),
+        )).catch(() => undefined);
+    scheduleNotificationDispatch();
+    await db.insert(fileActivity).values({
+      fileId: id,
+      eventType: "procesamiento_observado",
+      message: processingSummary,
+      actorEmail: user.email,
+      actorName: user.displayName,
+    }).catch(() => undefined);
+    let currentRow = row;
+    try {
+      const [freshRow] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, id)).limit(1);
+      if (freshRow) currentRow = freshRow;
+    } catch {
+      // Conserva como respuesta la fila obtenida en el alta inicial.
+    }
+    if (fileRequiresFinanceAccess(currentRow) && !user.financeAccess) {
+      return Response.json({
+        restricted: true,
+        message: "El original está archivado de forma confidencial y queda pendiente de revisión por una persona autorizada.",
+      }, { status: 202 });
+    }
+    return Response.json({
+      file: publicFileRow(currentRow, user),
+      message: processingSummary,
+    }, { status: 201 });
   }
 }

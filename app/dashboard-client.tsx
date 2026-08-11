@@ -2,86 +2,83 @@
 
 import { Component, ChangeEvent, FormEvent, createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ErrorInfo, MouseEvent as ReactMouseEvent, ReactNode } from "react";
-import {
+import type {
   Building,
   CustomMetric,
   Supplier,
   Unit,
   UnitDiscipline,
   UrbanismArea,
-  buildings,
-  cubicaciones,
-  customMetrics as initialMetrics,
-  dataSources,
-  monthlyPlan,
-  projectSnapshot,
-  suppliers as initialSuppliers,
-  timeline,
-  urbanismAreas,
-  workPackages,
 } from "./demo-data";
-import {
-  advances,
-  antonelyFinanceSource,
-  arrearsBreakdown,
-  constructionDisciplines,
-  costBreakdown,
-  cxpAging,
-  cxpCategories,
-  delayedUrbanismStarts,
-  financialProjection,
-  financingProcesses,
-  juneDataQualityIssues,
-  juneReport,
-  managementActions,
-  payablesReconciliation,
-  permits,
-  safetyFindings,
-  safetyMetrics,
-  salesLocations,
-  salesModels,
-  structuralDelay,
-  urbanismReportAreas,
-} from "./june-report-data";
-import {
-  antonelyAdvances,
-  antonelyBalanceLines,
-  antonelyCostAccounts,
-  antonelyDetailTotals,
-  antonelyPayableCategories,
-  antonelyPayableVendorsAll,
-} from "./antonely-finance-data";
-import {
-  ifcComplianceGroups,
-  juneDeviationSummary,
-  monthlyDeviationLines,
-  procurementAudit,
-  procurementMonthlySchedule,
-  procurementPackages,
-  procurementQualityIssues,
-  supplierComparisons,
-  supplierContactAudit,
-  supplierDirectory,
-  typeABudgetChapters,
-  typeABudgetSummary,
-} from "./procurement-data";
-import {
-  reprogrammedFlowAudit,
-  reprogrammedFlowMonths,
-  reprogrammedFlowQualityIssues,
-  reprogrammedFlowScopes,
-} from "./reprogrammed-flow-data";
-import {
-  fiduciaryBalanceSections,
-  fiduciaryManagementReconciliation,
-  fiduciaryStatementQualityIssues,
-  fiduciaryStatementSummary,
-} from "./fiduciary-statements-data";
-import {
-  dataAuthorityMatrix,
-  dataGovernanceSummary,
-  sourceGovernance,
-} from "./data-governance";
+import type { DashboardBootstrapData } from "../lib/dashboard-bootstrap-types";
+import { mergeFileRegistryRecords } from "../lib/file-registry-pagination";
+
+let buildings: DashboardBootstrapData["demo"]["buildings"] = [];
+let cubicaciones: DashboardBootstrapData["demo"]["cubicaciones"] = [];
+let initialMetrics: DashboardBootstrapData["demo"]["customMetrics"] = [];
+let dataSources: DashboardBootstrapData["demo"]["dataSources"] = [];
+let monthlyPlan: DashboardBootstrapData["demo"]["monthlyPlan"] = [];
+let projectSnapshot = {} as DashboardBootstrapData["demo"]["projectSnapshot"];
+let initialSuppliers: DashboardBootstrapData["demo"]["suppliers"] = [];
+let timeline: DashboardBootstrapData["demo"]["timeline"] = [];
+let urbanismAreas: DashboardBootstrapData["demo"]["urbanismAreas"] = [];
+let workPackages: DashboardBootstrapData["demo"]["workPackages"] = [];
+
+let advances: DashboardBootstrapData["june"]["advances"] = [];
+let antonelyFinanceSource = {} as DashboardBootstrapData["june"]["antonelyFinanceSource"];
+let arrearsBreakdown: DashboardBootstrapData["june"]["arrearsBreakdown"] = [];
+let constructionDisciplines: DashboardBootstrapData["june"]["constructionDisciplines"] = [];
+let costBreakdown: DashboardBootstrapData["june"]["costBreakdown"] = [];
+let cxpAging: DashboardBootstrapData["june"]["cxpAging"] = [];
+let cxpCategories: DashboardBootstrapData["june"]["cxpCategories"] = [];
+let delayedUrbanismStarts: DashboardBootstrapData["june"]["delayedUrbanismStarts"] = [];
+let financialProjection: DashboardBootstrapData["june"]["financialProjection"] = [];
+let financingProcesses: DashboardBootstrapData["june"]["financingProcesses"] = [];
+let juneDataQualityIssues: DashboardBootstrapData["june"]["juneDataQualityIssues"] = [];
+let juneReport = {} as DashboardBootstrapData["june"]["juneReport"];
+let managementActions: DashboardBootstrapData["june"]["managementActions"] = [];
+let payablesReconciliation: DashboardBootstrapData["june"]["payablesReconciliation"] = [];
+let permits: DashboardBootstrapData["june"]["permits"] = [];
+let safetyFindings: DashboardBootstrapData["june"]["safetyFindings"] = [];
+let safetyMetrics: DashboardBootstrapData["june"]["safetyMetrics"] = [];
+let salesLocations: DashboardBootstrapData["june"]["salesLocations"] = [];
+let salesModels: DashboardBootstrapData["june"]["salesModels"] = [];
+let structuralDelay: DashboardBootstrapData["june"]["structuralDelay"] = [];
+let urbanismReportAreas: DashboardBootstrapData["june"]["urbanismReportAreas"] = [];
+
+let antonelyAdvances: DashboardBootstrapData["antonely"]["antonelyAdvances"] = [];
+let antonelyBalanceLines: DashboardBootstrapData["antonely"]["antonelyBalanceLines"] = [];
+let antonelyCostAccounts: DashboardBootstrapData["antonely"]["antonelyCostAccounts"] = [];
+let antonelyDetailTotals = {} as DashboardBootstrapData["antonely"]["antonelyDetailTotals"];
+let antonelyPayableCategories: DashboardBootstrapData["antonely"]["antonelyPayableCategories"] = [];
+let antonelyPayableVendorsAll: DashboardBootstrapData["antonely"]["antonelyPayableVendorsAll"] = [];
+
+let ifcComplianceGroups: DashboardBootstrapData["procurement"]["ifcComplianceGroups"] = [];
+let juneDeviationSummary = {} as DashboardBootstrapData["procurement"]["juneDeviationSummary"];
+let monthlyDeviationLines: DashboardBootstrapData["procurement"]["monthlyDeviationLines"] = [];
+let procurementAudit = {} as DashboardBootstrapData["procurement"]["procurementAudit"];
+let procurementMonthlySchedule: DashboardBootstrapData["procurement"]["procurementMonthlySchedule"] = [];
+let procurementPackages: DashboardBootstrapData["procurement"]["procurementPackages"] = [];
+let procurementQualityIssues: DashboardBootstrapData["procurement"]["procurementQualityIssues"] = [];
+let supplierComparisons: DashboardBootstrapData["procurement"]["supplierComparisons"] = [];
+let supplierContactAudit = {} as DashboardBootstrapData["procurement"]["supplierContactAudit"];
+let supplierDirectory: DashboardBootstrapData["procurement"]["supplierDirectory"] = [];
+let typeABudgetChapters: DashboardBootstrapData["procurement"]["typeABudgetChapters"] = [];
+let typeABudgetSummary = {} as DashboardBootstrapData["procurement"]["typeABudgetSummary"];
+
+let reprogrammedFlowAudit = {} as DashboardBootstrapData["reprogrammedFlow"]["reprogrammedFlowAudit"];
+let reprogrammedFlowMonths: DashboardBootstrapData["reprogrammedFlow"]["reprogrammedFlowMonths"] = [];
+let reprogrammedFlowQualityIssues: DashboardBootstrapData["reprogrammedFlow"]["reprogrammedFlowQualityIssues"] = [];
+let reprogrammedFlowScopes: DashboardBootstrapData["reprogrammedFlow"]["reprogrammedFlowScopes"] = [];
+
+let fiduciaryBalanceSections: DashboardBootstrapData["fiduciary"]["fiduciaryBalanceSections"] = [];
+let fiduciaryManagementReconciliation: DashboardBootstrapData["fiduciary"]["fiduciaryManagementReconciliation"] = [];
+let fiduciaryStatementQualityIssues: DashboardBootstrapData["fiduciary"]["fiduciaryStatementQualityIssues"] = [];
+let fiduciaryStatementSummary = {} as DashboardBootstrapData["fiduciary"]["fiduciaryStatementSummary"];
+
+let dataAuthorityMatrix: DashboardBootstrapData["governance"]["dataAuthorityMatrix"] = [];
+let dataGovernanceSummary = {} as DashboardBootstrapData["governance"]["dataGovernanceSummary"];
+let sourceGovernance: DashboardBootstrapData["governance"]["sourceGovernance"] = {};
 import {
   CurrencyCode,
   DEFAULT_DISPLAY_CURRENCY,
@@ -99,7 +96,11 @@ import {
   uploadStatusLabels,
   userAreas,
 } from "../lib/file-routing";
-import { LiveDataMap, applyLiveValuesToTargets } from "../lib/live-data";
+import {
+  LiveDataMap,
+  applyLiveValuesToTargets,
+  requiresFinanceAccessForArea,
+} from "../lib/live-data";
 import {
   ArchivedReportSnapshot,
   ControlRoomPanel,
@@ -122,6 +123,139 @@ import type {
   LocalBiometricRecord,
 } from "./device-center";
 
+function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
+  ({
+    buildings,
+    cubicaciones,
+    customMetrics: initialMetrics,
+    dataSources,
+    monthlyPlan,
+    projectSnapshot,
+    suppliers: initialSuppliers,
+    timeline,
+    urbanismAreas,
+    workPackages,
+  } = bootstrap.demo);
+  ({
+    advances,
+    antonelyFinanceSource,
+    arrearsBreakdown,
+    constructionDisciplines,
+    costBreakdown,
+    cxpAging,
+    cxpCategories,
+    delayedUrbanismStarts,
+    financialProjection,
+    financingProcesses,
+    juneDataQualityIssues,
+    juneReport,
+    managementActions,
+    payablesReconciliation,
+    permits,
+    safetyFindings,
+    safetyMetrics,
+    salesLocations,
+    salesModels,
+    structuralDelay,
+    urbanismReportAreas,
+  } = bootstrap.june);
+  ({
+    antonelyAdvances,
+    antonelyBalanceLines,
+    antonelyCostAccounts,
+    antonelyDetailTotals,
+    antonelyPayableCategories,
+    antonelyPayableVendorsAll,
+  } = bootstrap.antonely);
+  ({
+    ifcComplianceGroups,
+    juneDeviationSummary,
+    monthlyDeviationLines,
+    procurementAudit,
+    procurementMonthlySchedule,
+    procurementPackages,
+    procurementQualityIssues,
+    supplierComparisons,
+    supplierContactAudit,
+    supplierDirectory,
+    typeABudgetChapters,
+    typeABudgetSummary,
+  } = bootstrap.procurement);
+  ({
+    reprogrammedFlowAudit,
+    reprogrammedFlowMonths,
+    reprogrammedFlowQualityIssues,
+    reprogrammedFlowScopes,
+  } = bootstrap.reprogrammedFlow);
+  ({
+    fiduciaryBalanceSections,
+    fiduciaryManagementReconciliation,
+    fiduciaryStatementQualityIssues,
+    fiduciaryStatementSummary,
+  } = bootstrap.fiduciary);
+  ({
+    dataAuthorityMatrix,
+    dataGovernanceSummary,
+    sourceGovernance,
+  } = bootstrap.governance);
+
+  liveDataTargets = {
+    advances,
+    antonelyAdvances,
+    antonelyBalanceLines,
+    antonelyCostAccounts,
+    antonelyDetailTotals,
+    antonelyFinanceSource,
+    antonelyPayableCategories,
+    antonelyPayableVendorsAll,
+    arrearsBreakdown,
+    buildings,
+    constructionDisciplines,
+    costBreakdown,
+    cubicaciones,
+    cxpAging,
+    cxpCategories,
+    dataSources,
+    delayedUrbanismStarts,
+    financialProjection,
+    financingProcesses,
+    fiduciaryBalanceSections,
+    fiduciaryManagementReconciliation,
+    fiduciaryStatementQualityIssues,
+    fiduciaryStatementSummary,
+    juneDataQualityIssues,
+    juneReport,
+    managementActions,
+    monthlyPlan,
+    payablesReconciliation,
+    permits,
+    projectSnapshot,
+    reprogrammedFlowAudit,
+    reprogrammedFlowMonths,
+    reprogrammedFlowQualityIssues,
+    reprogrammedFlowScopes,
+    safetyFindings,
+    safetyMetrics,
+    salesLocations,
+    salesModels,
+    structuralDelay,
+    timeline,
+    urbanismAreas,
+    urbanismReportAreas,
+    workPackages,
+  };
+  const visibleSourceIds = dataSources.map((source) => source.id);
+  if (workspaceAreaConfigs.fuentes) {
+    workspaceAreaConfigs.fuentes.sourceIds = visibleSourceIds;
+    workspaceAreaConfigs.fuentes.modules[0].sourceIds = visibleSourceIds;
+  }
+  statCardLinks["Datos gobernados"] = {
+    view: "fuentes",
+    sourceIds: dataAuthorityMatrix.map((item) => item.primarySourceId),
+  };
+  projects.araya.cutoff = projectSnapshot.declaredCutoff;
+}
+
 type View =
   | "resumen"
   | "planificacion"
@@ -138,7 +272,7 @@ type View =
   | "agente"
   | "usuarios";
 
-type DashboardUser = {
+export type DashboardUser = {
   id: number;
   email: string;
   displayName: string;
@@ -199,9 +333,37 @@ type UploadedFileRecord = {
   reviewNote: string;
   publicationRevision: number | null;
   publishedAt: string;
+  deletedAt: string;
+  deletedByName: string;
+  deleteReason: string;
+  restoredAt: string;
   createdAt: string;
   updatedAt: string;
+  canManage: boolean;
   downloadUrl: string;
+};
+
+type FileRegistrySummary = {
+  total: number;
+  active: number;
+  deleted: number;
+  pendingReview: number;
+  synchronized: number;
+  observed: number;
+  averageProgress: number;
+  discrepancies: number;
+  lastUploadAt: string;
+};
+
+type FileRegistryPayload = {
+  files?: UploadedFileRecord[];
+  removedIds?: string[];
+  hasMore?: boolean;
+  nextCursor?: string | null;
+  changeCursor?: string;
+  nextChangeCursor?: string;
+  summary?: FileRegistrySummary;
+  error?: string;
 };
 
 type FileViewerState = {
@@ -311,6 +473,43 @@ type LiveSyncState = {
     actorName: string;
     createdAt: string;
   } | null;
+};
+
+type ServerNotification = {
+  id: number;
+  kind: string;
+  projectId: string;
+  area: string;
+  actorName: string;
+  subjectType: string;
+  subjectId: string;
+  title: string;
+  body: string;
+  view: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  readAt: string;
+  openedAt: string;
+  read: boolean;
+};
+
+type ServerNotificationsResponse = {
+  notifications?: ServerNotification[];
+  cursor?: number;
+  refreshIntervalMs?: number;
+  refreshedAt?: string;
+  error?: string;
+};
+
+type NotificationReadPatch = {
+  ids?: number[];
+  openedId?: number;
+  readThroughId?: number;
+};
+
+type PushConfigResponse = {
+  enabled?: boolean;
+  publicKey?: string;
 };
 
 type InstallPromptEvent = Event & {
@@ -678,51 +877,7 @@ const statCardLinks: Record<string, { view: View; sourceIds: string[] }> = {
   "Corte declarado": { view: "fuentes", sourceIds: ["source-june-consolidated", "source-xls", "source-mpp"] },
 };
 
-const liveDataTargets: Record<string, unknown> = {
-  advances,
-  antonelyAdvances,
-  antonelyBalanceLines,
-  antonelyCostAccounts,
-  antonelyDetailTotals,
-  antonelyFinanceSource,
-  antonelyPayableCategories,
-  antonelyPayableVendorsAll,
-  arrearsBreakdown,
-  buildings,
-  constructionDisciplines,
-  costBreakdown,
-  cubicaciones,
-  cxpAging,
-  cxpCategories,
-  dataSources,
-  delayedUrbanismStarts,
-  financialProjection,
-  financingProcesses,
-  fiduciaryBalanceSections,
-  fiduciaryManagementReconciliation,
-  fiduciaryStatementQualityIssues,
-  fiduciaryStatementSummary,
-  juneDataQualityIssues,
-  juneReport,
-  managementActions,
-  monthlyPlan,
-  payablesReconciliation,
-  permits,
-  projectSnapshot,
-  reprogrammedFlowAudit,
-  reprogrammedFlowMonths,
-  reprogrammedFlowQualityIssues,
-  reprogrammedFlowScopes,
-  safetyFindings,
-  safetyMetrics,
-  salesLocations,
-  salesModels,
-  structuralDelay,
-  timeline,
-  urbanismAreas,
-  urbanismReportAreas,
-  workPackages,
-};
+let liveDataTargets: Record<string, unknown> = {};
 
 const projects: Record<ProjectId, {
   id: ProjectId;
@@ -737,7 +892,7 @@ const projects: Record<ProjectId, {
     code: "AR",
     name: "ARAYA",
     summary: "26 edificios · 156 apartamentos",
-    cutoff: projectSnapshot.declaredCutoff,
+    cutoff: "",
     demo: false,
   },
   mirador: {
@@ -1065,40 +1220,8 @@ const processingStageLabels: Record<string, string> = {
   observado: "Revisión requerida",
 };
 
-function financialQualityIssues(currency: CurrencyCode) {
-  const dop = (value: number) => formatMoney(value, "DOP", currency);
-  const usdValue = (value: number) => formatMoney(value, "USD", currency);
-  const juneIssues = juneDataQualityIssues.map((issue) => {
-    if (issue.title === "Presupuesto total") {
-      return { ...issue, detail: `La lámina 29 muestra ${formatMoneyMillions(3428500000, "DOP", currency)}; el Excel y la lámina 30 muestran ${formatMoneyMillions(3591280577.17, "DOP", currency)}. Se usa el Excel como control detallado.` };
-    }
-    if (issue.title === "Cuentas por pagar") {
-      return { ...issue, detail: `La relación consolidada suma ${dop(18597489.63)}; el balance, ${dop(18612245.9)}; y el detalle de Antonely, ${dop(18627534.91)}. Se mantienen las tres cifras para conciliación.` };
-    }
-    if (issue.title === "Morosidad") {
-      return { ...issue, detail: `El desglose suma ${usdValue(136840.44)}, cinco centavos de dólar más que el total declarado de ${usdValue(136840.39)}.` };
-    }
-    if (issue.title === "Versión comercial") {
-      return { ...issue, detail: `El informe de ventas aislado conserva una lámina anterior de 31 clientes y ${usdValue(148281.58)}; prevalece el consolidado actualizado al 06/07/2026.` };
-    }
-    if (issue.title === "Costes · fuente Antonely") {
-      return { ...issue, detail: `Antonely registra ${dop(48988755.86)} en junio y ${dop(712326161.73)} acumulados; el consolidado registra ${dop(48998910.52)} y ${dop(712326162.73)}. Diferencias: ${dop(10154.66)} y ${dop(1)}.` };
-    }
-    if (issue.title === "Anticipos · balance frente a detalle") {
-      return { ...issue, detail: `El balance registra ${dop(9210448.94)} y el detalle de 26 anticipos suma ${dop(9210448.86)}. La diferencia de ${dop(0.08)} queda abierta para conciliación.` };
-    }
-    return issue;
-  });
-  const fiduciaryIssues = fiduciaryStatementQualityIssues.map((issue) => {
-    if (issue.title === "Cuentas por pagar con distinto alcance") {
-      return { ...issue, detail: `Fiduciaria declara ${dop(24814585.2)}; el control consolidado operativo declara ${dop(18597489.63)}. La diferencia no se trata como error hasta disponer de conciliación por cuenta.` };
-    }
-    if (issue.title === "Disponibilidades pendientes de conciliación bancaria") {
-      return { ...issue, detail: `Fiduciaria declara ${dop(50353287.01)} y el control interno ${dop(48234289.3)}. Se mantiene abierta la diferencia de ${dop(2118997.71)}.` };
-    }
-    return issue;
-  });
-  return [...juneIssues, ...fiduciaryIssues];
+function financialQualityIssues() {
+  return [...juneDataQualityIssues, ...fiduciaryStatementQualityIssues];
 }
 
 const defaultUploadArea: Record<View, UploadArea> = {
@@ -1457,7 +1580,7 @@ function Header({
 }
 
 function sourceRequiresFinance(source: (typeof dataSources)[number]) {
-  return /financ|fideicomiso|balance|resultado|flujo|cxp|antonely|presupuesto|desviaci[oó]n|pr[eé]stamo ifc/i.test(`${source.kind} ${source.file}`);
+  return /financ|fideicomiso|balance|resultado|flujo|cxp|antonely|presupuesto|desviaci[oó]n|pr[eé]stamo ifc|comercial|ventas?|reservas?|cobranza|morosidad|desistimiento/i.test(`${source.kind} ${source.file}`);
 }
 
 function sourceWorkspaceDetail(source: (typeof dataSources)[number]): WorkspaceDetail {
@@ -1762,20 +1885,27 @@ function PdfDocumentPreview({ url, title }: { url: string; title: string }) {
   }, []);
 
   useEffect(() => {
-    const abortController = new AbortController();
     let disposed = false;
     let loadingTask: PdfLoadingTask | null = null;
     void (async () => {
       try {
-        const response = await fetch(url, { credentials: "same-origin", cache: "no-store", signal: abortController.signal });
-        if (!response.ok) throw new Error(`No se pudo cargar el PDF (${response.status}).`);
-        const bytes = await response.arrayBuffer();
         const [pdfjs, workerModule] = await Promise.all([
           import("pdfjs-dist"),
           import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
         ]);
         pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
-        const task = pdfjs.getDocument({ data: bytes }) as unknown as PdfLoadingTask;
+        // PDF.js requests only the byte ranges it needs. Keeping the original
+        // outside JavaScript memory avoids blank screens on low-memory phones.
+        const task = pdfjs.getDocument({
+          url: new URL(url, window.location.origin).toString(),
+          withCredentials: true,
+          rangeChunkSize: 64 * 1_024,
+          disableRange: false,
+          // disableStream is required for disableAutoFetch to avoid a
+          // progressive full-file download after the first page.
+          disableStream: true,
+          disableAutoFetch: true,
+        }) as unknown as PdfLoadingTask;
         loadingTask = task;
         const loadedDocument = await task.promise;
         if (disposed) {
@@ -1785,14 +1915,13 @@ function PdfDocumentPreview({ url, title }: { url: string; title: string }) {
         setDocumentHandle(loadedDocument);
         setStatus("ready");
       } catch (loadError) {
-        if (disposed || abortController.signal.aborted) return;
+        if (disposed) return;
         setStatus("error");
         setError(loadError instanceof Error ? loadError.message : "El PDF no se pudo mostrar.");
       }
     })();
     return () => {
       disposed = true;
-      abortController.abort();
       void loadingTask?.destroy?.();
     };
   }, [url]);
@@ -1856,13 +1985,24 @@ function TextDocumentPreview({ url }: { url: string }) {
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   useEffect(() => {
     const abortController = new AbortController();
-    void fetch(url, { credentials: "same-origin", cache: "no-store", signal: abortController.signal })
+    void fetch(url, {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { Range: "bytes=0-524287" },
+      signal: abortController.signal,
+    })
       .then((response) => {
         if (!response.ok) throw new Error(`No se pudo cargar el texto (${response.status}).`);
-        return response.text();
+        return Promise.all([
+          response.text(),
+          Promise.resolve(response.status === 206 || Boolean(response.headers.get("content-range"))),
+        ]);
       })
-      .then((content) => {
-        setText(content.length > 500_000 ? `${content.slice(0, 500_000)}\n\n… vista previa limitada a 500.000 caracteres.` : content);
+      .then(([content, partial]) => {
+        const limited = content.length > 500_000 ? content.slice(0, 500_000) : content;
+        setText(partial || content.length > 500_000
+          ? `${limited}\n\n… vista previa limitada; descarga la copia para consultar el contenido completo.`
+          : limited);
         setStatus("ready");
       })
       .catch((loadError) => {
@@ -1992,6 +2132,123 @@ function notificationTime(value: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+const serverNotificationPrefix = "server-";
+
+function serverNotificationDeviceId(id: number) {
+  return `${serverNotificationPrefix}${id}`;
+}
+
+function serverNotificationNumericId(id: string) {
+  if (!id.startsWith(serverNotificationPrefix)) return 0;
+  const value = Number(id.slice(serverNotificationPrefix.length));
+  return Number.isSafeInteger(value) && value > 0 ? value : 0;
+}
+
+function serverNotificationTone(notification: ServerNotification): DeviceNotificationItem["tone"] {
+  const signal = `${notification.kind} ${notification.title}`.toLowerCase();
+  if (/critical|critico|crítico|blocked|bloquead|rejected|rechazad|error/.test(signal)) return "critical";
+  if (/warning|advert|observ|overdue|vencid|deleted|eliminad|retirad/.test(signal)) return "warning";
+  if (/restored|restaurad|approved|aprobad|published|publicad|completed|completad/.test(signal)) return "success";
+  return "info";
+}
+
+function serverNotificationView(notification: ServerNotification): View {
+  if (navItems.some((item) => item.id === notification.view)) return notification.view as View;
+  return notificationAreaViews[notification.area] ?? "resumen";
+}
+
+function serverNotificationAsDeviceItem(notification: ServerNotification): DeviceNotificationItem {
+  return {
+    id: serverNotificationDeviceId(notification.id),
+    title: notification.title || "Actividad del Centro de Control",
+    detail: notification.body || (notification.actorName
+      ? `Actividad registrada por ${notification.actorName}.`
+      : "Hay una nueva actividad en el proyecto."),
+    timestamp: notificationTime(notification.createdAt),
+    tone: serverNotificationTone(notification),
+    view: serverNotificationView(notification),
+  };
+}
+
+function isServerNotification(value: unknown): value is ServerNotification {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<ServerNotification>;
+  return typeof item.id === "number" && Number.isSafeInteger(item.id) && item.id > 0
+    && typeof item.kind === "string"
+    && typeof item.area === "string"
+    && typeof item.title === "string"
+    && typeof item.body === "string"
+    && typeof item.view === "string"
+    && typeof item.createdAt === "string"
+    && typeof item.read === "boolean";
+}
+
+function mergeServerNotifications(
+  current: ServerNotification[],
+  incoming: ServerNotification[],
+) {
+  const byId = new Map(current.map((item) => [item.id, item]));
+  for (const item of incoming) byId.set(item.id, item);
+  return [...byId.values()]
+    .sort((left, right) => right.id - left.id)
+    .slice(0, 100);
+}
+
+function notificationFingerprint(item: DeviceNotificationItem) {
+  return `${item.title}\n${item.detail}\n${item.view ?? ""}`.trim().toLowerCase();
+}
+
+function mergeDeviceNotifications(
+  serverItems: DeviceNotificationItem[],
+  localItems: DeviceNotificationItem[],
+) {
+  const merged: DeviceNotificationItem[] = [];
+  const ids = new Set<string>();
+  const fingerprints = new Set<string>();
+  for (const item of [...serverItems, ...localItems]) {
+    const fingerprint = notificationFingerprint(item);
+    if (ids.has(item.id) || (fingerprint && fingerprints.has(fingerprint))) continue;
+    ids.add(item.id);
+    if (fingerprint) fingerprints.add(fingerprint);
+    merged.push(item);
+  }
+  return merged.slice(0, 24);
+}
+
+function clientPlatform() {
+  const navigatorWithHints = navigator as Navigator & { userAgentData?: { platform?: string } };
+  return navigatorWithHints.userAgentData?.platform || navigator.platform || "";
+}
+
+function createClientIdentifier(prefix: string) {
+  const suffix = typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}-${suffix}`.slice(0, 128);
+}
+
+function storedClientIdentifier(storage: Storage, key: string, prefix: string) {
+  try {
+    const stored = storage.getItem(key)?.trim() ?? "";
+    if (stored.length >= 8 && stored.length <= 128) return stored;
+    const created = createClientIdentifier(prefix);
+    storage.setItem(key, created);
+    return created;
+  } catch {
+    return createClientIdentifier(prefix);
+  }
+}
+
+function applicationServerKey(value: string) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
 }
 
 function buildDeviceNotifications(
@@ -3968,7 +4225,7 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
   const workspace = useContext(WorkspaceDetailContext);
   const rd = (value: number) => formatMoney(value, "DOP", currency);
   const rdMillions = (value: number) => formatMoneyMillions(value, "DOP", currency);
-  const qualityIssues = financialQualityIssues(currency);
+  const qualityIssues = financialQualityIssues();
   return (
     <div className="view-stack">
       <section className="data-view-intro">
@@ -3990,7 +4247,7 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
           { id: "anticipos", label: "Anticipos", detail: rdMillions(juneReport.finance.advancesPendingDop) },
           { id: "fideicomiso", label: "Fideicomiso", detail: rdMillions(fiduciaryStatementSummary.balance.assetsDop) },
           { id: "control", label: "Control interno", detail: rdMillions(juneReport.finance.assetsDop) },
-          { id: "detalle", label: "Detalle completo", detail: "29 · 15 · 26 · 41" },
+          { id: "detalle", label: "Detalle completo", detail: `${antonelyDetailTotals.costAccountCount} · ${antonelyDetailTotals.payableCategoryCount} · ${antonelyDetailTotals.advanceCount} · ${antonelyDetailTotals.balanceLineCount}` },
         ].map((item) => (
           <button key={item.id} className={section === item.id ? "active" : ""} onClick={() => setSection(item.id as typeof section)}>
             <span>{item.label}</span><strong>{item.detail}</strong>
@@ -4008,8 +4265,8 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
             {financialProjection.map((month) => (
               <div className="projection-month" key={month.month}>
                 <div className="projection-bars">
-                  <i className="income" style={{ height: `${Math.max(4, (month.income / 180000000) * 100)}%` }} title={`Ingresos ${rd(month.income)}`} />
-                  <i className="cost" style={{ height: `${Math.max(4, (month.costs / 180000000) * 100)}%` }} title={`Costes ${rd(month.costs)}`} />
+                  <i className="income" style={{ height: `${Math.max(4, (month.income / Math.max(1, ...financialProjection.flatMap((item) => [item.income, item.costs]))) * 100)}%` }} title={`Ingresos ${rd(month.income)}`} />
+                  <i className="cost" style={{ height: `${Math.max(4, (month.costs / Math.max(1, ...financialProjection.flatMap((item) => [item.income, item.costs]))) * 100)}%` }} title={`Costes ${rd(month.costs)}`} />
                 </div>
                 <strong>{month.month}</strong>
                 <small className={month.cumulative < 0 ? "danger-text" : "good-text"}>{rdMillions(month.cumulative)}</small>
@@ -4191,7 +4448,7 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
                 ))}
               </div>
             </div>
-            <div className="callout warn"><strong>Notas finales desactualizadas en origen</strong><p>El comentario del Excel habla de +0,7% y RD$138.178; sus fórmulas vigentes calculan +0,30% y {rd(juneDeviationSummary.differencePerBuildingDop)}. El dashboard usa los valores calculados y conserva el documento sin cambios.</p></div>
+            <div className="callout warn"><strong>Notas finales desactualizadas en origen</strong><p>El comentario final del Excel no coincide con sus fórmulas vigentes. El dashboard usa el valor calculado de {rd(juneDeviationSummary.differencePerBuildingDop)} y conserva el documento sin cambios.</p></div>
           </article>
 
           <article className="panel">
@@ -4267,7 +4524,7 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
           <article className="panel decision-panel">
             <span className="section-kicker">CONTROL DE ANTICIPOS</span>
             <h3>{antonelyDetailTotals.advanceCount} registros</h3>
-            <strong>{rdMillions(10035120.72)}</strong>
+            <strong>{rdMillions(antonelyDetailTotals.advanceGrantedDop)}</strong>
             <p>Total concedido. El saldo pendiente de amortización es {rdMillions(juneReport.finance.advancesPendingDop)}.</p>
             <div className="callout"><strong>Lectura correcta</strong><p>Los importes “concedido” y “pendiente” no son equivalentes; el dashboard muestra ambos por separado.</p></div>
           </article>
@@ -4379,7 +4636,7 @@ function MetricsView({ metrics, onAdd, currency }: { metrics: CustomMetric[]; on
                 <div className="compact-row" key={item.name}><strong>{item.name}</strong><span>{rdMillions(item.cumulative)}</span><span>{rdMillions(item.june)}</span></div>
               ))}
             </div>
-            <p className="quality-note">Antonely registra {rd(48988755.86)} en junio y {rd(712326161.73)} acumulados. Frente al consolidado, las diferencias son {rd(10154.66)} y {rd(1)} respectivamente.</p>
+            <p className="quality-note">Antonely registra {rd(antonelyCostAccounts.reduce((total, item) => total + item.june, 0))} en junio y {rd(antonelyCostAccounts.reduce((total, item) => total + item.cumulative, 0))} acumulados. Frente al consolidado, las diferencias son {rd(juneReport.finance.juneExecutedDop - antonelyCostAccounts.reduce((total, item) => total + item.june, 0))} y {rd(juneReport.finance.executedDop - antonelyCostAccounts.reduce((total, item) => total + item.cumulative, 0))} respectivamente.</p>
           </article>
           <article className="panel">
             <div className="panel-heading"><div><span className="section-kicker">CONTROL INTERNO</span><h3>Posición financiera de gestión</h3></div></div>
@@ -4520,10 +4777,10 @@ function FinanceLockedView() {
     <section className="panel finance-locked">
       <div className="finance-lock-mark" aria-hidden="true">F</div>
       <span className="section-kicker">ÁREA RESTRINGIDA</span>
-      <h2>Finanzas requiere autorización individual.</h2>
+      <h2>Finanzas y Ventas y cobranza requieren autorización individual.</h2>
       <p>
         Tu usuario puede trabajar con obra, apartamentos, edificios, urbanismo y documentación,
-        pero no tiene permiso para consultar cifras financieras. El administrador puede
+        pero no tiene permiso para consultar cifras financieras ni información comercial. El administrador puede
         conceder o retirar este acceso desde Usuarios y accesos.
       </p>
     </section>
@@ -4631,7 +4888,7 @@ function UserEditorModal({
             disabled={form.role === "admin"}
             onChange={(event) => setForm((current) => ({ ...current, financeAccess: event.target.checked }))}
           />
-          <span><strong>Acceso a Finanzas</strong><small>Los administradores siempre conservan este permiso.</small></span>
+          <span><strong>Finanzas y Ventas</strong><small>Los administradores siempre conservan este permiso combinado.</small></span>
         </label>
         <label className="permission-check">
           <input
@@ -4877,7 +5134,7 @@ function UsersAdminView({
           </label>
           <label className="permission-check">
             <input type="checkbox" checked={form.financeAccess} disabled={form.role === "admin"} onChange={(event) => setForm((current) => ({ ...current, financeAccess: event.target.checked }))} />
-            <span><strong>Acceso a Finanzas</strong><small>Permite consultar cifras, documentos e informes financieros.</small></span>
+            <span><strong>Finanzas y Ventas</strong><small>Permite consultar cifras, documentos e informes financieros, comerciales y de cobranza.</small></span>
           </label>
           <button className="button primary" type="submit" disabled={Boolean(saving)}>Crear acceso</button>
         </form>
@@ -4946,7 +5203,7 @@ function UsersAdminView({
                     disabled={user.role === "admin" || saving === String(user.id)}
                     onClick={() => void saveUser({ ...user, financeAccess: !user.financeAccess })}
                   >
-                    <span>Finanzas</span><strong>{user.financeAccess ? "Permitido" : "Bloqueado"}</strong>
+                    <span>Finanzas y Ventas</span><strong>{user.financeAccess ? "Permitido" : "Bloqueado"}</strong>
                   </button>
                   <button
                     className={`permission-toggle ${user.active ? "granted" : "revoked"}`}
@@ -5061,6 +5318,7 @@ function FileReviewPanel({
   const [draftValue, setDraftValue] = useState("");
   const [draftUpdates, setDraftUpdates] = useState<Array<{ key: string; value: unknown }>>([]);
   const onCloseRef = useRef(onClose);
+  const reviewRequestKeys = useRef<Partial<Record<"prepare" | "approve" | "observe" | "reject" | "reopen", string>>>({});
 
   useEffect(() => {
     onCloseRef.current = onClose;
@@ -5100,6 +5358,8 @@ function FileReviewPanel({
     if (working) return;
     setWorking(action);
     setError("");
+    const requestKey = reviewRequestKeys.current[action] ?? crypto.randomUUID();
+    reviewRequestKeys.current[action] = requestKey;
     try {
       const response = await fetch("/api/files/review", {
         method: "POST",
@@ -5107,7 +5367,7 @@ function FileReviewPanel({
         body: JSON.stringify({
           action,
           fileId: file.id,
-          requestKey: crypto.randomUUID(),
+          requestKey,
           note,
           area,
           cutoff,
@@ -5127,6 +5387,7 @@ function FileReviewPanel({
       });
       const payload = await response.json() as { error?: string; message?: string };
       if (!response.ok) throw new Error(payload.error ?? "No se pudo registrar la decisión.");
+      delete reviewRequestKeys.current[action];
       setNote("");
       setDraftUpdates([]);
       setDraftKey("");
@@ -5239,7 +5500,7 @@ function FileReviewPanel({
                     <select value={area} onChange={(event) => setArea(event.target.value)}>
                       {uploadAreas
                         .filter((option) => option.id !== "auto" && option.id !== "sin_clasificar")
-                        .filter((option) => detail.permissions.canAccessFinance || option.id !== "finanzas")
+                        .filter((option) => detail.permissions.canAccessFinance || !requiresFinanceAccessForArea(option.id))
                         .map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
                     </select>
                   </label>
@@ -5375,20 +5636,47 @@ function ArchiveDisclosure({
 
 function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser }) {
   const [files, setFiles] = useState<UploadedFileRecord[]>([]);
+  const [summary, setSummary] = useState<FileRegistrySummary>({
+    total: 0,
+    active: 0,
+    deleted: 0,
+    pendingReview: 0,
+    synchronized: 0,
+    observed: 0,
+    averageProgress: 0,
+    discrepancies: 0,
+    lastUploadAt: "",
+  });
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState<"pending" | "all" | "integrated" | "observed">("pending");
+  const [filter, setFilter] = useState<"pending" | "all" | "integrated" | "observed" | "deleted">("pending");
   const [selectedFile, setSelectedFile] = useState<UploadedFileRecord | null>(null);
+  const [lifecycleBusy, setLifecycleBusy] = useState("");
+  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const changeCursorRef = useRef("");
+  const pollingRef = useRef(false);
+  const filesRef = useRef<UploadedFileRecord[]>([]);
+  const reconciliationOffsetRef = useRef(0);
+
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
 
   useEffect(() => {
     let active = true;
-    async function refresh() {
+    async function initialize() {
       try {
-        const response = await fetch("/api/files", { cache: "no-store" });
-        const payload = (await response.json()) as { files?: UploadedFileRecord[]; error?: string };
+        const response = await fetch("/api/files?includeDeleted=1&limit=75", { cache: "no-store" });
+        const payload = (await response.json()) as FileRegistryPayload;
         if (!response.ok) throw new Error(payload.error ?? "No se pudo actualizar el registro.");
         if (active) {
           setFiles(payload.files ?? []);
+          if (payload.summary) setSummary(payload.summary);
+          setHasMore(Boolean(payload.hasMore));
+          setNextCursor(payload.nextCursor ?? null);
+          changeCursorRef.current = payload.changeCursor ?? "";
           setError("");
         }
       } catch (refreshError) {
@@ -5397,24 +5685,94 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
         if (active) setLoading(false);
       }
     }
-    const onFilesUpdated = () => void refresh();
-    void refresh();
-    const interval = window.setInterval(() => void refresh(), 5_000);
+
+    async function refreshChanges() {
+      if (!changeCursorRef.current || pollingRef.current) return;
+      pollingRef.current = true;
+      try {
+        let cursor = changeCursorRef.current;
+        const knownFiles = filesRef.current;
+        const knownStart = knownFiles.length
+          ? reconciliationOffsetRef.current % knownFiles.length
+          : 0;
+        const knownIds = knownFiles
+          .slice(knownStart, knownStart + 75)
+          .map((file) => file.id);
+        reconciliationOffsetRef.current = knownFiles.length && knownStart + knownIds.length < knownFiles.length
+          ? knownStart + knownIds.length
+          : 0;
+        for (let page = 0; page < 10 && active; page += 1) {
+          const knownQuery = page === 0 && knownIds.length
+            ? `&known=${encodeURIComponent(knownIds.join(","))}`
+            : "";
+          const response = await fetch(
+            `/api/files?includeDeleted=1&mode=changes&limit=100&after=${encodeURIComponent(cursor)}${knownQuery}`,
+            { cache: "no-store" },
+          );
+          const payload = (await response.json()) as FileRegistryPayload;
+          if (!response.ok) throw new Error(payload.error ?? "No se pudieron sincronizar los cambios documentales.");
+          if (!active) return;
+          setFiles((current) => mergeFileRegistryRecords(
+            current,
+            payload.files ?? [],
+            payload.removedIds ?? [],
+          ));
+          if (payload.summary) setSummary(payload.summary);
+          cursor = payload.nextChangeCursor ?? cursor;
+          changeCursorRef.current = cursor;
+          setError("");
+          if (!payload.hasMore) break;
+        }
+      } catch (refreshError) {
+        if (active) setError(refreshError instanceof Error ? refreshError.message : "No se pudieron sincronizar los cambios documentales.");
+      } finally {
+        pollingRef.current = false;
+      }
+    }
+
+    const onFilesUpdated = () => {
+      if (changeCursorRef.current) void refreshChanges();
+      else void initialize();
+    };
+    void initialize();
+    const interval = window.setInterval(() => void refreshChanges(), 5_000);
     window.addEventListener("araya-files-updated", onFilesUpdated);
     return () => {
       active = false;
       window.clearInterval(interval);
       window.removeEventListener("araya-files-updated", onFilesUpdated);
     };
-  }, []);
+  }, [currentUser.email, currentUser.financeAccess, currentUser.role]);
 
-  const pendingReview = files.filter((file) => file.requiresReview).length;
-  const synchronized = files.filter((file) => file.processingProgress >= 100).length;
-  const observed = files.filter((file) => file.status === "observado" || file.status === "rechazado").length;
-  const averageProgress = files.length
-    ? Math.round(files.reduce((total, file) => total + file.processingProgress, 0) / files.length)
-    : 0;
+  async function loadOlderFiles() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/files?includeDeleted=1&limit=75&cursor=${encodeURIComponent(nextCursor)}`,
+        { cache: "no-store" },
+      );
+      const payload = (await response.json()) as FileRegistryPayload;
+      if (!response.ok) throw new Error(payload.error ?? "No se pudo abrir el archivo documental anterior.");
+      setFiles((current) => mergeFileRegistryRecords(current, payload.files ?? []));
+      if (payload.summary) setSummary(payload.summary);
+      setHasMore(Boolean(payload.hasMore));
+      setNextCursor(payload.nextCursor ?? null);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "No se pudo abrir el archivo documental anterior.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  const pendingReview = summary.pendingReview;
+  const synchronized = summary.synchronized;
+  const observed = summary.observed;
+  const averageProgress = summary.averageProgress;
   const visibleFiles = useMemo(() => files.filter((file) => {
+    if (filter === "deleted") return Boolean(file.deletedAt);
+    if (file.deletedAt) return false;
     if (filter === "pending") return file.requiresReview;
     if (filter === "integrated") return file.status === "integrado";
     if (filter === "observed") return file.status === "observado" || file.status === "rechazado";
@@ -5459,6 +5817,31 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
       }));
   }, [visibleFiles]);
 
+  async function manageLifecycle(file: UploadedFileRecord, action: "delete" | "restore") {
+    if (
+      action === "delete" &&
+      !window.confirm(`¿Eliminar ${file.originalName}? El tablero se recalculará sin sus datos y podrás restaurarlo después.`)
+    ) return;
+    setLifecycleBusy(file.id);
+    setError("");
+    try {
+      const response = await fetch("/api/files/lifecycle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId: file.id, action }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "No se pudo actualizar el archivo.");
+      setSelectedFile(null);
+      window.dispatchEvent(new CustomEvent("araya-files-updated"));
+      window.dispatchEvent(new CustomEvent("araya-live-refresh"));
+    } catch (lifecycleError) {
+      setError(lifecycleError instanceof Error ? lifecycleError.message : "No se pudo actualizar el archivo.");
+    } finally {
+      setLifecycleBusy("");
+    }
+  }
+
   return (
     <>
     <section className="panel live-file-registry" aria-live="polite">
@@ -5469,7 +5852,7 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
         </div>
         <span className="live-state"><span className="live-dot" /> {currentUser.role === "admin" ? "Validación habilitada" : "Consulta autorizada"}</span>
       </div>
-      {files.length > 0 && (
+      {summary.total > 0 && (
         <div className="processing-overview">
           <span><strong>{pendingReview}</strong>Pendientes de revisión</span>
           <span><strong>{synchronized}</strong>Sincronizados</span>
@@ -5481,19 +5864,26 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
         <button type="button" className={filter === "pending" ? "active" : ""} onClick={() => setFilter("pending")}>Por validar · {pendingReview}</button>
         <button type="button" className={filter === "integrated" ? "active" : ""} onClick={() => setFilter("integrated")}>Integrados · {synchronized}</button>
         <button type="button" className={filter === "observed" ? "active" : ""} onClick={() => setFilter("observed")}>Observados · {observed}</button>
-        <button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>Todos · {files.length}</button>
+        <button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>Todos · {summary.active}</button>
+        {summary.deleted > 0 && (
+          <button type="button" className={filter === "deleted" ? "active" : ""} onClick={() => setFilter("deleted")}>Eliminados · {summary.deleted}</button>
+        )}
       </div>
+      {error && (
+        <div className="callout warn"><strong>Sincronización documental pendiente</strong><p>{error}</p></div>
+      )}
       {loading ? (
         <div className="empty-state compact"><strong>Actualizando registro…</strong></div>
-      ) : error ? (
-        <div className="callout warn"><strong>Registro no disponible</strong><p>{error}</p></div>
-      ) : files.length === 0 ? (
+      ) : summary.total === 0 ? (
         <div className="empty-state compact">
           <strong>Aún no hay cargas colaborativas.</strong>
           <p>Los archivos integrados históricamente aparecen debajo. Las nuevas cargas quedarán aquí con usuario, área, versión y estado.</p>
         </div>
       ) : visibleFiles.length === 0 ? (
-        <div className="empty-state compact"><strong>No hay expedientes en este estado.</strong><p>Cambia el filtro para consultar el resto del registro.</p></div>
+        <div className="empty-state compact">
+          <strong>No hay expedientes cargados en este estado.</strong>
+          <p>{hasMore ? "Carga meses anteriores o cambia el filtro para consultar el resto del registro." : "Cambia el filtro para consultar el resto del registro."}</p>
+        </div>
       ) : (
         <div className="document-archive">
           {archivedFiles.map((year, yearIndex) => {
@@ -5534,15 +5924,26 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
                               <span>{new Date(file.createdAt).toLocaleString("es-DO", { dateStyle: "short", timeStyle: "short" })}</span>
                             </div>
                             <div className="uploaded-file-state">
+                              {file.deletedAt && <span className="upload-status rechazado">Eliminado</span>}
                               <span className={`upload-status ${file.status}`}>{uploadStatusLabels[file.status] ?? file.status}</span>
                               <small>{reviewStatusLabels[file.reviewStatus] ?? file.reviewStatus}</small>
                               {file.discrepancyCount > 0 && <em>{file.discrepancyCount} discrepancias</em>}
                             </div>
                             <div className="uploaded-file-actions">
-                              <button type="button" className="button primary" onClick={() => setSelectedFile(file)}>
+                              {!file.deletedAt && <button type="button" className="button primary" onClick={() => setSelectedFile(file)}>
                                 {currentUser.role === "admin" && file.requiresReview ? "Revisar" : "Abrir expediente"}
-                              </button>
-                              <a className="button secondary" href={file.downloadUrl} data-file-title={file.originalName}>Abrir original</a>
+                              </button>}
+                              {!file.deletedAt && <a className="button secondary" href={file.downloadUrl} data-file-title={file.originalName}>Abrir original</a>}
+                              {file.canManage && (
+                                <button
+                                  type="button"
+                                  className={`button ${file.deletedAt ? "secondary" : "danger"}`}
+                                  disabled={lifecycleBusy === file.id}
+                                  onClick={() => void manageLifecycle(file, file.deletedAt ? "restore" : "delete")}
+                                >
+                                  {lifecycleBusy === file.id ? "Actualizando…" : file.deletedAt ? "Restaurar" : "Eliminar"}
+                                </button>
+                              )}
                             </div>
                           </article>
                         ))}
@@ -5553,6 +5954,19 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
               </ArchiveDisclosure>
             );
           })}
+        </div>
+      )}
+      {!loading && hasMore && (
+        <div className="archive-pagination">
+          <button
+            type="button"
+            className="button secondary"
+            disabled={loadingMore}
+            onClick={() => void loadOlderFiles()}
+          >
+            {loadingMore ? "Cargando…" : "Cargar archivos anteriores"}
+          </button>
+          <small>{files.length} cargados de {summary.total} expedientes visibles</small>
         </div>
       )}
     </section>
@@ -6319,7 +6733,7 @@ function DirectionReport({
                 <article className="danger"><span>Caja proyectada a diciembre</span><strong>{dop(reportFinance.projectedCashDecemberDop)}</strong><small>Escenario de flujo</small></article>
               </>
             ) : (
-              <article><span>Finanzas</span><strong>Restringido</strong><small>La instantánea no incluye datos financieros.</small></article>
+              <article><span>Finanzas y Ventas</span><strong>Restringido</strong><small>La instantánea no incluye datos financieros ni comerciales.</small></article>
             )}
           </div>
           <p className="report-footnote">{exchangeRateNote(currency)}. Los importes conservan su moneda de origen y solo cambia la presentación.</p>
@@ -6473,7 +6887,7 @@ function UploadModal({
               Área de destino
               <select value={area} onChange={(event) => setArea(event.target.value as UploadArea)}>
                 {uploadAreas
-                  .filter((option) => canAccessFinance || option.id !== "finanzas")
+                  .filter((option) => canAccessFinance || !requiresFinanceAccessForArea(option.id))
                   .map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
               </select>
             </label>
@@ -6912,7 +7326,14 @@ function DemoProjectContent({ view, onNavigate }: { view: View; onNavigate: (vie
   );
 }
 
-export function DashboardClient({ currentUser }: { currentUser: DashboardUser }) {
+export function DashboardClient({
+  currentUser,
+  bootstrap,
+}: {
+  currentUser: DashboardUser;
+  bootstrap: DashboardBootstrapData;
+}) {
+  installDashboardBootstrap(bootstrap);
   const [profileUser, setProfileUser] = useState(currentUser);
   const [activeProjectId, setActiveProjectId] = useState<ProjectId>("araya");
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
@@ -6949,6 +7370,8 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   const [offlineReady, setOfflineReady] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<DeviceNotificationPermission>("unsupported");
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
+  const [serverNotifications, setServerNotifications] = useState<ServerNotification[]>([]);
+  const [pushSubscriptionReady, setPushSubscriptionReady] = useState(false);
   const [deviceSecurityReady, setDeviceSecurityReady] = useState(false);
   const [biometricSupported, setBiometricSupported] = useState(false);
   const [biometricRecord, setBiometricRecord] = useState<LocalBiometricRecord | null>(null);
@@ -6957,6 +7380,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   const [biometricError, setBiometricError] = useState("");
   const hiddenAtRef = useRef(0);
   const lastNotifiedRevisionRef = useRef<number | null>(null);
+  const pushRegistrationRef = useRef<Promise<boolean> | null>(null);
   const activeProject = projects[activeProjectId];
   const availableNavItems = navItems.filter((item) => item.id !== "usuarios" || currentUser.role === "admin");
   const availableNavigationGroups = navigationGroups.map((group) => ({
@@ -6970,12 +7394,28 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     ?? availableNavigationGroups.find((group) => group.items.length > 0)
     ?? availableNavigationGroups[0];
   const arayaLiveSummary = `${buildings.length} edificios · ${buildings.reduce((total, building) => total + building.units.length, 0)} apartamentos`;
-  const deviceNotifications = useMemo(
+  const localDeviceNotifications = useMemo(
     () => buildDeviceNotifications(controlRoom, liveSync),
     [controlRoom, liveSync],
   );
+  const deviceNotifications = useMemo(
+    () => mergeDeviceNotifications(
+      serverNotifications.map(serverNotificationAsDeviceItem),
+      localDeviceNotifications,
+    ),
+    [localDeviceNotifications, serverNotifications],
+  );
+  const effectiveReadNotificationIds = useMemo(
+    () => Array.from(new Set([
+      ...readNotificationIds,
+      ...serverNotifications
+        .filter((item) => item.read)
+        .map((item) => serverNotificationDeviceId(item.id)),
+    ])),
+    [readNotificationIds, serverNotifications],
+  );
   const unreadNotifications = deviceNotifications.filter(
-    (item) => !readNotificationIds.includes(item.id),
+    (item) => !effectiveReadNotificationIds.includes(item.id),
   ).length;
 
   const refreshControlRoom = useCallback(async () => {
@@ -6992,6 +7432,78 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     } finally {
       setControlRoomLoading(false);
     }
+  }, []);
+
+  const patchNotificationReads = useCallback(async (payload: NotificationReadPatch) => {
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        body: JSON.stringify(payload),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const registerPushSubscription = useCallback(async () => {
+    if (pushRegistrationRef.current) return pushRegistrationRef.current;
+    const operation = (async () => {
+      if (
+        !("serviceWorker" in navigator) ||
+        !("PushManager" in window) ||
+        !("Notification" in window) ||
+        Notification.permission !== "granted" ||
+        !window.isSecureContext
+      ) {
+        setPushSubscriptionReady(false);
+        return false;
+      }
+      try {
+        const configResponse = await fetch("/api/push/config", {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (!configResponse.ok) throw new Error("Configuración push no disponible.");
+        const config = await configResponse.json() as PushConfigResponse;
+        if (!config.enabled || !config.publicKey) {
+          setPushSubscriptionReady(false);
+          return false;
+        }
+        await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: applicationServerKey(config.publicKey),
+          });
+        }
+        const subscriptionResponse = await fetch("/api/push/subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          cache: "no-store",
+          body: JSON.stringify({
+            subscription: subscription.toJSON(),
+            platform: clientPlatform(),
+          }),
+        });
+        if (!subscriptionResponse.ok) throw new Error("No se pudo registrar la suscripción push.");
+        setPushSubscriptionReady(true);
+        return true;
+      } catch {
+        setPushSubscriptionReady(false);
+        return false;
+      }
+    })();
+    pushRegistrationRef.current = operation;
+    const registered = await operation;
+    if (pushRegistrationRef.current === operation) pushRegistrationRef.current = null;
+    return registered;
   }, []);
 
   useEffect(() => {
@@ -7104,6 +7616,131 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   }, [refreshControlRoom]);
 
   useEffect(() => {
+    let active = true;
+    let refreshing = false;
+    const refreshNotifications = async () => {
+      if (refreshing || !navigator.onLine) return;
+      refreshing = true;
+      try {
+        const response = await fetch("/api/notifications?limit=100", {
+          credentials: "same-origin",
+          cache: "no-store",
+        });
+        if (!response.ok) throw new Error("Notificaciones no disponibles.");
+        const payload = await response.json() as ServerNotificationsResponse;
+        const incoming = Array.isArray(payload.notifications)
+          ? payload.notifications.filter(isServerNotification)
+          : [];
+        if (active) {
+          setServerNotifications((current) => mergeServerNotifications(current, incoming));
+        }
+      } catch {
+        // La bandeja local continúa funcionando cuando el servidor no responde.
+      } finally {
+        refreshing = false;
+      }
+    };
+    const handleNotificationUpdate = () => void refreshNotifications();
+    void refreshNotifications();
+    const interval = window.setInterval(() => void refreshNotifications(), 5_000);
+    window.addEventListener("araya-control-room-updated", handleNotificationUpdate);
+    window.addEventListener("araya-files-updated", handleNotificationUpdate);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("araya-control-room-updated", handleNotificationUpdate);
+      window.removeEventListener("araya-files-updated", handleNotificationUpdate);
+    };
+  }, [currentUser.id]);
+
+  useEffect(() => {
+    let active = true;
+    let sending = false;
+    const sessionId = storedClientIdentifier(
+      window.sessionStorage,
+      `bricket-presence-session-v1:${currentUser.id}`,
+      "session",
+    );
+    const deviceId = storedClientIdentifier(
+      window.localStorage,
+      "bricket-device-id-v1",
+      "device",
+    );
+    const sendPresence = async () => {
+      if (sending || !active || !navigator.onLine || document.visibilityState === "hidden") return;
+      sending = true;
+      try {
+        await fetch("/api/presence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          cache: "no-store",
+          keepalive: true,
+          body: JSON.stringify({
+            sessionId,
+            deviceId,
+            platform: clientPlatform(),
+          }),
+        });
+      } catch {
+        // La presencia se renueva en el siguiente latido al recuperar la red.
+      } finally {
+        sending = false;
+      }
+    };
+    const handleVisibleOrOnline = () => {
+      if (document.visibilityState === "visible") void sendPresence();
+    };
+    void sendPresence();
+    const interval = window.setInterval(() => void sendPresence(), 45_000);
+    window.addEventListener("online", handleVisibleOrOnline);
+    document.addEventListener("visibilitychange", handleVisibleOrOnline);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("online", handleVisibleOrOnline);
+      document.removeEventListener("visibilitychange", handleVisibleOrOnline);
+    };
+  }, [currentUser.id]);
+
+  useEffect(() => {
+    if (!deviceSecurityReady || !online || notificationPermission !== "granted") return;
+    void registerPushSubscription();
+  }, [deviceSecurityReady, notificationPermission, online, registerPushSubscription]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const requestedView = url.searchParams.get("view") as View | null;
+    const notificationId = Number(url.searchParams.get("notification") ?? 0);
+    const viewAllowed = requestedView &&
+      navItems.some((item) => item.id === requestedView) &&
+      (requestedView !== "usuarios" || currentUser.role === "admin") &&
+      (!(["finanzas", "comercial"] as View[]).includes(requestedView) || currentUser.financeAccess);
+    let navigationTimer = 0;
+    if (viewAllowed && requestedView) {
+      const targetGroup = navigationGroups.find((group) => navigationGroupContainsView(group, requestedView));
+      navigationTimer = window.setTimeout(() => {
+        if (targetGroup?.itemIds?.length) {
+          setExpandedNavGroup(targetGroup.id);
+          setMobileNavigationGroup(targetGroup.id);
+        }
+        setView(requestedView);
+      }, 0);
+    }
+    if (Number.isSafeInteger(notificationId) && notificationId > 0) {
+      void patchNotificationReads({ ids: [notificationId], openedId: notificationId });
+    }
+    if (requestedView || notificationId) {
+      url.searchParams.delete("view");
+      url.searchParams.delete("notification");
+      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+    return () => {
+      if (navigationTimer) window.clearTimeout(navigationTimer);
+    };
+  }, [currentUser.financeAccess, currentUser.role, patchNotificationReads]);
+
+  useEffect(() => {
     if ("serviceWorker" in navigator) {
       void navigator.serviceWorker
         .register("/sw.js", { updateViaCache: "none" })
@@ -7125,7 +7762,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
             .filter(Boolean);
           (ready.active ?? registration.active)?.postMessage({
             type: "CACHE_APP_SHELL",
-            resourceUrls: ["/", ...resourceUrls],
+            resourceUrls,
           });
         })
         .catch(() => undefined);
@@ -7184,10 +7821,12 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
         if (!liveResponse.ok || !dashboardResponse.ok) throw new Error("Sincronización no disponible");
         const [liveData, dashboardData] = await Promise.all([
           liveResponse.json() as Promise<{
+            healthy?: boolean;
             values?: LiveDataMap;
             revision?: number;
             refreshedAt?: string;
             latestEvent?: LiveSyncState["latestEvent"];
+            currentUser?: DashboardUser;
           }>,
           dashboardResponse.json() as Promise<{
             metrics?: CustomMetric[];
@@ -7195,6 +7834,21 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
           }>,
         ]);
         if (!active) return;
+        const refreshedUser = liveData.currentUser;
+        if (
+          refreshedUser &&
+          (
+            refreshedUser.active !== currentUser.active ||
+            refreshedUser.financeAccess !== currentUser.financeAccess ||
+            refreshedUser.role !== currentUser.role ||
+            refreshedUser.area !== currentUser.area
+          )
+        ) {
+          navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
+          window.location.reload();
+          return;
+        }
+        if (liveData.healthy === false) throw new Error("Sincronización no disponible");
         applyLiveValuesToTargets(liveData.values ?? {}, liveDataTargets);
         synchronizeSpatialSummary();
         setMetrics(currentUser.financeAccess
@@ -7231,7 +7885,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       window.clearInterval(interval);
       window.removeEventListener("araya-files-updated", handleFileUpdate);
     };
-  }, [currentUser.financeAccess, currentUser.id]);
+  }, [currentUser.active, currentUser.area, currentUser.financeAccess, currentUser.id, currentUser.role]);
 
   useEffect(() => {
     if (!deviceSecurityReady || liveSync.revision <= 0) return;
@@ -7246,7 +7900,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
 
     lastNotifiedRevisionRef.current = liveSync.revision;
     window.localStorage.setItem(storageKey, String(liveSync.revision));
-    if (notificationPermission === "granted") {
+    if (notificationPermission === "granted" && !pushSubscriptionReady) {
       void showDeviceNotification(
         `Bricket Control · revisión v${liveSync.revision}`,
         liveSync.latestEvent?.message ?? "El Centro de Control ha recibido nuevos datos.",
@@ -7258,6 +7912,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     liveSync.latestEvent?.message,
     liveSync.revision,
     notificationPermission,
+    pushSubscriptionReady,
   ]);
 
   const searchResults = useMemo<WorkspaceSearchResult[]>(() => {
@@ -7308,7 +7963,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
   }, [activeProjectId, search, supplierRows, metrics, currentUser.financeAccess]);
 
   function persistReadNotificationIds(ids: string[]) {
-    const uniqueIds = Array.from(new Set(ids)).slice(0, 100);
+    const uniqueIds = Array.from(new Set(ids)).slice(-100);
     setReadNotificationIds(uniqueIds);
     window.localStorage.setItem(
       `bricket-notifications-read-v1:${currentUser.id}`,
@@ -7318,6 +7973,13 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
 
   function readNotification(id: string) {
     persistReadNotificationIds([...readNotificationIds, id]);
+    const serverId = serverNotificationNumericId(id);
+    if (!serverId) return;
+    const now = new Date().toISOString();
+    setServerNotifications((current) => current.map((item) => item.id === serverId
+      ? { ...item, read: true, readAt: item.readAt || now, openedAt: now }
+      : item));
+    void patchNotificationReads({ ids: [serverId], openedId: serverId });
   }
 
   function readAllNotifications() {
@@ -7325,6 +7987,13 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       ...readNotificationIds,
       ...deviceNotifications.map((item) => item.id),
     ]);
+    const readThroughId = serverNotifications.reduce((latest, item) => Math.max(latest, item.id), 0);
+    if (!readThroughId) return;
+    const now = new Date().toISOString();
+    setServerNotifications((current) => current.map((item) => item.id <= readThroughId
+      ? { ...item, read: true, readAt: item.readAt || now }
+      : item));
+    void patchNotificationReads({ readThroughId });
   }
 
   async function showDeviceNotification(title: string, body: string) {
@@ -7339,6 +8008,27 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     });
   }
 
+  async function releasePushSubscription() {
+    if (!("serviceWorker" in navigator)) return;
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager?.getSubscription();
+      if (!subscription) return;
+      await fetch("/api/push/subscription", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        cache: "no-store",
+        keepalive: true,
+        body: JSON.stringify({ endpoint: subscription.endpoint }),
+      }).catch(() => undefined);
+      await subscription.unsubscribe().catch(() => false);
+      setPushSubscriptionReady(false);
+    } catch {
+      // El cierre de sesión continúa aunque el navegador no exponga PushManager.
+    }
+  }
+
   async function enableDeviceNotifications() {
     if (!("Notification" in window)) {
       setNotificationPermission("unsupported");
@@ -7347,12 +8037,16 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     const permission = await Notification.requestPermission();
     setNotificationPermission(permission);
     if (permission === "granted") {
-      setNotice("Notificaciones activadas en este dispositivo.");
+      const pushRegistered = await registerPushSubscription();
+      setNotice(pushRegistered
+        ? "Notificaciones push activadas en este dispositivo."
+        : "Notificaciones activadas; los avisos locales seguirán disponibles en la aplicación.");
       await showDeviceNotification(
         "Bricket Control listo",
         "Recibirás avisos de nuevas revisiones y alertas operativas.",
       );
     } else {
+      setPushSubscriptionReady(false);
       setNotice("El dispositivo no ha autorizado las notificaciones.");
     }
   }
@@ -7496,7 +8190,11 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
       url.origin === window.location.origin &&
       url.pathname.startsWith("/signout-with-chatgpt")
     ) {
+      event.preventDefault();
       navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
+      void releasePushSubscription().finally(() => {
+        window.location.assign(`${url.pathname}${url.search}${url.hash}`);
+      });
       return;
     }
     if (anchor.hasAttribute("download") || anchor.dataset.fileViewerBypass === "true") return;
@@ -7596,7 +8294,9 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
     if (view === "implantacion") return <div className="view-stack"><SitePlan onNavigate={navigate} onSelectBuilding={setSelectedBuilding} /></div>;
     if (view === "edificios") return <BuildingsView selected={selectedBuilding} setSelected={setSelectedBuilding} />;
     if (view === "viviendas") return <HousingView />;
-    if (view === "comercial") return <CommercialView currency={currency} />;
+    if (view === "comercial") return currentUser.financeAccess
+      ? <CommercialView currency={currency} />
+      : <FinanceLockedView />;
     if (view === "urbanismo") return <UrbanismView />;
     if (view === "control") return <ControlView currency={currency} canAccessFinance={currentUser.financeAccess} />;
     if (view === "cronologia") return <TimelineView />;
@@ -7744,7 +8444,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
                             ? dataSources.length
                             : dataSources.filter((source) => !sourceRequiresFinance(source)).length
                           : 3}</em>}
-                        {item.id === "metricas" && !currentUser.financeAccess && <em className="restricted">BLOQUEADO</em>}
+                        {["metricas", "comercial"].includes(item.id) && !currentUser.financeAccess && <em className="restricted">BLOQUEADO</em>}
                       </button>
                     ))}
                   </div>
@@ -7860,7 +8560,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
             onRecover={() => navigate("resumen")}
           >
             {content()}
-            {activeProjectId === "araya" && !(view === "metricas" && !currentUser.financeAccess) && (
+            {activeProjectId === "araya" && (currentUser.financeAccess || !(["metricas", "comercial"] as View[]).includes(view)) && (
               <AreaWorkspaceDock
                 view={view}
                 canAccessFinance={currentUser.financeAccess}
@@ -7897,7 +8597,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
                 >
                   <i>{String(itemIndex + 1).padStart(2, "0")}</i>
                   <span>{item.label}</span>
-                  {item.id === "metricas" && !currentUser.financeAccess && <em>Bloqueado</em>}
+                  {["metricas", "comercial"].includes(item.id) && !currentUser.financeAccess && <em>Bloqueado</em>}
                   {item.id === "fuentes" && <em className="mobile-data-count">{activeProjectId === "araya"
                     ? currentUser.financeAccess
                       ? dataSources.length
@@ -8021,7 +8721,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
         >
           <DeviceCenter
             notifications={deviceNotifications}
-            readIds={readNotificationIds}
+            readIds={effectiveReadNotificationIds}
             notificationPermission={notificationPermission}
             biometricSupported={biometricSupported}
             biometricConfigured={Boolean(biometricRecord)}
@@ -8055,7 +8755,7 @@ export function DashboardClient({ currentUser }: { currentUser: DashboardUser })
 
       {activeProjectId === "araya" && uploadOpen && (
         <UploadModal
-          initialArea={!currentUser.financeAccess && defaultUploadArea[view] === "finanzas" ? "auto" : defaultUploadArea[view]}
+          initialArea={!currentUser.financeAccess && requiresFinanceAccessForArea(defaultUploadArea[view]) ? "auto" : defaultUploadArea[view]}
           initialFile={pendingUploadFile}
           canAccessFinance={currentUser.financeAccess}
           online={online}

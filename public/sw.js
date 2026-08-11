@@ -1,5 +1,5 @@
-const SHELL_CACHE = "bricket-control-shell-v4";
-const PRIVATE_CACHE = "bricket-control-private-v4";
+const SHELL_CACHE = "bricket-control-shell-v5";
+const PRIVATE_CACHE = "bricket-control-private-v5";
 const CACHE_PREFIX = "bricket-control-";
 const STATIC_ASSETS = [
   "/manifest.webmanifest",
@@ -9,6 +9,21 @@ const STATIC_ASSETS = [
 
 function isCacheableResponse(response) {
   return response && response.ok && response.type !== "opaque";
+}
+
+function limitedNotificationText(value, fallback, maximum) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return (text || fallback).slice(0, maximum);
+}
+
+function safeNotificationDestination(value) {
+  try {
+    const url = new URL(typeof value === "string" ? value : "/", self.location.origin);
+    if (url.origin !== self.location.origin) return "/";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/";
+  }
 }
 
 async function cacheOne(cache, request) {
@@ -78,7 +93,10 @@ self.addEventListener("message", (event) => {
             .map((resource) => {
               try {
                 const url = new URL(resource, self.location.origin);
-                if (url.origin !== self.location.origin || url.pathname.startsWith("/api/")) return "";
+                const cacheableStatic =
+                  url.pathname.startsWith("/_next/static/") ||
+                  STATIC_ASSETS.includes(url.pathname);
+                if (url.origin !== self.location.origin || !cacheableStatic) return "";
                 return `${url.pathname}${url.search}`;
               } catch {
                 return "";
@@ -107,20 +125,10 @@ self.addEventListener("fetch", (event) => {
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request)
-        .then((response) => {
-          if (isCacheableResponse(response)) {
-            const copy = response.clone();
-            void caches.open(PRIVATE_CACHE).then((cache) => cache.put("/", copy));
-          }
-          return response;
-        })
-        .catch(async () => {
-          const exact = await caches.match(event.request);
-          return exact ?? caches.match("/") ?? new Response(
-            "<!doctype html><html lang=\"es\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>Bricket Control</title><body><main><h1>Bricket Control</h1><p>Conecta el dispositivo una vez para preparar el acceso sin conexión.</p></main></body></html>",
+        .catch(() => new Response(
+            "<!doctype html><html lang=\"es\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>Bricket Control</title><body><main><h1>Bricket Control</h1><p>Conéctate para verificar tu identidad y consultar los datos actuales.</p></main></body></html>",
             { headers: { "Content-Type": "text/html; charset=utf-8" } }
-          );
-        })
+          ))
     );
     return;
   }
@@ -130,6 +138,10 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(fetch(event.request));
     return;
   }
+  const cacheableStatic =
+    url.pathname.startsWith("/_next/static/") ||
+    STATIC_ASSETS.includes(url.pathname);
+  if (!cacheableStatic) return;
   const targetCache = SHELL_CACHE;
   event.respondWith(
     caches.match(event.request).then((cached) => {
@@ -145,9 +157,33 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+self.addEventListener("push", (event) => {
+  let payload = {};
+  try {
+    const parsed = event.data ? event.data.json() : {};
+    payload = parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    payload = {};
+  }
+
+  const title = limitedNotificationText(payload.title, "Bricket Control", 160);
+  const body = limitedNotificationText(payload.body, "Hay una nueva actividad en el Centro de Control.", 500);
+  const destination = safeNotificationDestination(payload.url);
+  const tag = limitedNotificationText(payload.tag, "bricket-control-live", 120);
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: "/bricket-mark.png",
+      badge: "/bricket-mark.png",
+      tag,
+      data: { url: destination },
+    })
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const destination = event.notification.data?.url || "/";
+  const destination = safeNotificationDestination(event.notification.data?.url);
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {

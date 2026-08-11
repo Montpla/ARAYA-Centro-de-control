@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { accessAudit, appUsers } from "../../../../db/schema";
 import { requireApiUser } from "../../../../lib/access-control";
+import { scheduleNotificationDispatch } from "../../../../lib/notification-dispatch";
 
 export const runtime = "edge";
 
@@ -134,6 +135,10 @@ export async function POST(request: Request) {
         avatarStorageKey: storageKey,
         avatarMimeType: candidate.type,
         avatarUpdatedAt: updatedAt,
+        notificationKind: "user_avatar_updated",
+        notificationNonce: crypto.randomUUID(),
+        notificationActorEmail: auth.user.email,
+        notificationActorName: auth.identity.displayName,
         updatedAt,
       })
       .where(eq(appUsers.id, targetUserId));
@@ -152,6 +157,7 @@ export async function POST(request: Request) {
   if (previousStorageKey && previousStorageKey !== storageKey) {
     await bucket.delete(previousStorageKey).catch(() => undefined);
   }
+  scheduleNotificationDispatch();
   return Response.json(
     {
       avatarUrl: avatarUrl(targetUserId, updatedAt),

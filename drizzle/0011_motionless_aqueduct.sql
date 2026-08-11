@@ -1,0 +1,1 @@
+CREATE INDEX `live_data_history_key_id_idx` ON `live_data_history` (`key`,`id`);

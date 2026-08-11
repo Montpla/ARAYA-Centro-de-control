@@ -26,7 +26,7 @@ from reportlab.graphics import renderPDF
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / "public"
 OUTPUT = ROOT / "output" / "pdf" / "guia_corporativa_bricket_control_personal_obra.pdf"
-APP_URL = "https://araya-centro-control.enriquemontesplaza.chatgpt.site"
+APP_URL = "https://www.proyectosgrupobricket.com/"
 
 PAGE_W, PAGE_H = A4
 MARGIN_X = 42
@@ -379,7 +379,7 @@ def cover_page(c: canvas.Canvas) -> None:
 
     c.setFillColor(MUTED)
     c.setFont(font_name("Body"), 7.5)
-    c.drawString(44, 68, "EDICIÓN 31.07.2026")
+    c.drawString(44, 68, "EDICIÓN 11.08.2026")
     c.setFillColor(white)
     c.setFont(font_name("Body-Bold"), 7.2)
     c.drawRightString(PAGE_W - 37, 32, "USO INTERNO | ARAYA PUNTA CANA")
@@ -676,16 +676,16 @@ def page_workflow(c: canvas.Canvas) -> None:
         c,
         "04 | Incorporación de información",
         "Del archivo al dato vivo",
-        "Cargar un documento no cambia una cifra por sí solo. La revisión conserva la fuente, compara la propuesta y publica únicamente lo aprobado.",
+        "El original se guarda primero. Los hechos explícitos de alta confianza se publican automáticamente; cualquier duda queda pendiente de revisión.",
     )
 
     rounded_rect(c, MARGIN_X, 463, PAGE_W - 2 * MARGIN_X, 196, white, LINE, 13)
     steps = [
-        ("Cargar", "Archivo o Hacer foto. Revisa área, corte, moneda y descripción."),
-        ("Identificar", "El sistema clasifica proyecto, tipo documental, periodo y origen."),
-        ("Contrastar", "Se compara Valor vigente > Valor propuesto y se señalan diferencias."),
-        ("Validar", "El responsable aprueba, observa o rechaza. El agente no decide."),
-        ("Publicar", "La nueva revisión actualiza vistas, informes y respuestas en menos de 5 s."),
+        ("Cargar", "Archivo o Hacer foto. El original queda guardado y trazable."),
+        ("Identificar", "El sistema detecta área, tipo documental, periodo, moneda y origen."),
+        ("Extraer", "Lee hechos explícitos y los contrasta con el valor vigente."),
+        ("Publicar o revisar", "La alta confianza se publica; las dudas esperan decisión humana."),
+        ("Sincronizar", "La revisión actualiza cifras, gráficos, planos y avisos en menos de 5 s."),
     ]
     step_w = (PAGE_W - 2 * MARGIN_X - 26) / 2
     for index, (title, body) in enumerate(steps):
@@ -702,7 +702,7 @@ def page_workflow(c: canvas.Canvas) -> None:
     action_cards = [
         (
             "Abrir documentos",
-            "Los PDF, imágenes y formatos compatibles se visualizan dentro de Bricket Control. Descargar copia es una opción independiente.",
+            "Los originales se abren dentro de Bricket Control. Eliminar recalcula el tablero y permite restaurar; descargar es opcional.",
             SAGE_PALE,
             SAGE,
         ),
@@ -720,7 +720,7 @@ def page_workflow(c: canvas.Canvas) -> None:
         ),
         (
             "Recibir avisos",
-            "La campana reúne revisiones, cargas, conciliaciones y acciones vencidas. Los avisos del sistema son opcionales.",
+            "La campana reúne cargas, cambios y conexiones. Activa avisos una vez para recibirlos en móvil, tablet u ordenador.",
             RED_PALE,
             ORANGE_DARK,
         ),
@@ -744,7 +744,7 @@ def page_workflow(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X + 16, 116, "IMPORTANTE")
     draw_wrapped(
         c,
-        "La sincronización cada 5 segundos consulta la base de datos y no consume tokens. El Agente IA interviene solo cuando se le consulta o se interpreta un formato no estructurado.",
+        "La sincronización cada 5 segundos no consume tokens. Solo interpretar documentos libres o consultar al Asistente usa la API de IA.",
         MARGIN_X + 16,
         99,
         PAGE_W - 2 * MARGIN_X - 32,
@@ -847,8 +847,8 @@ def page_mobile_install(c: canvas.Canvas) -> None:
         [
             "Permite notificaciones desde la campana si quieres avisos del sistema.",
             "Activa biometría en Avisos y seguridad: usa Face ID, Touch ID, huella, PIN o el método seguro disponible.",
-            "Abre una vez las secciones importantes con internet para preparar la consulta parcial sin conexión.",
-            "Sin internet puedes consultar la última interfaz preparada; no puedes cargar, modificar, generar informes ni usar el agente.",
+            "Mantén abierta la pantalla que necesites si prevés una pérdida breve de cobertura.",
+            "Sin internet puedes conservar la vista ya abierta; volver a entrar, cargar, modificar, generar informes o usar el agente requiere conexión.",
         ],
         MARGIN_X + 17,
         292,

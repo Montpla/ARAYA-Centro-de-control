@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { areaLabels, userAreas } from "../lib/file-routing";
+import { requiresFinanceAccessForArea } from "../lib/live-data";
 
 export type ArchivedReportSnapshot = {
   generatedAt: string;
@@ -21,7 +22,7 @@ export type ArchivedReportSnapshot = {
   };
   monthlyPlan: Array<{ month: string; planned: number; actual: number | null }>;
   production: Record<string, unknown>;
-  commercial: Record<string, unknown>;
+  commercial: Record<string, unknown> | null;
   finance: Record<string, unknown> | null;
   safety: Record<string, unknown>;
   managementActions: string[];
@@ -516,7 +517,7 @@ export function ControlRoomPanel({
             <form className="control-action-form" onSubmit={createAction}>
               <label>Título<input required value={actionForm.title} onChange={(event) => setActionForm((current) => ({ ...current, title: event.target.value }))} /></label>
               <label>Área<select value={actionForm.area} onChange={(event) => setActionForm((current) => ({ ...current, area: event.target.value }))}>
-                {userAreas.filter((area) => snapshot.currentUser.financeAccess || area.id !== "finanzas").map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
+                {userAreas.filter((area) => snapshot.currentUser.financeAccess || !requiresFinanceAccessForArea(area.id)).map((area) => <option key={area.id} value={area.id}>{area.label}</option>)}
               </select></label>
               <label>Prioridad<select value={actionForm.severity} onChange={(event) => setActionForm((current) => ({ ...current, severity: event.target.value }))}>
                 <option value="critical">Crítica</option><option value="medium">Media</option><option value="low">Baja</option>
@@ -525,7 +526,7 @@ export function ControlRoomPanel({
               {snapshot.currentUser.role === "admin" && (
                 <label>Responsable<select value={actionForm.assigneeEmail} onChange={(event) => setActionForm((current) => ({ ...current, assigneeEmail: event.target.value }))}>
                   <option value="">Administrador actual</option>
-                  {snapshot.assignees.filter((person) => actionForm.area !== "finanzas" || person.financeAccess).map((person) => <option key={person.email} value={person.email}>{person.displayName} · {areaName(person.area)}</option>)}
+                  {snapshot.assignees.filter((person) => !requiresFinanceAccessForArea(actionForm.area) || person.financeAccess).map((person) => <option key={person.email} value={person.email}>{person.displayName} · {areaName(person.area)}</option>)}
                 </select></label>
               )}
               <label className="wide">Descripción<textarea value={actionForm.description} onChange={(event) => setActionForm((current) => ({ ...current, description: event.target.value }))} /></label>

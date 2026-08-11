@@ -1,0 +1,2 @@
+CREATE INDEX `uploaded_files_created_at_id_idx` ON `uploaded_files` (`created_at`,`id`);--> statement-breakpoint
+CREATE INDEX `uploaded_files_updated_at_id_idx` ON `uploaded_files` (`updated_at`,`id`);

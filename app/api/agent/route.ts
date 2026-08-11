@@ -1,5 +1,5 @@
-import { desc } from "drizzle-orm";
-import { cubicaciones, monthlyPlan, projectSnapshot } from "../../demo-data";
+import { desc, eq } from "drizzle-orm";
+import { cubicaciones, monthlyPlan } from "../../demo-data";
 import {
   antonelyAdvances,
   antonelyBalanceLines,
@@ -38,8 +38,6 @@ import { dataAuthorityMatrix, dataGovernanceSummary } from "../../data-governanc
 import { getDb } from "../../../db";
 import {
   controlActions,
-  liveDataEvents,
-  liveDataPoints,
   reportSnapshots,
   uploadedFiles,
 } from "../../../db/schema";
@@ -47,8 +45,16 @@ import { areaLabels, uploadStatusLabels } from "../../../lib/file-routing";
 import { AGENT_PROMPT_VERSION, AGENT_SYSTEM_PROMPT } from "../../../lib/agent-prompt";
 import { requireApiUser } from "../../../lib/access-control";
 import { CurrencyCode, DOP_TO_USD, FX_RATE_CUTOFF, formatMoney, formatMoneyMillions } from "../../../lib/currency";
-import { LiveDataMap, materializeLiveRoot } from "../../../lib/live-data";
+import {
+  LiveDataValue,
+  materializeLiveRoot,
+  redactFinancialFields,
+  requiresFinanceAccessForArea,
+  requiresFinanceAccessForDocument,
+} from "../../../lib/live-data";
 import { buildControlRoomBaseline } from "../../../lib/control-room";
+import { readEffectiveLiveData } from "../../../lib/effective-live-data";
+import { materializeSpatialLiveData } from "../../../lib/spatial-live-data";
 
 type ToolName =
   | "get_project_summary"
@@ -176,30 +182,23 @@ function numberForAgent(value: number) {
   return value.toLocaleString("es-ES", { maximumFractionDigits: 2 });
 }
 
-async function getLiveDataSnapshot() {
+function redactedAgentList<T>(key: string, value: readonly T[]) {
+  const mutableValue = JSON.parse(JSON.stringify(value)) as LiveDataValue;
+  const redacted = redactFinancialFields(key, mutableValue);
+  return Array.isArray(redacted) ? redacted as unknown as T[] : [];
+}
+
+async function getLiveDataSnapshot(financeAccess: boolean) {
   try {
-    const db = getDb();
-    const [rows, events] = await Promise.all([
-      db.select().from(liveDataPoints),
-      db.select().from(liveDataEvents).orderBy(desc(liveDataEvents.id)).limit(1),
-    ]);
-    const values: LiveDataMap = {};
-    rows.forEach((row) => {
-      try {
-        values[row.key] = JSON.parse(row.valueJson);
-      } catch {
-        // Keep a malformed isolated value from affecting the remaining live data.
-      }
-    });
-    return { values, points: rows, latestEvent: events[0] ?? null };
+    return await readEffectiveLiveData(financeAccess);
   } catch {
-    return { values: {} as LiveDataMap, points: [], latestEvent: null };
+    return { values: {}, points: [], latestEvent: null, revision: 0 } as Awaited<ReturnType<typeof readEffectiveLiveData>>;
   }
 }
 
 async function executeTool(name: ToolName, args: Record<string, unknown>, canAccessFinance: boolean) {
-  const live = await getLiveDataSnapshot();
-  const currentProjectSnapshot = materializeLiveRoot("projectSnapshot", projectSnapshot, live.values);
+  const live = await getLiveDataSnapshot(canAccessFinance);
+  const currentProjectSnapshot = materializeSpatialLiveData(live.values).projectSnapshot;
   const currentMonthlyPlan = materializeLiveRoot("monthlyPlan", monthlyPlan, live.values);
   const currentCubicaciones = materializeLiveRoot("cubicaciones", cubicaciones, live.values);
   const currentJuneReport = materializeLiveRoot("juneReport", juneReport, live.values);
@@ -226,11 +225,13 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
   const currentReprogrammedFlowQualityIssues = materializeLiveRoot("reprogrammedFlowQualityIssues", reprogrammedFlowQualityIssues, live.values);
 
   if (name === "get_live_data_status") {
+    const visiblePoints = live.points;
+    const latestEvent = live.latestEvent;
     return {
-      revision: live.latestEvent?.id ?? 0,
+      revision: latestEvent?.id ?? 0,
       refreshedEverySeconds: 5,
-      latestEvent: live.latestEvent,
-      provenance: live.points.map((point) => ({
+      latestEvent,
+      provenance: visiblePoints.map((point) => ({
         key: point.key,
         sourceName: point.sourceName,
         area: point.area,
@@ -250,7 +251,7 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
     ]);
     const visibleActions = canAccessFinance
       ? actionRows
-      : actionRows.filter((row) => row.area !== "finanzas");
+      : actionRows.filter((row) => !requiresFinanceAccessForArea(row.area));
     const visibleReports = canAccessFinance
       ? reportRows
       : reportRows.filter((row) => !row.includesFinance);
@@ -337,6 +338,7 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
     };
   }
   if (name === "get_commercial_status") {
+    if (!canAccessFinance) return { error: "Acceso financiero y comercial no autorizado." };
     return {
       sales: currentJuneReport.sales,
       contracts: currentJuneReport.contracts,
@@ -392,8 +394,14 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
     };
   }
   if (name === "get_uploaded_files") {
-    const rows = await getDb().select().from(uploadedFiles).orderBy(desc(uploadedFiles.createdAt)).limit(20);
-    const visibleRows = canAccessFinance ? rows : rows.filter((row) => row.area !== "finanzas");
+    const rows = await getDb()
+      .select()
+      .from(uploadedFiles)
+      .where(eq(uploadedFiles.deletedAt, ""))
+      .orderBy(desc(uploadedFiles.createdAt))
+      .limit(20);
+    const visibleRows = canAccessFinance ? rows : rows.filter((row) =>
+      !requiresFinanceAccessForDocument(row.area, row.documentType));
     return {
       files: visibleRows.map((row) => ({
         file: row.originalName,
@@ -426,10 +434,10 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
   return {
     sources: canAccessFinance
       ? currentProjectSnapshot.dataSources
-      : currentProjectSnapshot.dataSources.filter((source) => !/financ|fideicomiso|balance|resultado|flujo|cxp|antonely/i.test(`${source.kind} ${source.file}`)),
+      : redactedAgentList("dataSources", currentProjectSnapshot.dataSources),
     juneIssues: canAccessFinance
       ? currentJuneDataQualityIssues
-      : currentJuneDataQualityIssues.filter((issue) => !/presupuesto|pagar|coste|anticipo|inter[eé]s/i.test(issue.title)),
+      : redactedAgentList("juneDataQualityIssues", currentJuneDataQualityIssues),
     fiduciaryIssues: canAccessFinance ? fiduciaryStatementQualityIssues : [],
     interpretation: {
       physicalProgress: "Excel: 18,23% ejecutado frente a 21,24% planificado.",
@@ -441,15 +449,21 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
   };
 }
 
-async function fallbackAnswer(question: string, currency: CurrencyCode) {
-  const live = await getLiveDataSnapshot();
-  const currentProjectSnapshot = materializeLiveRoot("projectSnapshot", projectSnapshot, live.values);
+async function fallbackAnswer(question: string, currency: CurrencyCode, canAccessFinance: boolean) {
+  const live = await getLiveDataSnapshot(canAccessFinance);
+  const currentProjectSnapshot = materializeSpatialLiveData(live.values).projectSnapshot;
   const currentJuneReport = materializeLiveRoot("juneReport", juneReport, live.values);
   const currentJuneDataQualityIssues = materializeLiveRoot("juneDataQualityIssues", juneDataQualityIssues, live.values);
   const currentSafetyMetrics = materializeLiveRoot("safetyMetrics", safetyMetrics, live.values);
   const currentReprogrammedFlowAudit = materializeLiveRoot("reprogrammedFlowAudit", reprogrammedFlowAudit, live.values);
+  const visibleDataSources = canAccessFinance
+    ? currentProjectSnapshot.dataSources
+    : redactedAgentList("dataSources", currentProjectSnapshot.dataSources);
+  const visibleJuneIssues = canAccessFinance
+    ? currentJuneDataQualityIssues
+    : redactedAgentList("juneDataQualityIssues", currentJuneDataQualityIssues);
   const normalized = question.toLowerCase();
-  const source = `\n\nFuentes: centro de datos ARAYA (${currentProjectSnapshot.dataSources.length} archivos integrados) · corte principal ${currentProjectSnapshot.declaredCutoff} · versión viva ${live.latestEvent?.id ?? "base"}.`;
+  const source = `\n\nFuentes: centro de datos ARAYA (${visibleDataSources.length} archivos autorizados) · corte principal ${currentProjectSnapshot.declaredCutoff} · versión viva ${live.latestEvent?.id ?? "base"}.`;
   const dopMillions = (value: number) => formatMoneyMillions(value, "DOP", currency);
   const usdValue = (value: number) => formatMoney(value, "USD", currency);
 
@@ -458,7 +472,7 @@ async function fallbackAnswer(question: string, currency: CurrencyCode) {
   }
 
   if (normalized.includes("calidad") || normalized.includes("fuente") || normalized.includes("inconsisten")) {
-    return `Hay ${currentJuneDataQualityIssues.length} conciliaciones principales. La procedencia de cada dato vivo conserva archivo, área, corte, moneda, responsable y versión. Todas las diferencias permanecen visibles; ninguna cifra se corrige silenciosamente.${source}`;
+    return `Hay ${visibleJuneIssues.length} conciliaciones autorizadas. La procedencia de cada dato vivo conserva archivo, área, corte, moneda, responsable y versión. Todas las diferencias permanecen visibles; ninguna cifra se corrige silenciosamente.${source}`;
   }
   if (normalized.includes("venta") || normalized.includes("reserva") || normalized.includes("moros") || normalized.includes("cobran")) {
     const sales = currentJuneReport.sales;
@@ -510,7 +524,7 @@ export async function POST(request: Request) {
   const question = payload.question?.trim() ?? "";
   const currency: CurrencyCode = payload.currency === "DOP" ? "DOP" : "USD";
   if (!question) return Response.json({ error: "Escribe una pregunta." }, { status: 400 });
-  const asksForFinance = /finanz|fideicomiso|presupuesto|costo|coste|caja|flujo|reprogram|balance|resultado|cuentas por pagar|cxp|anticipo|cr[eé]dito|cubicaci[oó]n/i.test(question);
+  const asksForFinance = /finanz|fideicomiso|presupuesto|costo|coste|caja|flujo|reprogram|balance|resultado|cuentas por pagar|cxp|anticipo|cr[eé]dito|cubicaci[oó]n|comercial|ventas?|reservas?|cobranza|morosidad|desistimiento|clientes?/i.test(question);
   if (asksForFinance && !auth.user.financeAccess) {
     return Response.json({
       answer: "La información financiera está restringida para tu usuario. Un administrador puede concederte acceso desde la pestaña Usuarios y accesos.",
@@ -522,7 +536,7 @@ export async function POST(request: Request) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return Response.json({
-      answer: await fallbackAnswer(question, currency),
+      answer: await fallbackAnswer(question, currency, auth.user.financeAccess),
       mode: "source-data-engine",
       promptVersion: AGENT_PROMPT_VERSION,
     });

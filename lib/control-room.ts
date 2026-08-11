@@ -246,10 +246,10 @@ export function buildReportSnapshot(
       delayedUrbanismStarts,
       workPackages: currentProject.workPackages,
     },
-    commercial: {
+    commercial: canAccessFinance ? {
       sales: currentJuneReport.sales,
       collections: currentJuneReport.collections,
-    },
+    } : null,
     finance: canAccessFinance ? currentJuneReport.finance : null,
     safety: {
       metrics: safetyMetrics,

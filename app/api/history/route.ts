@@ -1,8 +1,9 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { fileActivity, liveDataHistory, uploadedFiles } from "../../../db/schema";
+import { fileActivity, uploadedFiles } from "../../../db/schema";
 import { requireApiUser } from "../../../lib/access-control";
-import { isFinancialLiveKey } from "../../../lib/live-data";
+import { readPublishedLiveDataHistory } from "../../../lib/effective-live-data";
+import { requiresFinanceAccessForDocument } from "../../../lib/live-data";
 
 export const runtime = "edge";
 
@@ -25,13 +26,14 @@ export async function GET() {
 
   const db = getDb();
   const [changeRows, activityRows] = await Promise.all([
-    db.select().from(liveDataHistory).orderBy(desc(liveDataHistory.id)).limit(80),
+    readPublishedLiveDataHistory(auth.user.financeAccess),
     db
       .select({
         id: fileActivity.id,
         fileId: fileActivity.fileId,
         fileName: uploadedFiles.originalName,
         area: uploadedFiles.area,
+        documentType: uploadedFiles.documentType,
         eventType: fileActivity.eventType,
         message: fileActivity.message,
         actorName: fileActivity.actorName,
@@ -44,10 +46,9 @@ export async function GET() {
   ]);
 
   const changes = changeRows
-    .filter((row) => auth.user?.financeAccess || !isFinancialLiveKey(row.key))
     .slice(0, 40)
     .map((row) => ({
-      id: row.id,
+      id: row.historyId,
       revision: row.eventId,
       key: row.key,
       area: row.area,
@@ -58,7 +59,9 @@ export async function GET() {
       valuePreview: valuePreview(row.valueJson),
     }));
   const activity = activityRows
-    .filter((row) => auth.user?.financeAccess || row.area !== "finanzas")
+    .filter((row) => auth.user?.financeAccess || (
+      !requiresFinanceAccessForDocument(row.area, row.documentType)
+    ))
     .slice(0, 40)
     .map((row) => ({
       id: row.id,

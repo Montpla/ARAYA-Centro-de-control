@@ -19,25 +19,23 @@ publique en el mismo enlace.
 - Proyecto: Centro de Control ARAYA — Grupo Bricket.
 - Directorio local:
   `C:\Users\Usuario1\OneDrive\Desktop\ARAYA_Transformacion_Digital\12_Dashboard_Obra`
-- Producción:
+- Producción técnica vigente mientras se completa el DNS:
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
+- URL corporativa reservada en Sites:
+  `https://www.proyectosgrupobricket.com/` (pendiente del corte DNS de Nominalia).
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 51, con archivo documental por año y mes, visor
-  interno móvil, carga simplificada, publicación estructurada segura y
-  protección directa de originales estáticos. El agente permanece como
-  `ARAYA Asistente`. El commit desplegado es el `HEAD` de
-  `main`; el identificador opaco debe consultarse en Sites por número de versión
-  y no reconstruirse manualmente.
+- Versión que estaba publicada al iniciar este cierre: 51. El número vigente y
+  su SHA deben consultarse siempre en Sites; no asumir que los cambios locales
+  descritos en este documento ya están en producción hasta completar commit,
+  despliegue y prueba de humo. El agente permanece como `ARAYA Asistente`.
 - Acceso de infraestructura: `public` desde el 11/08/2026. La URL puede abrirse
   sin figurar en una lista externa de invitados, pero el contenido continúa
   protegido por inicio de sesión y por la tabla interna `app_users`.
 - Rama y remoto de publicación: rama `main`, remoto `sites`.
-- Sites no ofrece un alias público sin el espacio personal del propietario. Para
-  disponer de una dirección corporativa neutra hay que conectar un subdominio
-  controlado por Bricket (por ejemplo, `control.dominio-corporativo.com`) y
-  completar los registros DNS que devuelva Sites. No hay dominio personalizado
-  configurado actualmente.
+- El dominio personalizado `www.proyectosgrupobricket.com` ya está vinculado al
+  proyecto de Sites, pero no quedará activo hasta sustituir el CNAME de Railway
+  y publicar los dos TXT de validación indicados al final de este documento.
 
 ## Estado funcional
 
@@ -72,8 +70,9 @@ contraseñas propias:
   trazabilidad histórica, limpia la fotografía de R2 y permite restaurar la
   ficha. Una condición atómica impide eliminar o degradar al último
   administrador activo.
-- Cuando una sesión abierta recibe `401` o `403` en la sincronización, borra la
-  caché privada y la credencial biométrica local y vuelve a validar el acceso.
+- Cuando una sesión abierta recibe `401` o `403` en la sincronización, borra
+  cualquier caché heredada y la credencial biométrica local y vuelve a validar
+  el acceso.
 - Cada usuario tiene un área principal. El resumen ejecutivo adapta su bloque
   de prioridad y ordena las alertas para Dirección, Planificación, Obra,
   Urbanismo, Comercial, Finanzas, Compras, Seguridad, Legal o Diseño.
@@ -129,7 +128,9 @@ ARAYA para evitar mezclar registros reales con la demostración.
 La carga documental colaborativa está disponible en todas las pestañas de
 ARAYA mediante `+ Cargar archivo` y también dentro del chat del agente:
 
-- El original se guarda en R2 con la vinculación lógica `FILES`.
+- La carga es R2-first: el original se persiste primero en la vinculación
+  privada `FILES`; después D1 confirma el expediente. Las rutas de recuperación
+  resuelven respuestas ambiguas sin duplicar ni perder el objeto.
 - D1 registra usuario autenticado, área, sección, descripción, moneda de
   origen, fecha de corte, tamaño, SHA-256, versión, estado y motivo de
   clasificación.
@@ -138,8 +139,12 @@ ARAYA mediante `+ Cargar archivo` y también dentro del chat del agente:
   normalización y sincronización. La clasificación se completa al cargar; la
   sincronización llega al 100% únicamente cuando una revisión viva vinculada
   publica datos, evitando afirmar que un original ya fue interpretado.
-- El registro del Centro de datos y todas las vistas se refrescan cada 5
-  segundos.
+- El Centro de datos abre una página reciente de 75 expedientes, con máximo 200
+  por petición, agrupada por año y mes. `Cargar archivos anteriores` recorre el
+  histórico con cursor estable sin perder páginas ya abiertas. Cada 5 segundos
+  un feed incremental trae sólo cambios y reconcilia bajas o reclasificaciones
+  de IDs que el usuario ya conocía; el resumen global se calcula en D1 sobre
+  todo el conjunto visible.
 - El original de toda carga aparece inmediatamente con estado técnico
   `pendiente_revision`, mostrado como `En normalización`.
 - Cuando el contenido se normaliza mediante el contrato de datos vivos, se
@@ -147,8 +152,9 @@ ARAYA mediante `+ Cargar archivo` y también dentro del chat del agente:
   porcentajes, cronograma, avance, informes y respuestas del agente.
 - Las contradicciones no se sustituyen silenciosamente: conservan la
   procedencia y quedan observadas para conciliación.
-- Límite actual: 50 MB. Formatos: Excel, CSV, PowerPoint, PDF, Word, MPP, DWG,
-  imágenes y ZIP.
+- Límite actual: 50 MB. Se pueden archivar Excel, CSV, JSON, PowerPoint, PDF,
+  Word, MPP, DWG, imágenes y ZIP, pero admitir la carga no implica poder
+  interpretar semánticamente el formato.
 
 Rutas y persistencia:
 
@@ -161,6 +167,10 @@ Rutas y persistencia:
   previos y las cargas sin moneda explícita quedan como `DOP`.
 - `drizzle/0003_luxuriant_thaddeus_ross.sql`: añade las revisiones y puntos de
   datos vivos.
+- La cadena operativa completa llega hasta
+  `drizzle/0016_outstanding_stark_industries.sql`; esta última añade los índices
+  compuestos de creación/actualización usados por la paginación y el feed. No
+  omitir ninguna entrada de `drizzle/meta/_journal.json` al desplegar.
 
 ### Capa de datos vivos
 
@@ -175,7 +185,9 @@ necesidad de recompilar o volver a desplegar.
   Cada cambio exige una clave permitida y conserva área, archivo fuente,
   fecha de corte, moneda de origen, responsable y fecha de actualización.
 - `live_data_events`: cabecera de auditoría de cada revisión.
-- `live_data_points`: último valor vivo por clave con su procedencia.
+- `live_data_points`: caché materializada por clave; la lectura canónica se
+  reconstruye desde el historial de eventos publicados y no confía en una
+  revisión `preparing` o compensada.
 - `live_data_history`: conserva cada valor publicado, revisión, fuente, corte,
   moneda, responsable y fecha; no se limita al último valor.
 - `lib/live-data.ts`: contrato, claves admitidas y aplicación de valores vivos
@@ -196,12 +208,13 @@ necesidad de recompilar o volver a desplegar.
 - Las alertas del resumen se recalculan con los modelos vivos y se priorizan
   por el área del usuario sin ocultar los controles transversales.
 
-Importante: almacenar un PDF, PowerPoint, DWG o Excel no interpreta por sí solo
-su contenido. El original aparece inmediatamente; las cifras se actualizan
-cuando el agente o un importador confiable extrae y publica los datos mediante
-el contrato normalizado. No afirmar que un documento arbitrario se integra sin
-esta fase. Los datos ya estructurados pueden publicarse directamente y se
-propagan en menos de cinco segundos.
+Importante: CSV/JSON estructurado conforme al contrato vivo se interpreta de
+forma determinista. PDF, XLS/XLSX, PPT/PPTX, DOC/DOCX e imágenes requieren
+`OPENAI_API_KEY` en Sites para su interpretación semántica automática; sin esa
+clave el original queda seguro y pendiente de extracción/revisión. DWG, MPP y
+ZIP se archivan, pero no se interpretan. Sólo una revisión publicada modifica
+cifras, gráficos o elementos espaciales, y se propaga en un máximo de cinco
+segundos.
 
 La aplicación exige identidad ChatGPT y pertenencia activa a `app_users` antes
 de renderizar el dashboard. Desde el 11/08/2026 Sites está en modo `public`, de
@@ -256,10 +269,11 @@ específica para pantallas de hasta 1.100 px:
   cámara trasera. La fotografía queda preseleccionada en el expediente para
   completar área, corte, moneda y descripción antes de enviarla.
 - `public/manifest.webmanifest` y `public/sw.js` permiten instalar el Centro de
-  Control desde el navegador compatible. El service worker v3 conserva el
-  shell visitado y activos de la interfaz para consulta local, pero excluye
-  rutas API, autenticación y respuestas vivas. En modo sin conexión no se
-  permiten cargas, cambios ni generación de informes.
+  Control desde el navegador compatible. El service worker vigente conserva
+  solo activos públicos e inmutables; nunca almacena navegaciones autenticadas,
+  RSC, API, documentos ni respuestas vivas. Una vista ya abierta tolera una
+  pérdida breve de red, pero volver a entrar exige conexión y validación de la
+  identidad. Sin conexión no se permiten cargas, cambios ni informes.
 - `app/layout.tsx` declara el manifiesto, icono Bricket, modo Apple web app,
   color de interfaz y `viewport-fit=cover`.
 - La campana abre `Avisos y seguridad`: combina revisiones vivas, actividad,
@@ -273,8 +287,10 @@ específica para pantallas de hasta 1.100 px:
 - Tras 30 segundos fuera de la aplicación, una instalación con biometría vuelve
   a bloquearse. La recuperación exige conexión y un nuevo inicio de sesión; no
   permite saltarse la comprobación biométrica.
-- La consulta offline sólo se abre cuando este dispositivo ya tiene una
-  credencial local. Al cerrar sesión se eliminan las cachés privadas.
+- Sin red sólo permanece utilizable la vista que ya estaba abierta en memoria.
+  Recargar o volver a entrar exige conexión y una identidad válida; `v5` no
+  conserva una caché privada del dashboard. Al cerrar sesión se limpian las
+  cachés y credenciales locales restantes.
 
 ## Datos actualmente integrados
 
@@ -414,13 +430,11 @@ Comando habitual:
 
 `npm test`
 
-Este comando ejecuta el build de vinext y las pruebas. En el último corte:
-
-- 27 pruebas superadas.
-- 0 fallos.
-- La compilación de producción fue correcta.
-- `npm run lint` termina sin errores; mantiene nueve avisos conocidos por el
-  uso intencional de imágenes locales con `<img>`.
+Este comando ejecuta el build de vinext y la batería registrada en
+`package.json`. No conservar aquí un contador histórico como si fuera vigente:
+anotar el resultado exacto del último commit desplegado después de ejecutar
+`npm test`, `npx tsc --noEmit`, `npm run lint` y `git diff --check`. Los avisos
+conocidos de `<img>` no sustituyen la comprobación de cero errores.
 
 Para cambios visuales de posición, comprobar:
 
@@ -444,13 +458,13 @@ Cuando haya cambios de producto:
    compile el commit ya empujado; no retirar originales descargables para
    reducir peso.
 7. Guardar una nueva versión de Sites con el SHA exacto.
-8. Desplegar la versión guardada. El modo de acceso de Sites continúa `custom`
-   y limitado al propietario hasta que el workspace permita publicación a
-   Internet. Cuando se habilite, cambiarlo a `public`; la aplicación seguirá
-   cerrada por inicio de sesión y allowlist en D1.
+8. Desplegar la versión guardada. Sites ya está en modo de infraestructura
+   `public`; la aplicación continúa cerrada por inicio de sesión, `app_users` y
+   permisos server-side.
 9. Esperar a `status: succeeded`.
-10. Abrir el mismo enlace de producción con un parámetro de actualización si
-    el navegador conserva una versión anterior en caché.
+10. Probar primero la URL técnica
+    `https://araya-centro-control.enriquemontesplaza.chatgpt.site`. El dominio
+    corporativo sólo puede declararse activo después de validar el DNS y SSL.
 
 Nunca registrar credenciales, tokens ni enlaces con autenticación incrustada.
 
@@ -702,9 +716,11 @@ Iniciado y completado el 30/07/2026.
 - Los formatos CSV y JSON con columnas o propiedades `key/clave` y
   `value/valor` pueden preparar propuestas del contrato vivo automáticamente.
   Se admiten separadores por coma o punto y coma y decimales con coma.
-- Excel, PDF, PowerPoint, Word, MPP, DWG, imágenes y ZIP quedan catalogados y
-  esperan su importador especializado o una lectura asistida. No se afirma que
-  almacenar el original equivalga a interpretar sus datos.
+- PDF, XLS/XLSX, PPT/PPTX, DOC/DOCX e imágenes pueden pasar por extracción
+  semántica únicamente cuando Sites dispone de `OPENAI_API_KEY`; de lo
+  contrario quedan catalogados y pendientes de revisión. DWG, MPP y ZIP no se
+  interpretan. Almacenar el original nunca equivale por sí solo a publicar sus
+  datos.
 - `document_data_proposals` conserva el valor vigente, valor propuesto, clave,
   área, corte, moneda, confianza, discrepancia y estado de cada cambio.
 - `file_reviews` conserva cada preparación, aprobación, observación, rechazo o
@@ -729,7 +745,10 @@ Iniciado y completado el 30/07/2026.
   estado, pero no aprobar ni borrar desde el chat.
 - La clasificación y el refresco ordinarios no consumen tokens. El agente sólo
   interviene cuando un formato necesita interpretación.
-- Migración: `drizzle/0007_ingestion_control_room.sql`.
+- El archivo histórico no journalizado
+  `drizzle/0007_ingestion_control_room.sql` fue retirado. Su esquema de ingesta
+  quedó consolidado en el `0007_rapid_black_queen.sql` que sí figura en el
+  journal, para que una base nueva y una recuperación recorran la misma cadena.
 - Pruebas del punto 2: compilación correcta, 31/31 pruebas aprobadas, conjunto
   de clasificación 24/24 y lint sin errores; permanecen los nueve avisos
   conocidos de `<img>`.
@@ -797,9 +816,10 @@ Iniciado y completado el 30/07/2026.
 Completado el 30/07/2026.
 
 - Nueva ruta: `/api/control-room`.
-- Nueva migración: `drizzle/0007_rapid_black_queen.sql`. Sólo crea
-  `control_actions`, `control_action_activity` y `report_snapshots`; no repite
-  la migración documental del punto 2.
+- `drizzle/0007_rapid_black_queen.sql` es la entrada journalizada consolidada:
+  contiene tanto el esquema de ingesta de aquel punto 2 como
+  `control_actions`, `control_action_activity` y `report_snapshots`. No volver a
+  crear un segundo `0007` fuera del journal.
 - En aquella versión, ARAYA Copilot usaba el prompt
   `araya-copilot-v8-sala-operativa` y la herramienta de consulta
   `get_control_room_status`. Puede explicar, pero no crear, cerrar, reasignar
@@ -830,9 +850,9 @@ Revisado y publicado el 31/07/2026.
   `Imprimir / Guardar PDF`.
 - El nombre instalable es `Bricket Control` en el manifiesto, los metadatos de
   aplicación y la configuración de iPhone/iPad.
-- El Service Worker vigente usa `bricket-control-shell-v3` y una caché privada
-  separada. Prepara el shell visitado, nunca responde desde caché a rutas API o
-  de autenticación y borra ambas cachés al cerrar sesión.
+- Esta sección conserva el hito móvil de julio; su Service Worker `v3` fue
+  sustituido. La regla vigente es `v5`: sólo cachea activos estáticos públicos y
+  nunca navegaciones autenticadas, RSC, API, documentos ni datos vivos.
 - Validación final: compilación correcta, 32/32 pruebas aprobadas y lint sin
   errores; permanecen los nueve avisos conocidos de `<img>`.
 
@@ -847,8 +867,8 @@ Revisado y publicado el 31/07/2026 en la versión 39.
 - Al cerrar, se recupera exactamente la sección desde la que se abrió el
   documento. La URL del Centro de Control no cambia.
 - Los formatos que el navegador no puede representar con seguridad, como
-  Excel, MPP, DWG o PowerPoint, muestran una pantalla de descarga sin abandonar
-  la aplicación.
+  Excel, MPP, DWG o PowerPoint, muestran una ficha interna cerrable con descarga
+  opcional; abrir el expediente no inicia una descarga automática.
 - `Escape` también cierra el visor en ordenador.
 - Las cargas privadas admiten `GET /api/files?preview=...` únicamente para PDF,
   texto e imágenes raster autorizadas; los demás MIME conservan disposición de
@@ -867,12 +887,12 @@ Implementadas y publicadas el 31/07/2026:
   crear el expediente documental.
 - Desbloqueo WebAuthn local, cierre automático al volver después de 30 segundos
   y recuperación mediante nuevo inicio de sesión.
-- PWA parcialmente offline: última interfaz visitada y activos ya cargados en
-  modo de consulta. No se almacenan respuestas de API ni se permiten
-  mutaciones sin conexión.
-- Las notificaciones del sistema se generan mientras Bricket Control está
-  activo o en segundo plano. No existe todavía un servidor de Web Push para
-  despertar una aplicación completamente cerrada.
+- El hito `v40` permitía consulta parcial; la política vigente `v5` es más
+  restrictiva: sólo la vista que ya permanece abierta tolera una pérdida breve
+  de red. Recargar exige conexión y no se almacenan respuestas privadas.
+- La limitación original de notificaciones fue sustituida: hoy existe Web Push
+  con VAPID, outbox durable y entrega independiente por dispositivo, sujeto al
+  permiso explícito del navegador.
 - Validación: build correcto, 32/32 pruebas aprobadas, lint sin errores y los
   nueve avisos históricos de `<img>` sin cambios.
 
@@ -976,7 +996,7 @@ Implementado y publicado el 11/08/2026.
   de que la operación se aplicó y requiere revisión técnica, sin devolver un
   falso conflicto de correo.
 - Una sesión revocada detecta `401/403` en el refresco de cinco segundos, borra
-  la caché privada y la biometría local y vuelve a validar el acceso.
+  cualquier caché heredada y la biometría local y vuelve a validar el acceso.
 - Migración: `drizzle/0008_puzzling_the_captain.sql`.
 - Política de Sites: `public`, revisión 2. El acceso real a los datos continúa
   dependiendo de identidad ChatGPT y `app_users`.
@@ -1008,12 +1028,13 @@ Implementada y publicada el 11/08/2026 en la versión 44.
 Implementado y publicado el 11/08/2026; almacenamiento privado definitivo de
 originales en la versión 51.
 
-- La bandeja de archivos colaborativos ya no trunca el histórico en 60
-  registros. Todos los originales aparecen agrupados mediante acordeones de
-  año y mes de subida; cada acordeón conserva su estado manual aunque la lista
-  se refresque cada cinco segundos. El almacenamiento R2 ya utilizaba la ruta
-  `araya/<area>/<YYYY>/<MM>/...`, por lo que no fue necesario mover ni perder
-  ningún original.
+- La bandeja no descarga el histórico completo en cada refresco. Abre los 75
+  expedientes más recientes, admite hasta 200 por petición y conserva la
+  agrupación por año y mes. `Cargar archivos anteriores` usa un cursor
+  `(createdAt,id)` estable; el feed de cinco segundos usa `(updatedAt,id)` y
+  fusiona cambios sin descartar páginas ya cargadas. El almacenamiento R2
+  mantiene la ruta `araya/<area>/<YYYY>/<MM>/...`; paginar la interfaz no mueve
+  ni elimina originales.
 - Las fuentes históricas integradas permanecen completas, pero se presentan en
   un archivo secundario plegable para que el Centro de datos sea más compacto.
 - PDF se representa dentro de Bricket Control con PDF.js, navegación de
@@ -1040,10 +1061,10 @@ originales en la versión 51.
   el límite de una petición se guardan en fragmentos privados y se transmiten
   de forma continua, con soporte de rangos y el mismo nombre/tipo del original.
   Las respuestas son `private, no-store` y no entran en la caché offline.
-- El Service Worker está en la generación `v4`: borra las cachés `v3` al
-  activarse y trata `/data-center/*` como red obligatoria, sin lectura ni
-  escritura en Cache Storage. Esto elimina también cualquier copia que una
-  instalación anterior hubiera conservado antes de privatizar los originales.
+- El Service Worker vigente es `v5`. Sólo cachea activos estáticos públicos;
+  navegaciones autenticadas, RSC, API, `/data-center/*`, originales y datos
+  vivos son siempre de red y `private, no-store`. Al activarse limpia las
+  generaciones antiguas que pudieron conservar contenido privado.
 - El endpoint y el secreto temporales utilizados para la siembra inicial se
   eliminaron después de verificar los 23 documentos. Las nuevas cargas deben
   seguir entrando exclusivamente por `POST /api/files` y quedan en R2 desde
@@ -1052,20 +1073,80 @@ originales en la versión 51.
   pulsar `Subir y procesar`; área, tipo, periodo y moneda se detectan. Los
   campos manuales siguen disponibles dentro de `Opciones avanzadas`.
 - Todos los usuarios activos pueden subir; el original y su estado aparecen en
-  la bandeja compartida en el siguiente refresco. Por seguridad, sólo un
-  administrador puede publicar automáticamente una plantilla CSV/JSON del
-  contrato vivo, y únicamente si contiene valores escalares, claves hijas,
-  corte, área coherente y ninguna advertencia estructural. Las cargas de los
-  demás usuarios y PDF/Excel/PowerPoint/Word/MPP/DWG/imagen quedan registradas
-  para interpretación y revisión: no se afirma que cualquier documento libre
-  actualice cifras por sí solo.
-- Cuando una plantilla administrativa válida se publica, crea revisión,
+  la bandeja compartida mediante el feed. CSV/JSON válido sigue la extracción
+  determinista y sólo publica si cumple contrato, corte, área, permisos y
+  límites. PDF, XLS/XLSX, PPT/PPTX, DOC/DOCX e imágenes necesitan
+  `OPENAI_API_KEY` para interpretación semántica; sin ella quedan pendientes.
+  DWG, MPP y ZIP sólo se archivan.
+- Cuando una carga válida y autorizada se publica, crea revisión,
   procedencia e historial; `GET /api/live-data` propaga las nuevas cifras,
   barras, gráficos, cronograma y elementos espaciales en un máximo de cinco
   segundos según las claves incluidas.
 - Validación: build correcto, TypeScript sin errores, 37/37 pruebas aprobadas y
   lint sin errores; permanecen diez avisos no bloqueantes de imágenes HTML ya
   conocidas.
+
+## Ingesta viva reversible, avisos y dominio corporativo
+
+Implementado el 11/08/2026; pendiente de la publicación final y del cambio DNS
+en Nominalia.
+
+- `POST /api/files` conserva primero el original privado en R2 y después
+  confirma su expediente en D1 antes de interpretarlo. CSV/JSON con contrato
+  vivo se procesan de forma determinista. PDF, XLS/XLSX, PPT/PPTX, DOC/DOCX e
+  imágenes usan Responses API con salida JSON Schema estricta sólo si existe
+  `OPENAI_API_KEY`. DWG, MPP y ZIP se archivan pero no se interpretan.
+- La publicación automática exige claves del contrato vivo, corte, área
+  coherente, permisos del usuario, valores acotados y confianza alta. Un miembro
+  solo puede auto-publicar su área; Finanzas continúa bloqueada sin
+  `financeAccess`. Las cargas dudosas se conservan como propuestas sin inventar
+  cifras.
+- Cada contribución publicada permanece en `live_data_history`. Eliminar un
+  archivo es una baja lógica reversible: se excluye su contribución, se vuelve a
+  materializar el último valor procedente de otro archivo activo y, si no existe,
+  se recupera el valor base del frontend. Restaurar aplica la operación inversa.
+  El original R2, propuestas y trazabilidad nunca se destruyen.
+- La app consulta datos y notificaciones cada cinco segundos; para archivos usa
+  un feed paginado de cambios, no un listado histórico completo. Las
+  revisiones, cargas, bajas/restauraciones, revisiones documentales, acciones,
+  usuarios, indicadores, proveedores y fotos de perfil producen eventos
+  persistentes. `/api/presence` registra cada sesión activa y avisa a todos los
+  usuarios autorizados cuando una persona se conecta, sin exponer contenido
+  financiero.
+- Web Push usa suscripciones por dispositivo y VAPID; las variables
+  `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `VAPID_SUBJECT` están guardadas en
+  Sites (revisión de entorno 5). Cada usuario debe aceptar las notificaciones en
+  su móvil, tablet u ordenador. El Service Worker abre únicamente rutas del
+  mismo origen y el enlace profundo marca el aviso como leído.
+- `notification_events` funciona como outbox durable y
+  `notification_deliveries` conserva un estado independiente por dispositivo.
+  La aplicación revalida usuario, estado y permiso financiero en cada intento;
+  los reintentos pendientes no bloquean avisos nuevos. El sondeo de la campana
+  actúa como relay durable y cada mutación intenta además iniciar el reparto en
+  segundo plano.
+- La publicación y el ciclo eliminar/restaurar confirman en un único batch D1
+  el estado del archivo, la caché, historial, actividad, revisión publicada y
+  evento de notificación. Las propuestas documentales usan generaciones: una
+  preparación incompleta nunca sustituye al conjunto activo.
+- Las operaciones masivas se mantienen set-based y dentro de los límites de
+  D1: una publicación admite como máximo 250 cambios, los batches atómicos se
+  agrupan en un número acotado de sentencias y los listados nunca hacen una
+  consulta por fila. La migración vigente más reciente es la `0016`.
+- La extracción IA necesita `OPENAI_API_KEY` en Sites. A 11/08/2026 esa variable
+  todavía no existe: sin ella se mantiene el archivo y funciona la extracción
+  determinista, pero los documentos libres e imágenes quedan pendientes. No
+  afirmar que la ingesta multiformato está operativa hasta cargar este secreto y
+  desplegar de nuevo.
+- Sites tiene reservado `www.proyectosgrupobricket.com`, pero el DNS público
+  todavía apunta por CNAME a `pzkhj9zd.up.railway.app`. Para activar el Centro de
+  Control hay que cambiar el CNAME de `www.proyectosgrupobricket.com` a
+  `custom-domains.chatgpt.site.` y crear los TXT
+  de validación: `_openai-site-verification.www.proyectosgrupobricket.com` =
+  `openai-site-verification=ReIYEqnjHes6RI0bLxmvNyvX_4zHPvwez1eDmc6Z2WE` y
+  `_cf-custom-hostname.www.proyectosgrupobricket.com` =
+  `fafd06b2-640d-4bba-8c7b-36b7151c87bd`.
+  No tocar el apex hasta resolver y probar el `www`; la aplicación anterior
+  seguirá sirviéndose hasta ese corte.
 
 ## Criterios de continuidad
 

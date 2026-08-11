@@ -388,18 +388,21 @@ test("premium visual refinement uses an editorial hierarchy and readable control
 });
 
 test("financial files, live values and agent answers enforce per-user authorization", async () => {
-  const [files, liveRoute, liveModel, agent, dashboardRoute, documentProxy] = await Promise.all([
+  const [files, liveRoute, liveModel, effectiveLive, agent, dashboardRoute, documentProxy] = await Promise.all([
     readFile("app/api/files/route.ts", "utf8"),
     readFile("app/api/live-data/route.ts", "utf8"),
     readFile("lib/live-data.ts", "utf8"),
+    readFile("lib/effective-live-data.ts", "utf8"),
     readFile("app/api/agent/route.ts", "utf8"),
     readFile("app/api/dashboard/route.ts", "utf8"),
     readFile("proxy.ts", "utf8"),
   ]);
   assert.match(files, /No tienes acceso a documentos financieros/);
-  assert.match(files, /row\.area !== "finanzas"/);
-  assert.match(liveRoute, /redactFinancialFields/);
-  assert.match(liveRoute, /No tienes permiso para publicar datos financieros/);
+  assert.match(files, /fileRequiresFinanceAccess/);
+  assert.match(liveRoute, /readEffectiveLiveData\(auth\.user\.financeAccess\)/);
+  assert.match(liveRoute, /No tienes permiso para publicar datos financieros o comerciales/);
+  assert.match(effectiveLive, /redactFinancialFields/);
+  assert.match(effectiveLive, /eventStatus === "published"/);
   assert.match(liveModel, /isFinancialLiveKey/);
   assert.match(liveModel, /"fiduciaryStatementSummary"/);
   assert.match(liveModel, /"reprogrammedFlowAudit"/);
@@ -407,7 +410,7 @@ test("financial files, live values and agent answers enforce per-user authorizat
   assert.match(liveModel, /fideicomiso\|balance\|resultado/);
   assert.match(agent, /Acceso financiero no autorizado/);
   assert.match(agent, /auth\.user\.financeAccess/);
-  assert.match(agent, /rows\.filter\(\(row\) => row\.area !== "finanzas"\)/);
+  assert.match(agent, /requiresFinanceAccessForArea\(row\.area\)/);
   assert.match(dashboardRoute, /No tienes acceso para modificar indicadores financieros/);
   assert.match(documentProxy, /matcher: \["\/data-center\/:path\*"\]/);
   assert.match(documentProxy, /resolveAuthorizedUser/);
@@ -417,10 +420,12 @@ test("financial files, live values and agent answers enforce per-user authorizat
 });
 
 test("all variable dashboard values use a versioned live-data layer with five-second refresh", async () => {
-  const [dashboard, route, liveData, styles] = await Promise.all([
+  const [dashboard, route, liveData, effectiveLive, publisher, styles] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),
     readFile("app/api/live-data/route.ts", "utf8"),
     readFile("lib/live-data.ts", "utf8"),
+    readFile("lib/effective-live-data.ts", "utf8"),
+    readFile("lib/publish-live-data.ts", "utf8"),
     readFile("app/globals.css", "utf8"),
   ]);
   assert.match(dashboard, /fetch\("\/api\/live-data"/);
@@ -428,9 +433,12 @@ test("all variable dashboard values use a versioned live-data layer with five-se
   assert.match(dashboard, /setInterval\(\(\) => void refreshLiveData\(\), 5_000\)/);
   assert.match(dashboard, /Gráficas, cifras, porcentajes, cronograma y avance/);
   assert.match(dashboard, /Tiempo real/);
-  assert.match(route, /onConflictDoUpdate/);
+  assert.match(route, /publishLiveDataUpdates/);
   assert.match(route, /provenance/);
   assert.match(route, /refreshIntervalMs: 5_000/);
+  assert.match(effectiveLive, /ROW_NUMBER\(\) OVER \(PARTITION BY h\.key ORDER BY h\.id DESC\)/);
+  assert.match(effectiveLive, /e\.status = 'published'/);
+  assert.match(publisher, /status: "preparing"/);
   assert.match(liveData, /LIVE_DATA_ROOTS/);
   assert.match(liveData, /projectSnapshot/);
   assert.match(liveData, /monthlyPlan/);
@@ -516,7 +524,7 @@ test("every operational area exposes connected modules, documents and interactiv
   assert.match(dashboard, /sourceWorkspaceDetail/);
   assert.match(dashboard, /dataSources[\s\S]*sourceId: source\.id/);
   assert.match(dashboard, /workspace-data-row/);
-  assert.match(dashboard, /!\(view === "metricas" && !currentUser\.financeAccess\)/);
+  assert.match(dashboard, /currentUser\.financeAccess \|\| !\(\["metricas", "comercial"\] as View\[\]\)\.includes\(view\)/);
   assert.match(styles, /\.area-workspace-dock/);
   assert.match(styles, /\.workspace-module-card/);
   assert.match(styles, /\.workspace-detail-panel/);
@@ -569,12 +577,14 @@ test("S-curve matches the supplied executive reference without changing its data
 });
 
 test("operational intelligence adds complete apartment cards, role focus, processing and history", async () => {
-  const [dashboard, data, schema, historyRoute, liveRoute, filesRoute, adminRoute, migration] = await Promise.all([
+  const [dashboard, data, schema, historyRoute, liveRoute, effectiveLive, publisher, filesRoute, adminRoute, migration] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),
     readFile("app/demo-data.ts", "utf8"),
     readFile("db/schema.ts", "utf8"),
     readFile("app/api/history/route.ts", "utf8"),
     readFile("app/api/live-data/route.ts", "utf8"),
+    readFile("lib/effective-live-data.ts", "utf8"),
+    readFile("lib/publish-live-data.ts", "utf8"),
     readFile("app/api/files/route.ts", "utf8"),
     readFile("app/api/admin/users/route.ts", "utf8"),
     readFile("drizzle/0005_dapper_silver_surfer.sql", "utf8"),
@@ -591,8 +601,11 @@ test("operational intelligence adds complete apartment cards, role focus, proces
   assert.match(schema, /liveDataHistory/);
   assert.match(schema, /processingProgress/);
   assert.match(historyRoute, /requireApiUser/);
-  assert.match(historyRoute, /isFinancialLiveKey/);
-  assert.match(liveRoute, /datos_publicados/);
+  assert.match(historyRoute, /readPublishedLiveDataHistory/);
+  assert.match(effectiveLive, /isFinancialLiveKey/);
+  assert.match(effectiveLive, /liveDataEvents\.status, "published"/);
+  assert.match(liveRoute, /publishLiveDataUpdates/);
+  assert.match(publisher, /datos_publicados/);
   assert.match(filesRoute, /processingStage: normalizedUpdates\.length/);
   assert.match(adminRoute, /isUserArea/);
   assert.match(migration, /CREATE TABLE `live_data_history`/);
@@ -609,7 +622,7 @@ test("point two adds controlled ingestion, automatic structured publication and 
     readFile("lib/ingestion.ts", "utf8"),
     readFile("lib/publish-live-data.ts", "utf8"),
     readFile("db/schema.ts", "utf8"),
-    readFile("drizzle/0007_ingestion_control_room.sql", "utf8"),
+    readFile("drizzle/0007_rapid_black_queen.sql", "utf8"),
     readFile("lib/agent-prompt.ts", "utf8"),
   ]);
   assert.match(dashboard, /BANDEJA DE VALIDACIÓN/);
@@ -636,8 +649,10 @@ test("point two adds controlled ingestion, automatic structured publication and 
   assert.match(reviewRoute, /publishLiveDataUpdates/);
   assert.match(ingestion, /export function analyzeDocument/);
   assert.match(ingestion, /extension !== "csv" && extension !== "json"/);
-  assert.match(publisher, /liveDataHistory/);
-  assert.match(publisher, /onConflictDoUpdate/);
+  assert.match(publisher, /live_data_history/);
+  assert.match(publisher, /INSERT INTO live_data_history/);
+  assert.match(publisher, /await database\.batch\(atomicStatements\)/);
+  assert.match(publisher, /failedInvariantStatement/);
   assert.match(schema, /documentDataProposals/);
   assert.match(schema, /fileReviews/);
   assert.match(migration, /CREATE TABLE `document_data_proposals`/);
@@ -687,7 +702,7 @@ test("points three to eight add a live operational control room without autonomo
   assert.match(migration, /CREATE TABLE `control_actions`/);
   assert.match(migration, /CREATE TABLE `control_action_activity`/);
   assert.match(migration, /CREATE TABLE `report_snapshots`/);
-  assert.doesNotMatch(migration, /ALTER TABLE `uploaded_files`/);
+  assert.match(migration, /ALTER TABLE `uploaded_files` ADD `review_status`/);
   assert.match(prompt, /araya-asistente-v9-sala-operativa/);
   assert.match(prompt, /no crearlas, cerrarlas ni reasignarlas/);
   assert.match(styles, /\.control-room-shell/);
@@ -768,7 +783,7 @@ test("tablet and mobile mode provides navigation, camera, notifications, biometr
   assert.match(routeError, /Reintentar/);
   assert.match(manifest, /"display": "standalone"/);
   assert.match(manifest, /"short_name": "Bricket Control"/);
-  assert.match(serviceWorker, /bricket-control-shell-v4/);
+  assert.match(serviceWorker, /bricket-control-shell-v5/);
   assert.match(serviceWorker, /CACHE_APP_SHELL/);
   assert.match(serviceWorker, /CLEAR_PRIVATE_CACHE/);
   assert.match(serviceWorker, /event\.request\.mode === "navigate"/);
@@ -886,7 +901,7 @@ test("official fiduciary statements reconcile and remain separate from managemen
   assert.match(agent, /fideicomiso\|presupuesto/);
 });
 
-test("the collaborative document registry archives every upload by year and month without truncation", async () => {
+test("the collaborative document registry archives every upload by year and month with bounded pagination", async () => {
   const [dashboard, styles, filesRoute] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),
     readFile("app/globals.css", "utf8"),
@@ -894,9 +909,6 @@ test("the collaborative document registry archives every upload by year and mont
   ]);
   const registry = dashboard.match(
     /function CollaborativeFileRegistry[\s\S]*?\n}\n\nasync function fetchDataHistory/,
-  )?.[0] ?? "";
-  const listQuery = filesRoute.match(
-    /const rows = await db\.select\(\)\.from\(uploadedFiles\)\.orderBy\(desc\(uploadedFiles\.createdAt\)\)[^;]*;/,
   )?.[0] ?? "";
 
   assert.ok(registry, "CollaborativeFileRegistry must remain present");
@@ -910,9 +922,14 @@ test("the collaborative document registry archives every upload by year and mont
     "five-second refreshes must preserve each manually selected archive state");
   assert.match(styles, /\.(?:file-archive-year|archive-year|uploaded-file-year)\b/);
   assert.match(styles, /\.(?:file-archive-month|archive-month|uploaded-file-month)\b/);
-  assert.ok(listQuery, "the uploaded-files list query must remain explicit");
-  assert.doesNotMatch(listQuery, /\.limit\(/, "older uploads must not disappear after the first 60 records");
-  assert.doesNotMatch(filesRoute, /orderBy\(desc\(uploadedFiles\.createdAt\)\)\.limit\(60\)/);
+  assert.match(filesRoute, /normalizeFilePageSize\(searchParams\.get\("limit"\)\)/);
+  assert.match(filesRoute, /orderBy\(desc\(uploadedFiles\.createdAt\), desc\(uploadedFiles\.id\)\)/);
+  assert.match(filesRoute, /\.limit\(pageSize \+ 1\)/);
+  assert.match(filesRoute, /nextCursor/);
+  assert.match(registry, /mergeFileRegistryRecords/);
+  assert.match(registry, /Cargar archivos anteriores/);
+  assert.match(registry, /mode=changes/);
+  assert.match(registry, /knownIds\.join\(","\)/);
 });
 
 test("the in-app document viewer renders PDFs with PDF.js and downloads only on explicit action", async () => {
@@ -930,7 +947,12 @@ test("the in-app document viewer renders PDFs with PDF.js and downloads only on 
   assert.match(viewer, /import\("pdfjs-dist"\)/);
   assert.match(viewer, /pdf\.worker\.min\.mjs\?url/);
   assert.match(viewer, /GlobalWorkerOptions\.workerSrc/);
-  assert.match(viewer, /getDocument\(\{ data: bytes \}\)/);
+  assert.match(viewer, /getDocument\(\{[\s\S]*?url: new URL\(url, window\.location\.origin\)\.toString\(\)/);
+  assert.match(viewer, /rangeChunkSize: 64 \* 1_024/);
+  assert.match(viewer, /disableStream: true/);
+  assert.match(viewer, /disableAutoFetch: true/);
+  assert.doesNotMatch(viewer, /const bytes = await response\.arrayBuffer\(\)/);
+  assert.match(viewer, /headers: \{ Range: ["']bytes=0-524287["'] \}/);
   assert.match(viewer, /<canvas/);
   assert.match(viewer, /extension === "pdf"[\s\S]*<PdfDocumentPreview/);
   assert.match(viewer, /href=\{downloadUrl\}[\s\S]*download[\s\S]*data-file-viewer-bypass="true"/);
@@ -988,18 +1010,21 @@ test("simple uploads request automatic publication only for extracted structured
   assert.match(filesRoute, /extractStructuredUpdates\(bytes, extension/);
   assert.match(filesRoute, /const canPublishAutomatically/);
   assert.match(filesRoute, /user\.role === "admin"/);
-  assert.match(filesRoute, /classification\.area !== "sin_clasificar"/);
+  assert.match(filesRoute, /resolvedArea !== "sin_clasificar"/);
   assert.match(filesRoute, /isSafeAutomaticStructuredUpdate/);
   assert.match(filesRoute, /isFinancialLiveKey/);
   assert.match(filesRoute, /if \(canPublishAutomatically\)/);
   assert.match(filesRoute, /publishLiveDataUpdates\(\{/);
-  assert.match(filesRoute, /action: "aprobado_automatico"/);
-  assert.match(filesRoute, /set\(\{ status: "publicado", updatedAt:/);
-  assert.match(filesRoute, /publicaci[^\n]+no se complet[^\n]+[\s\S]*requiresReview: true[\s\S]*reviewStatus: "listo_revision"/i);
+  assert.match(filesRoute, /reviewClosure: \{[\s\S]*?mode: "insert"[\s\S]*?completedAction: "aprobado_automatico"/);
+  assert.doesNotMatch(filesRoute, /update\(documentDataProposals\)[\s\S]*?status: "publicado"/);
+  assert.match(publisher, /UPDATE document_data_proposals[\s\S]*?status = 'publicado'/);
+  assert.match(filesRoute, /publicaci[^\n]+no pudo confirmarse[^\n]+[\s\S]*requiresReview: true[\s\S]*reviewStatus: "cambios_solicitados"/i);
   assert.match(filesRoute, /todav[^\n]+no modifica cifras ni gr[^\n]+ficas/i);
-  assert.match(publisher, /status: "integrado"/);
-  assert.match(publisher, /processingStage: "sincronizado"/);
-  assert.match(publisher, /processingProgress: 100/);
-  assert.match(publisher, /requiresReview: false/);
-  assert.match(publisher, /eventType: "datos_publicados"/);
+  assert.match(publisher, /SET status = 'integrado', processing_stage = 'sincronizado'/);
+  assert.match(publisher, /processing_progress = 100/);
+  assert.match(publisher, /requires_review = 0/);
+  assert.match(
+    publisher,
+    /INSERT INTO file_activity[\s\S]*?SELECT json_extract\(item\.value, '\$\.id'\), 'datos_publicados'[\s\S]*?FROM json_each\(\?\) AS item/,
+  );
 });

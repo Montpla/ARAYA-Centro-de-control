@@ -1,8 +1,6 @@
-import { eq, like, or } from "drizzle-orm";
-import { getDb } from "../../../db";
-import { liveDataPoints } from "../../../db/schema";
 import { requireApiUser } from "../../../lib/access-control";
-import { LiveDataMap, materializeLiveRoot } from "../../../lib/live-data";
+import { readEffectiveLiveData } from "../../../lib/effective-live-data";
+import { materializeLiveRoot } from "../../../lib/live-data";
 import {
   antonelyPayableInvoiceLines,
   buildPayablesDataset,
@@ -23,27 +21,15 @@ export async function GET() {
   } = {};
 
   try {
-    const db = getDb();
-    const liveRows = await db
-      .select()
-      .from(liveDataPoints)
-      .where(or(
-        eq(liveDataPoints.key, "antonelyPayableInvoiceLines"),
-        like(liveDataPoints.key, "antonelyPayableInvoiceLines.%"),
-      ));
+    const live = await readEffectiveLiveData(true);
+    const liveRows = live.points.filter((row) =>
+      row.key === "antonelyPayableInvoiceLines" ||
+      row.key.startsWith("antonelyPayableInvoiceLines."));
     if (liveRows.length) {
-      const values: LiveDataMap = {};
-      liveRows.forEach((row) => {
-        try {
-          values[row.key] = JSON.parse(row.valueJson);
-        } catch {
-          // A malformed live cell does not invalidate the remaining invoice data.
-        }
-      });
       const materialized = materializeLiveRoot(
         "antonelyPayableInvoiceLines",
         antonelyPayableInvoiceLines,
-        values,
+        live.values,
       );
       const normalized = normalizePayableInvoiceLines(materialized);
       if (normalized.length) {

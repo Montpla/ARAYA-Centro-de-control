@@ -1,5 +1,5 @@
-import { and, desc, eq } from "drizzle-orm";
-import { monthlyPlan, projectSnapshot } from "../../demo-data";
+import { and, desc, eq, isNull, notInArray, or, sql } from "drizzle-orm";
+import { monthlyPlan } from "../../demo-data";
 import { juneReport } from "../../june-report-data";
 import { getDb } from "../../../db";
 import {
@@ -7,8 +7,6 @@ import {
   controlActionActivity,
   controlActions,
   documentDataProposals,
-  liveDataEvents,
-  liveDataPoints,
   reportSnapshots,
   uploadedFiles,
 } from "../../../db/schema";
@@ -18,7 +16,16 @@ import {
   buildReportSnapshot,
 } from "../../../lib/control-room";
 import { isUserArea } from "../../../lib/file-routing";
-import { LiveDataMap, materializeLiveRoot } from "../../../lib/live-data";
+import {
+  financeProtectedAreaValues,
+  financeProtectedDocumentTypeValues,
+  materializeLiveRoot,
+  requiresFinanceAccessForArea,
+  requiresFinanceAccessForDocument,
+} from "../../../lib/live-data";
+import { readEffectiveLiveData } from "../../../lib/effective-live-data";
+import { scheduleNotificationDispatch } from "../../../lib/notification-dispatch";
+import { materializeSpatialLiveData } from "../../../lib/spatial-live-data";
 
 const ACTION_STATUSES = new Set(["open", "in_progress", "blocked", "completed"]);
 const ACTION_SEVERITIES = new Set(["critical", "medium", "low"]);
@@ -46,19 +53,23 @@ function validDate(value: string) {
 }
 
 function visibleArea(area: string, financeAccess: boolean) {
-  return financeAccess || area !== "finanzas";
+  return financeAccess || !requiresFinanceAccessForArea(area);
 }
 
-function parseLiveValues(rows: Array<{ key: string; valueJson: string }>) {
-  const values: LiveDataMap = {};
-  rows.forEach((row) => {
-    try {
-      values[row.key] = JSON.parse(row.valueJson);
-    } catch {
-      // A malformed isolated point must not prevent the control room from loading.
-    }
-  });
-  return values;
+function visibleFile(
+  row: Pick<typeof uploadedFiles.$inferSelect, "area" | "documentType">,
+  financeAccess: boolean,
+) {
+  return financeAccess || !requiresFinanceAccessForDocument(row.area, row.documentType);
+}
+
+function visibleFileSql(financeAccess: boolean) {
+  return financeAccess
+    ? sql`1 = 1`
+    : and(
+        notInArray(uploadedFiles.area, financeProtectedAreaValues()),
+        notInArray(uploadedFiles.documentType, financeProtectedDocumentTypeValues()),
+      );
 }
 
 function publicAction(
@@ -88,10 +99,16 @@ function publicAction(
   };
 }
 
-function publicReport(row: typeof reportSnapshots.$inferSelect) {
+function publicReport(row: typeof reportSnapshots.$inferSelect, canAccessFinance = true) {
   let snapshot: unknown = null;
   try {
     snapshot = JSON.parse(row.snapshotJson) as unknown;
+    if (!canAccessFinance && snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)) {
+      const redacted = { ...(snapshot as Record<string, unknown>) };
+      redacted.finance = null;
+      redacted.commercial = null;
+      snapshot = redacted;
+    }
   } catch {
     // Keep the report metadata available even if one stored snapshot is malformed.
   }
@@ -121,18 +138,49 @@ type ControlRoomUser = {
 
 async function controlRoomPayload(auth: ControlRoomUser) {
   const db = getDb();
+  const activeVisibleFiles = and(
+    eq(uploadedFiles.deletedAt, ""),
+    visibleFileSql(auth.financeAccess),
+  );
   const [
-    fileRows,
-    proposalRows,
+    fileAreaRows,
+    pendingProposalRows,
     actionRows,
     activityRows,
     reportRows,
-    liveRows,
-    eventRows,
+    live,
   ] = await Promise.all([
-    db.select().from(uploadedFiles).orderBy(desc(uploadedFiles.createdAt)),
-    db.select().from(documentDataProposals).orderBy(desc(documentDataProposals.createdAt)),
-    db.select().from(controlActions).orderBy(desc(controlActions.updatedAt)).limit(150),
+    db
+      .select({
+        area: uploadedFiles.area,
+        files: sql<number>`count(*)`,
+        integratedFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.reviewStatus} = 'aprobado' then 1 else 0 end), 0)`,
+        pendingFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.reviewStatus} not in ('aprobado', 'rechazado') then 1 else 0 end), 0)`,
+        observedFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.reviewStatus} = 'cambios_solicitados' then 1 else 0 end), 0)`,
+        rejectedFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.reviewStatus} = 'rechazado' then 1 else 0 end), 0)`,
+        discrepancies: sql<number>`coalesce(sum(${uploadedFiles.discrepancyCount}), 0)`,
+        lastUploadAt: sql<string>`coalesce(max(${uploadedFiles.createdAt}), '')`,
+      })
+      .from(uploadedFiles)
+      .where(activeVisibleFiles)
+      .groupBy(uploadedFiles.area),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(documentDataProposals)
+      .innerJoin(uploadedFiles, eq(documentDataProposals.fileId, uploadedFiles.id))
+      .where(and(
+        activeVisibleFiles,
+        eq(documentDataProposals.status, "pendiente"),
+        eq(documentDataProposals.generation, uploadedFiles.proposalGeneration),
+      )),
+    db
+      .select()
+      .from(controlActions)
+      .where(auth.financeAccess
+        ? sql`1 = 1`
+        : notInArray(controlActions.area, financeProtectedAreaValues()))
+      .orderBy(desc(controlActions.updatedAt))
+      .limit(150),
     db
       .select({
         id: controlActionActivity.id,
@@ -146,19 +194,26 @@ async function controlRoomPayload(auth: ControlRoomUser) {
       })
       .from(controlActionActivity)
       .leftJoin(controlActions, eq(controlActionActivity.actionId, controlActions.id))
+      .where(auth.financeAccess
+        ? sql`1 = 1`
+        : or(
+            isNull(controlActions.area),
+            notInArray(controlActions.area, financeProtectedAreaValues()),
+          ))
       .orderBy(desc(controlActionActivity.id))
       .limit(100),
-    db.select().from(reportSnapshots).orderBy(desc(reportSnapshots.createdAt)).limit(50),
-    db.select().from(liveDataPoints),
-    db.select().from(liveDataEvents).orderBy(desc(liveDataEvents.id)).limit(1),
+    db
+      .select()
+      .from(reportSnapshots)
+      .where(auth.financeAccess ? sql`1 = 1` : eq(reportSnapshots.includesFinance, false))
+      .orderBy(desc(reportSnapshots.createdAt))
+      .limit(50),
+    readEffectiveLiveData(auth.financeAccess),
   ]);
-  const files = fileRows.filter((row) => visibleArea(row.area, auth.financeAccess));
-  const fileIds = new Set(files.map((row) => row.id));
-  const proposals = proposalRows.filter((row) => fileIds.has(row.fileId));
-  const actions = actionRows.filter((row) => visibleArea(row.area, auth.financeAccess));
-  const reports = reportRows.filter((row) => auth.financeAccess || !row.includesFinance);
-  const livePoints = liveRows.filter((row) => visibleArea(row.area, auth.financeAccess));
-  const liveValues = parseLiveValues(liveRows);
+  const actions = actionRows;
+  const reports = reportRows;
+  const livePoints = live.points;
+  const liveValues = live.values;
   const assigneeRows =
     auth.role === "admin"
       ? await db
@@ -172,52 +227,69 @@ async function controlRoomPayload(auth: ControlRoomUser) {
           .where(eq(appUsers.active, true))
           .orderBy(appUsers.displayName)
       : [];
-  const currentProject = materializeLiveRoot(
-    "projectSnapshot",
-    projectSnapshot,
-    liveValues,
-  );
+  const currentProject = materializeSpatialLiveData(liveValues).projectSnapshot;
   const currentPlan = materializeLiveRoot("monthlyPlan", monthlyPlan, liveValues);
   const baseline = buildControlRoomBaseline(
     auth.financeAccess,
     currentProject,
     currentPlan,
   );
-  const areaSet = new Set([
-    ...files.map((row) => row.area),
-    ...livePoints.map((row) => row.area),
-  ]);
+  const normalizedFileAreas = fileAreaRows.map((row) => ({
+    area: row.area,
+    files: Number(row.files),
+    integratedFiles: Number(row.integratedFiles),
+    pendingFiles: Number(row.pendingFiles),
+    observedFiles: Number(row.observedFiles),
+    rejectedFiles: Number(row.rejectedFiles),
+    discrepancies: Number(row.discrepancies),
+    lastUploadAt: row.lastUploadAt,
+  }));
+  const fileAreas = new Map(normalizedFileAreas.map((row) => [row.area, row]));
+  const liveAreas = new Map<string, { count: number; lastCutoff: string; updatedAt: string }>();
+  livePoints.forEach((point) => {
+    const current = liveAreas.get(point.area) ?? { count: 0, lastCutoff: "", updatedAt: "" };
+    current.count += 1;
+    if (point.cutoff && point.updatedAt >= current.updatedAt) {
+      current.lastCutoff = point.cutoff;
+      current.updatedAt = point.updatedAt;
+    }
+    liveAreas.set(point.area, current);
+  });
+  const areaSet = new Set([...fileAreas.keys(), ...liveAreas.keys()]);
   const areas = [...areaSet]
     .sort()
-    .map((area) => ({
-      area,
-      files: files.filter((row) => row.area === area).length,
-      integratedFiles: files.filter(
-        (row) => row.area === area && row.reviewStatus === "aprobado",
-      ).length,
-      pendingFiles: files.filter(
-        (row) =>
-          row.area === area &&
-          !["aprobado", "rechazado"].includes(row.reviewStatus),
-      ).length,
-      livePoints: livePoints.filter((row) => row.area === area).length,
-      lastCutoff:
-        livePoints
-          .filter((row) => row.area === area && row.cutoff)
-          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]
-          ?.cutoff ?? "",
-    }));
-  const approvedFiles = files.filter((row) => row.reviewStatus === "aprobado").length;
-  const pendingFiles = files.filter(
-    (row) => !["aprobado", "rechazado"].includes(row.reviewStatus),
-  ).length;
-  const discrepancyCount = files.reduce(
-    (total, row) => total + row.discrepancyCount,
-    0,
-  );
-  const pendingProposals = proposals.filter((row) => row.status === "pendiente").length;
-  const dossierScore = files.length
-    ? Math.round((approvedFiles / files.length) * 100)
+    .map((area) => {
+      const documents = fileAreas.get(area);
+      const points = liveAreas.get(area);
+      return {
+        area,
+        files: documents?.files ?? 0,
+        integratedFiles: documents?.integratedFiles ?? 0,
+        pendingFiles: documents?.pendingFiles ?? 0,
+        livePoints: points?.count ?? 0,
+        lastCutoff: points?.lastCutoff ?? "",
+      };
+    });
+  const documentTotals = normalizedFileAreas.reduce((totals, row) => ({
+    total: totals.total + row.files,
+    approved: totals.approved + row.integratedFiles,
+    pending: totals.pending + row.pendingFiles,
+    observed: totals.observed + row.observedFiles,
+    rejected: totals.rejected + row.rejectedFiles,
+    discrepancies: totals.discrepancies + row.discrepancies,
+    lastUploadAt: row.lastUploadAt > totals.lastUploadAt ? row.lastUploadAt : totals.lastUploadAt,
+  }), {
+    total: 0,
+    approved: 0,
+    pending: 0,
+    observed: 0,
+    rejected: 0,
+    discrepancies: 0,
+    lastUploadAt: "",
+  });
+  const pendingProposals = Number(pendingProposalRows[0]?.count ?? 0);
+  const dossierScore = documentTotals.total
+    ? Math.round((documentTotals.approved / documentTotals.total) * 100)
     : null;
 
   return {
@@ -234,22 +306,22 @@ async function controlRoomPayload(auth: ControlRoomUser) {
       financeAccess: row.financeAccess,
     })),
     documents: {
-      total: files.length,
-      approved: approvedFiles,
-      pending: pendingFiles,
-      observed: files.filter((row) => row.reviewStatus === "cambios_solicitados").length,
-      rejected: files.filter((row) => row.reviewStatus === "rechazado").length,
-      discrepancies: discrepancyCount,
+      total: documentTotals.total,
+      approved: documentTotals.approved,
+      pending: documentTotals.pending,
+      observed: documentTotals.observed,
+      rejected: documentTotals.rejected,
+      discrepancies: documentTotals.discrepancies,
       pendingProposals,
       dossierScore,
-      lastUploadAt: files[0]?.createdAt ?? "",
+      lastUploadAt: documentTotals.lastUploadAt,
       areas,
     },
     live: {
-      revision: eventRows[0]?.id ?? 0,
+      revision: live.revision,
       pointCount: livePoints.length,
-      lastPublishedAt: eventRows[0]?.createdAt ?? "",
-      latestSource: eventRows[0]?.sourceName ?? "",
+      lastPublishedAt: live.latestEvent?.createdAt ?? "",
+      latestSource: live.latestEvent?.sourceName ?? "",
       refreshIntervalMs: 5_000,
     },
     ...baseline,
@@ -270,7 +342,7 @@ async function controlRoomPayload(auth: ControlRoomUser) {
     actionActivity: activityRows
       .filter((row) => visibleArea(row.area ?? "", auth.financeAccess))
       .slice(0, 40),
-    reports: reports.map(publicReport),
+    reports: reports.map((row) => publicReport(row, auth.financeAccess)),
   };
 }
 
@@ -325,9 +397,15 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (area === "finanzas" && !auth.financeAccess) {
+    if (requiresFinanceAccessForArea(area) && !auth.financeAccess) {
       return Response.json(
-        { error: "No tienes acceso para crear acciones financieras." },
+        { error: "No tienes acceso para crear acciones financieras o comerciales." },
+        { status: 403 },
+      );
+    }
+    if (["metricas", "comercial"].includes(relatedView) && !auth.financeAccess) {
+      return Response.json(
+        { error: "No tienes acceso a la vista financiera o comercial solicitada." },
         { status: 403 },
       );
     }
@@ -348,6 +426,12 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
+      if (requiresFinanceAccessForArea(area) && !assignee[0].financeAccess) {
+        return Response.json(
+          { error: "La persona asignada no tiene acceso financiero y comercial." },
+          { status: 400 },
+        );
+      }
       assigneeName = assignee[0].displayName || assignee[0].email;
     }
     const sourceFileId = text(payload.sourceFileId, 120);
@@ -357,7 +441,7 @@ export async function POST(request: Request) {
         .from(uploadedFiles)
         .where(eq(uploadedFiles.id, sourceFileId))
         .limit(1);
-      if (!source[0] || !visibleArea(source[0].area, auth.financeAccess)) {
+      if (!source[0] || !visibleFile(source[0], auth.financeAccess)) {
         return Response.json(
           { error: "El documento de origen no está disponible." },
           { status: 400 },
@@ -394,6 +478,7 @@ export async function POST(request: Request) {
       actorName: auth.displayName,
       createdAt: now,
     });
+    scheduleNotificationDispatch();
     return Response.json({ action: publicAction(row, auth) }, { status: 201 });
   }
 
@@ -444,6 +529,7 @@ export async function POST(request: Request) {
         .update(controlActions)
         .set({ updatedAt: now })
         .where(eq(controlActions.id, actionId));
+      scheduleNotificationDispatch();
       return Response.json({ message: "Comentario registrado." }, { status: 201 });
     }
     const status = text(payload.status, 30);
@@ -455,6 +541,9 @@ export async function POST(request: Request) {
       .set({
         status,
         completedAt: status === "completed" ? now : "",
+        notificationNonce: crypto.randomUUID(),
+        notificationActorEmail: auth.email,
+        notificationActorName: auth.displayName,
         updatedAt: now,
       })
       .where(eq(controlActions.id, actionId))
@@ -468,6 +557,7 @@ export async function POST(request: Request) {
       actorName: auth.displayName,
       createdAt: now,
     });
+    scheduleNotificationDispatch();
     return Response.json({ action: publicAction(updated, auth) });
   }
 
@@ -505,19 +595,12 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const [liveRows, eventRows] = await Promise.all([
-      db.select().from(liveDataPoints),
-      db.select().from(liveDataEvents).orderBy(desc(liveDataEvents.id)).limit(1),
-    ]);
-    const values = parseLiveValues(liveRows);
-    const currentProject = materializeLiveRoot(
-      "projectSnapshot",
-      projectSnapshot,
-      values,
-    );
+    const live = await readEffectiveLiveData(auth.financeAccess);
+    const values = live.values;
+    const currentProject = materializeSpatialLiveData(values).projectSnapshot;
     const currentPlan = materializeLiveRoot("monthlyPlan", monthlyPlan, values);
     const currentJuneReport = materializeLiveRoot("juneReport", juneReport, values);
-    const liveRevision = eventRows[0]?.id ?? 0;
+    const liveRevision = live.revision;
     const snapshot = buildReportSnapshot(
       auth.financeAccess,
       currentProject,
@@ -544,6 +627,7 @@ export async function POST(request: Request) {
         createdAt: now,
       })
       .returning();
+    scheduleNotificationDispatch();
     return Response.json(
       {
         report: publicReport(report),
