@@ -945,13 +945,12 @@ test("the in-app document viewer renders PDFs with PDF.js and downloads only on 
 });
 
 test("historical originals stay out of public assets and use authenticated R2 delivery", async () => {
-  const [viteConfig, proxy, protectedRoute, accessRules, sitesPlugin, seedRoute, assetsIgnore] = await Promise.all([
+  const [viteConfig, proxy, protectedRoute, accessRules, sitesPlugin, assetsIgnore] = await Promise.all([
     readFile("vite.config.ts", "utf8"),
     readFile("proxy.ts", "utf8"),
     readFile("app/data-center/[...path]/route.ts", "utf8"),
     readFile("lib/document-access.ts", "utf8"),
     readFile("build/sites-vite-plugin.ts", "utf8"),
-    readFile("app/api/admin/document-seed/route.ts", "utf8"),
     readFile("public/.assetsignore", "utf8"),
   ]);
 
@@ -974,15 +973,6 @@ test("historical originals stay out of public assets and use authenticated R2 de
   assert.match(sitesPlugin, /privateDocumentOutput/);
   assert.match(sitesPlugin, /rm\(privateDocumentOutput, \{ recursive: true, force: true \}\)/);
   assert.match(assetsIgnore, /data-center\/\*\*/);
-  assert.match(seedRoute, /DOCUMENT_SEED_TOKEN/);
-  assert.match(seedRoute, /tokensMatch/);
-  assert.match(seedRoute, /runtime\.FILES\.put\(`historical\$\{path\}`/);
-  assert.match(seedRoute, /createMultipartUpload/);
-  assert.match(seedRoute, /resumeMultipartUpload/);
-  assert.match(seedRoute, /multipart-complete/);
-  assert.match(seedRoute, /chunk-complete/);
-  assert.match(seedRoute, /historical-manifest/);
-  assert.match(seedRoute, /historical-chunks/);
 });
 
 test("simple uploads request automatic publication only for extracted structured updates", async () => {

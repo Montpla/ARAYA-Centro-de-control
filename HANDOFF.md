@@ -23,7 +23,7 @@ publique en el mismo enlace.
   `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
 - Proyecto de Sites:
   `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Última versión publicada: 46, con archivo documental por año y mes, visor
+- Última versión publicada: 50, con archivo documental por año y mes, visor
   interno móvil, carga simplificada, publicación estructurada segura y
   protección directa de originales estáticos. El agente permanece como
   `ARAYA Asistente`. El commit desplegado es el `HEAD` de
@@ -1005,8 +1005,8 @@ Implementada y publicada el 11/08/2026 en la versión 44.
 
 ## Archivo documental, visor interno y carga simplificada
 
-Implementado y publicado el 11/08/2026; endurecimiento final de originales en
-la versión 46.
+Implementado y publicado el 11/08/2026; almacenamiento privado definitivo de
+originales en la versión 50.
 
 - La bandeja de archivos colaborativos ya no trunca el histórico en 60
   registros. Todos los originales aparecen agrupados mediante acordeones de
@@ -1027,14 +1027,23 @@ la versión 46.
   conversión derivada a PDF/HTML en una iteración posterior.
 - Se eliminaron todos los `target="_blank"` de documentos del proyecto. Tanto
   facturas y fuentes como informes financieros pasan por el visor común.
-- Cloudflare está configurado con `assets.run_worker_first` selectivo para
-  `/data-center/*`, evitando que su capa estática entregue un original antes
-  de ejecutar la autorización. `proxy.ts` y la ruta dinámica
+- Los 23 originales históricos (50.646.816 bytes) están sembrados y
+  verificados en R2 `FILES`; ninguno forma parte del paquete estático público.
+  `build/sites-vite-plugin.ts` elimina `dist/client/data-center` en cada build
+  y `public/.assetsignore` mantiene una segunda exclusión. No retirar estas dos
+  barreras aunque los originales auditables continúen en el árbol fuente.
+- Cloudflare conserva `assets.run_worker_first` selectivo para
+  `/data-center/*`. `proxy.ts` y la ruta dinámica
   `app/data-center/[...path]/route.ts` exigen identidad ChatGPT, usuario activo
   en `app_users` y `financeAccess` en rutas financieras o del fideicomiso; la
-  ruta autorizada recupera entonces el original mediante el binding `ASSETS`.
-  Las respuestas privadas no se guardan en caché pública ni en la caché
-  offline.
+  ruta autorizada recupera el original de R2. Los siete archivos que superan
+  el límite de una petición se guardan en fragmentos privados y se transmiten
+  de forma continua, con soporte de rangos y el mismo nombre/tipo del original.
+  Las respuestas son `private, no-store` y no entran en la caché offline.
+- El endpoint y el secreto temporales utilizados para la siembra inicial se
+  eliminaron después de verificar los 23 documentos. Las nuevas cargas deben
+  seguir entrando exclusivamente por `POST /api/files` y quedan en R2 desde
+  su recepción.
 - La carga principal y la del agente se redujeron a seleccionar un archivo y
   pulsar `Subir y procesar`; área, tipo, periodo y moneda se detectan. Los
   campos manuales siguen disponibles dentro de `Opciones avanzadas`.
