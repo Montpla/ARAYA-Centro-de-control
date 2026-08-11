@@ -944,12 +944,15 @@ test("the in-app document viewer renders PDFs with PDF.js and downloads only on 
   assert.match(styles, /\.file-viewer-close/);
 });
 
-test("historical originals always pass through authenticated worker-first delivery", async () => {
-  const [viteConfig, proxy, protectedRoute, accessRules] = await Promise.all([
+test("historical originals stay out of public assets and use authenticated R2 delivery", async () => {
+  const [viteConfig, proxy, protectedRoute, accessRules, sitesPlugin, seedRoute, assetsIgnore] = await Promise.all([
     readFile("vite.config.ts", "utf8"),
     readFile("proxy.ts", "utf8"),
     readFile("app/data-center/[...path]/route.ts", "utf8"),
     readFile("lib/document-access.ts", "utf8"),
+    readFile("build/sites-vite-plugin.ts", "utf8"),
+    readFile("app/api/admin/document-seed/route.ts", "utf8"),
+    readFile("public/.assetsignore", "utf8"),
   ]);
 
   assert.match(viteConfig, /assets:\s*\{[\s\S]*binding:\s*"ASSETS"[\s\S]*run_worker_first:\s*\["\/data-center\/\*"\]/);
@@ -957,12 +960,21 @@ test("historical originals always pass through authenticated worker-first delive
   assert.match(proxy, /resolveAuthorizedUser/);
   assert.match(protectedRoute, /requireApiUser\(\)/);
   assert.match(protectedRoute, /requiresFinanceDocumentAccess\(pathname\)/);
-  assert.match(protectedRoute, /env as unknown as \{ ASSETS\?: Fetcher \}/);
-  assert.match(protectedRoute, /assets\.fetch\(request\)/);
+  assert.match(protectedRoute, /env as unknown as \{ FILES\?: DocumentBucket \}/);
+  assert.match(protectedRoute, /`historical\$\{pathname\}`/);
+  assert.match(protectedRoute, /bucket\.head\(storageKey\)/);
+  assert.match(protectedRoute, /bucket\.get\(/);
+  assert.match(protectedRoute, /parseByteRange/);
   assert.match(protectedRoute, /Cache-Control", "private, no-store, max-age=0"/);
   assert.match(protectedRoute, /X-Robots-Tag", "noindex, noarchive, nosnippet"/);
   assert.match(accessRules, /financeOnlyDocuments/);
   assert.match(accessRules, /fideicomiso\|balance\|resultados/);
+  assert.match(sitesPlugin, /privateDocumentOutput/);
+  assert.match(sitesPlugin, /rm\(privateDocumentOutput, \{ recursive: true, force: true \}\)/);
+  assert.match(assetsIgnore, /data-center\/\*\*/);
+  assert.match(seedRoute, /DOCUMENT_SEED_TOKEN/);
+  assert.match(seedRoute, /tokensMatch/);
+  assert.match(seedRoute, /runtime\.FILES\.put\(`historical\$\{path\}`/);
 });
 
 test("simple uploads request automatic publication only for extracted structured updates", async () => {

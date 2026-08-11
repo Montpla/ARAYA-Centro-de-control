@@ -26,9 +26,14 @@ export function sites(): Plugin {
     },
     async closeBundle() {
       const outputDirectory = resolve(root, "dist", ".openai");
+      const privateDocumentOutput = resolve(root, "dist", "client", "data-center");
       const hostingConfig = resolve(root, ".openai", "hosting.json");
       const drizzleSource = resolve(root, "drizzle");
 
+      // Historical originals are retained in source for auditability and
+      // seeded into private R2 storage, but must never enter the public asset
+      // bundle produced by Sites.
+      await rm(privateDocumentOutput, { recursive: true, force: true });
       await rm(outputDirectory, { recursive: true, force: true });
       await mkdir(outputDirectory, { recursive: true });
 
