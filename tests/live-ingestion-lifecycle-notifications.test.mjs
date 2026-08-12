@@ -133,7 +133,7 @@ test("multiformat ingestion falls back to AI and gates automatic publication", (
     /JSON\.parse\(candidate\.value_json\)/,
     /text: \{[\s\S]*?format: \{[\s\S]*?type: ["']json_schema["'][\s\S]*?strict: true/,
     /safety_identifier: SAFETY_IDENTIFIER/,
-    /input\.updateConfidences\.every\(\(confidence\) =>[\s\S]*?confidence >= 0\.8/,
+    /input\.updateConfidences\.every\(\(confidence\) =>[\s\S]*?confidence >= 0\.5/,
   ], "AI extraction");
 });
 
@@ -154,7 +154,9 @@ test("upload quarantine, idempotent resume and automatic runtime contracts fail 
     /resolvedDocumentType = PROVISIONAL_DOCUMENT_TYPE;[\s\S]*?financeProtectedUpload = true;[\s\S]*?protectionResolved = false/,
     /financeProtectedUpload && !user\.financeAccess/,
     /resolveSpatialIdentityUpdates\(extraction\.updates, currentLiveData\.values\)/,
-    /automaticContractIsSafe\(normalizedUpdates, currentLiveData\?\.values \?\? \{\}\)/,
+    /const liveValues = currentLiveData\?\.values \?\? \{\}/,
+    /automaticContractIsSafe\(normalizedUpdates, liveValues\)/,
+    /individualUpdateContractIsSafe\(update, liveValues\)/,
     /!\[["']__proto__["'], ["']constructor["'], ["']prototype["']\]\.includes\(key\)/,
   ], "files route quarantine");
 

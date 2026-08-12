@@ -135,6 +135,10 @@ export const dataAuthorityMatrix = [
     status: "separado",
     decision: "El 17% del MPP no sustituye el 18,23% físico: miden conceptos diferentes.",
   },
+  // Estas dos entradas citan el avance físico y de cronograma dentro del
+  // texto de "decision" (no en un campo numérico aparte), así que el valor
+  // declarado arriba se queda fijo como línea base. liveDataAuthorityMatrix()
+  // sustituye ambas frases con los porcentajes vivos en el momento de mostrarlas.
   {
     id: "master-plan",
     metric: "Implantación y geometría",
@@ -215,6 +219,7 @@ export const dataAuthorityMatrix = [
   status: DataControlStatus;
   decision: string;
 }>;
+
 
 export const dataGovernanceSummary = {
   registeredSources: Object.keys(sourceGovernance).length,

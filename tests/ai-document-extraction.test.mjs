@@ -111,10 +111,10 @@ test("image extraction uses a data URL and rejects keys outside the live contrac
   assert.equal(requestBody.text.format.type, "json_schema");
   assert.equal(requestBody.text.format.strict, true);
   assert.equal(requestBody.safety_identifier, "araya_document_ingestion_service");
-  assert.match(requestBody.input[0].content[1].image_url, /^data:image\/png;base64,/);
+  assert.match(requestBody.input[0].content[2].image_url, /^data:image\/png;base64,/);
 });
 
-test("automatic AI publication requires every proposal to have high confidence and no warnings", () => {
+test("automatic AI publication requires every proposal to clear a moderate confidence floor, but informational warnings alone do not block it", () => {
   assert.equal(extraction.canAutomaticallyPublishExtraction({
     model: "deterministic",
     confidence: 1,
@@ -125,27 +125,27 @@ test("automatic AI publication requires every proposal to have high confidence a
 
   assert.equal(extraction.canAutomaticallyPublishExtraction({
     model: "gpt-5.6-terra",
-    confidence: 0.89,
-    updateConfidences: [0.99, 0.79],
+    confidence: 0.55,
+    updateConfidences: [0.99, 0.35],
     warnings: [],
     updateCount: 2,
-  }), false, "a high global average cannot hide one low-confidence AI proposal");
+  }), false, "a high global average cannot hide one proposal below the confidence floor");
 
   assert.equal(extraction.canAutomaticallyPublishExtraction({
     model: "gpt-5.6-terra",
     confidence: 0.9,
     updateConfidences: [0.9],
-    warnings: ["La pagina 2 es ilegible."],
+    warnings: ["Se omitio una fila sin evidencia verificable."],
     updateCount: 1,
-  }), false, "any AI warning requires human review");
+  }), true, "an informational warning about discarded/unrelated content does not block the accepted proposals");
 
   assert.equal(extraction.canAutomaticallyPublishExtraction({
     model: "gpt-5.6-terra",
-    confidence: 0.8,
-    updateConfidences: [0.8, 0.96],
+    confidence: 0.55,
+    updateConfidences: [0.55, 0.6],
     warnings: [],
     updateCount: 2,
-  }), true);
+  }), true, "moderate confidence at or above the floor is enough, it no longer requires 0.8+");
 });
 
 test("uploaded files use purpose user_data and are deleted after a Responses API error", async () => {
@@ -159,8 +159,8 @@ test("uploaded files use purpose user_data and are deleted after a Responses API
     }
     if (url === "https://api.openai.com/v1/responses") {
       const body = JSON.parse(init.body);
-      assert.equal(body.input[0].content[1].type, "input_file");
-      assert.equal(body.input[0].content[1].file_id, "file-temporary-123");
+      assert.equal(body.input[0].content[2].type, "input_file");
+      assert.equal(body.input[0].content[2].file_id, "file-temporary-123");
       return new Response(JSON.stringify({ error: { message: "Fallo temporal controlado" } }), {
         status: 500,
       });

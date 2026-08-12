@@ -163,6 +163,7 @@ export type ControlRoomSnapshot = {
     liveRevision: number;
     cutoff: string;
     includesFinance: boolean;
+    reportType: string;
     createdByName: string;
     createdAt: string;
     snapshot: ArchivedReportSnapshot | null;
@@ -197,6 +198,13 @@ const severityLabels: Record<string, string> = {
   critical: "Crítica",
   medium: "Media",
   low: "Baja",
+};
+
+const reportTypeLabels: Record<string, string> = {
+  global: "General",
+  obra_seguridad: "Obra y Seguridad",
+  finanzas: "Finanzas",
+  ventas: "Ventas",
 };
 
 function dateTime(value: string) {
@@ -482,8 +490,8 @@ export function ControlRoomPanel({
             <button
               type="button"
               onClick={onCreateReport}
-              disabled={!snapshot.currentUser.financeAccess || readOnly}
-              title={readOnly ? "Necesita conexión" : !snapshot.currentUser.financeAccess ? "Requiere acceso financiero" : undefined}
+              disabled={readOnly}
+              title={readOnly ? "Necesita conexión" : undefined}
             >
               Crear informe
             </button>
@@ -492,7 +500,7 @@ export function ControlRoomPanel({
             {snapshot.reports.length ? snapshot.reports.map((report) => (
               <button key={report.id} type="button" onClick={() => onOpenReport(report)}>
                 <i>{report.frequency === "weekly" ? "SEM" : "MES"}</i>
-                <span><strong>{report.label}</strong><small>Revisión {report.liveRevision || "base"} · corte {report.cutoff}</small></span>
+                <span><strong>{report.label}</strong><small>{reportTypeLabels[report.reportType] ?? "General"} · revisión {report.liveRevision || "base"} · corte {report.cutoff}</small></span>
                 <em>{report.currency}</em>
                 <b>{dateTime(report.createdAt)}</b>
               </button>

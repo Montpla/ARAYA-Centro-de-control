@@ -21,12 +21,14 @@ semántica de un documento o una consulta al asistente usa la API de IA.
 
 - CSV y JSON estructurados se leen de forma determinista; una revisión sólo se
   publica si sus claves, valores, corte, área y permisos cumplen el contrato.
-- PDF, XLS/XLSX, PPT/PPTX, DOC/DOCX e imágenes requieren `OPENAI_API_KEY` en
-  Sites para interpretación semántica automática. Sin la clave se conserva el
+- PDF, XLS/XLSX, PPT/PPTX, DOC/DOCX e imágenes requieren `OPENAI_API_KEY`
+  para interpretación semántica automática. Sin la clave se conserva el
   original y queda pendiente de extracción/revisión; no cambia el dashboard.
-- A 11/08/2026 `OPENAI_API_KEY` no está configurada en Sites. Por tanto, hasta
-  añadirla y desplegar de nuevo, esos formatos deben quedar pendientes; no
-  anunciar la automatización semántica multiformato como activa.
+- Actualizado el 13/08/2026: en el entorno de Cloudflare Workers vigente
+  (ver `HANDOFF.md`, "Aviso importante: plataforma de despliegue vigente")
+  `OPENAI_API_KEY` SÍ está configurada y la extracción semántica funciona en
+  producción con `gpt-5.6-terra`. La nota anterior sobre la clave ausente en
+  "Sites" describía un entorno distinto que no es el que se usa actualmente.
 - DWG, MPP y ZIP se pueden custodiar y abrir/descargar, pero no se interpretan.
 - Guardar o interpretar no equivale a publicar. Cifras, gráficos, cronograma,
   edificios, apartamentos y urbanismo cambian únicamente tras una revisión

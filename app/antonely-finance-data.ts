@@ -195,3 +195,4 @@ export const antonelyDetailTotals = {
   payablesOlderDop: -14760.54,
   payablesTotalDop: 18627534.91,
 } as const;
+

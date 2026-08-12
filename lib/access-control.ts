@@ -35,6 +35,18 @@ function publicUser(row: typeof appUsers.$inferSelect): AuthorizedUser {
 }
 
 export async function resolveAuthorizedUser(identity: ChatGPTUser) {
+  if (process.env.LOCAL_DEMO_MODE === "true") {
+    return {
+      id: 1,
+      email: identity.email,
+      displayName: identity.displayName,
+      role: "admin" as const,
+      area: "direccion" as UserArea,
+      financeAccess: true,
+      active: true,
+      avatarUrl: "",
+    };
+  }
   const email = normalizeEmail(identity.email);
   const db = getDb();
   let [row] = await db.select().from(appUsers).where(eq(appUsers.email, email)).limit(1);
@@ -77,7 +89,14 @@ export async function resolveAuthorizedUser(identity: ChatGPTUser) {
 }
 
 export async function getAuthorizedUser() {
-  const identity = await getChatGPTUser();
+  const identity =
+    process.env.LOCAL_DEMO_MODE === "true"
+      ? {
+          displayName: "Usuario Demo",
+          email: "demo@araya.local",
+          fullName: "Usuario Demo",
+        }
+      : await getChatGPTUser();
   if (!identity) return { identity: null, user: null };
   try {
     return { identity, user: await resolveAuthorizedUser(identity) };

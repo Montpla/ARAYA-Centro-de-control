@@ -310,11 +310,6 @@ button {
 .main-area {
   min-height: 100vh;
   margin-left: 244px;
-  transition: margin-right 0.2s ease;
-}
-
-.main-area.with-agent {
-  margin-right: 360px;
 }
 
 .topbar {
@@ -925,6 +920,10 @@ button {
   margin: 0 18px;
 }
 
+.s-curve.is-fullscreen .s-curve-reconciliation-note {
+  margin: 10px 18px 0;
+}
+
 .s-curve-plot {
   overflow: hidden;
   padding: 8px 14px 14px;
@@ -1059,6 +1058,25 @@ button {
 .s-curve-insight strong {
   margin-right: 4px;
   color: white;
+}
+
+.s-curve-reconciliation-note {
+  display: block;
+  margin: 10px 18px 0;
+  padding: 10px 16px;
+  border: 1px solid #e9d9ae;
+  border-radius: 5px;
+  color: #6b5423;
+  background: var(--amber-soft);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.s-curve-reconciliation-note strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--amber);
+  font-size: 9px;
 }
 
 .s-curve-nav {
@@ -2009,6 +2027,7 @@ button {
   z-index: 2;
   width: 6.3%;
   min-width: 54px;
+  perspective: 260px;
   transform: translate(-50%, -50%);
 }
 
@@ -2018,27 +2037,36 @@ button {
   border: 2px solid white;
   border-radius: 5px;
   color: white;
-  box-shadow: 0 2px 8px rgba(19, 24, 20, 0.42);
   font-size: clamp(6px, 0.72vw, 9px);
   font-weight: 900;
   cursor: pointer;
+  transform: rotateX(28deg);
+  transform-origin: bottom;
+  transition: transform 160ms ease;
 }
 
 .plan-building-trigger.done {
   background: rgba(25, 128, 82, 0.92);
+  box-shadow: 0 5px 0 #0e4629, 0 9px 12px rgba(14, 70, 41, 0.45);
 }
 
 .plan-building-trigger.active {
   background: rgba(226, 111, 28, 0.94);
+  box-shadow: 0 5px 0 #7c3d0f, 0 9px 12px rgba(124, 61, 15, 0.45);
 }
 
 .plan-building-trigger.pending {
   background: rgba(97, 101, 96, 0.88);
+  box-shadow: 0 5px 0 #353735, 0 9px 12px rgba(53, 55, 53, 0.4);
 }
 
 .plan-building-hotspot:hover {
   z-index: 3;
   transform: translate(-50%, -50%) scale(1.14);
+}
+
+.plan-building-hotspot:hover .plan-building-trigger {
+  transform: rotateX(12deg);
 }
 
 .plan-building-trigger:focus-visible,
@@ -2066,6 +2094,7 @@ button {
   border: 0;
   border-radius: 2px;
   cursor: pointer;
+  transition: transform 120ms ease;
 }
 
 .plan-home-statuses button:hover {
@@ -2074,18 +2103,22 @@ button {
 
 .plan-home-statuses .terminada {
   background: #198052;
+  box-shadow: 0 2px 0 #0e4629;
 }
 
 .plan-home-statuses .en_curso {
   background: #e26f1c;
+  box-shadow: 0 2px 0 #7c3d0f;
 }
 
 .plan-home-statuses .pendiente {
   background: #777d78;
+  box-shadow: 0 2px 0 #414542;
 }
 
 .plan-home-statuses .bloqueada {
   background: #b74536;
+  box-shadow: 0 2px 0 #64261e;
 }
 
 .urbanism-map-point {
@@ -2440,13 +2473,17 @@ button {
 .agent-panel {
   position: fixed;
   z-index: 40;
-  inset: 0 0 0 auto;
-  width: 360px;
+  inset: auto 24px 24px auto;
+  width: 380px;
+  max-width: calc(100vw - 48px);
+  height: min(640px, calc(100vh - 120px));
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: 18px;
   background: #fbfaf7;
-  box-shadow: -15px 0 40px rgba(31, 36, 48, 0.06);
+  box-shadow: 0 24px 60px rgba(31, 36, 48, 0.18);
+  overflow: hidden;
 }
 
 .agent-panel.expanded {
@@ -2807,16 +2844,9 @@ button {
   font-size: 11px;
 }
 
-.unit-card span,
-.unit-card small {
+.unit-card span {
   color: var(--muted);
   font-size: 8px;
-}
-
-.unit-card b {
-  display: block;
-  margin: 16px 0 4px;
-  font-size: 18px;
 }
 
 .unit-card em {
@@ -2834,20 +2864,6 @@ button {
 
 .unit-card.bloqueada {
   border-color: #e6c2bc;
-}
-
-.unit-progress {
-  height: 3px;
-  margin-top: 10px;
-  border-radius: 3px;
-  background: #e5e3dc;
-}
-
-.unit-progress i {
-  height: 100%;
-  display: block;
-  border-radius: inherit;
-  background: var(--orange);
 }
 
 .data-view-intro {
@@ -3868,6 +3884,45 @@ button {
 .report-builder-modal > .panel-heading,
 .report-builder-modal > .upload-intro {
   margin-bottom: 0;
+}
+
+.report-type-select {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.report-type-select button {
+  display: grid;
+  gap: 5px;
+  min-height: 72px;
+  padding: 13px 15px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfaf7;
+  cursor: pointer;
+  text-align: left;
+}
+
+.report-type-select button.active {
+  border-color: var(--orange);
+  background: var(--orange-soft);
+  box-shadow: inset 0 -3px var(--orange);
+}
+
+.report-type-select button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.report-type-select strong {
+  font-size: 12px;
+}
+
+.report-type-select span {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.4;
 }
 
 .report-frequency {
@@ -5246,10 +5301,7 @@ button.financial-detail-row:focus-visible {
 }
 
 @media (max-width: 1320px) {
-  .main-area.with-agent {
-    margin-right: 330px;
-  }
-  .agent-panel {
+  .agent-panel:not(.expanded) {
     width: 330px;
   }
   .hero-grid {
@@ -5258,18 +5310,10 @@ button.financial-detail-row:focus-visible {
 }
 
 @media (max-width: 1050px) {
-  .main-area.with-agent {
-    margin-right: 0;
-  }
   .agent-panel:not(.expanded) {
-    top: auto;
     left: 264px;
-    width: calc(100% - 284px);
-    height: min(620px, calc(100vh - 110px));
-    bottom: 20px;
-    border: 1px solid var(--line);
-    border-radius: 18px;
-    overflow: hidden;
+    right: 24px;
+    width: auto;
   }
   .dashboard-grid,
   .stat-grid.wide {
@@ -5939,7 +5983,8 @@ button.financial-detail-row:focus-visible {
     padding: 18px 20px;
   }
 
-  .report-frequency {
+  .report-frequency,
+  .report-type-select {
     grid-template-columns: 1fr;
   }
 
@@ -7044,20 +7089,52 @@ button.financial-detail-row:focus-visible {
   font-size: 9px;
 }
 
-.unit-discipline-list .pending {
+.unit-discipline-list .band-pending {
   color: var(--muted);
 }
 
-.unit-discipline-list .pending i b {
+.unit-discipline-list .band-pending i b {
   background: #c7c2b9;
 }
 
-.unit-discipline-list .aggregate {
+.unit-discipline-list .band-0 {
+  color: var(--red);
+}
+
+.unit-discipline-list .band-0 i b {
+  background: var(--red);
+}
+
+.unit-discipline-list .band-20 {
+  color: var(--orange);
+}
+
+.unit-discipline-list .band-20 i b {
+  background: var(--orange);
+}
+
+.unit-discipline-list .band-40 {
   color: var(--amber);
 }
 
-.unit-discipline-list .aggregate i b {
+.unit-discipline-list .band-40 i b {
   background: var(--amber);
+}
+
+.unit-discipline-list .band-60 {
+  color: #6f7a3f;
+}
+
+.unit-discipline-list .band-60 i b {
+  background: #6f7a3f;
+}
+
+.unit-discipline-list .band-80 {
+  color: var(--green);
+}
+
+.unit-discipline-list .band-80 i b {
+  background: var(--green);
 }
 
 .unit-accountability-grid {
@@ -7092,6 +7169,12 @@ button.financial-detail-row:focus-visible {
   gap: 6px;
 }
 
+.unit-mini-disciplines.compact {
+  grid-template-columns: 1fr;
+  gap: 4px;
+  margin: 10px 0 24px;
+}
+
 .unit-mini-disciplines span {
   display: flex;
   justify-content: space-between;
@@ -7102,14 +7185,39 @@ button.financial-detail-row:focus-visible {
   font-size: 8px;
 }
 
-.unit-mini-disciplines .pending {
+.unit-mini-disciplines.compact span {
+  padding: 5px 7px;
+  font-size: 7px;
+}
+
+.unit-mini-disciplines .band-pending {
   color: var(--muted);
   background: #f6f4ef;
 }
 
-.unit-mini-disciplines .aggregate {
+.unit-mini-disciplines .band-0 {
+  color: var(--red);
+  background: var(--red-soft);
+}
+
+.unit-mini-disciplines .band-20 {
+  color: var(--orange);
+  background: var(--orange-soft);
+}
+
+.unit-mini-disciplines .band-40 {
   color: var(--amber);
-  background: #fbf3e5;
+  background: var(--amber-soft);
+}
+
+.unit-mini-disciplines .band-60 {
+  color: #6f7a3f;
+  background: #f0f3e3;
+}
+
+.unit-mini-disciplines .band-80 {
+  color: var(--green);
+  background: var(--green-soft);
 }
 
 .unit-issues > p,
@@ -7418,8 +7526,7 @@ button.financial-detail-row:focus-visible {
     display: none;
   }
 
-  .main-area,
-  .main-area.with-agent {
+  .main-area {
     margin-right: 0;
     margin-left: 0;
   }
@@ -9927,6 +10034,74 @@ button.financial-detail-row:focus-visible {
   font-size: 7px;
   font-style: normal;
   font-weight: 850;
+}
+
+.review-unmapped-candidates {
+  display: grid;
+  gap: 12px;
+  padding: 17px;
+  border: 1px solid var(--amber);
+  border-radius: 12px;
+  background: var(--amber-soft);
+}
+
+.review-unmapped-candidates .section-intro {
+  margin: 0;
+  color: #6b5423;
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.unmapped-candidate {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #e9d9ae;
+  border-radius: 9px;
+  background: #fffdf6;
+}
+
+.unmapped-candidate > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.unmapped-candidate strong {
+  font-size: 10px;
+}
+
+.unmapped-candidate > div > small {
+  color: var(--amber);
+  font-size: 7px;
+  white-space: nowrap;
+}
+
+.unmapped-candidate p {
+  margin: 0;
+  color: #3d423f;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.unmapped-candidate > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 9px;
+}
+
+.unmapped-candidate > span small {
+  color: var(--muted);
+  font-size: 7px;
+}
+
+.unmapped-candidate-evidence {
+  color: var(--muted);
+  font-size: 7px;
+  font-style: italic;
+  line-height: 1.4;
 }
 
 .review-preparation .form-grid label,

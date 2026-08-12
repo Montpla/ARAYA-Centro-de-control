@@ -136,6 +136,31 @@ export const documentDataProposals = sqliteTable(
   ],
 );
 
+export const unmappedFieldCandidates = sqliteTable(
+  "unmapped_field_candidates",
+  {
+    id: text("id").primaryKey(),
+    fileId: text("file_id").notNull(),
+    label: text("label").notNull(),
+    description: text("description").notNull().default(""),
+    valueJson: text("value_json").notNull(),
+    suggestedArea: text("suggested_area").notNull().default(""),
+    evidence: text("evidence").notNull().default(""),
+    confidence: real("confidence").notNull().default(0),
+    status: text("status").notNull().default("pendiente"),
+    reviewedByEmail: text("reviewed_by_email").notNull().default(""),
+    reviewedByName: text("reviewed_by_name").notNull().default(""),
+    reviewedAt: text("reviewed_at").notNull().default(""),
+    reviewNote: text("review_note").notNull().default(""),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("unmapped_field_candidates_file_id_idx").on(table.fileId),
+    index("unmapped_field_candidates_status_idx").on(table.status),
+    index("unmapped_field_candidates_created_at_idx").on(table.createdAt),
+  ],
+);
+
 export const fileReviews = sqliteTable(
   "file_reviews",
   {
@@ -259,6 +284,9 @@ export const appUsers = sqliteTable(
     avatarStorageKey: text("avatar_storage_key").notNull().default(""),
     avatarMimeType: text("avatar_mime_type").notNull().default(""),
     avatarUpdatedAt: text("avatar_updated_at").notNull().default(""),
+    pinHash: text("pin_hash").notNull().default(""),
+    failedPinAttempts: integer("failed_pin_attempts").notNull().default(0),
+    pinLockedUntil: text("pin_locked_until").notNull().default(""),
     createdByEmail: text("created_by_email").notNull().default(""),
     lastLoginAt: text("last_login_at").notNull().default(""),
     deletedAt: text("deleted_at").notNull().default(""),
@@ -275,6 +303,22 @@ export const appUsers = sqliteTable(
     index("app_users_active_idx").on(table.active),
     index("app_users_role_idx").on(table.role),
     index("app_users_deleted_at_idx").on(table.deletedAt),
+  ],
+);
+
+export const userSessions = sqliteTable(
+  "user_sessions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tokenHash: text("token_hash").notNull(),
+    userId: integer("user_id").notNull(),
+    expiresAt: text("expires_at").notNull(),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("user_sessions_token_hash_idx").on(table.tokenHash),
+    index("user_sessions_user_id_idx").on(table.userId),
+    index("user_sessions_expires_at_idx").on(table.expiresAt),
   ],
 );
 
@@ -472,6 +516,7 @@ export const reportSnapshots = sqliteTable(
     cutoff: text("cutoff").notNull().default(""),
     snapshotJson: text("snapshot_json").notNull(),
     includesFinance: integer("includes_finance", { mode: "boolean" }).notNull().default(false),
+    reportType: text("report_type").notNull().default("global"),
     requestKey: text("request_key").notNull(),
     createdByEmail: text("created_by_email").notNull(),
     createdByName: text("created_by_name").notNull(),

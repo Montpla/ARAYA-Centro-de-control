@@ -38,6 +38,7 @@ const localBindingConfig = {
 };
 
 export default defineConfig(async () => {
+  const isLocalDemo = process.env.LOCAL_DEMO_MODE === "true";
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= "false";
@@ -53,7 +54,7 @@ export default defineConfig(async () => {
       : undefined,
     plugins: [
       vinext(),
-      sites(),
+      ...(isLocalDemo ? [] : [sites()]),
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
         config: localBindingConfig,

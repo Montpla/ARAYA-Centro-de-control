@@ -18,7 +18,12 @@ import {
 export const runtime = "edge";
 
 const DEFAULT_LIMIT = 30;
-const MAX_LIMIT = 100;
+// D1 rechaza consultas con demasiados parámetros ligados. La consulta de
+// notification_reads liga userEmail + un id por cada notificación visible;
+// con MAX_LIMIT=100 eso son 101 parámetros y la consulta fallaba con 500 en
+// cada poll de 5s. Se deja margen (no el límite exacto) por si D1 cambia el
+// tope o se añade otro parámetro a la consulta más adelante.
+const MAX_LIMIT = 90;
 const MAX_SCAN = 500;
 
 function getD1JsonDatabase() {

@@ -60,7 +60,7 @@ export const reviewStatusLabels: Record<string, string> = {
 
 const areaKeywords: Record<Exclude<ClassifiedArea, "sin_clasificar">, string[]> = {
   direccion: ["direccion", "directivo", "comite", "resumen ejecutivo", "consolidado"],
-  planificacion: ["cronograma", "planificacion", "programacion", "mpp", "project", "linea base", "curva s"],
+  planificacion: ["cronograma", "planificacion", "programacion", "mpp", "project", "linea base", "curva s", "graficos araya", "plan operativo"],
   obra: ["obra", "edificio", "apartamento", "vivienda", "avance", "cubicacion", "superestructura", "hormigon", "encofrado"],
   urbanismo: ["urbanismo", "vial", "paisajismo", "jardineria", "infraestructura", "alcantarillado"],
   comercial: ["venta", "reserva", "cliente", "cobranza", "morosidad", "comercial", "desistimiento"],

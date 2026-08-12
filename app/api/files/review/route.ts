@@ -6,6 +6,7 @@ import {
   fileActivity,
   fileReviews,
   uploadedFiles,
+  unmappedFieldCandidates,
 } from "../../../../db/schema";
 import { requireApiUser } from "../../../../lib/access-control";
 import { areaLabels, isUploadArea } from "../../../../lib/file-routing";
@@ -281,13 +282,15 @@ export async function GET(request: Request) {
     return Response.json({ error: "No tienes acceso a la revisión financiera o comercial." }, { status: 403 });
   }
   const db = getDb();
-  const [proposals, reviews, activity] = await Promise.all([
+  const [proposals, reviews, activity, unmappedCandidates] = await Promise.all([
     db.select().from(documentDataProposals).where(and(
       eq(documentDataProposals.fileId, fileId),
       eq(documentDataProposals.generation, file.proposalGeneration),
     )).orderBy(documentDataProposals.key),
     db.select().from(fileReviews).where(eq(fileReviews.fileId, fileId)).orderBy(desc(fileReviews.id)).limit(20),
     db.select().from(fileActivity).where(eq(fileActivity.fileId, fileId)).orderBy(desc(fileActivity.id)).limit(30),
+    db.select().from(unmappedFieldCandidates).where(eq(unmappedFieldCandidates.fileId, fileId))
+      .orderBy(desc(unmappedFieldCandidates.createdAt)),
   ]);
   return Response.json({
     file: {
@@ -332,6 +335,21 @@ export async function GET(request: Request) {
     })),
     reviews,
     activity,
+    unmappedCandidates: unmappedCandidates.map((candidate) => ({
+      id: candidate.id,
+      label: candidate.label,
+      description: candidate.description,
+      value: parseStoredValue(candidate.valueJson),
+      suggestedArea: candidate.suggestedArea,
+      suggestedAreaLabel: areaLabels[candidate.suggestedArea as keyof typeof areaLabels] ?? candidate.suggestedArea,
+      evidence: candidate.evidence,
+      confidence: candidate.confidence,
+      status: candidate.status,
+      reviewedByName: candidate.reviewedByName,
+      reviewedAt: candidate.reviewedAt,
+      reviewNote: candidate.reviewNote,
+      createdAt: candidate.createdAt,
+    })),
     permissions: {
       canReview: auth.user.role === "admin" && !file.deletedAt,
       canAccessFinance: auth.user.financeAccess,

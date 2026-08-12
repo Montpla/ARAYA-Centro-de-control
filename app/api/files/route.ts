@@ -18,10 +18,11 @@ import {
   documentDataProposals,
   fileActivity,
   uploadedFiles,
+  unmappedFieldCandidates,
 } from "../../../db/schema";
 import { requireApiUser } from "../../../lib/access-control";
 import { resolveSourceCurrency } from "../../../lib/currency";
-import { areaLabels, classifyUpload, safeFileName } from "../../../lib/file-routing";
+import { areaLabels, classifyUpload, safeFileName, uploadAreas } from "../../../lib/file-routing";
 import { analyzeDocument, extractStructuredUpdates } from "../../../lib/ingestion";
 import {
   canAutomaticallyPublishExtraction,
@@ -47,7 +48,7 @@ import {
   selectLivePointValues,
   upsertDocumentProposalRows,
 } from "../../../lib/d1-json-bulk";
-import { assertLiveDataContracts } from "../../../lib/live-data-contract";
+import { assertLiveDataContracts, getContractRootsSnapshot, validateLiveDataContract } from "../../../lib/live-data-contract";
 import { normalizeLiveDataUpdates, publishLiveDataUpdates } from "../../../lib/publish-live-data";
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-upsert";
@@ -205,7 +206,7 @@ function isSafeLiveValue(value: unknown, depth = 0): boolean {
 
 function isSafeAutomaticStructuredUpdate(update: ReturnType<typeof normalizeLiveDataUpdates>[number]) {
   const path = update.key.split(".");
-  if (path.length < 2 || path.length > 8 || !update.cutoff.trim()) return false;
+  if (path.length < 1 || path.length > 8 || !update.cutoff.trim()) return false;
   if (path.some((segment) => /^\d+$/.test(segment) && Number(segment) > 500)) return false;
   try {
     const value = JSON.parse(update.valueJson) as unknown;
@@ -222,6 +223,21 @@ function automaticContractIsSafe(
   try {
     assertLiveDataContracts(updates, currentValues);
     return true;
+  } catch {
+    return false;
+  }
+}
+
+// Un solo campo huérfano dentro de un lote (p. ej. una propuesta con una clave
+// que el modelo no reconoce) no debe arrastrar al resto: se valida cada
+// actualización por separado, así las que sí encajan en el contrato se
+// publican solas y solo la que falla se queda pendiente de revisión.
+function individualUpdateContractIsSafe(
+  update: ReturnType<typeof normalizeLiveDataUpdates>[number],
+  currentValues: Awaited<ReturnType<typeof readEffectiveLiveData>>["values"],
+) {
+  try {
+    return validateLiveDataContract(update.key, update.valueJson, currentValues).valid;
   } catch {
     return false;
   }
@@ -868,7 +884,14 @@ export async function POST(request: Request) {
       confidence: deterministicExtraction.updates.length ? 1 : 0,
       model: "deterministic",
       promptVersion: "structured-file-v1",
+      unmappedCandidates: [],
     };
+    // Se lee antes de llamar a la IA (no solo para validar el contrato
+    // después) porque también se le pasa como referencia de esquema: sin ver
+    // los nombres de campo reales ya existentes, el modelo inventaba claves
+    // plausibles pero distintas (p. ej. "physicalProgressExecuted" en vez de
+    // "overallProgress"), y el contrato las rechazaba en silencio.
+    const currentLiveData = await readEffectiveLiveData(true);
     if (!deterministicExtraction.updates.length) {
       extraction = await extractDocumentWithAI({
         bytes,
@@ -879,11 +902,11 @@ export async function POST(request: Request) {
         cutoff: effectiveCutoff,
         sourceCurrency: sourceCurrency === "USD" ? "USD" : "DOP",
         apiKey: process.env.OPENAI_API_KEY ?? "",
+        currentValues: currentLiveData.values,
+        knownAreas: uploadAreas,
+        schemaReference: getContractRootsSnapshot(),
       });
     }
-    const currentLiveData = extraction.updates.length
-      ? await readEffectiveLiveData(true)
-      : null;
     const identityResolvedUpdates = currentLiveData
       ? resolveSpatialIdentityUpdates(extraction.updates, currentLiveData.values)
       : extraction.updates;
@@ -948,6 +971,9 @@ export async function POST(request: Request) {
       extraction.summary,
       extraction.model !== "deterministic" ? `Análisis documental: ${extraction.model}.` : "",
       extraction.warnings.length ? `${extraction.warnings.length} advertencias de estructura.` : "",
+      extraction.unmappedCandidates.length
+        ? `${extraction.unmappedCandidates.length} propuestas de sección nueva detectadas.`
+        : "",
     ].filter(Boolean).join(" ");
 
     const proposalsUpdatedAt = new Date().toISOString();
@@ -977,6 +1003,23 @@ export async function POST(request: Request) {
         };
       }),
     );
+    if (extraction.unmappedCandidates.length) {
+      // notify_unmapped_field_candidate_created (migración 0020) genera la
+      // notificación al insertar; esta ruta solo escribe la fila y programa
+      // el despacho, igual que el resto de rutas propiedad de un trigger.
+      await db.insert(unmappedFieldCandidates).values(
+        extraction.unmappedCandidates.map((candidate) => ({
+          id: crypto.randomUUID(),
+          fileId: id,
+          label: candidate.label,
+          description: candidate.description,
+          valueJson: candidate.valueJson,
+          suggestedArea: candidate.suggestedArea,
+          evidence: candidate.evidence,
+          confidence: candidate.confidence,
+        })),
+      ).catch(() => undefined);
+    }
     const classifiedAt = new Date().toISOString();
     let classifiedFile: { id: string } | undefined;
     try {
@@ -1038,9 +1081,7 @@ export async function POST(request: Request) {
       actorName: user.displayName,
     }).catch(() => undefined);
     let automaticMessage = "";
-    const canPublishInArea = (
-      user.role === "admin" || resolvedArea === user.area
-    ) && (!financeProtectedUpload || user.financeAccess);
+    const canPublishInArea = !financeProtectedUpload || user.financeAccess;
     const extractionConfidenceIsSafe = canAutomaticallyPublishExtraction({
       model: extraction.model,
       confidence: extraction.confidence,
@@ -1055,34 +1096,64 @@ export async function POST(request: Request) {
       extractionConfidenceIsSafe &&
       normalizedUpdates.length > 0 &&
       Boolean(currentLiveData) &&
-      automaticContractIsSafe(normalizedUpdates, currentLiveData?.values ?? {}) &&
       normalizedUpdates.every((update) =>
         update.area === resolvedArea &&
         (user.financeAccess || !isFinancialLiveKey(update.key)) &&
         isSafeAutomaticStructuredUpdate(update),
       );
-    if (canPublishAutomatically) {
+    const liveValues = currentLiveData?.values ?? {};
+    // El contrato se comprueba primero como lote completo (igual que siempre,
+    // cero cambio de comportamiento cuando todo encaja). Solo si el lote
+    // completo falla se revisa cada clave por separado, para que un único
+    // campo huérfano (p. ej. uno que la IA propuso pero no tiene sitio
+    // todavía) no arrastre al resto de datos que sí eran perfectamente
+    // publicables.
+    const wholeBatchSafe = canPublishAutomatically && automaticContractIsSafe(normalizedUpdates, liveValues);
+    const autoPublishable = wholeBatchSafe
+      ? normalizedUpdates
+      : canPublishAutomatically
+        ? normalizedUpdates.filter((update) => individualUpdateContractIsSafe(update, liveValues))
+        : [];
+    if (autoPublishable.length) {
       publicationStarted = true;
+      const isFullBatch = autoPublishable.length === normalizedUpdates.length;
       const publication = await publishLiveDataUpdates({
-        normalized: normalizedUpdates,
+        normalized: autoPublishable,
         actor: user,
         area: resolvedArea,
         cutoff: effectiveCutoff,
         sourceFileId: id,
         sourceName: candidate.name,
-        message: `${normalizedUpdates.length} datos estructurados publicados automáticamente desde ${candidate.name}.`,
-        reviewClosure: {
-          mode: "insert",
-          fileId: id,
-          proposalGeneration: extractionGeneration,
-          requestKey: `auto:${id}`,
-          completedAction: "aprobado_automatico",
-          note: "Publicación automática de hechos explícitos con alta confianza, validados por el contrato vivo y los permisos del usuario.",
-          proposalCount: normalizedUpdates.length,
-        },
+        message: `${autoPublishable.length} datos estructurados publicados automáticamente desde ${candidate.name}.`,
+        ...(isFullBatch ? {
+          reviewClosure: {
+            mode: "insert" as const,
+            fileId: id,
+            proposalGeneration: extractionGeneration,
+            requestKey: `auto:${id}`,
+            completedAction: "aprobado_automatico",
+            note: "Publicación automática de hechos explícitos con alta confianza, validados por el contrato vivo y los permisos del usuario.",
+            proposalCount: autoPublishable.length,
+          },
+        } : {}),
       });
       publicationCompleted = true;
-      automaticMessage = `${normalizedUpdates.length} datos se han actualizado automáticamente en la revisión ${publication.id}; las cifras y gráficas se refrescarán en menos de 5 segundos.`;
+      automaticMessage = isFullBatch
+        ? `${autoPublishable.length} datos se han actualizado automáticamente en la revisión ${publication.id}; las cifras y gráficas se refrescarán en menos de 5 segundos.`
+        : `${autoPublishable.length} de ${normalizedUpdates.length} datos se han actualizado automáticamente en la revisión ${publication.id}; ${normalizedUpdates.length - autoPublishable.length} no encajan en un campo conocido todavía y siguen pendientes de revisión manual.`;
+      if (!isFullBatch) {
+        // publishLiveDataUpdates marca el archivo como aprobado/sin revisión
+        // pendiente de forma incondicional (no depende de reviewClosure). En
+        // un lote parcial eso es falso — todavía queda al menos una propuesta
+        // sin publicar — así que se corrige aparte, sin tocar la transacción
+        // atómica.
+        await db.update(uploadedFiles).set({
+          requiresReview: true,
+          reviewStatus: "listo_revision",
+          processingSummary: `${extractionSummary} ${autoPublishable.length} de ${normalizedUpdates.length} datos ya están publicados en la revisión ${publication.id}; el resto necesita revisión manual.`,
+          updatedAt: new Date().toISOString(),
+        }).where(eq(uploadedFiles.id, id)).catch(() => undefined);
+      }
     }
     let currentRow = row;
     try {
@@ -1106,7 +1177,8 @@ export async function POST(request: Request) {
       },
       { status: 201 },
     );
-  } catch {
+  } catch (error) {
+    console.error("file extraction/publication failed", id, error);
     let authoritativePointerReadSucceeded = false;
     if (!extractionCommitted && extractionGeneration) {
       try {

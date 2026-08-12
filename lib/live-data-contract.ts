@@ -53,6 +53,13 @@ function buildContractRoots() {
 
 const contractRoots = buildContractRoots();
 
+// Expuesto para que la extracción por IA pueda mostrarle al modelo los
+// nombres de campo reales que el contrato va a exigir, en vez de dejarlo
+// adivinar sinónimos que luego se rechazan en silencio.
+export function getContractRootsSnapshot(): Record<string, unknown> {
+  return contractRoots;
+}
+
 function fallbackArrayItem(path: string) {
   if (path === "buildings.*.units") {
     const baselineBuildings = contractRoots.buildings;
@@ -143,6 +150,43 @@ function expectedAtPath(rootName: string, root: unknown, segments: string[]) {
   return { expected: current, normalizedSegments, arrayElement };
 }
 
+// Marks a field that is null in some rows of an expected array-of-records
+// and a concrete value in others (e.g. monthlyPlan.actual: reported months
+// carry a number, unreported ones are null). Positional matching against a
+// single row would otherwise permanently lock that field to whichever state
+// the row at that exact index happened to have — a nullable progress field
+// like "the actual for jul-26" could never move from null to a real number
+// through a whole-array publish, which is exactly the case a monthly Curva S
+// update needs. Only ever constructed by mergedArrayTemplate below and only
+// ever consumed by matchesContract's own recursion, so it can never collide
+// with real extracted data.
+class NullableTemplate {
+  constructor(public readonly example: unknown) {}
+}
+
+function mergedArrayTemplate(expected: unknown[]): unknown {
+  if (!expected.length) return undefined;
+  if (!expected.every(isRecord)) return expected[0];
+  const keys = new Set<string>();
+  for (const item of expected) {
+    for (const key of Object.keys(item as Record<string, unknown>)) keys.add(key);
+  }
+  const merged: Record<string, unknown> = {};
+  for (const key of keys) {
+    let nonNullExample: unknown;
+    let sawNull = false;
+    for (const item of expected) {
+      const value = (item as Record<string, unknown>)[key];
+      if (value === null) sawNull = true;
+      else if (nonNullExample === undefined) nonNullExample = value;
+    }
+    merged[key] = nonNullExample === undefined
+      ? null
+      : sawNull ? new NullableTemplate(nonNullExample) : nonNullExample;
+  }
+  return merged;
+}
+
 function matchesContract(
   expected: unknown,
   actual: unknown,
@@ -150,6 +194,9 @@ function matchesContract(
   depth = 0,
 ): boolean {
   if (depth > 16) return false;
+  if (expected instanceof NullableTemplate) {
+    return actual === null || matchesContract(expected.example, actual, path, depth + 1);
+  }
   if (expected === null) return actual === null;
   if (typeof expected === "number") return typeof actual === "number" && Number.isFinite(actual);
   if (typeof expected === "string" || typeof expected === "boolean") {
@@ -158,8 +205,9 @@ function matchesContract(
   if (Array.isArray(expected)) {
     if (!Array.isArray(actual) || actual.length > MAX_ARRAY_ITEMS) return false;
     if (expected.length === 0) return actual.length === 0;
-    return actual.every((item, index) => matchesContract(
-      expected[index] ?? expected[0],
+    const template = mergedArrayTemplate(expected) ?? expected[0];
+    return actual.every((item) => matchesContract(
+      template,
       item,
       [...path, "*"],
       depth + 1,

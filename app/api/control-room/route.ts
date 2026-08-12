@@ -1,6 +1,26 @@
 import { and, desc, eq, isNull, notInArray, or, sql } from "drizzle-orm";
-import { monthlyPlan } from "../../demo-data";
-import { juneReport } from "../../june-report-data";
+import {
+  cxpAging,
+  financialProjection,
+  juneReport,
+  payablesReconciliation,
+  salesLocations,
+  salesModels,
+} from "../../june-report-data";
+import {
+  antonelyAdvances,
+  antonelyBalanceLines,
+  antonelyCostAccounts,
+  antonelyDetailTotals,
+  antonelyPayableCategories,
+} from "../../antonely-finance-data";
+import { fiduciaryBalanceSections, fiduciaryStatementSummary } from "../../fiduciary-statements-data";
+import {
+  liveAntonelyDetailTotals,
+  liveFiduciaryStatementSummary,
+  liveJuneReportFinance,
+  livePayablesReconciliation,
+} from "../../../lib/live-derivations";
 import { getDb } from "../../../db";
 import {
   appUsers,
@@ -27,6 +47,7 @@ import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import { scheduleNotificationDispatch } from "../../../lib/notification-dispatch";
 import { materializeSpatialLiveData } from "../../../lib/spatial-live-data";
 
+const REPORT_TYPES = new Set(["global", "obra_seguridad", "finanzas", "ventas"]);
 const ACTION_STATUSES = new Set(["open", "in_progress", "blocked", "completed"]);
 const ACTION_SEVERITIES = new Set(["critical", "medium", "low"]);
 const RELATED_VIEWS = new Set([
@@ -122,6 +143,7 @@ function publicReport(row: typeof reportSnapshots.$inferSelect, canAccessFinance
     liveRevision: row.liveRevision,
     cutoff: row.cutoff,
     includesFinance: row.includesFinance,
+    reportType: row.reportType,
     createdByName: row.createdByName,
     createdAt: row.createdAt,
     snapshot,
@@ -227,8 +249,9 @@ async function controlRoomPayload(auth: ControlRoomUser) {
           .where(eq(appUsers.active, true))
           .orderBy(appUsers.displayName)
       : [];
-  const currentProject = materializeSpatialLiveData(liveValues).projectSnapshot;
-  const currentPlan = materializeLiveRoot("monthlyPlan", monthlyPlan, liveValues);
+  const spatial = materializeSpatialLiveData(liveValues);
+  const currentProject = spatial.projectSnapshot;
+  const currentPlan = spatial.monthlyPlan;
   const baseline = buildControlRoomBaseline(
     auth.financeAccess,
     currentProject,
@@ -562,9 +585,19 @@ export async function POST(request: Request) {
   }
 
   if (operation === "create_report") {
-    if (!auth.financeAccess) {
+    const reportType = REPORT_TYPES.has(text(payload.reportType, 20))
+      ? text(payload.reportType, 20)
+      : "global";
+    // Obra y Seguridad no toca cifras financieras ni comerciales, así que no
+    // exige acceso financiero para crearse. Los demás tipos sí, igual que el
+    // informe global siempre exigió.
+    if (reportType !== "obra_seguridad" && !auth.financeAccess) {
       return Response.json(
-        { error: "La creación del informe completo requiere acceso financiero." },
+        {
+          error: reportType === "global"
+            ? "La creación del informe completo requiere acceso financiero."
+            : "Este tipo de informe requiere acceso financiero.",
+        },
         { status: 403 },
       );
     }
@@ -597,9 +630,45 @@ export async function POST(request: Request) {
     }
     const live = await readEffectiveLiveData(auth.financeAccess);
     const values = live.values;
-    const currentProject = materializeSpatialLiveData(values).projectSnapshot;
-    const currentPlan = materializeLiveRoot("monthlyPlan", monthlyPlan, values);
-    const currentJuneReport = materializeLiveRoot("juneReport", juneReport, values);
+    const spatial = materializeSpatialLiveData(values);
+    const currentProject = spatial.projectSnapshot;
+    const currentPlan = spatial.monthlyPlan;
+    // Antonely (detalle) alimenta cxpDop/advancesPendingDop/balance de
+    // juneReport.finance en vivo; ver liveJuneReportFinance en
+    // june-report-data.ts. Sin esto, el informe archivaba los mismos
+    // totales congelados que ya se corrigieron en el tablero y el agente.
+    const currentAntonelyAdvances = materializeLiveRoot("antonelyAdvances", antonelyAdvances, values);
+    const currentAntonelyCostAccounts = materializeLiveRoot("antonelyCostAccounts", antonelyCostAccounts, values);
+    const currentAntonelyPayableCategories = materializeLiveRoot("antonelyPayableCategories", antonelyPayableCategories, values);
+    const currentAntonelyBalanceLines = materializeLiveRoot("antonelyBalanceLines", antonelyBalanceLines, values);
+    const currentAntonelyDetailTotals = liveAntonelyDetailTotals(
+      materializeLiveRoot("antonelyDetailTotals", antonelyDetailTotals, values),
+      {
+        advances: currentAntonelyAdvances,
+        costAccounts: currentAntonelyCostAccounts,
+        payableCategories: currentAntonelyPayableCategories,
+        balanceLines: currentAntonelyBalanceLines,
+      },
+    );
+    const currentFinancialProjection = materializeLiveRoot("financialProjection", financialProjection, values);
+    const currentJuneReport = liveJuneReportFinance(
+      materializeLiveRoot("juneReport", juneReport, values),
+      currentAntonelyDetailTotals,
+      currentAntonelyBalanceLines,
+      currentFinancialProjection,
+    );
+    const currentCxpAging = materializeLiveRoot("cxpAging", cxpAging, values);
+    const currentPayablesReconciliation: readonly (typeof payablesReconciliation)[number][] = livePayablesReconciliation(
+      materializeLiveRoot("payablesReconciliation", payablesReconciliation, values),
+      currentAntonelyDetailTotals.payablesTotalDop,
+    );
+    const currentFiduciaryBalanceSections = materializeLiveRoot("fiduciaryBalanceSections", fiduciaryBalanceSections, values);
+    const currentFiduciaryStatementSummary = liveFiduciaryStatementSummary(
+      materializeLiveRoot("fiduciaryStatementSummary", fiduciaryStatementSummary, values),
+      currentFiduciaryBalanceSections,
+    );
+    const currentSalesModels = materializeLiveRoot("salesModels", salesModels, values);
+    const currentSalesLocations = materializeLiveRoot("salesLocations", salesLocations, values);
     const liveRevision = live.revision;
     const snapshot = buildReportSnapshot(
       auth.financeAccess,
@@ -607,6 +676,14 @@ export async function POST(request: Request) {
       currentPlan,
       liveRevision,
       currentJuneReport,
+      {
+        cxpAging: currentCxpAging,
+        payablesReconciliation: currentPayablesReconciliation,
+        fiduciaryBalance: currentFiduciaryStatementSummary.balance,
+        antonelyDetailTotals: currentAntonelyDetailTotals,
+        salesModels: currentSalesModels,
+        salesLocations: currentSalesLocations,
+      },
     );
     const [report] = await db
       .insert(reportSnapshots)
@@ -621,6 +698,7 @@ export async function POST(request: Request) {
         cutoff: currentProject.declaredCutoff,
         snapshotJson: JSON.stringify(snapshot),
         includesFinance: auth.financeAccess,
+        reportType,
         requestKey,
         createdByEmail: auth.email,
         createdByName: auth.displayName,

@@ -698,6 +698,7 @@ export const projectSnapshot = {
   declaredCutoff: "30/06/2026",
   lastUpdated: "30/07/2026 12:17",
   overallProgress: 18.23,
+  apartmentAverageProgress: 18.23,
   plannedProgress: 21.24,
   scheduleProgress: 17,
   deviationPoints: -3.0,

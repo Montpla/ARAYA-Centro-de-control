@@ -417,6 +417,7 @@ export async function publishLiveDataUpdates(input: {
   if (!createdEvent) throw new Error("No se pudo crear la revisión de datos.");
 
   let event = createdEvent;
+  const isAutomaticPublication = input.reviewClosure?.completedAction === "aprobado_automatico";
   const notificationRecord = prepareNotificationRecord({
     kind: "data_published",
     projectId: "araya",
@@ -426,8 +427,12 @@ export async function publishLiveDataUpdates(input: {
     actorName: input.actor.displayName,
     subjectType: "live_revision",
     subjectId: event.id,
-    title: `Centro de Control actualizado · revisión ${event.id}`,
-    body: `${event.changeCount} datos de ${event.area} se han recalculado y ya están disponibles.`,
+    title: isAutomaticPublication
+      ? `Publicación automática sin revisión · revisión ${event.id}`
+      : `Centro de Control actualizado · revisión ${event.id}`,
+    body: isAutomaticPublication
+      ? `${event.changeCount} datos de ${event.area} se publicaron solos desde ${event.sourceName}, sin que nadie los revisara. Échales un vistazo; si algo no cuadra, retira el archivo de origen para deshacerlo.`
+      : `${event.changeCount} datos de ${event.area} se han recalculado y ya están disponibles.`,
     view: event.area === "comercial"
       ? "comercial"
       : event.area === "finanzas"
@@ -440,6 +445,7 @@ export async function publishLiveDataUpdates(input: {
       changeCount: event.changeCount,
       sourceFileIds: linkedFileIds,
       cutoff: event.cutoff,
+      automatic: isAutomaticPublication,
     },
     createdAt: updatedAt,
   });

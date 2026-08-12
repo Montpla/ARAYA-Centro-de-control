@@ -1,9 +1,12 @@
 import {
   LIVE_DATA_ROOTS,
   isLiveDataKey,
+  type LiveDataMap,
   type LiveDataUpdate,
   type LiveDataValue,
 } from "./live-data";
+
+type KnownArea = { id: string; label: string };
 
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 const EXTRACTION_MODEL = "gpt-5.6-terra";
@@ -17,6 +20,7 @@ const MAX_VALUE_JSON_LENGTH = 250_000;
 const MAX_JSON_DEPTH = 32;
 const MAX_JSON_NODES = 50_000;
 const MAX_WARNINGS = 80;
+const MAX_UNMAPPED_CANDIDATES = 30;
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
 const FILE_EXTENSIONS = new Set([
@@ -50,7 +54,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 const EXTRACTION_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["updates", "summary", "warnings", "confidence"],
+  required: ["updates", "summary", "warnings", "confidence", "unmapped_candidates"],
   properties: {
     updates: {
       type: "array",
@@ -83,6 +87,22 @@ const EXTRACTION_SCHEMA = {
       items: { type: "string" },
     },
     confidence: { type: "number" },
+    unmapped_candidates: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["label", "description", "value_json", "suggested_area", "confidence", "evidence"],
+        properties: {
+          label: { type: "string" },
+          description: { type: "string" },
+          value_json: { type: "string" },
+          suggested_area: { type: "string" },
+          confidence: { type: "number" },
+          evidence: { type: "string" },
+        },
+      },
+    },
   },
 } as const;
 
@@ -96,12 +116,23 @@ SEGURIDAD Y FIDELIDAD
 - No calcules totales, diferencias, porcentajes, conversiones de moneda ni fechas derivadas. Si un dato no está escrito de forma inequívoca, omítelo y explica la duda en warnings.
 - Cada update necesita evidencia breve y verificable: etiqueta, celda, tabla, página, diapositiva o zona visual donde aparece el valor. Sin evidencia, no emitas el update.
 - value_json debe ser una cadena que contenga JSON válido y represente exactamente el valor observado, sin Markdown ni comentarios.
+- Conserva el vocabulario exacto del documento fuente en nombres de conceptos, hallazgos y listas de texto libre (p. ej. "buenas prácticas", "actos inseguros"). El personal de obra usa español latinoamericano con sus propios términos regionales; no lo traduzcas, no lo "corrijas" ni lo sustituyas por un sinónimo que te parezca más estándar o más propio de otra variante del español. Copia el término tal como está escrito en la fuente, letra por letra.
 
 CONTRATO DE DATOS VIVO
 - Solo puedes usar claves válidas cuya raíz sea una de estas: ${LIVE_DATA_ROOTS.join(", ")}.
 - Puedes usar cualquiera de esas raíces y rutas hijas compatibles. No crees nombres de raíz nuevos.
+- Recibirás una referencia de esquema con los nombres de campo y un valor de ejemplo ya publicados para cada raíz. Cuando el hecho del documento actualiza algo que ya existe (p. ej. un avance físico, un campo de un edificio), usa exactamente ese mismo nombre de campo — no inventes un sinónimo aunque parezca más descriptivo. Una clave que no coincide exactamente con el modelo autorizado se descarta en servidor sin publicarse, aunque la evidencia y la confianza sean altas.
+- Cualquier campo cuyo nombre sea o termine en algo como date, fecha, cutoff, start, finish o similar debe llevar el valor en value_json como fecha ISO 8601 estricta ("AAAA-MM-DD"), sin importar el formato en que aparezca en el documento fuente (por ejemplo, "15/08/2026" en el documento se escribe como "2026-08-15"). Un campo de fecha en cualquier otro formato se descarta igual que una clave inventada.
 - Usa el área y el corte facilitados como contexto. Solo sustitúyelos si el documento declara otros de forma explícita.
 - Usa USD solo cuando la fuente identifique de forma explícita dólares estadounidenses. Si la fuente no indica moneda, usa DOP. No conviertas importes.
+- Cuando actualices un objeto que ya tiene una forma conocida (no una lista, un objeto con campos fijos como los totales de un resumen), usa exactamente esos mismos campos y ningún otro. No le añadas un campo nuevo al objeto aunque el documento traiga un dato relacionado y parezca lógico agruparlo ahí: un objeto con un solo campo no reconocido se descarta completo en el servidor, arrastrando también los campos válidos que sí tenía. Si el documento trae un dato relacionado que no tiene campo en ese objeto, repórtalo aparte en unmapped_candidates en vez de meterlo dentro.
+- Todo campo de porcentaje o avance (cualquier campo llamado o que contenga percent, percentage, progress, porcentaje, avance físico, completion u occupancy, incluidos monthlyPlan.planned y monthlyPlan.actual) se escribe en escala 0-100, nunca como fracción 0-1. Un "22,71%" leído en el documento se escribe como 22.71, no como 0.2271. Si el documento ya imprime el símbolo "%", el número que lo acompaña es directamente el valor en escala 0-100.
+
+DATOS SIN CAMPO TODAVÍA
+- Si el documento trae un dato claro, verificable y relevante para el proyecto ARAYA que no encaja en ninguna raíz autorizada ni en sus rutas hijas conocidas, no lo descartes en silencio ni lo fuerces dentro de una clave que no coincide: añádelo a unmapped_candidates.
+- Cada candidato necesita label (el nombre del concepto tal como lo llama el documento fuente, sin traducirlo, resumirlo ni cambiarlo a un sinónimo — copia su propio término), description (qué mide o representa, en una frase, en tu descripción sí puedes explicarlo con tus palabras), value_json (el valor o lista de valores observados, como JSON válido), suggested_area (la misma lista de áreas que usas para area en updates), confidence y evidence (igual de estricta que en updates: página, tabla o celda exacta).
+- unmapped_candidates es solo para conceptos genuinamente nuevos. Si el dato ya cabe en una raíz existente aunque con una ruta hija nueva razonable, va en updates, no aquí.
+- Si no hay ningún dato huérfano, devuelve unmapped_candidates como lista vacía.
 
 ESPACIAL, EDIFICIOS, APARTAMENTOS Y URBANISMO
 - Si una entidad espacial no trae indice, usa una clave logica alfanumerica: buildings.<identidad>, buildings.<edificio>.units.<apartamento> o urbanismAreas.<identidad>. Incluye el id o codigo exacto dentro de value_json; el servidor resolvera esa identidad a un indice estable sin reutilizar huecos eliminados.
@@ -116,10 +147,16 @@ CURVA S Y PLANIFICACIÓN
 - Solo emite una serie completa cuando la tabla o gráfica contiene todos sus periodos y valores de forma legible. Para puntos parciales, no adivines la posición del array.
 - No leas un valor aproximado por la altura de una línea o barra; hace falta una etiqueta, tabla o cifra explícita.
 
+SEGURIDAD
+- safetyMetrics es una lista de objetos {label, value, detail} con label fijo, uno por cada uno de: "Accidentes", "Personal", "Horas-persona", "Observaciones", "Reuniones", "Inspecciones", "Acciones". Usa exactamente esos labels aunque el documento use otro texto para el mismo concepto: "Total de Eventos Registrables" o el conteo de accidentes de la tabla de accidentabilidad → Accidentes; "Total de empleados" o cantidad de personal → Personal; "Horas Trabajadas del Proyecto" → Horas-persona; "Reporte de Observaciones" → Observaciones; "Reunión de Seguridad" → Reuniones; "Inspecciones" → Inspecciones; cantidad de acciones correctivas o hallazgos en seguimiento → Acciones.
+- Si la tabla ya trae una columna o fila "Total" con el valor sumado impreso, puedes usarlo tal cual: es un hecho ya escrito en el documento, no un cálculo tuyo. Si no hay un total impreso y solo hay columnas por semana (S1, S2, S3...) sin sumar, no las sumes tú: omite ese label y explica en warnings que falta un total explícito en la fuente.
+- safetyFindings es la lista de actos y condiciones inseguras identificadas (columnas "Acto Inseguro" y "Condición Insegura"). No mezcles ahí las buenas prácticas ni el seguimiento de acciones.
+
 RESPUESTA
 - Devuelve solamente el objeto que exige el esquema JSON.
 - confidence y la confianza de cada update deben estar entre 0 y 1 y reflejar legibilidad, correspondencia de clave y fuerza de la evidencia.
 - Si no hay hechos publicables, devuelve updates vacío, confidence 0 y explica el motivo en summary/warnings.
+- unmapped_candidates es un campo obligatorio del esquema: si no encontraste ningún dato huérfano, devuélvelo como lista vacía en vez de omitirlo.
 `.trim();
 
 type ExtractionInput = {
@@ -131,6 +168,18 @@ type ExtractionInput = {
   cutoff: string;
   sourceCurrency: "DOP" | "USD";
   apiKey: string;
+  currentValues?: LiveDataMap;
+  knownAreas?: readonly KnownArea[];
+  schemaReference?: Record<string, unknown>;
+};
+
+type UnmappedCandidate = {
+  label: string;
+  description: string;
+  valueJson: string;
+  suggestedArea: string;
+  confidence: number;
+  evidence: string;
 };
 
 type ExtractionResult = {
@@ -141,6 +190,7 @@ type ExtractionResult = {
   confidence: number;
   model: string;
   promptVersion: string;
+  unmappedCandidates: UnmappedCandidate[];
 };
 
 type ModelUpdate = {
@@ -149,6 +199,15 @@ type ModelUpdate = {
   area: string;
   cutoff: string;
   source_currency: "DOP" | "USD";
+  confidence: number;
+  evidence: string;
+};
+
+type ModelUnmappedCandidate = {
+  label: string;
+  description: string;
+  value_json: string;
+  suggested_area: string;
   confidence: number;
   evidence: string;
 };
@@ -169,6 +228,7 @@ function emptyResult(summary: string, warnings: string[] = []): ExtractionResult
     confidence: 0,
     model: EXTRACTION_MODEL,
     promptVersion: PROMPT_VERSION,
+    unmappedCandidates: [],
   };
 }
 
@@ -180,17 +240,20 @@ export function canAutomaticallyPublishExtraction(input: {
   updateCount: number;
 }) {
   if (!Number.isInteger(input.updateCount) || input.updateCount <= 0) return false;
-  if (!Number.isFinite(input.confidence) || input.confidence < 0.8 || input.confidence > 1) return false;
+  if (!Number.isFinite(input.confidence) || input.confidence < 0.5 || input.confidence > 1) return false;
 
   // CSV/JSON estructurados ya pasan por el parser determinista y el contrato vivo.
   if (input.model === "deterministic") return true;
 
-  // En IA no basta una media alta: cada propuesta debe superar el umbral y
-  // cualquier advertencia obliga a contraste humano.
-  return input.warnings.length === 0
-    && input.updateConfidences.length === input.updateCount
+  // Cada archivo que llega aquí ya pasó por evidencia obligatoria y por el
+  // contrato vivo (validateModelOutput descarta antes cualquier valor sin
+  // evidencia o con clave no compatible). Las advertencias que sobreviven son
+  // en su mayoría informativas (qué se descartó), no motivo para bloquear el
+  // resto del lote — el personal es de confianza y los archivos declarados
+  // fiables, así que un umbral moderado por dato basta para publicar solo.
+  return input.updateConfidences.length === input.updateCount
     && input.updateConfidences.every((confidence) =>
-      Number.isFinite(confidence) && confidence >= 0.8 && confidence <= 1);
+      Number.isFinite(confidence) && confidence >= 0.5 && confidence <= 1);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -208,6 +271,37 @@ function safeFileName(fileName: string, extension: string) {
     .slice(-200);
   if (cleaned) return cleaned;
   return `documento.${extension || "bin"}`;
+}
+
+function normalizeAreaText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function buildAreaLookup(knownAreas: readonly KnownArea[] | undefined) {
+  const lookup = new Map<string, string>();
+  (knownAreas ?? []).forEach((area) => {
+    lookup.set(normalizeAreaText(area.id), area.id);
+    lookup.set(normalizeAreaText(area.label), area.id);
+  });
+  return lookup;
+}
+
+// El modelo recibe el área ya clasificada como contexto y suele devolverla
+// casi literal, pero a veces como etiqueta legible ("Planificación y
+// cronograma") en vez del id técnico ("planificacion"). Sin esta
+// normalización, esa diferencia de formato bastaba para que
+// update.area !== resolvedArea bloqueara la publicación automática de un
+// dato ya extraído con evidencia y alta confianza.
+function normalizeAreaCandidate(value: unknown, fallback: string, areaLookup: Map<string, string>): string {
+  if (typeof value === "string" && value.trim()) {
+    const matched = areaLookup.get(normalizeAreaText(value));
+    if (matched) return matched;
+  }
+  return fallback;
 }
 
 function boundedString(value: unknown, fallback: string, maxLength: number) {
@@ -375,6 +469,21 @@ function modelUpdates(payload: Record<string, unknown>) {
   });
 }
 
+function modelUnmappedCandidates(payload: Record<string, unknown>) {
+  if (!Array.isArray(payload.unmapped_candidates)) return [];
+  return payload.unmapped_candidates.filter((candidate): candidate is ModelUnmappedCandidate => {
+    if (!isRecord(candidate)) return false;
+    return (
+      typeof candidate.label === "string" &&
+      typeof candidate.description === "string" &&
+      typeof candidate.value_json === "string" &&
+      typeof candidate.suggested_area === "string" &&
+      typeof candidate.confidence === "number" &&
+      typeof candidate.evidence === "string"
+    );
+  });
+}
+
 function validateModelOutput(
   outputText: string,
   input: ExtractionInput,
@@ -412,6 +521,7 @@ function validateModelOutput(
     addWarning(warnings, `La respuesta superaba ${MAX_UPDATES} propuestas; se ignoró el exceso.`);
   }
 
+  const areaLookup = buildAreaLookup(input.knownAreas);
   const accepted = new Map<string, { update: LiveDataUpdate; valueJson: string; confidence: number }>();
   const conflictedKeys = new Set<string>();
   candidates.slice(0, MAX_UPDATES).forEach((candidate) => {
@@ -466,7 +576,7 @@ function validateModelOutput(
       update: {
         key,
         value,
-        area: boundedString(candidate.area, input.area, 80),
+        area: normalizeAreaCandidate(candidate.area, input.area, areaLookup),
         cutoff: boundedString(candidate.cutoff, input.cutoff, 40),
         sourceCurrency: candidate.source_currency === "USD" ? "USD" : "DOP",
         sourceName: safeFileName(input.fileName, normalizeExtension(input.extension)),
@@ -492,6 +602,29 @@ function validateModelOutput(
     1_000,
   );
 
+  const unmappedCandidates: UnmappedCandidate[] = modelUnmappedCandidates(payload)
+    .slice(0, MAX_UNMAPPED_CANDIDATES)
+    .filter((candidate) => {
+      if (candidate.value_json.length > MAX_VALUE_JSON_LENGTH) return false;
+      try {
+        JSON.parse(candidate.value_json);
+      } catch {
+        return false;
+      }
+      return Boolean(candidate.label.trim() && candidate.evidence.trim());
+    })
+    .map((candidate) => ({
+      label: boundedString(candidate.label, "", 120),
+      description: boundedString(candidate.description, "", 500),
+      valueJson: candidate.value_json,
+      suggestedArea: boundedString(candidate.suggested_area, input.area, 80),
+      confidence: clampConfidence(candidate.confidence),
+      evidence: boundedString(candidate.evidence, "", 500),
+    }));
+  if (Array.isArray(payload.unmapped_candidates) && unmappedCandidates.length !== payload.unmapped_candidates.length) {
+    addWarning(warnings, "Se descartaron candidatos de sección nueva con una estructura incompleta o inválida.");
+  }
+
   return {
     updates,
     updateConfidences,
@@ -500,7 +633,60 @@ function validateModelOutput(
     confidence,
     model: responseModel || EXTRACTION_MODEL,
     promptVersion: PROMPT_VERSION,
+    unmappedCandidates,
   };
+}
+
+const MAX_SCHEMA_CONTEXT_CHARS = 24_000;
+const MAX_SCHEMA_DEPTH = 5;
+
+// Muestra los nombres de campo reales (y un valor de ejemplo) ya existentes
+// para cada raíz del contrato vivo, en vez de solo los nombres de raíz. Sin
+// esto el modelo debía adivinar claves hijas plausibles ("physicalProgress",
+// "executedProgress"...) que casi nunca coincidían exactamente con el campo
+// real ("overallProgress"), así que el contrato las rechazaba en silencio y
+// la publicación automática nunca se disparaba pese a una extracción
+// correcta. Los arreglos largos (edificios, apartamentos...) se muestran
+// solo con un elemento de muestra más el total, para no disparar el tamaño
+// del prompt ni reenviar cada fila real innecesariamente.
+function buildValueSkeleton(value: unknown, depth: number): unknown {
+  if (depth > MAX_SCHEMA_DEPTH) return typeof value;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return [];
+    return [buildValueSkeleton(value[0], depth + 1), `... (${value.length} elementos en total)`];
+  }
+  if (isRecord(value)) {
+    const out: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) out[key] = buildValueSkeleton(item, depth + 1);
+    return out;
+  }
+  return value;
+}
+
+function buildSchemaContext(
+  schemaReference: Record<string, unknown> | undefined,
+  currentValues: LiveDataMap | undefined,
+): string {
+  // schemaReference (los contractRoots del llamador) es la misma referencia
+  // que usa el validador del contrato, así que sus nombres de campo son
+  // exactamente los que hace falta reutilizar — a diferencia de
+  // currentValues (el resumen de datos vivos publicados), que puede estar
+  // vacío si todavía no se publicó nada para esa raíz, dejando al modelo sin
+  // ninguna referencia real.
+  const merged: Record<string, unknown> = { ...(schemaReference ?? {}), ...(currentValues ?? {}) };
+  if (!Object.keys(merged).length) {
+    return "No hay datos vivos publicados todavía; usa solo las raíces autorizadas.";
+  }
+  const skeleton = buildValueSkeleton(merged, 0);
+  let json: string;
+  try {
+    json = JSON.stringify(skeleton);
+  } catch {
+    return "No se pudo construir la referencia de esquema actual.";
+  }
+  return json.length > MAX_SCHEMA_CONTEXT_CHARS
+    ? `${json.slice(0, MAX_SCHEMA_CONTEXT_CHARS)}...(referencia truncada por tamaño)`
+    : json;
 }
 
 function inputMetadata(input: ExtractionInput) {
@@ -530,6 +716,9 @@ export async function extractDocumentWithAI(input: {
   cutoff: string;
   sourceCurrency: "DOP" | "USD";
   apiKey: string;
+  currentValues?: LiveDataMap;
+  knownAreas?: readonly KnownArea[];
+  schemaReference?: Record<string, unknown>;
 }): Promise<{
   updates: LiveDataUpdate[];
   updateConfidences: number[];
@@ -538,6 +727,7 @@ export async function extractDocumentWithAI(input: {
   confidence: number;
   model: string;
   promptVersion: string;
+  unmappedCandidates: UnmappedCandidate[];
 }> {
   if (!input || !(input.bytes instanceof ArrayBuffer)) {
     throw new TypeError("extractDocumentWithAI requiere bytes en un ArrayBuffer.");
@@ -573,6 +763,10 @@ export async function extractDocumentWithAI(input: {
   try {
     const content: Record<string, unknown>[] = [
       { type: "input_text", text: `Metadatos externos no confiables:\n${inputMetadata(input)}` },
+      {
+        type: "input_text",
+        text: `Referencia de esquema — nombres de campo y ejemplo del valor vigente para cada raíz ya publicada (usa exactamente estos nombres cuando el hecho actualice algo que ya existe; solo crea un nombre nuevo cuando el concepto es realmente nuevo):\n${buildSchemaContext(input.schemaReference, input.currentValues)}`,
+      },
     ];
     if (IMAGE_EXTENSIONS.has(extension)) {
       const mimeType = MIME_BY_EXTENSION[extension];

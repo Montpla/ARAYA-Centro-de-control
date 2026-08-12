@@ -1,5 +1,6 @@
-import { headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { SESSION_COOKIE, sessionUserFromToken } from "../lib/session";
 
 export type ChatGPTUser = {
   displayName: string;
@@ -7,37 +8,32 @@ export type ChatGPTUser = {
   fullName: string | null;
 };
 
-const USER_EMAIL_HEADER = "oai-authenticated-user-email";
-const USER_FULL_NAME_HEADER = "oai-authenticated-user-full-name";
-const USER_FULL_NAME_ENCODING_HEADER =
-  "oai-authenticated-user-full-name-encoding";
-const PERCENT_ENCODED_UTF8 = "percent-encoded-utf-8";
 const SIGN_IN_PATH = "/signin-with-chatgpt";
 const SIGN_OUT_PATH = "/signout-with-chatgpt";
 const CALLBACK_PATH = "/callback";
 
+// El nombre "ChatGPT" en estas funciones es histórico (venía del inicio de
+// sesión externo de Sites, que ya no está disponible fuera de esa
+// plataforma). Se conserva el nombre para no tener que tocar cada punto de
+// la app que ya llama a requireChatGPTUser/getChatGPTUser — lo único que
+// cambió es de dónde sale la identidad: antes de cabeceras inyectadas por
+// Sites, ahora de una sesión propia verificada por PIN.
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
-  const requestHeaders = await headers();
-  const email = requestHeaders.get(USER_EMAIL_HEADER);
-  if (!email) return null;
-
-  const encodedFullName = requestHeaders.get(USER_FULL_NAME_HEADER);
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get(USER_FULL_NAME_ENCODING_HEADER) === PERCENT_ENCODED_UTF8
-      ? safeDecodeURIComponent(encodedFullName)
-      : null;
-
-  return {
-    displayName: fullName ?? email,
-    email,
-    fullName,
-  };
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  return sessionUserFromToken(token);
 }
 
 export async function requireChatGPTUser(
   returnTo: string,
 ): Promise<ChatGPTUser> {
+  if (process.env.LOCAL_DEMO_MODE === "true") {
+    return {
+      displayName: "Usuario Demo",
+      email: "demo@araya.local",
+      fullName: "Usuario Demo",
+    };
+  }
   const user = await getChatGPTUser();
   if (user) return user;
 
@@ -54,7 +50,7 @@ export function chatGPTSignOutPath(returnTo = "/"): string {
   return `${SIGN_OUT_PATH}?return_to=${encodeURIComponent(safeReturnTo)}`;
 }
 
-function safeRelativeReturnPath(value: string): string {
+export function safeRelativeReturnPath(value: string): string {
   if (!value.startsWith("/") || value.startsWith("//")) return "/";
 
   let url: URL;
@@ -75,12 +71,4 @@ function isReservedAuthPath(pathname: string): boolean {
     pathname === SIGN_OUT_PATH ||
     pathname === CALLBACK_PATH
   );
-}
-
-function safeDecodeURIComponent(value: string): string | null {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return null;
-  }
 }

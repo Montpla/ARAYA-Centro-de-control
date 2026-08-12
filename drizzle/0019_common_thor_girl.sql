@@ -1,0 +1,1 @@
+ALTER TABLE `report_snapshots` ADD `report_type` text DEFAULT 'global' NOT NULL;

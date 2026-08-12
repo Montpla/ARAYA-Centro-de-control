@@ -39,7 +39,7 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /CAPAS OPERATIVAS DEL PLANO/);
   assert.match(source, /INFORME COMERCIAL · JUNIO 2026/);
   assert.match(source, /CONTROL TRANSVERSAL · JUNIO 2026/);
-  assert.match(source, /INFORME FINANCIERO · JUNIO 2026/);
+  assert.match(source, /INFORME FINANCIERO · \{financePeriodLabel\}/);
 });
 
 test("desktop, tablet and mobile share the requested grouped navigation", async () => {
@@ -186,7 +186,7 @@ test("agent is source-grounded, guarded and evaluated", async () => {
   assert.match(route, /materializeLiveRoot/);
   assert.match(dashboard, /ARAYA Asistente/);
   assert.doesNotMatch(dashboard, /ARAYA Copilot/);
-  assert.match(prompt, /araya-asistente-v9-sala-operativa/);
+  assert.match(prompt, /araya-asistente-v10-publicacion-abierta/);
   assert.match(prompt, /Eres ARAYA Asistente/);
   assert.match(prompt, /No inventes cifras/);
   assert.match(prompt, /Consulta siempre las herramientas/);
@@ -277,7 +277,7 @@ test("dashboard requires verified membership and provides administrator-managed 
   assert.match(adminRoute, /financeAccess/);
   assert.match(adminRoute, /accessAudit/);
   assert.match(dashboard, /Usuarios y accesos/);
-  assert.match(dashboard, /Bricket no almacena/);
+  assert.match(dashboard, /correo y un PIN propio/);
   assert.match(dashboard, /FinanceLockedView/);
   assert.match(schema, /appUsers/);
   assert.match(schema, /accessAudit/);
@@ -367,8 +367,8 @@ test("spatial views derive live colors and accept new mapped buildings and urban
     readFile("app/demo-data.ts", "utf8"),
   ]);
   assert.match(dashboard, /function visualUnitStatus/);
-  assert.match(dashboard, /unit\.progress >= 100/);
-  assert.match(dashboard, /unit\.progress > 0/);
+  assert.match(dashboard, /overall >= 100/);
+  assert.match(dashboard, /overall > 0/);
   assert.match(dashboard, /building\.mapCoordinates\?\.\[planMode\]/);
   assert.match(dashboard, /area\.mapCoordinates\?\.\[planMode\]/);
   assert.match(dashboard, /synchronizeSpatialSummary/);
@@ -457,10 +457,10 @@ test("financial presentation defaults to USD and preserves DOP source values", a
   assert.match(currency, /return "DOP"/);
   assert.match(dashboard, /Moneda de visualización/);
   assert.match(dashboard, /Detalle completo/);
-  assert.match(dashboard, /29 CUENTAS DE COSTE/);
-  assert.match(dashboard, /15 CATEGORÍAS · 96 FACTURAS/);
-  assert.match(dashboard, /26 ANTICIPOS/);
-  assert.match(dashboard, /41 LÍNEAS DE BALANCE/);
+  assert.match(dashboard, /\{antonelyDetailTotals\.costAccountCount\} CUENTAS DE COSTE/);
+  assert.match(dashboard, /\{antonelyDetailTotals\.payableCategoryCount\} CATEGORÍAS · \{antonelyDetailTotals\.payableInvoiceCount\} FACTURAS/);
+  assert.match(dashboard, /\{antonelyDetailTotals\.advanceCount\} ANTICIPOS/);
+  assert.match(dashboard, /\{antonelyDetailTotals\.balanceLineCount\} LÍNEAS DE BALANCE/);
   assert.match(financeDetail, /antonelyPayableVendorsAll/);
   assert.match(financeDetail, /advancePendingDop: 9210448\.86/);
 });
@@ -558,7 +558,7 @@ test("S-curve matches the supplied executive reference without changing its data
   assert.match(dashboard, /jun-2025 a ago-2027/);
   assert.match(dashboard, /Plan Operativo/);
   assert.match(dashboard, /Ejecutado Real/);
-  assert.match(dashboard, /Al corte \(jun-2026\):/);
+  assert.match(dashboard, /Al corte \(\{cutoffPoint \? `\$\{cutoffPoint\.month\}-\$\{cutoffYear\}` : "sin dato"\}\):/);
   assert.match(dashboard, /monthLabel/);
   assert.match(dashboard, /isExpanded/);
   assert.match(dashboard, /Ver Curva S a pantalla completa/);
@@ -703,7 +703,7 @@ test("points three to eight add a live operational control room without autonomo
   assert.match(migration, /CREATE TABLE `control_action_activity`/);
   assert.match(migration, /CREATE TABLE `report_snapshots`/);
   assert.match(migration, /ALTER TABLE `uploaded_files` ADD `review_status`/);
-  assert.match(prompt, /araya-asistente-v9-sala-operativa/);
+  assert.match(prompt, /araya-asistente-v10-publicacion-abierta/);
   assert.match(prompt, /no crearlas, cerrarlas ni reasignarlas/);
   assert.match(styles, /\.control-room-shell/);
   assert.match(styles, /\.control-actions-layout/);
@@ -783,7 +783,7 @@ test("tablet and mobile mode provides navigation, camera, notifications, biometr
   assert.match(routeError, /Reintentar/);
   assert.match(manifest, /"display": "standalone"/);
   assert.match(manifest, /"short_name": "Bricket Control"/);
-  assert.match(serviceWorker, /bricket-control-shell-v5/);
+  assert.match(serviceWorker, /bricket-control-shell-v6/);
   assert.match(serviceWorker, /CACHE_APP_SHELL/);
   assert.match(serviceWorker, /CLEAR_PRIVATE_CACHE/);
   assert.match(serviceWorker, /event\.request\.mode === "navigate"/);
@@ -856,7 +856,8 @@ test("reprogrammed Phase I flow remains separate from physical progress and glob
   assert.match(flowData, /Sin indicador de avance físico/);
   assert.match(dashboard, /Flujo de obra real y reprogramado/);
   assert.match(dashboard, /El avance físico no cambia con este archivo/);
-  assert.match(dashboard, /18,23%/);
+  assert.match(dashboard, /physical-progress-lock/);
+  assert.match(dashboard, /\{number\.format\(projectSnapshot\.overallProgress\)\}%/);
   assert.match(dashboard, /source-reprogrammed-flow-phase-1/);
   assert.match(agentRoute, /phaseOneWorkFlow/);
   assert.match(agentRoute, /normalized\.includes\("flujo"\)/);
@@ -1013,7 +1014,7 @@ test("simple uploads request automatic publication only for extracted structured
   assert.match(filesRoute, /resolvedArea !== "sin_clasificar"/);
   assert.match(filesRoute, /isSafeAutomaticStructuredUpdate/);
   assert.match(filesRoute, /isFinancialLiveKey/);
-  assert.match(filesRoute, /if \(canPublishAutomatically\)/);
+  assert.match(filesRoute, /if \(autoPublishable\.length\)/);
   assert.match(filesRoute, /publishLiveDataUpdates\(\{/);
   assert.match(filesRoute, /reviewClosure: \{[\s\S]*?mode: "insert"[\s\S]*?completedAction: "aprobado_automatico"/);
   assert.doesNotMatch(filesRoute, /update\(documentDataProposals\)[\s\S]*?status: "publicado"/);

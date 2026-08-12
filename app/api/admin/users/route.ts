@@ -5,6 +5,7 @@ import { accessAudit, appUsers } from "../../../../db/schema";
 import { requireApiUser } from "../../../../lib/access-control";
 import { isUserArea } from "../../../../lib/file-routing";
 import { scheduleNotificationDispatch } from "../../../../lib/notification-dispatch";
+import { hashPin, validPinFormat } from "../../../../lib/pin";
 
 export const runtime = "edge";
 
@@ -18,6 +19,7 @@ type UserPayload = {
   active?: boolean;
   expectedUpdatedAt?: string;
   restore?: boolean;
+  pin?: string;
 };
 
 type AvatarBucket = {
@@ -142,6 +144,10 @@ export async function POST(request: Request) {
   if (!validEmail(email)) {
     return Response.json({ error: "Introduce un correo electrónico válido." }, { status: 400 });
   }
+  const pin = String(payload.pin ?? "");
+  if (!validPinFormat(pin)) {
+    return Response.json({ error: "El PIN debe tener entre 4 y 10 dígitos." }, { status: 400 });
+  }
   const role = payload.role === "admin" ? "admin" : "member";
   const area = isUserArea(String(payload.area ?? "")) ? String(payload.area) : "direccion";
   const financeAccess = role === "admin" || Boolean(payload.financeAccess);
@@ -170,6 +176,7 @@ export async function POST(request: Request) {
         area,
         financeAccess,
         active: true,
+        pinHash: hashPin(pin),
         createdByEmail: auth.user.email,
         updatedAt: now,
       })
@@ -266,6 +273,10 @@ export async function PATCH(request: Request) {
   if (!validEmail(email)) {
     return Response.json({ error: "Introduce un correo electrónico válido." }, { status: 400 });
   }
+  const resetPin = payload.pin !== undefined && String(payload.pin).trim() !== "";
+  if (resetPin && !validPinFormat(String(payload.pin))) {
+    return Response.json({ error: "El PIN debe tener entre 4 y 10 dígitos." }, { status: 400 });
+  }
   const role = payload.role === "admin" ? "admin" : "member";
   const area = isUserArea(String(payload.area ?? "")) ? String(payload.area) : "direccion";
   const active = payload.active !== false;
@@ -290,6 +301,7 @@ export async function PATCH(request: Request) {
         area,
         financeAccess,
         active,
+        ...(resetPin ? { pinHash: hashPin(String(payload.pin)), failedPinAttempts: 0, pinLockedUntil: "" } : {}),
         notificationKind: "user_updated",
         notificationNonce: crypto.randomUUID(),
         notificationActorEmail: auth.user.email,

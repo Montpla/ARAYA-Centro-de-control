@@ -67,6 +67,7 @@ export const fiduciaryBalanceSections = [
   },
 ] as const;
 
+
 export const fiduciaryManagementReconciliation = [
   {
     metric: "Activos",

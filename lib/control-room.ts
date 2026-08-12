@@ -9,18 +9,23 @@ import {
 } from "../app/demo-data";
 import {
   constructionDisciplines,
+  cxpAging,
   delayedUrbanismStarts,
   juneDataQualityIssues,
   juneReport,
   managementActions,
+  payablesReconciliation,
   permits,
   safetyMetrics,
+  salesLocations,
+  salesModels,
   structuralDelay,
   urbanismReportAreas,
 } from "../app/june-report-data";
+import { antonelyDetailTotals } from "../app/antonely-finance-data";
 import { procurementQualityIssues } from "../app/procurement-data";
 import { reprogrammedFlowQualityIssues } from "../app/reprogrammed-flow-data";
-import { fiduciaryStatementQualityIssues } from "../app/fiduciary-statements-data";
+import { fiduciaryStatementQualityIssues, fiduciaryStatementSummary } from "../app/fiduciary-statements-data";
 
 export const CONTROL_ROOM_VERSION = "araya-control-room-v1";
 
@@ -219,6 +224,14 @@ export function buildReportSnapshot(
   currentPlan: MonthlyPlan,
   liveRevision: number,
   currentJuneReport: JuneReport = juneReport,
+  live: {
+    cxpAging?: typeof cxpAging;
+    payablesReconciliation?: readonly (typeof payablesReconciliation)[number][];
+    fiduciaryBalance?: typeof fiduciaryStatementSummary.balance;
+    antonelyDetailTotals?: typeof antonelyDetailTotals;
+    salesModels?: typeof salesModels;
+    salesLocations?: typeof salesLocations;
+  } = {},
 ) {
   const baseline = buildControlRoomBaseline(canAccessFinance, currentProject, currentPlan);
   return {
@@ -249,8 +262,17 @@ export function buildReportSnapshot(
     commercial: canAccessFinance ? {
       sales: currentJuneReport.sales,
       collections: currentJuneReport.collections,
+      salesModels: live.salesModels ?? salesModels,
+      salesLocations: live.salesLocations ?? salesLocations,
     } : null,
-    finance: canAccessFinance ? currentJuneReport.finance : null,
+    finance: canAccessFinance ? {
+      ...currentJuneReport.finance,
+      cxpAging: live.cxpAging ?? cxpAging,
+      payablesReconciliation: live.payablesReconciliation ?? payablesReconciliation,
+      fiduciaryBalance: live.fiduciaryBalance ?? fiduciaryStatementSummary.balance,
+      advancesGrantedDop: (live.antonelyDetailTotals ?? antonelyDetailTotals).advanceGrantedDop,
+      advancesCount: (live.antonelyDetailTotals ?? antonelyDetailTotals).advanceCount,
+    } : null,
     safety: {
       metrics: safetyMetrics,
       permits,

@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "araya-centro-control",
+  "compatibility_date": "2026-08-12",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "main": "./dist/server/index.js",
+  "no_bundle": true,
+  "rules": [
+    { "type": "ESModule", "globs": ["**/*.js", "**/*.mjs"] }
+  ],
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS",
+    "run_worker_first": ["/data-center/*"]
+  },
+  "images": {
+    "binding": "IMAGES"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "araya-centro-control-d1",
+      "database_id": "d653cbbb-3faa-413c-9ac4-0b4bde237219",
+      "migrations_dir": "drizzle"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "araya-centro-control-files"
+    }
+  ]
+}

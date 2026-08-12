@@ -1,6 +1,6 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 11/08/2026
+Actualizado: 13/08/2026
 Zona horaria del usuario: Europe/Madrid
 Idioma de trabajo: español
 
@@ -8,11 +8,58 @@ Idioma de trabajo: español
 
 Continuar sobre este proyecto existente. No reconstruir el dashboard desde cero,
 no sustituir su arquitectura y no inventar datos. Antes de modificar el código,
-leer este documento, `AGENTS.md` del workspace y `.openai/hosting.json`.
+leer este documento completo, `AGENTS.md` del workspace si existe, y la sección
+siguiente sobre la plataforma de despliegue vigente (léela antes que el resto:
+corrige algo que el resto del documento da por hecho y ya no es así).
 
 El usuario trabaja de forma iterativa: normalmente entrega archivos, capturas o
 indicaciones visuales y espera que el dashboard se actualice, se compruebe y se
 publique en el mismo enlace.
+
+## Aviso importante: plataforma de despliegue vigente (leer antes que nada)
+
+Añadido el 13/08/2026. El resto de este documento (secciones "Proyecto y
+publicación", "Publicación con Sites" y varias notas sobre `OPENAI_API_KEY`
+"no configurada") describe una vía de despliegue por **Sites de OpenAI**
+(`.openai/hosting.json`, dominio `www.proyectosgrupobricket.com`, corte DNS
+pendiente en Nominalia). Esa vía no se ha tocado ni verificado en las
+sesiones recientes — su último commit real es del inicio del proyecto. **No
+asumir que sigue siendo la vía activa.**
+
+Las sesiones recientes, incluida esta, despliegan y verifican
+exclusivamente sobre **Cloudflare Workers**:
+
+- URL de producción verificada en este cierre, con sesión real de navegador:
+  `https://araya-centro-control.grupobricket.workers.dev`.
+- Despliegue: `npm run build` y después
+  `npx wrangler deploy --config wrangler.deploy.jsonc`. Ese archivo de
+  configuración existe solo en local, no está commiteado — comprobar que
+  sigue presente antes de desplegar; si falta, pedir al usuario el contenido
+  o reconstruirlo a partir de los bindings de abajo.
+- D1: `araya-centro-control-d1` (binding `env.DB`). R2:
+  `araya-centro-control-files` (binding `env.FILES`).
+- Migraciones: `npx wrangler d1 execute araya-centro-control-d1 --remote
+  --file=drizzle/<archivo>.sql`. La cadena de `drizzle/meta/_journal.json`
+  llega hasta `0020_notify_unmapped_field_candidate_created.sql`; no omitir
+  ninguna entrada al desplegar sobre una base nueva.
+- `OPENAI_API_KEY` **sí está configurada** en este entorno de Cloudflare: la
+  extracción semántica por IA (PDF, XLS/XLSX, PPT/PPTX, DOC/DOCX, imágenes)
+  funciona en producción con el modelo `gpt-5.6-terra` vía Responses API. Las
+  notas de este documento y de `OPERATIONS.md` que dicen lo contrario se
+  refieren al entorno de Sites, no a este.
+- Antes de dar por buena cualquier corrección visual o de datos, verificar
+  con una sesión real de navegador contra la URL de arriba (Playwright sirve:
+  login por `POST /api/auth/login` con `email` y `pin` de un administrador,
+  extraer la cookie `araya_session`, `context.addCookies([...])`). Comprobar
+  `npm run build`/`tsc --noEmit` nunca es suficiente por sí solo: el HTML de
+  hidratación SSR siempre contiene el valor estático de arranque de
+  `app/demo-data.ts` hasta que el cliente sincroniza con `/api/live-data`;
+  un `grep` del bundle puede dar un falso positivo o negativo si no se
+  distingue el JSON de hidratación (invisible al usuario) del DOM realmente
+  renderizado.
+- Si en algún momento hay que decidir entre reactivar Sites o seguir solo con
+  Cloudflare, preguntar al usuario en vez de asumir — puede que Sites siga
+  siendo relevante para otro propósito no documentado aquí.
 
 ## Proyecto y publicación
 
@@ -294,11 +341,20 @@ específica para pantallas de hasta 1.100 px:
 
 ## Datos actualmente integrados
 
-- Corte documental: 30/06/2026.
-- Avance físico ejecutado: 18,23%.
-- Plan operativo: 21,24%.
+Corte documental original: 30/06/2026. Actualizado el 13/08/2026 tras
+publicar julio (ver "Reversión de autoridad de la Curva S" más abajo): estas
+cifras son valores vivos que cambian con cada Excel maestro nuevo que se
+apruebe, no constantes de código. Antes de confiar en un número de esta
+lista, contrastarlo con `GET /api/control-room` (`planning.physicalActual`,
+`planning.curveCutoffLabel`) en vez de asumir que sigue vigente.
+
+- Avance físico ejecutado: 22,71% (corte jul-26; fuente: `monthlyPlan`,
+  Excel maestro, ya no el promedio por apartamento — ver más abajo).
+- Avance por apartamento (métrica de apoyo, ya no autoritativa): 20,13%.
+- Plan operativo (KPI): 21,24%.
 - Avance del cronograma MPP: 17%.
-- Desviación física: -3,00 puntos porcentuales.
+- Desviación física: +1,47 puntos porcentuales (ejecutado por encima del
+  plan operativo).
 - Fin de línea base: 31/05/2027.
 - Fin previsto: 07/06/2027.
 - Desviación prevista: +7 días.
@@ -1147,6 +1203,137 @@ en Nominalia.
   `fafd06b2-640d-4bba-8c7b-36b7151c87bd`.
   No tocar el apex hasta resolver y probar el `www`; la aplicación anterior
   seguirá sirviéndose hasta ese corte.
+
+## Reversión de autoridad de la Curva S y bug de escala de extracción
+
+Implementado y publicado el 13/08/2026 en Cloudflare Workers.
+
+- El usuario decidió, tras plantear la disyuntiva explícitamente, que el
+  avance físico global (`projectSnapshot.overallProgress`) debe seguir el
+  último "Ejecutado Real" que declare el Excel maestro en `monthlyPlan`
+  (Curva S) — es el control real que usa el equipo de obra —, no el
+  promedio calculado apartamento a apartamento. El cálculo por apartamento
+  se conserva como métrica de apoyo en el nuevo campo
+  `projectSnapshot.apartmentAverageProgress`; no se borra, sigue siendo la
+  fuente de las fichas por unidad (`unitOverallProgress`, sin cambios).
+- `lib/spatial-live-data.ts`: `materializeSpatialLiveData()` ahora
+  materializa `monthlyPlan` primero y deriva `overallProgress` de su último
+  `actual` no nulo, con `apartmentAverageProgress` como campo aparte y
+  `deviationPoints` recalculado sobre el nuevo `overallProgress`.
+  `syncMonthlyPlanActual()` (hacía el cálculo inverso: forzaba el último
+  `actual` de `monthlyPlan` a igualar el promedio por apartamento) se
+  eliminó por quedar obsoleta con el cambio de dirección.
+- Mismo cambio replicado en el espejo cliente
+  (`synchronizeSpatialSummary()`, `app/dashboard-client.tsx`) y en los cuatro
+  puntos donde el servidor recalculaba esto (`app/api/agent/route.ts` ×2,
+  `app/api/control-room/route.ts` ×2). `projectSnapshot.plannedProgress` (el
+  KPI operativo) no se tocó: sigue siendo un valor separado y
+  deliberadamente no conciliado con el `planned` propio de la Curva S.
+- Nueva nota junto a la Curva S ("Fuente del avance físico global") explica
+  el cambio y muestra ambos valores (Excel vs. promedio por apartamento) con
+  su procedencia.
+- Bug de escala encontrado y corregido en la extracción por IA:
+  `lib/ai-document-extraction.ts` no indicaba la escala esperada para
+  porcentajes, así que un "22,71%" del Excel se extraía como fracción
+  `0.2271` (o `0.002271` en un primer intento, un error compuesto). Se añadió
+  una regla explícita en el prompt para todo campo de porcentaje/avance
+  (incluye `monthlyPlan.planned`/`monthlyPlan.actual`).
+- Bug más profundo encontrado en `lib/live-data-contract.ts`:
+  `matchesContract()` comparaba cada posición de un array contra la misma
+  posición del array ya publicado; como `monthlyPlan[13].actual` (julio)
+  valía `null` en el valor vigente, cualquier intento de convertirlo en un
+  número real quedaba rechazado por "tipo o estructura no coincide", sin
+  importar la escala. Esto habría bloqueado cualquier actualización futura de
+  la Curva S, no solo la de julio. Corregido generalizando la comparación:
+  para arrays de objetos ahora se construye una plantilla fusionada por
+  campo (`mergedArrayTemplate`), que acepta `null` o el tipo real cuando el
+  campo es `null` en algunas filas del valor vigente y numérico en otras
+  (marcador `NullableTemplate`, interno a la función), sin relajar ninguna
+  otra validación de tipo, rango o identidad.
+- El 22,71% real de julio de 2026 quedó publicado en producción (revisión 33
+  de datos vivos), extraído de nuevo desde
+  `01 - GRAFICOS ARAYA FASE II COMPLETO MODIFICADO JULIO.xls` con el prompt ya
+  corregido. Se corrigieron a mano los meses posteriores a julio, que
+  llegaban como `actual: 0` en vez de `null` (artefacto de fórmula del
+  Excel, no un cero real), antes de aprobar la propuesta.
+- El expediente antiguo con la extracción mal escalada (id de archivo
+  `d8167525-4849-4c1d-bc06-c41cb63f18ca`) quedó **rechazado** a propósito
+  para que nadie lo apruebe por error desde la bandeja de revisión y
+  corrompa la Curva S con valores 100 veces más pequeños de lo real.
+- Validación: `npx tsc --noEmit -p .`, `npm run build` y sesión real de
+  Playwright contra producción confirmando 22,71% visible en el Resumen, la
+  Curva S y la matriz de gobernanza del dato ("Datos gobernados"), sin
+  errores de consola tras varios ciclos de refresco.
+
+## Filtración de datos financieros al bundle público del cliente (corregida)
+
+Encontrado y corregido el 13/08/2026 al arreglar la suite de pruebas
+existente, que llevaba tiempo detectándolo.
+
+- `app/dashboard-client.tsx` (el código que se envía al navegador de
+  cualquier usuario, tenga o no permiso financiero) importaba directamente
+  diez funciones `liveX(...)` desde los mismos módulos que declaran en
+  código las cifras financieras reales (`app/june-report-data.ts`,
+  `app/antonely-finance-data.ts`, `app/procurement-data.ts`,
+  `app/reprogrammed-flow-data.ts`, `app/fiduciary-statements-data.ts`,
+  `app/data-governance.ts`). Importar la función arrastraba el módulo
+  completo al bundle, incluidas sus constantes con importes reales —
+  visible para cualquiera con las herramientas de desarrollador del
+  navegador, sin necesidad de `financeAccess`.
+- Corregido moviendo las diez funciones puras a un módulo nuevo y aislado,
+  `lib/live-derivations.ts`, que no exporta ningún dato sensible (solo
+  funciones genéricas que reciben sus valores por parámetro). El cliente
+  ahora importa exclusivamente desde ahí; los módulos de datos originales
+  conservan solo sus constantes, y las rutas de servidor
+  (`app/api/agent/route.ts`, `app/api/control-room/route.ts`) importan las
+  mismas funciones desde el módulo nuevo.
+- Verificado: las cifras centinela (presupuesto, balance fiduciario, flujo
+  de proveedores, etc.) ya no aparecen en `dist/client` ni en `.next/static`.
+- Regla para el futuro: ningún archivo que `app/dashboard-client.tsx`
+  importe directamente puede declarar datos financieros reales en el mismo
+  módulo. Las funciones de re-sincronización en vivo (`liveX`) deben vivir
+  en `lib/live-derivations.ts` o en un módulo igualmente aislado.
+
+## Notificación de "posible sección nueva" pasa a estar en manos de un trigger
+
+Corregido el 13/08/2026.
+
+- `app/api/files/route.ts` llamaba a `emitNotification()` directamente al
+  detectar campos sin encaje conocido (`unmappedCandidates`), rompiendo el
+  patrón establecido de que las rutas API solo escriben en D1 y programan
+  `scheduleNotificationDispatch()` — la notificación en sí la genera siempre
+  un trigger de base de datos, para que nunca se dupliquen avisos entre el
+  trigger y la ruta. De paso, ese bloque tenía una variable fuera de alcance
+  (`candidate.name`, referenciada tras el `.map()` que la declaraba) que
+  habría lanzado un error en tiempo de ejecución si llegaba a ejecutarse.
+- Migración nueva `drizzle/0020_notify_unmapped_field_candidate_created.sql`:
+  trigger `notify_unmapped_field_candidate_created` sobre
+  `unmapped_field_candidates`, ya aplicada en D1 remoto. Se quitó la llamada
+  directa y el import ya no usado de `emitNotification` en
+  `app/api/files/route.ts`.
+
+## Doce pruebas obsoletas corregidas
+
+Corregido el 13/08/2026, a petición explícita del usuario: "hay q arreglar
+todas las pruebas que ya fallaban, debe quedar todo arreglado y corregido".
+
+- Diez de las doce comprobaban texto literal desactualizado de cambios
+  legítimos ya hechos (esta sesión o sesiones previas sin commitear), no
+  bugs reales: versión del service worker (`v5` → `v6`, ya documentada
+  arriba en "Archivo documental"), versión del prompt del agente
+  (`araya-asistente-v9-sala-operativa` →
+  `araya-asistente-v10-publicacion-abierta`), cabecera financiera ahora
+  dinámica en vez de "JUNIO 2026" fijo, contadores de Antonely ahora en vivo
+  (`{antonelyDetailTotals.costAccountCount}` en vez de la cifra "29" fija),
+  refactor de `visualUnitStatus` para usar el promedio de disciplinas en vez
+  de `unit.progress`, refactor del publicado parcial automático
+  (`autoPublishable`/`liveValues` en vez de la forma anterior) y el "Al
+  corte" dinámico de la Curva S. Se actualizaron las aserciones de las
+  pruebas para reflejar el comportamiento correcto vigente; no se revirtió
+  ningún cambio de producto para hacerlas pasar.
+- Las otras dos corresponden a los dos arreglos reales descritos arriba (la
+  filtración al bundle del cliente y el trigger de notificaciones).
+- Validación final: `node --test tests/*.mjs` → 97/97 pruebas aprobadas.
 
 ## Criterios de continuidad
 

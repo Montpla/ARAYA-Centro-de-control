@@ -1,37 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { ChatGPTUser } from "./app/chatgpt-auth";
 import { resolveAuthorizedUser } from "./lib/access-control";
 import { requiresFinanceDocumentAccess } from "./lib/document-access";
+import { SESSION_COOKIE, sessionUserFromToken } from "./lib/session";
 
-const USER_EMAIL_HEADER = "oai-authenticated-user-email";
-const USER_FULL_NAME_HEADER = "oai-authenticated-user-full-name";
-const USER_FULL_NAME_ENCODING_HEADER = "oai-authenticated-user-full-name-encoding";
-const PERCENT_ENCODED_UTF8 = "percent-encoded-utf-8";
-
-function safeDecodeURIComponent(value: string) {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return null;
-  }
-}
-
-function chatGPTIdentity(request: NextRequest): ChatGPTUser | null {
-  const email = request.headers.get(USER_EMAIL_HEADER);
-  if (!email) return null;
-
-  const encodedFullName = request.headers.get(USER_FULL_NAME_HEADER);
-  const fullName =
-    encodedFullName &&
-    request.headers.get(USER_FULL_NAME_ENCODING_HEADER) === PERCENT_ENCODED_UTF8
-      ? safeDecodeURIComponent(encodedFullName)
-      : null;
-
-  return {
-    displayName: fullName ?? email,
-    email,
-    fullName,
-  };
+async function chatGPTIdentity(request: NextRequest) {
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  return sessionUserFromToken(token);
 }
 
 function protectedResponse(body: string, status: number) {
@@ -48,7 +22,10 @@ function protectedResponse(body: string, status: number) {
 }
 
 export async function proxy(request: NextRequest) {
-  const identity = chatGPTIdentity(request);
+  if (process.env.LOCAL_DEMO_MODE === "true") {
+    return NextResponse.next();
+  }
+  const identity = await chatGPTIdentity(request);
   if (!identity) {
     const signInUrl = request.nextUrl.clone();
     signInUrl.pathname = "/signin-with-chatgpt";

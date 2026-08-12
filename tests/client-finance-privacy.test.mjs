@@ -75,5 +75,5 @@ test("authorization bootstrap and service worker fail closed", async () => {
   assert.doesNotMatch(worker, /cache\.put\("\/"/);
   assert.doesNotMatch(worker, /caches\.match\("\/"/);
   assert.doesNotMatch(client, /resourceUrls:\s*\["\/"/);
-  assert.match(worker, /url\.pathname\.startsWith\("\/_next\/static\/"\)/);
+  assert.match(worker, /url\.pathname\.startsWith\("\/assets\/"\)/);
 });

@@ -1,5 +1,5 @@
 import { desc, eq } from "drizzle-orm";
-import { cubicaciones, monthlyPlan } from "../../demo-data";
+import { cubicaciones } from "../../demo-data";
 import {
   antonelyAdvances,
   antonelyBalanceLines,
@@ -12,6 +12,7 @@ import {
   antonelyFinanceSource,
   arrearsBreakdown,
   cxpAging,
+  financialProjection,
   financingProcesses,
   juneDataQualityIssues,
   juneReport,
@@ -22,6 +23,13 @@ import {
   salesLocations,
   salesModels,
 } from "../../june-report-data";
+import {
+  juneDeviationSummary,
+  monthlyDeviationLines,
+  procurementQualityIssues,
+  typeABudgetChapters,
+  typeABudgetSummary,
+} from "../../procurement-data";
 import {
   reprogrammedFlowAudit,
   reprogrammedFlowMonths,
@@ -35,6 +43,17 @@ import {
   fiduciaryStatementSummary,
 } from "../../fiduciary-statements-data";
 import { dataAuthorityMatrix, dataGovernanceSummary } from "../../data-governance";
+import {
+  liveAntonelyDetailTotals,
+  liveDataAuthorityMatrix,
+  liveFiduciaryManagementReconciliation,
+  liveFiduciaryStatementSummary,
+  liveJuneDeviationSummary,
+  liveJuneReportFinance,
+  livePayablesReconciliation,
+  liveReprogrammedFlowQualityIssues,
+  liveTypeABudgetSummary,
+} from "../../../lib/live-derivations";
 import { getDb } from "../../../db";
 import {
   controlActions,
@@ -55,6 +74,14 @@ import {
 import { buildControlRoomBaseline } from "../../../lib/control-room";
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import { materializeSpatialLiveData } from "../../../lib/spatial-live-data";
+
+type ResponsesApiOutput = Array<{
+  type: string;
+  name?: ToolName;
+  arguments?: string;
+  call_id?: string;
+  content?: Array<{ type: string; text?: string }>;
+}>;
 
 type ToolName =
   | "get_project_summary"
@@ -182,6 +209,16 @@ function numberForAgent(value: number) {
   return value.toLocaleString("es-ES", { maximumFractionDigits: 2 });
 }
 
+function extractOutputText(output: ResponsesApiOutput): string {
+  return output
+    .filter((item) => item.type === "message")
+    .flatMap((item) => item.content ?? [])
+    .filter((part) => part.type === "output_text" && typeof part.text === "string")
+    .map((part) => part.text as string)
+    .join("")
+    .trim();
+}
+
 function redactedAgentList<T>(key: string, value: readonly T[]) {
   const mutableValue = JSON.parse(JSON.stringify(value)) as LiveDataValue;
   const redacted = redactFinancialFields(key, mutableValue);
@@ -198,22 +235,39 @@ async function getLiveDataSnapshot(financeAccess: boolean) {
 
 async function executeTool(name: ToolName, args: Record<string, unknown>, canAccessFinance: boolean) {
   const live = await getLiveDataSnapshot(canAccessFinance);
-  const currentProjectSnapshot = materializeSpatialLiveData(live.values).projectSnapshot;
-  const currentMonthlyPlan = materializeLiveRoot("monthlyPlan", monthlyPlan, live.values);
+  const spatial = materializeSpatialLiveData(live.values);
+  const currentProjectSnapshot = spatial.projectSnapshot;
+  const currentMonthlyPlan = spatial.monthlyPlan;
   const currentCubicaciones = materializeLiveRoot("cubicaciones", cubicaciones, live.values);
-  const currentJuneReport = materializeLiveRoot("juneReport", juneReport, live.values);
+  const currentFinancialProjection = materializeLiveRoot("financialProjection", financialProjection, live.values);
+  let currentJuneReport = materializeLiveRoot("juneReport", juneReport, live.values);
   const currentSalesModels = materializeLiveRoot("salesModels", salesModels, live.values);
   const currentSalesLocations = materializeLiveRoot("salesLocations", salesLocations, live.values);
   const currentArrearsBreakdown = materializeLiveRoot("arrearsBreakdown", arrearsBreakdown, live.values);
   const currentCxpAging = materializeLiveRoot("cxpAging", cxpAging, live.values);
   const currentAdvances = materializeLiveRoot("advances", advances, live.values);
   const currentAntonelyFinanceSource = materializeLiveRoot("antonelyFinanceSource", antonelyFinanceSource, live.values);
-  const currentPayablesReconciliation = materializeLiveRoot("payablesReconciliation", payablesReconciliation, live.values);
+  let currentPayablesReconciliation: readonly (typeof payablesReconciliation)[number][] = materializeLiveRoot("payablesReconciliation", payablesReconciliation, live.values);
   const currentAntonelyCostAccounts = materializeLiveRoot("antonelyCostAccounts", antonelyCostAccounts, live.values);
   const currentAntonelyPayableCategories = materializeLiveRoot("antonelyPayableCategories", antonelyPayableCategories, live.values);
   const currentAntonelyAdvances = materializeLiveRoot("antonelyAdvances", antonelyAdvances, live.values);
   const currentAntonelyBalanceLines = materializeLiveRoot("antonelyBalanceLines", antonelyBalanceLines, live.values);
-  const currentAntonelyDetailTotals = materializeLiveRoot("antonelyDetailTotals", antonelyDetailTotals, live.values);
+  const currentAntonelyDetailTotals = liveAntonelyDetailTotals(
+    materializeLiveRoot("antonelyDetailTotals", antonelyDetailTotals, live.values),
+    {
+      advances: currentAntonelyAdvances,
+      costAccounts: currentAntonelyCostAccounts,
+      payableCategories: currentAntonelyPayableCategories,
+      balanceLines: currentAntonelyBalanceLines,
+    },
+  );
+  // antonelyAdvances/antonelyCostAccounts/antonelyPayableCategories/
+  // antonelyBalanceLines (detalle) se sincronizan al subir un archivo; sus
+  // resúmenes (juneReport.finance, la fila "Archivo Antonely" de la
+  // conciliación de CxP) eran copias aparte que se quedaban en la semilla
+  // original — ver las notas junto a cada función.
+  currentJuneReport = liveJuneReportFinance(currentJuneReport, currentAntonelyDetailTotals, currentAntonelyBalanceLines, currentFinancialProjection);
+  currentPayablesReconciliation = livePayablesReconciliation(currentPayablesReconciliation, currentAntonelyDetailTotals.payablesTotalDop);
   const currentSafetyMetrics = materializeLiveRoot("safetyMetrics", safetyMetrics, live.values);
   const currentSafetyFindings = materializeLiveRoot("safetyFindings", safetyFindings, live.values);
   const currentPermits = materializeLiveRoot("permits", permits, live.values);
@@ -222,7 +276,31 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
   const currentReprogrammedFlowAudit = materializeLiveRoot("reprogrammedFlowAudit", reprogrammedFlowAudit, live.values);
   const currentReprogrammedFlowMonths = materializeLiveRoot("reprogrammedFlowMonths", reprogrammedFlowMonths, live.values);
   const currentReprogrammedFlowScopes = materializeLiveRoot("reprogrammedFlowScopes", reprogrammedFlowScopes, live.values);
-  const currentReprogrammedFlowQualityIssues = materializeLiveRoot("reprogrammedFlowQualityIssues", reprogrammedFlowQualityIssues, live.values);
+  const currentReprogrammedFlowQualityIssues = liveReprogrammedFlowQualityIssues(
+    materializeLiveRoot("reprogrammedFlowQualityIssues", reprogrammedFlowQualityIssues, live.values),
+    currentProjectSnapshot.overallProgress,
+  );
+  const currentFiduciaryBalanceSections = materializeLiveRoot("fiduciaryBalanceSections", fiduciaryBalanceSections, live.values);
+  const currentFiduciaryManagementReconciliation = liveFiduciaryManagementReconciliation(
+    materializeLiveRoot("fiduciaryManagementReconciliation", fiduciaryManagementReconciliation, live.values),
+    currentFiduciaryBalanceSections,
+  );
+  const currentFiduciaryStatementQualityIssues = materializeLiveRoot("fiduciaryStatementQualityIssues", fiduciaryStatementQualityIssues, live.values);
+  const currentFiduciaryStatementSummary = liveFiduciaryStatementSummary(
+    materializeLiveRoot("fiduciaryStatementSummary", fiduciaryStatementSummary, live.values),
+    currentFiduciaryBalanceSections,
+  );
+  const currentTypeABudgetChapters = materializeLiveRoot("typeABudgetChapters", typeABudgetChapters, live.values);
+  const currentTypeABudgetSummary = liveTypeABudgetSummary(
+    materializeLiveRoot("typeABudgetSummary", typeABudgetSummary, live.values),
+    currentTypeABudgetChapters,
+  );
+  const currentMonthlyDeviationLines = materializeLiveRoot("monthlyDeviationLines", monthlyDeviationLines, live.values);
+  const currentJuneDeviationSummary = liveJuneDeviationSummary(
+    materializeLiveRoot("juneDeviationSummary", juneDeviationSummary, live.values),
+    currentMonthlyDeviationLines,
+  );
+  const currentProcurementQualityIssues = materializeLiveRoot("procurementQualityIssues", procurementQualityIssues, live.values);
 
   if (name === "get_live_data_status") {
     const visiblePoints = live.points;
@@ -364,10 +442,10 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
       balanceLines: currentAntonelyBalanceLines,
       detailCounts: currentAntonelyDetailTotals,
       fiduciaryOfficialStatements: {
-        summary: fiduciaryStatementSummary,
-        balanceSections: fiduciaryBalanceSections,
-        managementReconciliation: fiduciaryManagementReconciliation,
-        qualityIssues: fiduciaryStatementQualityIssues,
+        summary: currentFiduciaryStatementSummary,
+        balanceSections: currentFiduciaryBalanceSections,
+        managementReconciliation: currentFiduciaryManagementReconciliation,
+        qualityIssues: currentFiduciaryStatementQualityIssues,
         rule: "Fiduciaria Universal prevalece para balance y resultados oficiales. El Excel conserva su función de control interno.",
       },
       phaseOneWorkFlow: {
@@ -375,11 +453,20 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
         months: currentReprogrammedFlowMonths,
         scopes: currentReprogrammedFlowScopes,
         qualityIssues: currentReprogrammedFlowQualityIssues,
-        physicalProgressEffect: "Ninguno. El archivo no contiene mediciones físicas; el avance físico validado sigue en 18,23%.",
+        physicalProgressEffect: `Ninguno. El archivo no contiene mediciones físicas; el avance físico validado sigue en ${numberForAgent(currentProjectSnapshot.overallProgress)}%.`,
       },
+      typeABudget: {
+        summary: currentTypeABudgetSummary,
+        chapters: currentTypeABudgetChapters,
+      },
+      juneDeviation: {
+        summary: currentJuneDeviationSummary,
+        lines: currentMonthlyDeviationLines,
+      },
+      procurementQualityIssues: currentProcurementQualityIssues,
       sourceCurrency: "DOP, salvo importes comerciales identificados expresamente como USD",
       displayRule: `USD por defecto · 1 DOP = ${DOP_TO_USD} USD · corte ${FX_RATE_CUTOFF}`,
-      source: "INFORME_JUN_2026_ARAYA_v1_1.xlsx, Datos para Informe Jun-26.xlsx, ARAYA_-Flujo I reprogramado.xlsx y estados oficiales de Fiduciaria Universal",
+      source: "INFORME_JUN_2026_ARAYA_v1_1.xlsx, Datos para Informe Jun-26.xlsx, ARAYA_-Flujo I reprogramado.xlsx, comparativo de presupuesto Tipo A y estados oficiales de Fiduciaria Universal",
       cutoff: currentJuneReport.cutoff,
     };
   }
@@ -428,7 +515,7 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
         reviewedBy: row.reviewedByName || "Pendiente",
         publicationRevision: row.publicationRevision,
       })),
-      rule: "Recepción, identificación, extracción y contraste no cambian el dashboard. Sólo una aprobación en la bandeja de validación publica la revisión viva; finanzas y datos operativos nunca se aprueban de forma autónoma.",
+      rule: "Recepción, identificación, extracción y contraste no cambian el dashboard por sí solos. Si el resultado tiene alta confianza, encaja en un campo ya conocido del contrato vivo y coincide con el área y los permisos de quien sube el archivo (incluida Finanzas), se publica solo, sin esperar aprobación de nadie. Lo que no cumple esas condiciones queda en la bandeja de validación hasta una decisión humana.",
     };
   }
   return {
@@ -438,24 +525,52 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
     juneIssues: canAccessFinance
       ? currentJuneDataQualityIssues
       : redactedAgentList("juneDataQualityIssues", currentJuneDataQualityIssues),
-    fiduciaryIssues: canAccessFinance ? fiduciaryStatementQualityIssues : [],
+    fiduciaryIssues: canAccessFinance ? currentFiduciaryStatementQualityIssues : [],
     interpretation: {
-      physicalProgress: "Excel: 18,23% ejecutado frente a 21,24% planificado.",
-      scheduleProgress: "MPP: 17%. Es un indicador distinto y no se sustituye por el del Excel.",
+      physicalProgress: `Excel: ${numberForAgent(currentProjectSnapshot.overallProgress)}% ejecutado frente a ${numberForAgent(currentProjectSnapshot.plannedProgress)}% planificado.`,
+      scheduleProgress: `MPP: ${numberForAgent(currentProjectSnapshot.scheduleProgress)}%. Es un indicador distinto y no se sustituye por el del Excel.`,
       buildings: "Índice de frentes = promedio simple de 32 frentes por edificio.",
       units: "El avance disponible por apartamento corresponde sólo a superestructura.",
     },
-    governance: canAccessFinance ? { summary: dataGovernanceSummary, matrix: dataAuthorityMatrix } : undefined,
+    governance: canAccessFinance ? {
+      summary: dataGovernanceSummary,
+      matrix: liveDataAuthorityMatrix(
+        dataAuthorityMatrix,
+        currentProjectSnapshot.overallProgress,
+        currentProjectSnapshot.plannedProgress,
+        currentProjectSnapshot.scheduleProgress,
+        currentJuneReport.finance.cxpDop,
+      ),
+    } : undefined,
   };
 }
 
 async function fallbackAnswer(question: string, currency: CurrencyCode, canAccessFinance: boolean) {
   const live = await getLiveDataSnapshot(canAccessFinance);
   const currentProjectSnapshot = materializeSpatialLiveData(live.values).projectSnapshot;
-  const currentJuneReport = materializeLiveRoot("juneReport", juneReport, live.values);
+  const currentAntonelyBalanceLines = materializeLiveRoot("antonelyBalanceLines", antonelyBalanceLines, live.values);
+  const currentAntonelyDetailTotals = liveAntonelyDetailTotals(
+    materializeLiveRoot("antonelyDetailTotals", antonelyDetailTotals, live.values),
+    {
+      advances: materializeLiveRoot("antonelyAdvances", antonelyAdvances, live.values),
+      costAccounts: materializeLiveRoot("antonelyCostAccounts", antonelyCostAccounts, live.values),
+      payableCategories: materializeLiveRoot("antonelyPayableCategories", antonelyPayableCategories, live.values),
+      balanceLines: currentAntonelyBalanceLines,
+    },
+  );
+  const currentJuneReport = liveJuneReportFinance(
+    materializeLiveRoot("juneReport", juneReport, live.values),
+    currentAntonelyDetailTotals,
+    currentAntonelyBalanceLines,
+    materializeLiveRoot("financialProjection", financialProjection, live.values),
+  );
   const currentJuneDataQualityIssues = materializeLiveRoot("juneDataQualityIssues", juneDataQualityIssues, live.values);
   const currentSafetyMetrics = materializeLiveRoot("safetyMetrics", safetyMetrics, live.values);
   const currentReprogrammedFlowAudit = materializeLiveRoot("reprogrammedFlowAudit", reprogrammedFlowAudit, live.values);
+  const currentFiduciaryStatementSummary = liveFiduciaryStatementSummary(
+    materializeLiveRoot("fiduciaryStatementSummary", fiduciaryStatementSummary, live.values),
+    materializeLiveRoot("fiduciaryBalanceSections", fiduciaryBalanceSections, live.values),
+  );
   const visibleDataSources = canAccessFinance
     ? currentProjectSnapshot.dataSources
     : redactedAgentList("dataSources", currentProjectSnapshot.dataSources);
@@ -468,7 +583,7 @@ async function fallbackAnswer(question: string, currency: CurrencyCode, canAcces
   const usdValue = (value: number) => formatMoney(value, "USD", currency);
 
   if (normalized.includes("archivo") || normalized.includes("adjunt") || normalized.includes("subir") || normalized.includes("cargar")) {
-    return `Puedes adjuntar el archivo en este chat o usar “+ Cargar archivo” desde cualquier pestaña. El sistema conserva el original, detecta duplicados e identifica proyecto, área, tipo, periodo y moneda. Después abre un expediente para extracción, contraste y validación. Ninguna cifra, porcentaje, fecha, apartamento, edificio o elemento urbano cambia hasta que el administrador aprueba las propuestas visibles; entonces se publica una revisión viva y todas las pantallas la reciben en menos de cinco segundos.${source}`;
+    return `Puedes adjuntar el archivo en este chat o usar “+ Cargar archivo” desde cualquier pestaña. El sistema conserva el original, detecta duplicados e identifica proyecto, área, tipo, periodo y moneda. Después abre un expediente para extracción, contraste y validación. Si los datos extraídos tienen alta confianza y encajan en un campo ya conocido de tu área, se publican solos, sin esperar aprobación de nadie; lo que no cumple esas condiciones queda como propuesta pendiente de revisión manual. En ambos casos, la revisión viva se sincroniza en todas las pantallas en menos de cinco segundos.${source}`;
   }
 
   if (normalized.includes("calidad") || normalized.includes("fuente") || normalized.includes("inconsisten")) {
@@ -490,7 +605,7 @@ async function fallbackAnswer(question: string, currency: CurrencyCode, canAcces
     return `El flujo de obra reprogramado de la Fase I asciende a ${dopMillions(currentReprogrammedFlowAudit.reprogrammedTotalDop)}. El real de diciembre de 2025 a junio de 2026 es ${dopMillions(currentReprogrammedFlowAudit.actualPeriodDop)} y quedan ${dopMillions(currentReprogrammedFlowAudit.remainingForecastDop)} por ejecutar entre julio de 2026 y julio de 2027. La desviación acumulada de ${dopMillions(currentReprogrammedFlowAudit.cumulativeVarianceRedistributedDop)} se concentra por mitades en agosto y septiembre de 2026. Esta fuente solo contiene importes de Urbanismo y Edificios; no incluye mediciones físicas, por lo que el avance físico validado sigue en ${numberForAgent(currentProjectSnapshot.overallProgress)}%.${source}`;
   }
   if (normalized.includes("fideicomiso") || normalized.includes("balance") || normalized.includes("resultado")) {
-    return `Los estados oficiales de Fiduciaria Universal muestran activos por ${dopMillions(fiduciaryStatementSummary.balance.assetsDop)}, pasivos por ${dopMillions(fiduciaryStatementSummary.balance.liabilitiesDop)} y patrimonio neto por ${dopMillions(fiduciaryStatementSummary.balance.netEquityDop)}. El resultado de junio es ${dopMillions(fiduciaryStatementSummary.monthlyResult.netResultDop)} y el acumulado enero-junio, ${dopMillions(fiduciaryStatementSummary.accumulatedResult.netResultDop)}. El balance cuadra y el resultado acumulado coincide con el incorporado al patrimonio. Estas cifras se mantienen separadas del Excel de control interno por diferencias de alcance y clasificación.${source}`;
+    return `Los estados oficiales de Fiduciaria Universal muestran activos por ${dopMillions(currentFiduciaryStatementSummary.balance.assetsDop)}, pasivos por ${dopMillions(currentFiduciaryStatementSummary.balance.liabilitiesDop)} y patrimonio neto por ${dopMillions(currentFiduciaryStatementSummary.balance.netEquityDop)}. El resultado de junio es ${dopMillions(currentFiduciaryStatementSummary.monthlyResult.netResultDop)} y el acumulado enero-junio, ${dopMillions(currentFiduciaryStatementSummary.accumulatedResult.netResultDop)}. El balance cuadra y el resultado acumulado coincide con el incorporado al patrimonio. Estas cifras se mantienen separadas del Excel de control interno por diferencias de alcance y clasificación.${source}`;
   }
   if (normalized.includes("cubic") || normalized.includes("contab") || normalized.includes("dinero") || normalized.includes("financ")) {
     const finance = currentJuneReport.finance;
@@ -564,13 +679,13 @@ export async function POST(request: Request) {
     }
     const data = (await response.json()) as {
       id: string;
-      output_text?: string;
-      output?: Array<{ type: string; name?: ToolName; arguments?: string; call_id?: string }>;
+      output?: ResponsesApiOutput;
     };
-    const calls = (data.output ?? []).filter((item) => item.type === "function_call");
+    const output = data.output ?? [];
+    const calls = output.filter((item) => item.type === "function_call");
     if (!calls.length) {
       return Response.json({
-        answer: data.output_text || "No tengo ese dato registrado.",
+        answer: extractOutputText(output) || "No tengo ese dato registrado.",
         mode: "openai-tools",
         promptVersion: AGENT_PROMPT_VERSION,
       });

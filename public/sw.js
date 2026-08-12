@@ -1,5 +1,5 @@
-const SHELL_CACHE = "bricket-control-shell-v5";
-const PRIVATE_CACHE = "bricket-control-private-v5";
+const SHELL_CACHE = "bricket-control-shell-v6";
+const PRIVATE_CACHE = "bricket-control-private-v6";
 const CACHE_PREFIX = "bricket-control-";
 const STATIC_ASSETS = [
   "/manifest.webmanifest",
@@ -94,7 +94,7 @@ self.addEventListener("message", (event) => {
               try {
                 const url = new URL(resource, self.location.origin);
                 const cacheableStatic =
-                  url.pathname.startsWith("/_next/static/") ||
+                  url.pathname.startsWith("/assets/") ||
                   STATIC_ASSETS.includes(url.pathname);
                 if (url.origin !== self.location.origin || !cacheableStatic) return "";
                 return `${url.pathname}${url.search}`;
@@ -139,7 +139,7 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   const cacheableStatic =
-    url.pathname.startsWith("/_next/static/") ||
+    url.pathname.startsWith("/assets/") ||
     STATIC_ASSETS.includes(url.pathname);
   if (!cacheableStatic) return;
   const targetCache = SHELL_CACHE;
