@@ -110,6 +110,12 @@ async function smokeVerify() {
   // R2 vive fuera del build normal (scripts/sync-historical-documents.mjs).
   // Si esa sincronización falla o el objeto se borra en R2, esta es la única
   // comprobación que lo nota con una sesión real autenticada.
+  const otherUrl = `${PRODUCTION_URL}/data-center/julio-2026/informe-analisis-ifc-2026-07-29.pdf`;
+  const otherResponse = await fetch(otherUrl, {
+    headers: { Cookie: `araya_session=${sessionMatch[1]}` },
+  });
+  console.log(`  DEBUG otro documento (${otherUrl}) → status=${otherResponse.status}, content-type=${otherResponse.headers.get("content-type")}, content-length=${otherResponse.headers.get("content-length")}`);
+
   const guideUrl = `${PRODUCTION_URL}/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`;
   const guideResponse = await fetch(guideUrl, {
     headers: { Cookie: `araya_session=${sessionMatch[1]}` },
