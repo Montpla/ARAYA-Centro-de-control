@@ -1746,28 +1746,58 @@ verdad, no simulada):
   middleware y el handler, devolviendo un 404 vacío en vez de invocar el
   código real.
 
-**Hipótesis de arreglo, propuesta pero NO probada todavía** (se revirtió
-antes de intentarla, ver más abajo): quitar `/data-center/:path*` del
-`matcher` de `proxy.ts`. `route.ts` ya hace su propia comprobación completa
-de identidad y acceso financiero (`requireApiUser()` +
-`requiresFinanceDocumentAccess()`) — el middleware es redundante para esta
-ruta concreta, y es justo esa redundancia la que parece estar rompiéndose en
-el traspaso. Quitar el matcher cambiaría la experiencia de un enlace directo
-sin sesión: en vez de redirigir a `/signin-with-chatgpt` (lo que hace
-`proxy.ts` hoy), `route.ts` devolvería un JSON 401 plano — una regresión de
-UX menor, aceptable si soluciona el 404.
+**Hipótesis nº1 — PROBADA Y DESCARTADA (13/08/2026, más tarde el mismo día)**:
+quitar `/data-center/:path*` del `matcher` de `proxy.ts` (con `matcher: []`,
+confirmado por lectura de
+`node_modules/vinext/dist/server/middleware-matcher.js` que eso desactiva el
+middleware por completo para cualquier ruta). `route.ts` ya hace su propia
+comprobación completa de identidad y acceso financiero (`requireApiUser()` +
+`requiresFinanceDocumentAccess()`, mismo `SESSION_COOKIE` que `proxy.ts`), así
+que quitar el matcher no reduce la protección. Se desplegó y se probó con
+sesión real autenticada (login real vía `/api/auth/login` en GitHub Actions):
+**la guía siguió devolviendo 404**. Esto descarta el mecanismo exacto
+propuesto (el traspaso `x-middleware-next` de `NextResponse.next()`) como
+causa única — con el middleware completamente fuera de la ecuación, algo más
+sigue produciendo el mismo 404 vacío. Revertido inmediatamente tras
+confirmarlo en contra.
 
-**Por qué se revirtió sin terminar de probarlo**: la investigación (varios
-despliegues manuales de diagnóstico, más de diez ejecuciones de GitHub
-Actions en pocos minutos) generó una cadena visible de fallos en GitHub que
-preocupó al usuario ("da error en github todo el rato", "sigue fallando").
-El usuario pidió explícitamente eliminar todo lo relativo al botón/verificación
-de la guía y dejarlo como antes. Se revirtió:
+**Hipótesis nº2 — siguiente a probar, todavía sin intentar**: `public/
+.assetsignore` excluye explícitamente `data-center/**` de los activos
+estáticos que Cloudflare sirve (a propósito — si no, cualquiera podría leer
+los documentos sin autenticarse, sin pasar por R2 ni por `route.ts`). Eso
+significa que `env.ASSETS.fetch()` para cualquier `/data-center/...` siempre
+devuelve 404 dentro del propio Worker, por diseño. Sospecha: en algún punto
+del pipeline de vinext/Cloudflare (dentro del propio Worker, no en el borde
+de Cloudflare — `run_worker_first` ya fuerza que la petición llegue al
+Worker) puede existir una comprobación "¿existe como activo conocido?" que,
+al recibir ese 404 esperado de `env.ASSETS`, lo trata como respuesta final en
+vez de seguir hacia el enrutado de la app (middleware + `route.ts`). Esto
+encajaría con el 404 vacío observado. No se ha verificado leyendo el código
+fuente de vinext que gestiona esa ruta exacta (el worker principal,
+`dist/server/index.js`, o el paquete `@cloudflare/vite-plugin`) — es la
+siguiente pista a seguir, no una causa confirmada.
+
+**Por qué se revirtieron ambos intentos sin resolverlo del todo**: la
+investigación (varios despliegues manuales de diagnóstico, más de diez
+ejecuciones de GitHub Actions en pocos minutos) generó una cadena visible de
+fallos en GitHub que preocupó al usuario ("da error en github todo el rato",
+"sigue fallando"). Tras la primera ronda, el usuario pidió explícitamente
+eliminar todo lo relativo al botón/verificación de la guía y dejarlo como
+antes; se probó una segunda hipótesis con permiso explícito del usuario
+("intentar arreglarlo sin modificar nada del programa" — interpretado como
+"sin añadir funciones nuevas", ya que la propia oficina de República
+Dominicana iba a usar la aplicación ese mismo día) pero, al confirmarse en
+contra con una prueba real, se priorizó la estabilidad para el uso real de
+hoy sobre seguir experimentando en caliente en producción. Se revirtió en
+ambas rondas:
 
 - El botón "Guía de uso" nuevo en la cabecera principal (junto al selector de
   moneda) — eliminado.
 - La comprobación autenticada de la guía añadida a `deploy.mjs` — eliminada
   (no podía pasar mientras el bug siga abierto, y bloqueaba cada despliegue).
+- El cambio del `matcher` de `proxy.ts` — revertido a
+  `matcher: ["/data-center/:path*"]` (probado y descartado, ver hipótesis
+  nº1 arriba).
 - Todo el código de diagnóstico temporal en `route.ts`, `proxy.ts` y
   `deploy.mjs`.
 
@@ -1792,10 +1822,13 @@ para revertir algo en este repo desde Windows, conviene normalizar los
 saltos de línea del archivo justo después, antes de confiar en una prueba
 local en rojo/verde.
 
-**Para retomar esto con calma más adelante**: probar la hipótesis del
-matcher de `proxy.ts` en una rama o con menos despliegues seguidos (para no
-generar una cadena de fallos visible en GitHub mientras se investiga), y si
-funciona, restaurar el botón de la cabecera y la verificación en
+**Para retomar esto con calma más adelante**: la hipótesis del matcher de
+`proxy.ts` ya está descartada (arriba). Seguir con la hipótesis nº2
+(`.assetsignore` + fallback de activos estáticos dentro del propio Worker) —
+leer `dist/server/index.js` generado y el código de `@cloudflare/vite-plugin`
+que decide entre `env.ASSETS.fetch()` y el enrutado de la app, en vez de
+seguir probando cambios a ciegas en producción. Si se encuentra y arregla la
+causa real, restaurar el botón de la cabecera y la verificación en
 `deploy.mjs` que se revirtieron aquí.
 
 ## Criterios de continuidad
