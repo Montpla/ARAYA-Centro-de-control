@@ -114,10 +114,14 @@ async function smokeVerify() {
   const guideResponse = await fetch(guideUrl, {
     headers: { Cookie: `araya_session=${sessionMatch[1]}` },
   });
+  console.log(`  DEBUG guía → status=${guideResponse.status}`);
+  for (const [key, value] of guideResponse.headers.entries()) {
+    console.log(`  DEBUG header ${key}: ${value}`);
+  }
+  const guideBodyPreview = await guideResponse.clone().text().catch((e) => `<no se pudo leer: ${e}>`);
+  console.log(`  DEBUG body (primeros 300 chars): ${guideBodyPreview.slice(0, 300)}`);
   if (!guideResponse.ok) {
-    const guideBody = await guideResponse.text().catch(() => "");
     console.error(`✖ ${guideUrl} devolvió ${guideResponse.status} con sesión autenticada — la guía no está en R2.`);
-    if (guideBody) console.error(`  Cuerpo de la respuesta: ${guideBody}`);
     process.exit(1);
   }
   const guideContentType = guideResponse.headers.get("content-type") ?? "";
