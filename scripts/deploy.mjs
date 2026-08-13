@@ -112,6 +112,7 @@ run("Typecheck", "npx tsc --noEmit -p .");
 run("Build", "npm run build");
 run("Pruebas", "node --test tests/*.mjs");
 run("Despliegue a Cloudflare Workers", `npx wrangler deploy --config ${WRANGLER_CONFIG}`);
+run("Sincronizar documentos corporativos con R2", "node scripts/sync-historical-documents.mjs");
 
 console.log("\nEsperando unos segundos a que el despliegue esté completamente disponible…");
 await sleep(4000);

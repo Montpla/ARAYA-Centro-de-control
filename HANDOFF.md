@@ -1643,6 +1643,71 @@ PDF de la guía sigue protegido por autenticación igual que el resto de
 `/data-center/` (no es un fallo: es el mismo comportamiento que toda la
 documentación privada).
 
+## Los 23 documentos fijos del Centro de Control nunca llegaron a R2 (404 en producción)
+
+Encontrado y corregido el 13/08/2026, al intentar abrir la guía corporativa
+recién corregida (sección anterior) y recibir "No se pudo representar el
+PDF... Unexpected server response (404)". La causa no era la guía en
+particular: es un hueco estructural que afectaba a los 23 documentos fijos
+del Centro de Control por igual, probablemente desde que cada uno se creó.
+
+**Causa raíz**: `app/data-center/[...path]/route.ts` es la única ruta que
+sirve estos archivos, y `wrangler.deploy.jsonc` la marca
+`run_worker_first: ["/data-center/*"]` — esas peticiones nunca las resuelve
+la capa de activos estáticos de Cloudflare (`dist/client`, donde sí vive todo
+lo que hay en `public/`). Siempre pasan por el Worker, que busca el objeto en
+el bucket R2 `FILES` bajo la clave `historical${pathname}`. Colocar un
+archivo en `public/data-center/...` lo deja perfectamente presente en el
+repo, en `dist/client` y en el build — y por eso `npm run deploy` pasaba en
+verde sin avisar nada — pero es completamente invisible para esta ruta si
+nadie lo sube también a R2 con ese comando aparte. Nadie lo había hecho para
+ninguno de los 23 documentos: ni la guía, ni los cinco archivos fuente de
+julio (`informe-analisis-ifc-2026-07-29.pdf`,
+`contactos-proveedores-araya.xls`, `araya-flujo-i-reprogramado.xlsx`,
+`comparativo-presupuesto-edificio-tipo-a.xls`,
+`desviacion-mensual-junio-2026.xlsx`), ni los cuatro balances del fideicomiso
+de junio, ni los trece registrados como fuente en `app/demo-data.ts` (pese al
+nombre del archivo, es el registro real de fuentes de ARAYA — DWG de
+implantación, MPP del cronograma maestro, informes y Excel de junio — no
+contenido de un proyecto de demostración) y `app/antonely-payable-invoices.ts`.
+Confirmado uno por uno con `wrangler r2 object get`: los 23 devolvían
+"The specified key does not exist."
+
+**Arreglo inmediato**: los 23 archivos ya se subieron a R2 con
+`wrangler r2 object put` bajo su clave `historical/data-center/...`
+correspondiente, verificados con descarga y comparación de tamaño en bytes
+contra el original local.
+
+**Arreglo de fondo**: `scripts/sync-historical-documents.mjs` (nuevo) recorre
+recursivamente todo `public/data-center/` y sube cada archivo a R2 bajo su
+clave `historical/data-center/<ruta relativa>`, con el tipo de contenido
+resuelto por extensión (debe reflejar `canonicalMimeByExtension` en
+`route.ts`). No depende de una lista a mano — cualquier archivo nuevo que se
+coloque ahí se sincroniza solo en el siguiente despliegue. `scripts/deploy.mjs`
+lo ejecuta como paso obligatorio después de `wrangler deploy`, así que ya no
+es un comando aparte que alguien tenga que acordarse de correr.
+
+**Red de seguridad nueva**: `tests/live-sync-consistency.test.mjs` añade una
+prueba que extrae todas las rutas `/data-center/...` referenciadas en
+`app/dashboard-client.tsx`, `app/demo-data.ts` y
+`app/antonely-payable-invoices.ts`, y falla si alguna no tiene un archivo
+correspondiente en `public/data-center/`; además confirma por patrón que el
+script de sincronización sigue recorriendo el directorio completo (no una
+lista a mano) y que `deploy.mjs` sigue invocándolo. Esto no prueba que el
+archivo llegue a R2 en cada entorno, pero si alguien añade un enlace a un
+documento que no existe en el repo, la prueba lo detiene antes de desplegar —
+y mientras el paso del pipeline exista, todo lo que sí está en el repo queda
+sincronizado en cada despliegue sin intervención manual.
+
+**Al añadir un documento fijo nuevo en el futuro**: basta con colocarlo bajo
+`public/data-center/...` y enlazarlo desde la app con esa misma ruta — el
+siguiente `npm run deploy` lo sube a R2 solo. No hace falta tocar
+`scripts/sync-historical-documents.mjs`.
+
+Verificado con `wrangler r2 object get --file` sobre una muestra (el DWG de
+18,4 MB, un balance del fideicomiso, el informe IFC) comparando bytes
+descargados contra el archivo local: coinciden exactamente.
+
 ## Criterios de continuidad
 
 - Mostrar únicamente datos aportados o derivados de las fuentes.

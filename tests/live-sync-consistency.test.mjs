@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 // Guarda contra la clase de bug que motivó esta suite: un resumen calculado
@@ -90,4 +90,50 @@ test("overallProgress and plannedProgress always come from the same monthlyPlan 
     /projectSnapshot\.overallProgress = cutoffActual;\s*\n\s*projectSnapshot\.plannedProgress = cutoffPlanned;/,
     "la reasignación cliente debe fijar overallProgress y plannedProgress juntos, en el mismo bloque",
   );
+});
+
+// Guarda contra la misma clase de bug en un sitio distinto: app/data-center/
+// [...path]/route.ts nunca sirve estos archivos desde dist/client
+// (run_worker_first en wrangler.deploy.jsonc); siempre lee de R2 bajo la
+// clave historical${pathname}. Un archivo listo en public/data-center/ pero
+// nunca subido a R2 se ve perfecto en el repo y devuelve 404 en producción —
+// así estuvieron rotos los 23 documentos fijos del Centro de Control (guía
+// corporativa, fuentes de junio/julio, balances del fideicomiso) desde que
+// se crearon, sin que ninguna prueba lo detectara.
+test("every /data-center/ document referenced from the app exists on disk and the deploy pipeline syncs all of them to R2", async () => {
+  const [dashboard, demoData, payableInvoices, syncScript, deployScript] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/demo-data.ts", "utf8"),
+    readFile("app/antonely-payable-invoices.ts", "utf8"),
+    readFile("scripts/sync-historical-documents.mjs", "utf8"),
+    readFile("scripts/deploy.mjs", "utf8"),
+  ]);
+
+  const referencedPaths = new Set();
+  for (const source of [dashboard, demoData, payableInvoices]) {
+    for (const match of source.matchAll(/\/data-center\/[^"'`\s)]+/g)) {
+      referencedPaths.add(match[0]);
+    }
+  }
+  assert.ok(
+    referencedPaths.size > 0,
+    "no se encontró ninguna referencia /data-center/ en el código — ¿cambió el patrón de búsqueda?",
+  );
+
+  for (const referencedPath of referencedPaths) {
+    await assert.doesNotReject(
+      access(`public${referencedPath}`),
+      `${referencedPath} se referencia en la app pero no existe en public/data-center/ (quedaría en 404 en producción)`,
+    );
+  }
+
+  // El script de sincronización debe recorrer todo public/data-center/, no
+  // depender de una lista a mano que alguien tenga que recordar actualizar
+  // cada vez que se añade un documento nuevo.
+  assert.match(syncScript, /collectFiles\(SOURCE_DIR\)/);
+  assert.match(syncScript, /historical\/data-center\/\$\{relativePath\}/);
+
+  // Y el pipeline de despliegue debe ejecutarlo siempre, no como paso manual
+  // aparte que alguien tenga que recordar correr.
+  assert.match(deployScript, /sync-historical-documents\.mjs/);
 });
