@@ -351,10 +351,13 @@ lista, contrastarlo con `GET /api/control-room` (`planning.physicalActual`,
 - Avance físico ejecutado: 22,71% (corte jul-26; fuente: `monthlyPlan`,
   Excel maestro, ya no el promedio por apartamento — ver más abajo).
 - Avance por apartamento (métrica de apoyo, ya no autoritativa): 20,13%.
-- Plan operativo (KPI): 21,24%.
+- Plan operativo (KPI): 26,61% (mismo corte jul-26 que el ejecutado; ver
+  "Plan operativo y avance físico ahora comparan siempre el mismo mes" más
+  abajo — antes de esa corrección este campo quedaba congelado en el plan
+  del mes anterior, dando una desviación falsa).
 - Avance del cronograma MPP: 17%.
-- Desviación física: +1,47 puntos porcentuales (ejecutado por encima del
-  plan operativo).
+- Desviación física: -3,9 puntos porcentuales (ejecutado por debajo del
+  plan operativo del mismo mes).
 - Fin de línea base: 31/05/2027.
 - Fin previsto: 07/06/2027.
 - Desviación prevista: +7 días.
@@ -1334,6 +1337,43 @@ todas las pruebas que ya fallaban, debe quedar todo arreglado y corregido".
 - Las otras dos corresponden a los dos arreglos reales descritos arriba (la
   filtración al bundle del cliente y el trigger de notificaciones).
 - Validación final: `node --test tests/*.mjs` → 97/97 pruebas aprobadas.
+
+## Plan operativo y avance físico ahora comparan siempre el mismo mes
+
+Corregido el 13/08/2026. El usuario reportó, con captura del Resumen
+ejecutivo, que el círculo de avance físico marcaba 22% y la tarjeta "Plan
+operativo" marcaba 21%, y pidió arreglarlo de forma definitiva ("que siempre
+está dando problemas y no cuadran los datos").
+
+- Causa real: tras la reversión de autoridad de la Curva S (ver más arriba),
+  `projectSnapshot.overallProgress` avanza con el último "Ejecutado Real"
+  publicado en `monthlyPlan` (ya en julio, 22,71%), pero
+  `projectSnapshot.plannedProgress` (la tarjeta "Plan operativo", el KPI)
+  seguía siendo un campo estático congelado en el valor de junio (21,24%).
+  El tablero comparaba el ejecutado de un mes contra el plan de otro mes
+  distinto — no era un error de sincronización, era una comparación entre
+  dos periodos diferentes disfrazada de inconsistencia.
+- Corregido en la misma fuente única de siempre: tanto
+  `lib/spatial-live-data.ts` (`materializeSpatialLiveData`) como el espejo
+  cliente (`synchronizeSpatialSummary`, `app/dashboard-client.tsx`) ahora
+  leen `planned` y `actual` de la **misma fila** de `monthlyPlan` (la última
+  con `actual` no nulo), en vez de leer `actual` de esa fila y `planned` de
+  un campo estático aparte. `deviationPoints` se recalcula sobre ese mismo
+  par, así que la brecha mostrada también quedó corregida (pasó de +1,47pp,
+  que comparaba julio contra el plan de junio, a -3,9pp, que compara julio
+  contra su propio plan).
+- La nota "Dos fuentes de 'plan', sin conciliar todavía" de la Curva S se
+  volvió inalcanzable por construcción (planned y plannedProgress ahora
+  siempre son el mismo número) y se eliminó junto con su condición muerta.
+- Como todos los usos de `plannedProgress` en el resto de la app (matriz de
+  gobernanza del dato, respuestas del agente, texto del Resumen) leen ese
+  mismo campo de `projectSnapshot`, se corrigieron todos a la vez sin tocar
+  cada sitio de uso por separado — el mismo patrón ya aplicado varias veces
+  en esta sesión.
+- Verificado en producción: `GET /api/control-room` → `planning.kpiPlan` y
+  `planning.curvePlanAtCutoff` ahora son idénticos (26,61%); la tarjeta
+  "Plan operativo" del Resumen ejecutivo muestra "26,61% · -3,9 pp de brecha
+  física"; `npx tsc --noEmit`, `npm run build` y 97/97 pruebas en verde.
 
 ## Criterios de continuidad
 

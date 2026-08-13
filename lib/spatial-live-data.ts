@@ -39,12 +39,18 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
   const apartmentAverageProgress = allUnits.length
     ? allUnits.reduce((sum, unit) => sum + unitOverallProgress(unit, constructionDisciplines), 0) / allUnits.length
     : snapshot.apartmentAverageProgress;
-  let lastDeclaredActual: number | null = null;
+  // El "Plan operativo" (KPI) y el "Ejecutado Real" deben leerse siempre del
+  // mismo mes de monthlyPlan: comparar el ejecutado de julio contra el plan
+  // congelado de junio (u otro mes anterior) produce dos cifras que parecen
+  // contradecirse sin serlo. Se toma el último registro con actual no nulo y
+  // se leen planned/actual de esa misma fila, así avanzan siempre juntos.
+  let cutoffEntry: (typeof monthlyPlan)[number] | null = null;
   for (const entry of monthlyPlan) {
-    if (entry.actual !== null) lastDeclaredActual = entry.actual;
+    if (entry.actual !== null) cutoffEntry = entry;
   }
-  const overallProgress = lastDeclaredActual ?? snapshot.overallProgress;
-  const deviationPoints = Math.round((overallProgress - snapshot.plannedProgress) * 100) / 100;
+  const overallProgress = cutoffEntry?.actual ?? snapshot.overallProgress;
+  const plannedProgress = cutoffEntry?.planned ?? snapshot.plannedProgress;
+  const deviationPoints = Math.round((overallProgress - plannedProgress) * 100) / 100;
 
   return {
     buildings,
@@ -53,6 +59,7 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
     projectSnapshot: {
       ...snapshot,
       overallProgress,
+      plannedProgress,
       apartmentAverageProgress,
       deviationPoints,
       buildings,

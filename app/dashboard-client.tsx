@@ -1235,12 +1235,22 @@ function synchronizeSpatialSummary() {
     projectSnapshot.apartmentAverageProgress =
       allUnits.reduce((sum, unit) => sum + unitOverallProgress(unit), 0) / allUnits.length;
   }
-  let lastDeclaredActual: number | null = null;
-  monthlyPlan.forEach((entry) => {
-    if (entry.actual !== null) lastDeclaredActual = entry.actual;
-  });
-  if (lastDeclaredActual !== null) {
-    projectSnapshot.overallProgress = lastDeclaredActual;
+  // El "Plan operativo" (KPI) y el "Ejecutado Real" deben leerse siempre del
+  // mismo mes de monthlyPlan: comparar el ejecutado de julio contra el plan
+  // congelado de junio produce dos cifras que parecen contradecirse sin
+  // serlo. Se toma el último registro con actual no nulo y se leen
+  // planned/actual de esa misma fila, así avanzan siempre juntos.
+  let cutoffActual: number | null = null;
+  let cutoffPlanned: number | null = null;
+  for (const entry of monthlyPlan) {
+    if (entry.actual !== null) {
+      cutoffActual = entry.actual;
+      cutoffPlanned = entry.planned;
+    }
+  }
+  if (cutoffActual !== null && cutoffPlanned !== null) {
+    projectSnapshot.overallProgress = cutoffActual;
+    projectSnapshot.plannedProgress = cutoffPlanned;
     projectSnapshot.deviationPoints =
       Math.round((projectSnapshot.overallProgress - projectSnapshot.plannedProgress) * 100) / 100;
   }
@@ -2629,16 +2639,6 @@ function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
             : "Todavía no hay avance ejecutado publicado para calcular la brecha."}
         </span>
       </div>
-      {cutoffPoint && Math.abs(cutoffPoint.planned - projectSnapshot.plannedProgress) > 0.01 && (
-        <div className="s-curve-reconciliation-note">
-          <strong>Dos fuentes de "plan", sin conciliar todavía:</strong>
-          <span>
-            {" "}Esta gráfica usa el plan mensual propio de la Curva S ({number.format(cutoffPoint.planned)}% al corte).
-            El indicador "Plan operativo" de otras pantallas usa el KPI ejecutivo declarado por separado ({number.format(projectSnapshot.plannedProgress)}%).
-            No es un error de sincronización: son dos fuentes distintas que la app mantiene visibles hasta que se concilien con los documentos originales.
-          </span>
-        </div>
-      )}
       <div className="s-curve-reconciliation-note">
         <strong>Fuente del avance físico global:</strong>
         <span>
