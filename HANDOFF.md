@@ -1708,6 +1708,96 @@ Verificado con `wrangler r2 object get --file` sobre una muestra (el DWG de
 18,4 MB, un balance del fideicomiso, el informe IFC) comparando bytes
 descargados contra el archivo local: coinciden exactamente.
 
+## `/data-center/[...path]` sigue devolviendo 404 en producción — sin resolver (13/08/2026)
+
+**Esto NO está arreglado.** La sección anterior (los 23 documentos subidos a
+R2) es un arreglo real y necesario, pero no basta: con sesión autenticada
+real, **cualquier** URL `/data-center/...` — la guía, un informe, un balance,
+todos probados — sigue devolviendo 404 en producción, aunque el objeto
+correspondiente ya existe en R2 byte a byte (confirmado con
+`wrangler r2 object get`). Todos los botones "Abrir guía / Abrir informe /
+Abrir archivo fuente" del Centro de Control siguen mostrando el error que
+reportó el usuario.
+
+**Diagnóstico hasta donde se llegó** (con una verificación autenticada real
+añadida temporalmente a `deploy.mjs`, con sesión de un administrador de
+verdad, no simulada):
+
+- El 404 lleva las cabeceras propias de la app (`Cache-Control: private,
+  no-store`, `X-Robots-Tag`, `Vary: *`) — no es el 404 en blanco de la capa
+  de activos estáticos de Cloudflare.
+- Pero el cuerpo de la respuesta está completamente vacío
+  (`content-length: 0`). Los dos `return errorResponse("Archivo no
+  encontrado.", 404)` de `app/data-center/[...path]/route.ts` SIEMPRE
+  producen cuerpo con texto — así que ninguno de los dos se está ejecutando.
+- Se añadió temporalmente un `console.log` y luego un `try/catch` alrededor
+  de `bucket.head()` con el error volcado al propio cuerpo de la respuesta;
+  ninguno de los dos apareció nunca (ni en `wrangler tail --format
+  pretty/json`, ni en el cuerpo HTTP). `wrangler tail` marca estas peticiones
+  como `outcome: "ok"`, sin excepciones.
+- Conclusión: la función `GET` de `route.ts` probablemente **nunca llega a
+  ejecutarse** para esta ruta en este despliegue concreto (vinext + Cloudflare
+  Workers Assets con `run_worker_first`). `proxy.ts` (middleware al estilo
+  Next.js, `matcher: ["/data-center/:path*"]`) sí se ejecuta —sus propias
+  cabeceras (`Vary: *` sólo aparece en su rama `NextResponse.next()` de
+  éxito) llegan hasta la respuesta final— pero el traspaso de
+  `NextResponse.next()` hacia el `route.ts` con segmento catch-all
+  `[...path]` parece romperse silenciosamente en algún punto entre el
+  middleware y el handler, devolviendo un 404 vacío en vez de invocar el
+  código real.
+
+**Hipótesis de arreglo, propuesta pero NO probada todavía** (se revirtió
+antes de intentarla, ver más abajo): quitar `/data-center/:path*` del
+`matcher` de `proxy.ts`. `route.ts` ya hace su propia comprobación completa
+de identidad y acceso financiero (`requireApiUser()` +
+`requiresFinanceDocumentAccess()`) — el middleware es redundante para esta
+ruta concreta, y es justo esa redundancia la que parece estar rompiéndose en
+el traspaso. Quitar el matcher cambiaría la experiencia de un enlace directo
+sin sesión: en vez de redirigir a `/signin-with-chatgpt` (lo que hace
+`proxy.ts` hoy), `route.ts` devolvería un JSON 401 plano — una regresión de
+UX menor, aceptable si soluciona el 404.
+
+**Por qué se revirtió sin terminar de probarlo**: la investigación (varios
+despliegues manuales de diagnóstico, más de diez ejecuciones de GitHub
+Actions en pocos minutos) generó una cadena visible de fallos en GitHub que
+preocupó al usuario ("da error en github todo el rato", "sigue fallando").
+El usuario pidió explícitamente eliminar todo lo relativo al botón/verificación
+de la guía y dejarlo como antes. Se revirtió:
+
+- El botón "Guía de uso" nuevo en la cabecera principal (junto al selector de
+  moneda) — eliminado.
+- La comprobación autenticada de la guía añadida a `deploy.mjs` — eliminada
+  (no podía pasar mientras el bug siga abierto, y bloqueaba cada despliegue).
+- Todo el código de diagnóstico temporal en `route.ts`, `proxy.ts` y
+  `deploy.mjs`.
+
+**Lo que NO se tocó y sigue igual que antes de esta sesión**: los accesos
+existentes a la guía (`Centro de datos`, `Usuarios y accesos`, `Más` en
+móvil) y el resto de enlaces `/data-center/...` de la app. Siguen apuntando
+a las mismas URLs, que siguen sin funcionar — este bug es anterior a esta
+sesión, no algo que esta sesión haya roto.
+
+**Trampa real encontrada al revertir con `git checkout <commit> -- <archivo>`
+en Windows**: ese comando aplica el filtro `core.autocrlf` de Git al
+working tree (a diferencia de editar con una herramienta que escribe LF
+directo), dejando el archivo en disco con CRLF aunque el contenido
+"lógico" sea idéntico. Las pruebas de `tests/rendered-html.test.mjs` que
+extraen un bloque de `dashboard-client.tsx` con una regex que exige `\n\n`
+consecutivos fallan con ese archivo (el `\r` de por medio rompe el patrón),
+aunque `git diff` no muestre ningún cambio. El commit en sí no se corrompió
+(GitHub Actions corre en Linux con `autocrlf` distinto y nunca lo sufrió),
+pero las pruebas en local sí fallaban hasta convertir el working tree de
+vuelta a LF a mano. Si se vuelve a usar `git checkout <ref> -- <archivo>`
+para revertir algo en este repo desde Windows, conviene normalizar los
+saltos de línea del archivo justo después, antes de confiar en una prueba
+local en rojo/verde.
+
+**Para retomar esto con calma más adelante**: probar la hipótesis del
+matcher de `proxy.ts` en una rama o con menos despliegues seguidos (para no
+generar una cadena de fallos visible en GitHub mientras se investiga), y si
+funciona, restaurar el botón de la cabecera y la verificación en
+`deploy.mjs` que se revirtieron aquí.
+
 ## Criterios de continuidad
 
 - Mostrar únicamente datos aportados o derivados de las fuentes.
