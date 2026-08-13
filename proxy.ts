@@ -70,13 +70,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // /data-center/* ya no pasa por este middleware: app/data-center/[...path]/
-  // route.ts hace exactamente la misma comprobación de identidad y acceso
-  // financiero por su cuenta (requireApiUser + requiresFinanceDocumentAccess,
-  // mismo SESSION_COOKIE), así que no pierde protección. El traspaso de
-  // NextResponse.next() de este middleware hacia esa ruta catch-all no estaba
-  // llegando a ejecutar route.ts en este despliegue (404 vacío pese a que el
-  // archivo sí existía en R2); con la ruta fuera del matcher, deja de pasar
-  // por ese punto de fallo.
-  matcher: [],
+  matcher: ["/data-center/:path*"],
 };

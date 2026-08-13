@@ -412,10 +412,7 @@ test("financial files, live values and agent answers enforce per-user authorizat
   assert.match(agent, /auth\.user\.financeAccess/);
   assert.match(agent, /requiresFinanceAccessForArea\(row\.area\)/);
   assert.match(dashboardRoute, /No tienes acceso para modificar indicadores financieros/);
-  // El matcher ya no incluye /data-center/*; la aplicación real de finanzas
-  // para esa ruta vive en app/data-center/[...path]/route.ts (comprobado en
-  // "historical originals stay out of public assets and use authenticated R2 delivery").
-  assert.doesNotMatch(documentProxy, /matcher:\s*\[\s*["']\/data-center/);
+  assert.match(documentProxy, /matcher: \["\/data-center\/:path\*"\]/);
   assert.match(documentProxy, /resolveAuthorizedUser/);
   assert.match(documentProxy, /requiresFinanceDocumentAccess/);
   assert.match(documentProxy, /!user\.financeAccess/);
@@ -982,13 +979,7 @@ test("historical originals stay out of public assets and use authenticated R2 de
   ]);
 
   assert.match(viteConfig, /assets:\s*\{[\s\S]*binding:\s*"ASSETS"[\s\S]*run_worker_first:\s*\["\/data-center\/\*"\]/);
-  // El matcher del middleware ya no incluye /data-center/*: el traspaso de
-  // NextResponse.next() hacia esa ruta catch-all no llegaba a ejecutar
-  // route.ts en producción (404 vacío pese a que el archivo sí existía en
-  // R2). La protección vive ahora solo en route.ts (requireApiUser +
-  // requiresFinanceDocumentAccess, comprobado más abajo), que usa el mismo
-  // SESSION_COOKIE que este middleware.
-  assert.doesNotMatch(proxy, /matcher:\s*\[\s*["']\/data-center/);
+  assert.match(proxy, /matcher:\s*\["\/data-center\/:path\*"\]/);
   assert.match(proxy, /resolveAuthorizedUser/);
   assert.match(protectedRoute, /requireApiUser\(\)/);
   assert.match(protectedRoute, /requiresFinanceDocumentAccess\(pathname\)/);

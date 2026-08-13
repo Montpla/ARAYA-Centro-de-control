@@ -104,19 +104,6 @@ async function smokeVerify() {
     process.exit(1);
   }
   console.log(`✔ Centro de datos responde (${controlRoom.documents.total} expedientes con seguimiento activo).`);
-
-  // DEBUG TEMPORAL: confirma con sesión real que /data-center/* ya sirve el
-  // archivo (no solo que esté en R2) tras quitar esa ruta del matcher del
-  // middleware. Se retira en cuanto se confirme.
-  const guideUrl = `${PRODUCTION_URL}/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`;
-  const guideResponse = await fetch(guideUrl, {
-    headers: { Cookie: `araya_session=${sessionMatch[1]}` },
-  });
-  if (!guideResponse.ok) {
-    console.error(`✖ DEBUG TEMPORAL: ${guideUrl} devolvió ${guideResponse.status} con sesión autenticada.`);
-    process.exit(1);
-  }
-  console.log(`✔ DEBUG TEMPORAL: guía accesible con sesión autenticada (${guideResponse.status}, ${guideResponse.headers.get("content-type")}).`);
 }
 
 console.log("=== Pipeline de despliegue: Centro de Control ARAYA ===");
