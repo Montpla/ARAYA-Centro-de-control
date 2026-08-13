@@ -1625,7 +1625,6 @@ function Header({
   online,
   unreadNotifications,
   onOpenDeviceCenter,
-  onOpenGuide,
 }: {
   view: View;
   onAsk: () => void;
@@ -1641,7 +1640,6 @@ function Header({
   online: boolean;
   unreadNotifications: number;
   onOpenDeviceCenter: () => void;
-  onOpenGuide: () => void;
 }) {
   const label = navItems.find((item) => item.id === view)?.label;
   return (
@@ -1654,9 +1652,6 @@ function Header({
         <h1>{label}</h1>
       </div>
       <div className="top-actions">
-        <button className="button secondary" type="button" onClick={onOpenGuide}>
-          Guía de uso
-        </button>
         {!project.demo && (
           <div className="currency-control" title={exchangeRateNote(currency)}>
             <span>Moneda</span>
@@ -8933,12 +8928,6 @@ export function DashboardClient({
           online={online}
           unreadNotifications={unreadNotifications}
           onOpenDeviceCenter={() => setDeviceCenterOpen(true)}
-          onOpenGuide={() =>
-            setFileViewer({
-              url: "/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf",
-              title: "Guía corporativa Bricket Control · personal de obra.pdf",
-            })
-          }
         />
         <div className="global-search">
           <span>⌕</span>

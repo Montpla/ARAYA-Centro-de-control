@@ -104,38 +104,6 @@ async function smokeVerify() {
     process.exit(1);
   }
   console.log(`✔ Centro de datos responde (${controlRoom.documents.total} expedientes con seguimiento activo).`);
-
-  // Guarda de regresión concreta: app/data-center/[...path]/route.ts sirve
-  // estos archivos solo desde R2 (nunca desde dist/client), y esa subida a
-  // R2 vive fuera del build normal (scripts/sync-historical-documents.mjs).
-  // Si esa sincronización falla o el objeto se borra en R2, esta es la única
-  // comprobación que lo nota con una sesión real autenticada.
-  const otherUrl = `${PRODUCTION_URL}/data-center/julio-2026/informe-analisis-ifc-2026-07-29.pdf`;
-  const otherResponse = await fetch(otherUrl, {
-    headers: { Cookie: `araya_session=${sessionMatch[1]}` },
-  });
-  console.log(`  DEBUG otro documento (${otherUrl}) → status=${otherResponse.status}, content-type=${otherResponse.headers.get("content-type")}, content-length=${otherResponse.headers.get("content-length")}`);
-
-  const guideUrl = `${PRODUCTION_URL}/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`;
-  const guideResponse = await fetch(guideUrl, {
-    headers: { Cookie: `araya_session=${sessionMatch[1]}` },
-  });
-  console.log(`  DEBUG guía → status=${guideResponse.status}`);
-  for (const [key, value] of guideResponse.headers.entries()) {
-    console.log(`  DEBUG header ${key}: ${value}`);
-  }
-  const guideBodyPreview = await guideResponse.clone().text().catch((e) => `<no se pudo leer: ${e}>`);
-  console.log(`  DEBUG body (primeros 300 chars): ${guideBodyPreview.slice(0, 300)}`);
-  if (!guideResponse.ok) {
-    console.error(`✖ ${guideUrl} devolvió ${guideResponse.status} con sesión autenticada — la guía no está en R2.`);
-    process.exit(1);
-  }
-  const guideContentType = guideResponse.headers.get("content-type") ?? "";
-  if (!guideContentType.includes("pdf")) {
-    console.error(`✖ ${guideUrl} respondió ${guideResponse.status} pero con Content-Type "${guideContentType}" (se esperaba PDF).`);
-    process.exit(1);
-  }
-  console.log(`✔ Guía corporativa accesible con sesión autenticada (${guideResponse.status}, ${guideContentType}).`);
 }
 
 console.log("=== Pipeline de despliegue: Centro de Control ARAYA ===");
