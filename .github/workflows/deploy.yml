@@ -1,0 +1,58 @@
+name: Deploy Centro de Control ARAYA
+
+# Dispara el pipeline completo (typecheck, build, pruebas, despliegue y
+# verificación real contra producción) cada vez que llega un push a main, o
+# a mano desde la pestaña Actions de GitHub. Reutiliza exactamente el mismo
+# scripts/deploy.mjs que se usa en local (npm run deploy) — un solo lugar
+# define qué significa "desplegar", así CI y local nunca pueden divergir.
+#
+# Requiere dos secretos del repositorio antes de que el paso de despliegue
+# funcione (Settings → Secrets and variables → Actions → New repository
+# secret). Sin ellos, este workflow falla en el paso "wrangler deploy" con
+# un mensaje claro de autenticación — los pasos anteriores (typecheck,
+# build, pruebas) siguen corriendo y protegen igual contra romper el código.
+#
+#   CLOUDFLARE_API_TOKEN   — token con permiso de editar Workers, D1 y R2
+#                            para la cuenta de Cloudflare del proyecto.
+#   CLOUDFLARE_ACCOUNT_ID  — id de la cuenta de Cloudflare (dashboard →
+#                            barra lateral derecha, "Account ID").
+#
+# Opcionales, para que el paso de verificación autenticada también corra en
+# CI (sin ellos, el pipeline sigue funcionando, solo se salta esa parte):
+#
+#   DEPLOY_VERIFY_EMAIL
+#   DEPLOY_VERIFY_PIN
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Desplegar y verificar (npm run deploy)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+        run: npm run deploy

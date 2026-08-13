@@ -552,6 +552,39 @@ cuando haya una migración nueva, aplicarla aparte, una sola vez:
 npx wrangler d1 execute araya-centro-control-d1 --remote --file=drizzle/<archivo>.sql
 ```
 
+### Despliegue automático al hacer push (GitHub Actions)
+
+Añadido el 13/08/2026, a petición explícita del usuario tras preguntar qué
+falta para llegar a "todo automatizado". `.github/workflows/deploy.yml`
+dispara `npm run deploy` (el mismo script de arriba, sin duplicar lógica)
+en cada push a `main`, o a mano desde la pestaña **Actions** de GitHub.
+
+Repositorio en GitHub: dos remotos configurados apuntan al mismo repositorio
+tras un cambio de nombre — `origin` (`Montpla/ARAYA-Dashboard-Obra`, nombre
+antiguo, redirige) y `github` (`Montpla/ARAYA-Centro-de-control`, nombre
+actual). La rama local `main` sigue a `origin/main`.
+
+**El workflow no puede desplegar todavía**: necesita dos secretos del
+repositorio que solo el usuario puede añadir — ningún asistente debe pedir
+ni manejar el token de Cloudflare por chat. Pasos, en
+`github.com/Montpla/ARAYA-Centro-de-control/settings/secrets/actions`:
+
+1. `CLOUDFLARE_API_TOKEN` — crear en el dashboard de Cloudflare
+   (`dash.cloudflare.com/profile/api-tokens` → "Create Token") un token
+   con permiso de **editar** Workers Scripts, D1 y R2 para la cuenta del
+   proyecto; no usar un token global de administrador. Añadirlo como
+   secreto nuevo con ese nombre exacto.
+2. `CLOUDFLARE_ACCOUNT_ID` — el "Account ID" que aparece en la barra
+   lateral derecha del dashboard de Cloudflare. Añadirlo igual.
+3. Opcionales, para que la verificación autenticada también corra en CI
+   (sin ellos el pipeline sigue funcionando, solo omite esa parte, igual
+   que en local): `DEPLOY_VERIFY_EMAIL` y `DEPLOY_VERIFY_PIN`.
+
+Con esos dos primeros secretos añadidos, el siguiente `git push origin main`
+despliega y verifica solo. Hasta entonces, seguir usando `npm run deploy`
+en local — el workflow, si se dispara sin los secretos, falla con claridad
+en el paso "wrangler deploy" (typecheck/build/pruebas sí llegan a correr).
+
 ### Vía anterior (Sites de OpenAI, inactiva)
 
 Lo que sigue describe la publicación por Sites de OpenAI, la vía original
