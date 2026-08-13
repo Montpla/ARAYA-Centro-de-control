@@ -246,6 +246,7 @@ async function serveProtectedDocument(request: Request, context: RouteContext) {
 
   const storageKey = `historical${pathname}`;
   const head = await bucket.head(storageKey);
+  console.log("DEBUG data-center lookup", JSON.stringify({ pathname, storageKey, headFound: Boolean(head), headSize: head?.size ?? null }));
   const manifest = head ? null : await readDocumentManifest(bucket, pathname);
   if (!head && !manifest) return errorResponse("Archivo no encontrado.", 404);
   const totalSize = head?.size ?? manifest?.size ?? 0;
