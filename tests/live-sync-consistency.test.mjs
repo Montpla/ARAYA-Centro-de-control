@@ -136,4 +136,9 @@ test("every /data-center/ document referenced from the app exists on disk and th
   // Y el pipeline de despliegue debe ejecutarlo siempre, no como paso manual
   // aparte que alguien tenga que recordar correr.
   assert.match(deployScript, /sync-historical-documents\.mjs/);
+
+  // La verificación autenticada contra producción debe seguir pidiendo la
+  // guía con la cookie de sesión real — es la única comprobación que detecta
+  // con certeza si la sincronización a R2 falló en un despliegue concreto.
+  assert.match(deployScript, /guia-corporativa-bricket-control-personal-obra\.pdf/);
 });
