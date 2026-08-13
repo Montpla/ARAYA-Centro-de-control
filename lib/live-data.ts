@@ -64,6 +64,7 @@ export const LIVE_DATA_ROOTS = [
   "salesModels",
   "structuralDelay",
   "supplierComparisons",
+  "supplierDirectory",
   "timeline",
   "typeABudgetChapters",
   "urbanismAreas",

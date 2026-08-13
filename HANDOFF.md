@@ -1375,6 +1375,101 @@ está dando problemas y no cuadran los datos").
   "Plan operativo" del Resumen ejecutivo muestra "26,61% · -3,9 pp de brecha
   física"; `npx tsc --noEmit`, `npm run build` y 97/97 pruebas en verde.
 
+## Auditoría completa de "cifras congeladas" y computedView
+
+Implementado y publicado el 13/08/2026. El usuario pidió explícitamente un
+plan definitivo, no otro parche puntual: "siempre está dando problemas y no
+cuadran los datos [...] dime como podemos arreglar todo de una vez y de
+forma definitiva", después de reportar que el círculo de avance físico y la
+tarjeta "Plan operativo" mostraban meses distintos (arreglado en la sección
+anterior). Esto es la respuesta de fondo, no otro parche más.
+
+**Diagnóstico**: el patrón de bug no es un caso aislado. El dashboard
+guarda cada resumen/contador (antonelyDetailTotals, plannedProgress,
+supplierContactAudit, dataGovernanceSummary...) como una **copia
+independiente** de los datos "en bruto" de los que depende, y esa copia solo
+se actualiza si alguien, al programar esa pantalla, se acuerda de escribir
+una función `liveX()` y conectarla a mano en `synchronizeSpatialSummary()`.
+Cada pantalla nueva con un resumen es una nueva oportunidad de olvidar ese
+paso. Una auditoría completa de los ~50 campos vivos de
+`app/dashboard-client.tsx` (comparando cada uno contra `liveDataTargets` y
+`LIVE_DATA_ROOTS`) encontró tres instancias más del mismo bug, ya reales en
+producción, no hipotéticas:
+
+1. `supplierContactAudit` (tarjetas de Proveedores: relaciones con crédito,
+   límite de crédito, datos por completar) — sin ninguna sincronización.
+2. `dataGovernanceSummary` ("X conciliados · Y separados · Z observados" en
+   Centro de datos) — sin ninguna sincronización.
+3. `dataAuthorityMatrix` — su texto de decisión/status en vivo solo se
+   calculaba dentro del render de `SourcesView`, nunca se escribía de vuelta
+   al estado compartido; cualquier otra pantalla que lo leyera habría visto
+   la versión estática.
+4. `supplierDirectory` (el directorio completo de 67 proveedores) no estaba
+   registrado como raíz viva en absoluto — ni con revisión manual había
+   forma de actualizarlo desde un archivo nuevo.
+
+**Arreglo de hoy** (mismo patrón ya usado en toda la sesión): se registró
+`supplierDirectory` en `LIVE_DATA_ROOTS`/`liveDataTargets`; se añadieron
+`liveSupplierContactAudit()` y `liveDataGovernanceSummary()` en
+`lib/live-derivations.ts`; `dataAuthorityMatrix` ahora se reasigna dentro de
+`synchronizeSpatialSummary()` (después de que overallProgress/plannedProgress
+queden al día), y `SourcesView` simplemente filtra esa versión ya viva en vez
+de recalcularla por su cuenta. `ifcComplianceGroups` se revisó y se dejó tal
+cual: es texto contractual fijo (compromisos IFC), no un dato que deba
+actualizarse con cargas nuevas.
+
+**El cambio de fondo — `computedView()`**: en vez de seguir dependiendo de
+que cada resumen tenga su `liveX()` recordado a mano, `antonelyDetailTotals`,
+`typeABudgetSummary`, `juneDeviationSummary`, `procurementAudit`,
+`dataGovernanceSummary` y `supplierContactAudit` — los seis resúmenes que son
+objetos derivados por completo, sin campos hermanos propios — se
+construyen ahora con `lib/computed-view.ts`, un `Proxy` que ejecuta la
+función `liveX()` correspondiente en **cada lectura** de un campo, en vez de
+guardar una copia que haya que resincronizar. No hay copia que se pueda
+quedar congelada porque no existe copia: es matemáticamente imposible que
+uno de estos seis vuelva a mostrar un número de otra fecha, sin importar
+qué pantalla nueva se añada en el futuro ni si alguien olvida conectarla.
+`projectSnapshot` (overallProgress/plannedProgress), `juneReport.finance` y
+`fiduciaryStatementSummary.balance` se quedaron en el patrón de reasignación
+explícita de siempre porque tienen muchos campos hermanos que no se derivan
+de nada — envolver el objeto entero habría sido más arriesgado que el
+beneficio, así que ahí la garantía sigue siendo "revisado y probado", no
+"imposible que falle".
+
+**Trampa real encontrada al aplicar esto**: incluir un objeto `computedView`
+en `liveDataTargets` lo rompe. `applyLiveValuesToTargets`
+(`lib/live-data.ts`) clona el valor de un target la primera vez que lo ve
+(`JSON.parse(JSON.stringify(target))`, que sí lee a través de un `Proxy`) y
+cachea ese clon para siempre en un `WeakMap` como "línea base" — así que un
+`computedView` incluido ahí quedaría congelado en su primer valor calculado,
+un bug distinto pero de la misma familia. `antonelyDetailTotals` se sacó de
+`liveDataTargets` por este motivo exacto (los otros cinco nunca habían
+estado ahí).
+
+**Red de seguridad nueva**: `tests/live-sync-consistency.test.mjs` verifica
+por patrón de código que (a) los seis resúmenes siguen envueltos en
+`computedView(`, (b) ninguno de los seis vuelve a aparecer en
+`liveDataTargets`, (c) `dataAuthorityMatrix` se reasigna dentro de
+`synchronizeSpatialSummary` y no solo dentro de `SourcesView`, y (d)
+`overallProgress`/`plannedProgress` siguen leyéndose de la misma entrada de
+`monthlyPlan` tanto en el servidor como en el cliente. Si alguien reintroduce
+cualquiera de estos cuatro bugs, la prueba falla antes del despliegue en vez
+de que lo note alguien en República Dominicana.
+
+**Al añadir un resumen derivado nuevo en el futuro**: preferir
+`computedView(base, () => liveX(base, ...))` sobre el patrón antiguo de
+reasignación manual siempre que el campo sea un objeto derivado por
+completo (sin campos hermanos propios) y no necesite recibir una publicación
+directa. Si se usa el patrón antiguo, añadir su comprobación a
+`tests/live-sync-consistency.test.mjs`.
+
+Verificado en producción con sesión real de Playwright: `dataGovernanceSummary`
+mostrando "7 conciliados · 2 separados · 2 observados" (antes, un conteo
+fijo), `supplierContactAudit` mostrando "Directorio validado 67",
+"Relaciones con crédito 16 · USD 0,70 M" (antes, sin ninguna sincronización),
+cero errores de consola tras varios ciclos de sondeo; `npx tsc --noEmit`,
+`npm run build` y 100/100 pruebas en verde.
+
 ## Criterios de continuidad
 
 - Mostrar únicamente datos aportados o derivados de las fuentes.

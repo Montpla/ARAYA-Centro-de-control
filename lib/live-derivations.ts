@@ -327,3 +327,78 @@ export function liveReprogrammedFlowQualityIssues<T extends { title: string; det
     ? { ...issue, detail: `El libro registra importes presupuestados, reales y reprogramados, pero no contiene mediciones físicas, cantidades ejecutadas ni porcentajes de avance de obra. El avance físico permanece en ${reprogrammedFlowPercentFormatter.format(overallProgress)}%.` }
     : issue);
 }
+
+// governedMetrics/reconciledMetrics/separatedMetrics/observedMetrics son
+// conteos puros de dataAuthorityMatrix por status (verificado). registeredSources
+// se deja fijo: cuenta fuentes canónicas registradas en sourceGovernance, un
+// catálogo que no cambia con cada carga.
+export function liveDataGovernanceSummary<
+  T extends {
+    governedMetrics: number;
+    reconciledMetrics: number;
+    separatedMetrics: number;
+    observedMetrics: number;
+  },
+  M extends { status: string },
+>(summary: T, matrix: readonly M[]): T {
+  if (!matrix.length) return summary;
+  return {
+    ...summary,
+    governedMetrics: matrix.length,
+    reconciledMetrics: matrix.filter((item) => item.status === "conciliado").length,
+    separatedMetrics: matrix.filter((item) => item.status === "separado").length,
+    observedMetrics: matrix.filter((item) => item.status === "observado").length,
+  };
+}
+
+// El directorio de proveedores ya agrupa cada fila de contacto por empresa
+// (nombre normalizado); estos conteos se derivan sumando/filtrando sobre esas
+// filas agrupadas, no sobre las filas sueltas del origen. Eso cambia
+// ligeramente el criterio de creditRelationships/cashRelationships/
+// pendingNegotiation frente al cálculo original (por proveedor con al menos
+// una relación de ese tipo, no por fila) — un criterio más correcto para un
+// contador "cuántos proveedores", y el único derivable en vivo sin conservar
+// las filas sueltas del Excel de origen como raíz propia.
+export function liveSupplierContactAudit<
+  T extends {
+    sourceRows: number;
+    uniqueSuppliers: number;
+    large: number;
+    medium: number;
+    small: number;
+    creditRelationships: number;
+    cashRelationships: number;
+    pendingNegotiation: number;
+    creditLimitDop: number;
+    missingLegalId: number;
+    missingEmail: number;
+  },
+  S extends {
+    size: string;
+    relationships: readonly string[];
+    creditLimitDop: number;
+    legalIds: readonly unknown[];
+    emails: readonly unknown[];
+    sourceRows: readonly unknown[];
+  },
+>(audit: T, directory: readonly S[]): T {
+  if (!directory.length) return audit;
+  const hasRelationship = (needle: string) =>
+    directory.filter((supplier) =>
+      supplier.relationships.some((item) => item.toLocaleLowerCase("es").includes(needle)),
+    ).length;
+  return {
+    ...audit,
+    sourceRows: directory.reduce((sum, supplier) => sum + supplier.sourceRows.length, 0),
+    uniqueSuppliers: directory.length,
+    large: directory.filter((supplier) => supplier.size.toLocaleUpperCase("es") === "GRANDE").length,
+    medium: directory.filter((supplier) => supplier.size.toLocaleUpperCase("es") === "MEDIANA").length,
+    small: directory.filter((supplier) => supplier.size.toLocaleUpperCase("es") === "PEQUENA").length,
+    creditRelationships: hasRelationship("credito"),
+    cashRelationships: hasRelationship("contado"),
+    pendingNegotiation: hasRelationship("sin negociacion"),
+    creditLimitDop: directory.reduce((sum, supplier) => sum + supplier.creditLimitDop, 0),
+    missingLegalId: directory.filter((supplier) => supplier.legalIds.length === 0).length,
+    missingEmail: directory.filter((supplier) => supplier.emails.length === 0).length,
+  };
+}

@@ -16,9 +16,11 @@ import {
   unitDisciplines as sharedUnitDisciplines,
   unitOverallProgress as sharedUnitOverallProgress,
 } from "../lib/unit-progress";
+import { computedView } from "../lib/computed-view";
 import {
   liveAntonelyDetailTotals,
   liveDataAuthorityMatrix,
+  liveDataGovernanceSummary,
   liveFiduciaryManagementReconciliation,
   liveFiduciaryStatementSummary,
   liveJuneDeviationSummary,
@@ -26,6 +28,7 @@ import {
   livePayablesReconciliation,
   liveProcurementAudit,
   liveReprogrammedFlowQualityIssues,
+  liveSupplierContactAudit,
   liveTypeABudgetSummary,
 } from "../lib/live-derivations";
 
@@ -190,24 +193,48 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     antonelyAdvances,
     antonelyBalanceLines,
     antonelyCostAccounts,
-    antonelyDetailTotals,
     antonelyPayableCategories,
     antonelyPayableVendorsAll,
   } = bootstrap.antonely);
+  // antonelyDetailTotals, typeABudgetSummary, juneDeviationSummary,
+  // procurementAudit, supplierContactAudit y dataGovernanceSummary son
+  // resúmenes puros de otros arreglos en vivo (antonelyAdvances,
+  // typeABudgetChapters, monthlyDeviationLines, ...). En vez de guardar una
+  // copia que haya que recordar resincronizar cada vez que llega un dato
+  // nuevo (el bug de "el plan operativo se quedó en junio" de esta misma
+  // sesión), se envuelven con computedView: cada lectura de un campo
+  // recalcula sobre los datos en vivo actuales, así que no existe copia que
+  // se pueda quedar congelada.
+  const baseAntonelyDetailTotals = bootstrap.antonely.antonelyDetailTotals;
+  antonelyDetailTotals = computedView(baseAntonelyDetailTotals, () =>
+    liveAntonelyDetailTotals(baseAntonelyDetailTotals, {
+      advances: antonelyAdvances,
+      costAccounts: antonelyCostAccounts,
+      payableCategories: antonelyPayableCategories,
+      balanceLines: antonelyBalanceLines,
+    }));
   ({
     ifcComplianceGroups,
-    juneDeviationSummary,
     monthlyDeviationLines,
-    procurementAudit,
     procurementMonthlySchedule,
     procurementPackages,
     procurementQualityIssues,
     supplierComparisons,
-    supplierContactAudit,
     supplierDirectory,
     typeABudgetChapters,
-    typeABudgetSummary,
   } = bootstrap.procurement);
+  const baseJuneDeviationSummary = bootstrap.procurement.juneDeviationSummary;
+  juneDeviationSummary = computedView(baseJuneDeviationSummary, () =>
+    liveJuneDeviationSummary(baseJuneDeviationSummary, monthlyDeviationLines));
+  const baseProcurementAudit = bootstrap.procurement.procurementAudit;
+  procurementAudit = computedView(baseProcurementAudit, () =>
+    liveProcurementAudit(baseProcurementAudit, procurementPackages, supplierComparisons, procurementMonthlySchedule));
+  const baseSupplierContactAudit = bootstrap.procurement.supplierContactAudit;
+  supplierContactAudit = computedView(baseSupplierContactAudit, () =>
+    liveSupplierContactAudit(baseSupplierContactAudit, supplierDirectory));
+  const baseTypeABudgetSummary = bootstrap.procurement.typeABudgetSummary;
+  typeABudgetSummary = computedView(baseTypeABudgetSummary, () =>
+    liveTypeABudgetSummary(baseTypeABudgetSummary, typeABudgetChapters));
   ({
     reprogrammedFlowAudit,
     reprogrammedFlowMonths,
@@ -222,16 +249,22 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
   } = bootstrap.fiduciary);
   ({
     dataAuthorityMatrix,
-    dataGovernanceSummary,
     sourceGovernance,
   } = bootstrap.governance);
+  const baseDataGovernanceSummary = bootstrap.governance.dataGovernanceSummary;
+  dataGovernanceSummary = computedView(baseDataGovernanceSummary, () =>
+    liveDataGovernanceSummary(baseDataGovernanceSummary, dataAuthorityMatrix));
 
   liveDataTargets = {
     advances,
     antonelyAdvances,
     antonelyBalanceLines,
     antonelyCostAccounts,
-    antonelyDetailTotals,
+    // antonelyDetailTotals deliberadamente fuera: es un computedView (ver
+    // más arriba), y applyLiveValuesToTargets clona un valor base la
+    // primera vez que ve un target y lo cachea para siempre — si el target
+    // es un Proxy que recalcula solo, ese clon lo congelaría en su primer
+    // valor calculado, deshaciendo el propósito de computedView.
     antonelyFinanceSource,
     antonelyPayableCategories,
     antonelyPayableVendorsAll,
@@ -271,6 +304,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     salesModels,
     structuralDelay,
     supplierComparisons,
+    supplierDirectory,
     timeline,
     typeABudgetChapters,
     urbanismAreas,
@@ -1201,30 +1235,16 @@ function synchronizeSpatialSummary() {
   // congelado si nadie lo vuelve a sincronizar.
   fiduciaryStatementSummary = liveFiduciaryStatementSummary(fiduciaryStatementSummary, fiduciaryBalanceSections);
   fiduciaryManagementReconciliation = liveFiduciaryManagementReconciliation(fiduciaryManagementReconciliation, fiduciaryBalanceSections);
-  // antonelyAdvances/antonelyCostAccounts/antonelyPayableCategories/
-  // antonelyBalanceLines (detalle línea a línea) sí se sincronizan al subir
-  // un archivo; sus resúmenes (antonelyDetailTotals.*, juneReport.finance,
-  // payablesReconciliation) eran copias aparte que se quedaban en la
-  // semilla original.
-  antonelyDetailTotals = liveAntonelyDetailTotals(antonelyDetailTotals, {
-    advances: antonelyAdvances,
-    costAccounts: antonelyCostAccounts,
-    payableCategories: antonelyPayableCategories,
-    balanceLines: antonelyBalanceLines,
-  });
+  // antonelyDetailTotals, typeABudgetSummary, juneDeviationSummary y
+  // procurementAudit ya no se resincronizan aquí: se construyeron como
+  // computedView en installDashboardBootstrap, así que cada lectura de uno
+  // de sus campos recalcula sola sobre antonelyAdvances/typeABudgetChapters/
+  // monthlyDeviationLines/procurementPackages actuales — no hay copia que
+  // resincronizar. juneReport y payablesReconciliation siguen el patrón
+  // anterior (reasignación explícita) porque tienen campos hermanos que no
+  // se derivan de nada y no conviene envolver el objeto entero.
   juneReport = liveJuneReportFinance(juneReport, antonelyDetailTotals, antonelyBalanceLines, financialProjection);
   payablesReconciliation = livePayablesReconciliation(payablesReconciliation, antonelyDetailTotals.payablesTotalDop);
-  // typeABudgetSummary/juneDeviationSummary son sumas puras de
-  // typeABudgetChapters/monthlyDeviationLines (verificado campo a campo);
-  // se quedaban congelados aunque se subiera un nuevo comparativo de
-  // presupuesto o de desviación mensual.
-  typeABudgetSummary = liveTypeABudgetSummary(typeABudgetSummary, typeABudgetChapters);
-  juneDeviationSummary = liveJuneDeviationSummary(juneDeviationSummary, monthlyDeviationLines);
-  // procurementAudit resume procurementPackages/supplierComparisons/
-  // procurementMonthlySchedule (verificado: 14 paquetes, 58 ofertas, 11
-  // comparativos, RD$202.373.400,47 acumulados) — mismo patrón, Proveedores
-  // nunca se había revisado esta sesión.
-  procurementAudit = liveProcurementAudit(procurementAudit, procurementPackages, supplierComparisons, procurementMonthlySchedule);
   // Espejo del cálculo del servidor (lib/spatial-live-data.ts): el avance
   // físico por apartamento se conserva como métrica de apoyo, pero ya no
   // manda sobre el avance físico global — el equipo de obra lleva su
@@ -1257,6 +1277,19 @@ function synchronizeSpatialSummary() {
   reprogrammedFlowQualityIssues = liveReprogrammedFlowQualityIssues(
     reprogrammedFlowQualityIssues,
     projectSnapshot.overallProgress,
+  );
+  // dataAuthorityMatrix decide el texto de "decision"/"status" en vivo
+  // (avance físico, plan, CxP); se sincroniza aquí (con overallProgress y
+  // plannedProgress ya actualizados arriba) para que cualquier lectura del
+  // arreglo, no solo el filtro local de SourcesView, vea la versión
+  // vigente. dataGovernanceSummary es un computedView construido sobre este
+  // mismo arreglo, así que sus conteos por status quedan al día solos.
+  dataAuthorityMatrix = liveDataAuthorityMatrix(
+    dataAuthorityMatrix,
+    projectSnapshot.overallProgress,
+    projectSnapshot.plannedProgress,
+    projectSnapshot.scheduleProgress,
+    juneReport.finance.cxpDop,
   );
 }
 
@@ -6318,13 +6351,10 @@ function SourcesView({
   const visibleIssues = canAccessFinance
     ? [...juneDataQualityIssues, ...procurementQualityIssues, ...reprogrammedFlowQualityIssues, ...fiduciaryStatementQualityIssues]
     : juneDataQualityIssues.filter((issue) => !/presupuesto|pagar|coste|anticipo|inter[eé]s/i.test(issue.title));
-  const visibleAuthorityMatrix = liveDataAuthorityMatrix(
-    dataAuthorityMatrix,
-    projectSnapshot.overallProgress,
-    projectSnapshot.plannedProgress,
-    projectSnapshot.scheduleProgress,
-    juneReport.finance.cxpDop,
-  ).filter((item) => {
+  // dataAuthorityMatrix ya llega con el texto de decisión/status en vivo:
+  // synchronizeSpatialSummary() lo sincroniza centralmente para que
+  // cualquier otra pantalla que lo lea también lo vea al día, no solo esta.
+  const visibleAuthorityMatrix = dataAuthorityMatrix.filter((item) => {
     const source = dataSources.find((candidate) => candidate.id === item.primarySourceId);
     return canAccessFinance || !source || !sourceRequiresFinance(source);
   });
