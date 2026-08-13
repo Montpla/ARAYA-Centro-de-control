@@ -115,7 +115,9 @@ async function smokeVerify() {
     headers: { Cookie: `araya_session=${sessionMatch[1]}` },
   });
   if (!guideResponse.ok) {
+    const guideBody = await guideResponse.text().catch(() => "");
     console.error(`✖ ${guideUrl} devolvió ${guideResponse.status} con sesión autenticada — la guía no está en R2.`);
+    if (guideBody) console.error(`  Cuerpo de la respuesta: ${guideBody}`);
     process.exit(1);
   }
   const guideContentType = guideResponse.headers.get("content-type") ?? "";

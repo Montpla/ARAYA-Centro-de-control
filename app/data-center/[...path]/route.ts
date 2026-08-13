@@ -245,10 +245,20 @@ async function serveProtectedDocument(request: Request, context: RouteContext) {
   }
 
   const storageKey = `historical${pathname}`;
-  const head = await bucket.head(storageKey);
-  console.log("DEBUG data-center lookup", JSON.stringify({ pathname, storageKey, headFound: Boolean(head), headSize: head?.size ?? null }));
+  let head: StoredDocumentHead | null = null;
+  let headError = "";
+  try {
+    head = await bucket.head(storageKey);
+  } catch (error) {
+    headError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  }
   const manifest = head ? null : await readDocumentManifest(bucket, pathname);
-  if (!head && !manifest) return errorResponse("Archivo no encontrado.", 404);
+  if (!head && !manifest) {
+    return errorResponse(
+      `Archivo no encontrado. DEBUG pathname=${pathname} storageKey=${storageKey} bucketType=${typeof bucket} headErr=${headError || "none"}`,
+      404,
+    );
+  }
   const totalSize = head?.size ?? manifest?.size ?? 0;
 
   const requestedRange = parseByteRange(request.headers.get("range"), totalSize);
