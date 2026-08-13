@@ -564,26 +564,40 @@ tras un cambio de nombre — `origin` (`Montpla/ARAYA-Dashboard-Obra`, nombre
 antiguo, redirige) y `github` (`Montpla/ARAYA-Centro-de-control`, nombre
 actual). La rama local `main` sigue a `origin/main`.
 
-**El workflow no puede desplegar todavía**: necesita dos secretos del
-repositorio que solo el usuario puede añadir — ningún asistente debe pedir
-ni manejar el token de Cloudflare por chat. Pasos, en
-`github.com/Montpla/ARAYA-Centro-de-control/settings/secrets/actions`:
+**Operativo y verificado el 13/08/2026.** Los cuatro secretos del
+repositorio están puestos en
+`github.com/Montpla/ARAYA-Centro-de-control/settings/secrets/actions`
+(`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `DEPLOY_VERIFY_EMAIL`,
+`DEPLOY_VERIFY_PIN` — los dos últimos habilitan la verificación autenticada
+completa en CI, no solo el local). Los añadió el usuario desde la web de
+GitHub (el token de Cloudflare nunca pasó por chat); las dos credenciales
+de verificación las añadió un asistente con `gh secret set` a petición
+explícita del usuario, reutilizando la cuenta de administrador ya usada
+toda la sesión para pruebas — `gh secret set` cifra el valor antes de
+enviarlo a GitHub, no queda en texto plano en ningún sitio.
 
-1. `CLOUDFLARE_API_TOKEN` — crear en el dashboard de Cloudflare
-   (`dash.cloudflare.com/profile/api-tokens` → "Create Token") un token
-   con permiso de **editar** Workers Scripts, D1 y R2 para la cuenta del
-   proyecto; no usar un token global de administrador. Añadirlo como
-   secreto nuevo con ese nombre exacto.
-2. `CLOUDFLARE_ACCOUNT_ID` — el "Account ID" que aparece en la barra
-   lateral derecha del dashboard de Cloudflare. Añadirlo igual.
-3. Opcionales, para que la verificación autenticada también corra en CI
-   (sin ellos el pipeline sigue funcionando, solo omite esa parte, igual
-   que en local): `DEPLOY_VERIFY_EMAIL` y `DEPLOY_VERIFY_PIN`.
+Confirmado con tres ejecuciones reales del workflow
+(`gh workflow run deploy.yml` + `gh run watch`), la última con la cadena
+completa en verde: typecheck, build, 100 pruebas, `wrangler deploy`, login
+real contra producción, y `planning.kpiPlan === planning.curvePlanAtCutoff`
+coincidiendo con datos en vivo. Las dos primeras ejecuciones fallaron y
+sirvieron para depurar el propio pipeline, no el código de la app:
 
-Con esos dos primeros secretos añadidos, el siguiente `git push origin main`
-despliega y verifica solo. Hasta entonces, seguir usando `npm run deploy`
-en local — el workflow, si se dispara sin los secretos, falla con claridad
-en el paso "wrangler deploy" (typecheck/build/pruebas sí llegan a correr).
+- 1ª vez: `CLOUDFLARE_API_TOKEN` no llegó a guardarse en GitHub (la lista
+  de secretos solo tenía `CLOUDFLARE_ACCOUNT_ID`) — hubo que rehacer ese
+  paso.
+- 2ª vez: el token sí estaba, pero traía un salto de línea o espacio
+  pegado de más (`Headers.set: "***" is an invalid header value` — Wrangler
+  intenta usarlo como cabecera HTTP y un carácter de control lo invalida).
+  Se resolvió recreándolo con el botón de copiar de Cloudflare en vez de
+  seleccionar el texto a mano.
+
+A partir de ahora, cada `git push origin main` despliega y verifica solo,
+de principio a fin, sin que nadie tenga que ejecutar nada a mano. Si algún
+día hay que rotar `DEPLOY_VERIFY_PIN` (cambia el PIN del administrador
+usado para las pruebas), actualizar también este secreto o la verificación
+autenticada empezará a fallar en cada push — no es un fallo del código, es
+la credencial desactualizada.
 
 ### Vía anterior (Sites de OpenAI, inactiva)
 
