@@ -31,11 +31,10 @@ exclusivamente sobre **Cloudflare Workers**:
 
 - URL de producción verificada en este cierre, con sesión real de navegador:
   `https://araya-centro-control.grupobricket.workers.dev`.
-- Despliegue: `npm run build` y después
-  `npx wrangler deploy --config wrangler.deploy.jsonc`. Ese archivo de
-  configuración existe solo en local, no está commiteado — comprobar que
-  sigue presente antes de desplegar; si falta, pedir al usuario el contenido
-  o reconstruirlo a partir de los bindings de abajo.
+- Despliegue: `npm run deploy` (un solo comando: typecheck, build, pruebas,
+  `wrangler deploy --config wrangler.deploy.jsonc` y verificación real
+  contra producción — ver "Publicación con Cloudflare Workers" más abajo).
+  `wrangler.deploy.jsonc` ya está commiteado.
 - D1: `araya-centro-control-d1` (binding `env.DB`). R2:
   `araya-centro-control-files` (binding `env.FILES`).
 - Migraciones: `npx wrangler d1 execute araya-centro-control-d1 --remote
@@ -489,11 +488,14 @@ Comando habitual:
 
 `npm test`
 
-Este comando ejecuta el build de vinext y la batería registrada en
-`package.json`. No conservar aquí un contador histórico como si fuera vigente:
-anotar el resultado exacto del último commit desplegado después de ejecutar
-`npm test`, `npx tsc --noEmit`, `npm run lint` y `git diff --check`. Los avisos
-conocidos de `<img>` no sustituyen la comprobación de cero errores.
+Este comando ejecuta el build de vinext y toda la carpeta `tests/` (por
+glob, `node --test tests/*.mjs` — no hace falta añadir un archivo nuevo a
+ninguna lista). No conservar aquí un contador histórico como si fuera
+vigente: anotar el resultado exacto del último commit desplegado después de
+ejecutar `npm test`, `npx tsc --noEmit`, `npm run lint` y `git diff --check`.
+Los avisos conocidos de `<img>` no sustituyen la comprobación de cero
+errores. Para publicar de verdad (no solo validar en local), usar
+`npm run deploy` — ver "Publicación con Cloudflare Workers" más abajo.
 
 Para cambios visuales de posición, comprobar:
 
@@ -503,7 +505,60 @@ Para cambios visuales de posición, comprobar:
 4. Que al pulsarlo se abra la ficha correcta.
 5. Que la vista técnica siga operativa.
 
-## Publicación con Sites
+## Publicación con Cloudflare Workers (vigente)
+
+Implementado el 13/08/2026, a petición explícita del usuario de automatizar
+el proceso de despliegue. Antes de esto, publicar eran cinco pasos manuales
+(typecheck, build, tests, `wrangler deploy`, y una comprobación aparte que
+alguien tenía que acordarse de hacer) — el mismo patrón de "si nadie se
+acuerda, se salta" que motivó la auditoría de datos congelados. Ahora es un
+solo comando:
+
+```
+npm run deploy
+```
+
+`scripts/deploy.mjs` ejecuta, en orden, y se detiene en el primer fallo sin
+avanzar al siguiente paso:
+
+1. `npx tsc --noEmit -p .`
+2. `npm run build`
+3. `node --test tests/*.mjs` (toda la carpeta `tests/`, por glob — ya no hay
+   una lista de archivos escrita a mano en `package.json` que se pueda
+   quedar desactualizada; eso mismo pasó con `tests/live-sync-consistency.
+   test.mjs` el mismo día que se escribió esta sección).
+4. `npx wrangler deploy --config wrangler.deploy.jsonc`.
+5. **Verificación real contra producción**, no solo compilación: confirma
+   que el Worker responde, hace login y comprueba con datos reales de
+   `/api/control-room` que `planning.kpiPlan` y `planning.curvePlanAtCutoff`
+   siguen coincidiendo (guarda de regresión directa del bug de esta sesión)
+   y que el resumen de documentos responde con forma válida.
+
+El paso 5 solo corre completo si existen `DEPLOY_VERIFY_EMAIL` y
+`DEPLOY_VERIFY_PIN` en el entorno local (nunca deben escribirse en ningún
+archivo commiteado). Sin esas variables, el script avisa y omite la parte
+autenticada en vez de fallar — sigue comprobando que el Worker esté vivo.
+
+Migraciones de D1: **deliberadamente fuera** del pipeline automático. No
+existe todavía una forma segura de detectar automáticamente cuáles de
+`drizzle/*.sql` ya se aplicaron contra D1 remoto (esta base no usa el
+sistema de seguimiento propio de `wrangler d1 migrations`; se ha aplicado
+cada migración a mano con `wrangler d1 execute ... --file=...` durante toda
+la vida del proyecto). Reintentar una migración ya aplicada falla en voz
+alta (`table already exists`), lo cual es seguro pero molesto — así que
+cuando haya una migración nueva, aplicarla aparte, una sola vez:
+
+```
+npx wrangler d1 execute araya-centro-control-d1 --remote --file=drizzle/<archivo>.sql
+```
+
+### Vía anterior (Sites de OpenAI, inactiva)
+
+Lo que sigue describe la publicación por Sites de OpenAI, la vía original
+del proyecto antes de migrar a Cloudflare Workers. Se conserva como
+referencia histórica; no se ha usado ni verificado en las sesiones
+recientes (ver "Aviso importante: plataforma de despliegue vigente" al
+principio de este documento).
 
 Cuando haya cambios de producto:
 

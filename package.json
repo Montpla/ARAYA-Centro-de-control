@@ -9,9 +9,10 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/ingestion-classifier.test.mjs tests/ai-document-extraction.test.mjs tests/live-ingestion-lifecycle-notifications.test.mjs tests/effective-live-data.test.mjs tests/client-finance-privacy.test.mjs tests/migrations.test.mjs tests/mutation-notification-outbox.test.mjs tests/upload-commit-recovery.test.mjs tests/review-cancel-recovery.test.mjs tests/file-registry-pagination.test.mjs tests/d1-json-bulk.test.mjs",
+    "test": "npm run build && node --test tests/*.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next --ignore-pattern tmp",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "deploy": "node scripts/deploy.mjs"
   },
   "dependencies": {
     "@block65/webcrypto-web-push": "^1.0.2",
