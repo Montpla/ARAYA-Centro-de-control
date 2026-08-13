@@ -1,9 +1,12 @@
-const SHELL_CACHE = "bricket-control-shell-v6";
-const PRIVATE_CACHE = "bricket-control-private-v6";
+const SHELL_CACHE = "bricket-control-shell-v7";
+const PRIVATE_CACHE = "bricket-control-private-v7";
 const CACHE_PREFIX = "bricket-control-";
 const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/bricket-mark.png",
+  "/bricket-mark-192.png",
+  "/bricket-mark-512.png",
+  "/bricket-mark-512-maskable.png",
   "/araya-wordmark.jpg"
 ];
 

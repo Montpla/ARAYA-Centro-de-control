@@ -1572,6 +1572,77 @@ fijo), `supplierContactAudit` mostrando "Directorio validado 67",
 cero errores de consola tras varios ciclos de sondeo; `npx tsc --noEmit`,
 `npm run build` y 100/100 pruebas en verde.
 
+## Guía corporativa corregida e instalación PWA completa en las 4 plataformas
+
+Implementado y publicado el 13/08/2026, como parte del pedido del usuario de
+dejar la aplicación "preparada para instalar en móvil Apple, Android y
+tablets, y también como aplicación en ordenador Windows y Mac", además de un
+sitio donde el personal aprenda a usar el programa.
+
+**Bug crítico encontrado y corregido**: `scripts/generate_staff_guide_pdf.py`
+tenía `APP_URL = "https://www.proyectosgrupobricket.com/"` — un dominio
+antiguo, ya no vigente (ver "Aviso importante: plataforma de despliegue
+vigente"). Esa constante alimenta los 3 códigos QR/enlaces del PDF (portada,
+instalación móvil, instalación escritorio). Cualquiera que escaneara el QR
+llegaba a un dominio que ya no sirve esta aplicación. Corregido a
+`https://araya-centro-control.grupobricket.workers.dev/`, la URL real del
+Worker. La guía también se actualizó para describir los 4 tipos de informe
+(general/obra × finanzas/ventas) en la tarjeta "Crear informes" en vez de
+solo semana/mes.
+
+**Iconos PWA insuficientes**: `manifest.webmanifest` sólo tenía un icono de
+225×225 marcado `"any maskable"` a la vez — insuficiente para los criterios
+de instalación de Android/Chrome (piden ≥192px y ≥512px) y, además, un icono
+"any" no debería reutilizarse como "maskable" porque un mismo PNG sin margen
+de seguridad se recorta mal bajo las máscaras adaptativas (círculo/squircle).
+`scripts/generate_pwa_icons.py` (nuevo, usa Pillow) genera desde el logo
+existente `bricket-mark-192.png`, `bricket-mark-512.png` y
+`bricket-mark-512-maskable.png` (este último con 20% de margen de contenido
+sobre fondo `#EC5D31` para respetar la zona segura). `manifest.webmanifest`,
+`app/layout.tsx` (metadata `icons`/`apple`) y `public/sw.js`
+(`STATIC_ASSETS`, caché `v6` → `v7`) ya referencian los tres tamaños nuevos
+junto al icono original.
+
+**Nuevo punto de entrada de la guía**: la sección `Usuarios y accesos` de
+escritorio (`UsersAdminView`) ahora tiene una tarjeta "Guía de uso para el
+personal" con botón "Abrir guía", además de los accesos ya existentes en
+`Centro de datos` y `Más → Guía de uso` en móvil (ver "Apertura documental y
+guía corporativa de la versión 41"). El PDF servido en
+`public/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`
+se regeneró con la URL corregida.
+
+**Estado real de instalación por plataforma**:
+
+- Android / Chrome / Edge (móvil o escritorio): instalación nativa vía el
+  banner del navegador o el botón "Instalar aplicación" (menú `Más` en
+  móvil), que usa el `beforeinstallprompt` ya cableado en
+  `dashboard-client.tsx`. Con los iconos corregidos, ahora cumple todos los
+  criterios de instalabilidad de Chrome.
+- Windows / Mac con Chrome o Edge: instalable como app de escritorio desde el
+  icono de instalación de la barra de direcciones (el navegador lo ofrece
+  solo porque el manifiesto y los iconos ya son válidos). No existe un botón
+  equivalente dentro de la propia aplicación para escritorio.
+- iOS / iPadOS Safari: Apple no dispara `beforeinstallprompt`; la instalación
+  es manual vía `Compartir → Añadir a pantalla de inicio`. No hay aviso
+  in-app que explique esto en iOS.
+- Para Windows/Mac e iOS, la única guía disponible hoy es la corporativa en
+  PDF (ya corregida). **Decisión de alcance tomada esta sesión, no
+  confirmada con el usuario todavía**: no se construyó un botón de
+  instalación dedicado para escritorio ni un aviso in-app específico para
+  iOS, para no duplicar lo que el PDF ya explica correctamente. Si el
+  usuario pide más adelante un acceso directo dentro de la propia app para
+  esos dos casos, es la siguiente extensión natural.
+
+**Validación**: `npm run deploy` completo en verde — `tsc --noEmit`, build,
+100/100 pruebas (incluye `tests/rendered-html.test.mjs` actualizado a
+`bricket-control-shell-v7`), `wrangler deploy` y el Worker respondiendo en
+producción. Confirmado manualmente contra
+`https://araya-centro-control.grupobricket.workers.dev`: `manifest.webmanifest`
+sirve los 4 iconos, `sw.js` en `v7`, los tres PNG nuevos devuelven 200, y el
+PDF de la guía sigue protegido por autenticación igual que el resto de
+`/data-center/` (no es un fallo: es el mismo comportamiento que toda la
+documentación privada).
+
 ## Criterios de continuidad
 
 - Mostrar únicamente datos aportados o derivados de las fuentes.

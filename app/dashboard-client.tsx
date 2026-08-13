@@ -5191,9 +5191,11 @@ function DeleteUserModal({
 function UsersAdminView({
   currentUser,
   onCurrentAvatarUpdated,
+  onOpenGuide,
 }: {
   currentUser: DashboardUser;
   onCurrentAvatarUpdated: (avatarUrl: string) => void;
+  onOpenGuide: () => void;
 }) {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -5377,6 +5379,20 @@ function UsersAdminView({
             <div><b>04</b><span><strong>Auditoría</strong><small>Cada cambio conserva administrador, fecha y detalle.</small></span></div>
           </div>
         </section>
+      </section>
+
+      <section className="panel access-guide-card">
+        <div className="panel-heading">
+          <div><span className="section-kicker">ONBOARDING</span><h3>Guía de uso para el personal</h3></div>
+          <button className="button" type="button" onClick={onOpenGuide}>Abrir guía</button>
+        </div>
+        <p>
+          Manual breve de 7 páginas: navegación, permisos, carga documental,
+          instalación en móvil, tablet y ordenador, cámara, avisos y
+          seguridad. Compártela con cada persona al darla de alta — el
+          enlace y el código QR de dentro llevan directo a esta misma
+          aplicación.
+        </p>
       </section>
 
       <section className="panel access-directory">
@@ -8648,6 +8664,12 @@ export function DashboardClient({
           currentUser={profileUser}
           onCurrentAvatarUpdated={(avatarUrl) =>
             setProfileUser((current) => ({ ...current, avatarUrl }))
+          }
+          onOpenGuide={() =>
+            setFileViewer({
+              url: "/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf",
+              title: "Guía corporativa Bricket Control · personal de obra.pdf",
+            })
           }
         />
       );

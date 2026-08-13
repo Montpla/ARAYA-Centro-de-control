@@ -26,7 +26,7 @@ from reportlab.graphics import renderPDF
 ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / "public"
 OUTPUT = ROOT / "output" / "pdf" / "guia_corporativa_bricket_control_personal_obra.pdf"
-APP_URL = "https://www.proyectosgrupobricket.com/"
+APP_URL = "https://araya-centro-control.grupobricket.workers.dev/"
 
 PAGE_W, PAGE_H = A4
 MARGIN_X = 42
@@ -708,7 +708,7 @@ def page_workflow(c: canvas.Canvas) -> None:
         ),
         (
             "Crear informes",
-            "Selecciona semana o mes. La instantánea conserva periodo, moneda, autor, corte y revisión usada.",
+            "Elige tipo (general, obra, finanzas o ventas) y periodo. La instantánea conserva moneda, autor, corte y revisión.",
             BLUE_PALE,
             NAVY,
         ),

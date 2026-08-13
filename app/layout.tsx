@@ -19,7 +19,11 @@ export async function generateMetadata(): Promise<Metadata> {
     applicationName: "Bricket Control",
     manifest: "/manifest.webmanifest",
     icons: {
-      icon: [{ url: "/bricket-mark.png", type: "image/png", sizes: "225x225" }],
+      icon: [
+        { url: "/bricket-mark-192.png", type: "image/png", sizes: "192x192" },
+        { url: "/bricket-mark.png", type: "image/png", sizes: "225x225" },
+        { url: "/bricket-mark-512.png", type: "image/png", sizes: "512x512" },
+      ],
       apple: [{ url: "/bricket-mark.png", type: "image/png", sizes: "225x225" }],
     },
     appleWebApp: {
