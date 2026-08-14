@@ -13180,3 +13180,93 @@ button.financial-detail-row:focus-visible {
     outline-offset: 1px;
   }
 }
+
+/* Panel de guías de uso: un único punto de entrada para todos los PDF del
+   personal, abierto desde la cabecera, Usuarios y accesos y el menú Más. */
+.guides-modal {
+  max-width: 720px;
+  width: min(720px, calc(100vw - 32px));
+}
+
+.guides-intro {
+  margin: 0 0 4px;
+  color: var(--muted, #6b7280);
+  font-size: 0.92rem;
+}
+
+.guides-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.guides-list > li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.guides-list.compact > li {
+  grid-template-columns: 1fr auto;
+}
+
+.guides-mark {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: #EC5D31;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.guides-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.guides-body > strong {
+  font-size: 1.02rem;
+  line-height: 1.3;
+}
+
+.guides-body > small {
+  color: var(--muted, #6b7280);
+  line-height: 1.45;
+}
+
+.guides-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+@media (max-width: 720px) {
+  .guides-list > li,
+  .guides-list.compact > li {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .guides-mark {
+    display: none;
+  }
+
+  .guides-actions > .button {
+    flex: 1;
+    text-align: center;
+  }
+}

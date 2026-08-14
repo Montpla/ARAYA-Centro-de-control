@@ -1723,7 +1723,7 @@ function Header({
       </div>
       <div className="top-actions">
         <button className="button secondary" type="button" onClick={onOpenGuide}>
-          Guía de uso
+          Guías de uso
         </button>
         {!project.demo && (
           <div className="currency-control" title={exchangeRateNote(currency)}>
@@ -5267,6 +5267,107 @@ function DeleteUserModal({
   );
 }
 
+// Catálogo único de guías del personal. Todos los accesos de la aplicación
+// (cabecera, Centro de datos, Usuarios y accesos y el menú Más de móvil)
+// abren el mismo panel y lo leen de aquí: añadir una guía nueva en el futuro
+// es añadir una entrada a esta lista, sin tocar cuatro sitios ni arriesgarse
+// a que uno se quede desactualizado.
+const staffGuides = [
+  {
+    id: "corporativa",
+    kicker: "USO DIARIO",
+    title: "Guía corporativa Bricket Control",
+    detail:
+      "Funciones, navegación, permisos, carga documental, cámara, avisos e " +
+      "instalación en móvil, tablet y ordenador.",
+    pages: "7 páginas",
+    url: "/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf",
+    fileName: "guia-corporativa-bricket-control-personal-obra.pdf",
+    viewerTitle: "Guía corporativa Bricket Control · personal de obra.pdf",
+  },
+  {
+    id: "carga",
+    kicker: "AL SUBIR UN ARCHIVO",
+    title: "Subí un archivo y el programa no cambió nada",
+    detail:
+      "Qué pasa al cargar un documento, las seis comprobaciones que debe " +
+      "superar para publicarse solo y cómo saber en qué fase se quedó.",
+    pages: "4 páginas",
+    url: "/data-center/guias/guia-carga-de-archivos-araya.pdf",
+    fileName: "guia-carga-de-archivos-araya.pdf",
+    viewerTitle: "Guía de carga de archivos · Centro de Control ARAYA.pdf",
+  },
+] as const;
+
+function GuidesPanel({
+  onOpenDocument,
+  onClose,
+}: {
+  onOpenDocument: (guide: (typeof staffGuides)[number]) => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <div
+        className="modal guides-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="guides-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="panel-heading">
+          <div>
+            <span className="section-kicker">GRUPO BRICKET · PERSONAL DE OBRA Y OFICINA</span>
+            <h3 id="guides-title">Guías de uso</h3>
+          </div>
+          <button className="close-button" type="button" onClick={onClose} aria-label="Cerrar">×</button>
+        </div>
+        <p className="guides-intro">
+          Documentos breves para consultar en el momento. Se pueden abrir aquí
+          mismo o descargar para compartirlos.
+        </p>
+        <ul className="guides-list">
+          {staffGuides.map((guide) => (
+            <li key={guide.id}>
+              <div className="guides-mark" aria-hidden="true">PDF</div>
+              <div className="guides-body">
+                <span className="section-kicker">{guide.kicker} · {guide.pages}</span>
+                <strong>{guide.title}</strong>
+                <small>{guide.detail}</small>
+              </div>
+              <div className="guides-actions">
+                <button
+                  className="button primary"
+                  type="button"
+                  onClick={() => onOpenDocument(guide)}
+                >
+                  Abrir
+                </button>
+                <a
+                  className="button secondary"
+                  href={guide.url}
+                  download={guide.fileName}
+                  data-file-viewer-bypass="true"
+                >
+                  Descargar
+                </a>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 type TvScreenToken = {
   id: number;
   label: string;
@@ -5599,15 +5700,16 @@ function UsersAdminView({
 
       <section className="panel access-guide-card">
         <div className="panel-heading">
-          <div><span className="section-kicker">ONBOARDING</span><h3>Guía de uso para el personal</h3></div>
-          <button className="button" type="button" onClick={onOpenGuide}>Abrir guía</button>
+          <div><span className="section-kicker">ONBOARDING</span><h3>Guías de uso para el personal</h3></div>
+          <button className="button" type="button" onClick={onOpenGuide}>Abrir guías</button>
         </div>
         <p>
-          Manual breve de 7 páginas: navegación, permisos, carga documental,
-          instalación en móvil, tablet y ordenador, cámara, avisos y
-          seguridad. Compártela con cada persona al darla de alta — el
-          enlace y el código QR de dentro llevan directo a esta misma
-          aplicación.
+          Dos documentos breves: la guía corporativa (navegación, permisos,
+          carga documental, instalación en móvil, tablet y ordenador, cámara,
+          avisos y seguridad) y la guía de carga, que explica por qué un
+          archivo recién subido no siempre cambia las cifras. Compártelas con
+          cada persona al darla de alta — el enlace y el código QR de dentro
+          llevan directo a esta misma aplicación.
         </p>
       </section>
 
@@ -6602,30 +6704,45 @@ function SourcesView({
         </div>
         <button className="button primary" onClick={onUpload}>+ Añadir archivo</button>
       </section>
-      <section className="panel staff-guide-card">
+      {/* Las guías se listan desde el catálogo compartido staffGuides, el
+          mismo que alimenta el panel de la cabecera, Usuarios y accesos y el
+          menú Más de móvil: una guía nueva aparece en los cuatro sitios a la
+          vez sin tocar ninguno. */}
+      <section className="panel staff-guide-card guides-card">
         <div className="staff-guide-mark" aria-hidden="true">PDF</div>
         <div>
-          <span className="section-kicker">GUÍA CORPORATIVA · PERSONAL DE OBRA</span>
-          <h3>Funciones, uso diario e instalación de Bricket Control</h3>
-          <p>Manual breve de 7 páginas para móvil, tablet y ordenador, con acceso, navegación, permisos, carga documental y seguridad.</p>
+          <span className="section-kicker">GUÍAS DE USO · PERSONAL DE OBRA Y OFICINA</span>
+          <h3>Guías de uso del Centro de Control</h3>
+          <p>Documentos breves para consultar en el momento. Se pueden abrir aquí mismo o descargar para compartirlos.</p>
         </div>
-        <div className="staff-guide-actions">
-          <a
-            className="button primary"
-            href="/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf"
-            data-file-title="Guía corporativa Bricket Control · personal de obra.pdf"
-          >
-            Abrir guía
-          </a>
-          <a
-            className="button secondary"
-            href="/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf"
-            download="guia-corporativa-bricket-control-personal-obra.pdf"
-            data-file-viewer-bypass="true"
-          >
-            Descargar PDF
-          </a>
-        </div>
+        <ul className="guides-list compact">
+          {staffGuides.map((guide) => (
+            <li key={guide.id}>
+              <div className="guides-body">
+                <span className="section-kicker">{guide.kicker} · {guide.pages}</span>
+                <strong>{guide.title}</strong>
+                <small>{guide.detail}</small>
+              </div>
+              <div className="guides-actions">
+                <a
+                  className="button primary"
+                  href={guide.url}
+                  data-file-title={guide.viewerTitle}
+                >
+                  Abrir
+                </a>
+                <a
+                  className="button secondary"
+                  href={guide.url}
+                  download={guide.fileName}
+                  data-file-viewer-bypass="true"
+                >
+                  Descargar
+                </a>
+              </div>
+            </li>
+          ))}
+        </ul>
       </section>
       <section className="stat-grid wide">
         <StatCard eyebrow="Fuentes visibles" value={`${visibleSources.length}`} detail={canAccessFinance ? "Repositorio completo autorizado" : "Documentación operativa autorizada"} />
@@ -7963,6 +8080,8 @@ export function DashboardClient({
   const [directionReport, setDirectionReport] = useState<DirectionReportPeriod | null>(null);
   const [workspaceDetail, setWorkspaceDetail] = useState<WorkspaceDetail | null>(null);
   const [fileViewer, setFileViewer] = useState<FileViewerState | null>(null);
+  // Panel único de guías; todos los accesos de la aplicación lo abren.
+  const [guidesOpen, setGuidesOpen] = useState(false);
   const [expandedNavGroup, setExpandedNavGroup] = useState<NavigationGroupId | null>(null);
   const [mobileNavigationGroup, setMobileNavigationGroup] = useState<NavigationGroupId>("obra");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -8921,12 +9040,7 @@ export function DashboardClient({
           onCurrentAvatarUpdated={(avatarUrl) =>
             setProfileUser((current) => ({ ...current, avatarUrl }))
           }
-          onOpenGuide={() =>
-            setFileViewer({
-              url: "/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf",
-              title: "Guía corporativa Bricket Control · personal de obra.pdf",
-            })
-          }
+          onOpenGuide={() => setGuidesOpen(true)}
         />
       );
     }
@@ -9185,12 +9299,7 @@ export function DashboardClient({
           online={online}
           unreadNotifications={unreadNotifications}
           onOpenDeviceCenter={() => setDeviceCenterOpen(true)}
-          onOpenGuide={() =>
-            setFileViewer({
-              url: "/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf",
-              title: "Guía corporativa Bricket Control · personal de obra.pdf",
-            })
-          }
+          onOpenGuide={() => setGuidesOpen(true)}
         />
         <div className="global-search">
           <span>⌕</span>
@@ -9339,13 +9448,10 @@ export function DashboardClient({
                 type="button"
                 onClick={() => {
                   setMobileMenuOpen(false);
-                  setFileViewer({
-                    url: "/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf",
-                    title: "Guía corporativa Bricket Control · personal de obra.pdf",
-                  });
+                  setGuidesOpen(true);
                 }}
               >
-                <i>PDF</i><span><strong>Guía de uso</strong><small>Funciones e instalación</small></span>
+                <i>PDF</i><span><strong>Guías de uso</strong><small>Uso diario y carga de archivos</small></span>
               </button>
               <button
                 type="button"
@@ -9390,6 +9496,16 @@ export function DashboardClient({
             </div>
           </aside>
         </>
+      )}
+
+      {guidesOpen && (
+        <GuidesPanel
+          onClose={() => setGuidesOpen(false)}
+          onOpenDocument={(guide) => {
+            setGuidesOpen(false);
+            setFileViewer({ url: guide.url, title: guide.viewerTitle });
+          }}
+        />
       )}
 
       {deviceCenterOpen && (
