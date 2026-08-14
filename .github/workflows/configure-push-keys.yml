@@ -23,11 +23,11 @@ on:
   workflow_dispatch:
     inputs:
       contacto:
-        description: "Correo de contacto para VAPID_SUBJECT (sin el prefijo mailto:)"
+        description: enriquemontesplaza@gmail.com
         required: true
         type: string
       confirmar:
-        description: 'Escribe "generar" para confirmar (sustituye claves anteriores si las hubiera)'
+        description: generar
         required: true
         type: string
 
