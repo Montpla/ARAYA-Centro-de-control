@@ -5207,6 +5207,143 @@ function DeleteUserModal({
   );
 }
 
+type TvScreenToken = {
+  id: number;
+  label: string;
+  createdByName: string;
+  expiresAt: string;
+  revokedAt: string;
+  lastUsedAt: string;
+  createdAt: string;
+  active: boolean;
+};
+
+// Pantallas del modo TV/obra. El enlace con el token en claro solo se puede
+// copiar en el momento de crearlo: el servidor guarda únicamente su hash, así
+// que no hay forma de volver a mostrarlo. Revocar corta el acceso al instante.
+function TvScreensCard() {
+  const [screens, setScreens] = useState<TvScreenToken[]>([]);
+  const [label, setLabel] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [freshLink, setFreshLink] = useState("");
+  const [message, setMessage] = useState("");
+
+  const refreshScreens = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/tv-tokens", { cache: "no-store" });
+      const payload = await response.json() as { tokens?: TvScreenToken[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo consultar las pantallas.");
+      setScreens(payload.tokens ?? []);
+      setMessage("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo consultar las pantallas.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshScreens();
+  }, [refreshScreens]);
+
+  async function createScreen() {
+    setCreating(true);
+    setFreshLink("");
+    try {
+      const response = await fetch("/api/admin/tv-tokens", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: label.trim() }),
+      });
+      const payload = await response.json() as { url?: string; error?: string; message?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo crear la pantalla.");
+      setFreshLink(payload.url ? `${window.location.origin}${payload.url}` : "");
+      setMessage(payload.message ?? "");
+      setLabel("");
+      await refreshScreens();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo crear la pantalla.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function revokeScreen(id: number) {
+    try {
+      const response = await fetch("/api/admin/tv-tokens", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const payload = await response.json() as { error?: string; message?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo revocar la pantalla.");
+      setMessage(payload.message ?? "");
+      await refreshScreens();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo revocar la pantalla.");
+    }
+  }
+
+  return (
+    <section className="panel tv-screens-card">
+      <div className="panel-heading">
+        <div><span className="section-kicker">PANTALLAS</span><h3>Modo TV para obra y oficina</h3></div>
+      </div>
+      <p>
+        Genera un enlace para una pantalla siempre encendida. Muestra avance,
+        Curva S y acciones vencidas en rotación, sin datos financieros y sin
+        pedir usuario ni contraseña en el dispositivo. Copia el enlace al
+        crearlo: por seguridad no vuelve a mostrarse.
+      </p>
+      <div className="tv-screens-form">
+        <input
+          type="text"
+          value={label}
+          maxLength={120}
+          placeholder="Nombre de la pantalla (p. ej. Oficina de obra)"
+          onChange={(event) => setLabel(event.target.value)}
+        />
+        <button className="button" type="button" onClick={() => void createScreen()} disabled={creating}>
+          {creating ? "Creando…" : "Crear pantalla"}
+        </button>
+      </div>
+      {freshLink && (
+        <div className="tv-screen-link" role="status">
+          <code>{freshLink}</code>
+          <button
+            className="button ghost"
+            type="button"
+            onClick={() => void navigator.clipboard?.writeText(freshLink)}
+          >
+            Copiar enlace
+          </button>
+        </div>
+      )}
+      {message && <div className="access-message" role="status">{message}</div>}
+      {screens.length > 0 && (
+        <ul className="tv-screens-list">
+          {screens.map((screen) => (
+            <li key={screen.id} className={screen.active ? "" : "tv-screen-revoked"}>
+              <span>
+                <strong>{screen.label}</strong>
+                <small>
+                  {screen.active
+                    ? `Activa hasta ${screen.expiresAt.slice(0, 10)}`
+                    : screen.revokedAt ? "Revocada" : "Caducada"}
+                  {screen.lastUsedAt ? ` · último uso ${screen.lastUsedAt.slice(0, 10)}` : " · sin usar todavía"}
+                </small>
+              </span>
+              {screen.active && (
+                <button className="button ghost" type="button" onClick={() => void revokeScreen(screen.id)}>
+                  Revocar
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function UsersAdminView({
   currentUser,
   onCurrentAvatarUpdated,
@@ -5413,6 +5550,8 @@ function UsersAdminView({
           aplicación.
         </p>
       </section>
+
+      <TvScreensCard />
 
       <section className="panel access-directory">
         <div className="panel-heading">

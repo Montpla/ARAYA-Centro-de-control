@@ -550,6 +550,69 @@ test("service worker receives push and opens only a same-origin destination", ()
   ], "dashboard client");
 });
 
+// El modo TV es la única superficie de la aplicación que sirve datos sin una
+// sesión de usuario: la autoriza un token de dispositivo. Una pantalla en la
+// oficina de obra es semi-pública, así que el recorte financiero no puede ser
+// opcional ni depender de que alguien recuerde aplicarlo.
+test("TV mode serves a token-scoped, non-financial snapshot and never stores the raw token", async () => {
+  const [tvRoute, tvTokensRoute, tvPage, tvClient, journal, migration, schemaSource] = await Promise.all([
+    read("app/api/tv/route.ts"),
+    read("app/api/admin/tv-tokens/route.ts"),
+    read("app/tv/page.tsx"),
+    read("app/tv/tv-client.tsx"),
+    read("drizzle/meta/_journal.json"),
+    read("drizzle/0021_tv_device_tokens.sql"),
+    read("db/schema.ts"),
+  ]);
+
+  // La vía de datos es la del usuario sin permiso financiero, no una copia
+  // paralela que pueda divergir con el tiempo.
+  expectPatterns(tvRoute, [
+    /readEffectiveLiveData\(false\)/,
+    /buildControlRoomBaseline\(false,/,
+    /notInArray\(controlActions\.area, financeProtectedAreaValues\(\)\)/,
+  ], "tv route financial scope");
+  // Y no debe filtrarse ninguna raíz financiera por otra vía.
+  assert.doesNotMatch(tvRoute, /readEffectiveLiveData\(true\)/);
+  assert.doesNotMatch(tvRoute, /payables|antonelyPayableInvoiceLines|fiduciary|cxpAging/i);
+
+  // El token viaja por Authorization o query, pero solo su hash llega a D1.
+  expectPatterns(tvRoute, [
+    /createHash\("sha256"\)/,
+    /eq\(tvDeviceTokens\.tokenHash, hashToken\(token\)\)/,
+    /tokenRow\.revokedAt/,
+    /new Date\(tokenRow\.expiresAt\)\.getTime\(\) < Date\.now\(\)/,
+  ], "tv token validation");
+  assert.doesNotMatch(tvRoute, /eq\(tvDeviceTokens\.tokenHash, token\)/);
+
+  // Crear y revocar pantallas es exclusivo de administradores.
+  const adminGuards = tvTokensRoute.match(/requireApiUser\(\{ admin: true \}\)/g) ?? [];
+  assert.equal(adminGuards.length, 3, "GET, POST y PATCH de tv-tokens deben exigir administrador");
+  expectPatterns(tvTokensRoute, [
+    /tokenHash: hashToken\(token\)/,
+    /randomBytes\(32\)/,
+  ], "tv token creation");
+  // publicToken() nunca puede devolver el hash ni el token en claro.
+  const publicTokenBlock = tvTokensRoute.match(/function publicToken[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.ok(publicTokenBlock, "no se encontró publicToken()");
+  assert.doesNotMatch(publicTokenBlock, /tokenHash/);
+
+  // La pantalla retira el token de la barra de direcciones tras guardarlo.
+  expectPatterns(tvClient, [
+    /sessionStorage\.setItem\(TOKEN_STORAGE_KEY/,
+    /history\.replaceState\(null, "", "\/tv"\)/,
+    /Authorization`?: `Bearer \$\{token\}`/,
+  ], "tv client token handling");
+  assert.match(tvPage, /export const dynamic = "force-dynamic"/);
+
+  // La migración debe existir y estar encadenada en el journal, o el
+  // despliegue quedaría con la tabla ausente.
+  assert.match(migration, /CREATE TABLE `tv_device_tokens`/);
+  assert.match(migration, /CREATE UNIQUE INDEX `tv_device_tokens_token_hash_idx`/);
+  assert.match(journal, /"idx": 21[\s\S]*?"tag": "0021_tv_device_tokens"/);
+  assert.match(schemaSource, /export const tvDeviceTokens = sqliteTable\(/);
+});
+
 async function loadBusinessAlertCandidates() {
   const source = await read("lib/business-alerts.ts");
   const output = ts.transpileModule(source, {
