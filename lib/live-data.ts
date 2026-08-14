@@ -135,7 +135,15 @@ const mixedProtectedSourceIds = new Set([
   "source-june-consolidated",
   "source-june-pdf",
 ]);
-const keyPattern = /^[A-Za-z][A-Za-z0-9]*(?:\.(?:[A-Za-z][A-Za-z0-9]*|\d+))*$/;
+// La raíz sigue siendo un identificador alfanumérico (son los nombres fijos de
+// LIVE_DATA_ROOTS). Los segmentos hijos admiten además guiones porque son los
+// que nombran entidades reales: "TH-14", "edificio-14", "14-101". Sin esto,
+// cualquier clave que nombrara un edificio por su código se rechazaba por
+// inválida antes de llegar a resolverse, que es la razón de fondo por la que
+// las actualizaciones de implantación nunca cuajaban. No se admiten puntos ni
+// barras dentro de un segmento, y forbiddenPathSegments sigue cortando
+// __proto__, constructor y prototype.
+const keyPattern = /^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9][A-Za-z0-9-]*)*$/;
 const forbiddenPathSegments = new Set(["__proto__", "constructor", "prototype"]);
 
 export function isLiveDataKey(key: string) {
@@ -272,6 +280,12 @@ export function compactLiveEntities<T extends object>(value: Array<T | null | un
   );
 }
 
+// Campos por los que una entidad de una colección viva puede nombrarse dentro
+// de una clave. `shortName` está aquí y no en stableArrayIdentity porque no
+// identifica a la entidad de forma única en todo el modelo (sirve para
+// nombrarla en una clave, no para reconciliar dos listas completas).
+const ENTITY_NAMING_KEYS = ["id", "code", "shortName", "unitId", "apartmentId", "buildingId"];
+
 function stableArrayIdentity(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "";
   const record = value as Record<string, unknown>;
@@ -281,13 +295,68 @@ function stableArrayIdentity(value: unknown) {
   return "";
 }
 
+// Forma canónica con la que se compara un segmento de clave contra los campos
+// que nombran a una entidad. La obra escribe "TH-14", el modelo de datos
+// guarda shortName "14" e id "edificio-14", y la pantalla rotula
+// "TH-" + shortName.padStart(2, "0"): las tres formas designan al mismo
+// edificio y aquí colapsan en el mismo token ("14"). Se descartan acentos,
+// separadores, el prefijo de tipo y los ceros de relleno.
+export function namingToken(value: string) {
+  const compact = value
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+  if (!compact) return "";
+  const withoutPrefix = compact.replace(/^(th|edificio|torre|apartamento|apto|unidad)/, "");
+  const withoutPadding = withoutPrefix.replace(/^0+(?=\d)/, "");
+  return withoutPadding || withoutPrefix || compact;
+}
+
+// Resuelve qué posición de una colección viva nombra un segmento de clave.
+//
+// Hasta ahora sólo se aceptaba el índice numérico (`buildings.13.progress`),
+// lo que obligaba a quien produjera la clave —la extracción IA, sobre todo— a
+// adivinar la posición exacta de un edificio dentro del array. Cuando fallaba,
+// `Number("TH-14")` daba NaN, la escritura acababa en una propiedad "NaN" del
+// array y el dato se perdía sin error ni aviso: el archivo constaba como
+// procesado y el panel no se movía. Ahora un segmento no numérico se busca
+// entre los campos que nombran a la entidad, así que `buildings.TH-14.progress`
+// llega a su sitio. Devuelve -1 si no corresponde a ninguna entidad viva.
+function resolveArrayIndex(cursor: unknown[], segment: string) {
+  if (/^\d+$/.test(segment)) return Number(segment);
+  const wanted = namingToken(segment);
+  if (!wanted) return -1;
+  for (let index = 0; index < cursor.length; index += 1) {
+    const item = cursor[index];
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const record = item as Record<string, unknown>;
+    for (const key of ENTITY_NAMING_KEYS) {
+      const raw = record[key];
+      if (typeof raw === "string" && namingToken(raw) === wanted) return index;
+    }
+  }
+  return -1;
+}
+
 function setPath(target: unknown, path: string[], value: LiveDataValue) {
   if (!path.length || target === null || typeof target !== "object") return;
   let cursor = target as Record<string, unknown> | unknown[];
   for (let index = 0; index < path.length - 1; index += 1) {
     const segment = path[index];
     const nextSegment = path[index + 1];
-    const key = Array.isArray(cursor) ? Number(segment) : segment;
+    let key: string | number;
+    if (Array.isArray(cursor)) {
+      const resolved = resolveArrayIndex(cursor, segment);
+      // Un código que no corresponde a ninguna entidad viva se descarta entero
+      // en vez de inventar una posición: escribir un "TH-99" inexistente al
+      // final de la lista crearía un edificio fantasma en la implantación.
+      if (resolved < 0) return;
+      key = resolved;
+    } else {
+      key = segment;
+    }
     const current = (cursor as Record<string | number, unknown>)[key];
     if (current === null || typeof current !== "object") {
       (cursor as Record<string | number, unknown>)[key] = /^\d+$/.test(nextSegment) ? [] : {};
@@ -295,7 +364,14 @@ function setPath(target: unknown, path: string[], value: LiveDataValue) {
     cursor = (cursor as Record<string | number, unknown>)[key] as Record<string, unknown> | unknown[];
   }
   const finalSegment = path[path.length - 1];
-  const finalKey = Array.isArray(cursor) ? Number(finalSegment) : finalSegment;
+  let finalKey: string | number;
+  if (Array.isArray(cursor)) {
+    const resolved = resolveArrayIndex(cursor, finalSegment);
+    if (resolved < 0) return;
+    finalKey = resolved;
+  } else {
+    finalKey = finalSegment;
+  }
   (cursor as Record<string | number, unknown>)[finalKey] = cloneValue(value);
 }
 

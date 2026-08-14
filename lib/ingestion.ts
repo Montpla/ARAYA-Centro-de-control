@@ -125,8 +125,13 @@ function extractionMode(extension: string) {
   if (extension === "xls" || extension === "xlsx") {
     return { id: "importador_tabular", label: "Importador tabular asistido" };
   }
-  if (extension === "mpp" || extension === "dwg") {
-    return { id: "especializada", label: "Importación especializada" };
+  // .mpp, .dwg y .zip se archivan tal cual: ninguna de sus cifras llega al
+  // panel. El rótulo anterior ("Importación especializada") daba a entender lo
+  // contrario y costó meses de informes de Project subidos con la expectativa
+  // razonable de que actualizaran la implantación. El nombre dice ahora lo que
+  // el sistema hace de verdad.
+  if (extension === "mpp" || extension === "dwg" || extension === "zip") {
+    return { id: "solo_archivo", label: "Solo archivo (sus datos no actualizan el panel)" };
   }
   if (["jpg", "jpeg", "png"].includes(extension)) {
     return { id: "evidencia_visual", label: "Lectura de evidencia visual" };

@@ -4,6 +4,7 @@ import {
   LiveDataUpdate,
   LiveDataValue,
   materializeLiveRoot,
+  namingToken,
 } from "./live-data";
 import { buildings, urbanismAreas } from "../app/demo-data";
 
@@ -11,12 +12,13 @@ function isRecord(value: unknown): value is Record<string, LiveDataValue> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+// Una sola regla de normalizaci\u00f3n para todo el sistema (lib/live-data.ts): la
+// que aqu\u00ed decide en qu\u00e9 posici\u00f3n cae "TH-14" es la misma que all\u00ed resuelve un
+// nombre al materializar. Cuando eran dos, la obra escrib\u00eda "TH-14", esta
+// funci\u00f3n lo reduc\u00eda a "th14" y no casaba con el shortName "14" del edificio,
+// as\u00ed que la identidad no se resolv\u00eda y el dato acababa descartado.
 function identityToken(value: unknown) {
-  return String(value ?? "")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
+  return namingToken(String(value ?? ""));
 }
 
 function entityMatchesToken(value: unknown, token: string) {
@@ -113,6 +115,50 @@ function resolvedUpdate(update: LiveDataUpdate, key: string, value: LiveDataValu
 }
 
 /**
+ * Traduce a posiciones los nombres de entidad de una ruta espacial profunda,
+ * del tipo `buildings.TH-14.progress` o `buildings.TH-14.units.14-101.status`.
+ *
+ * El upsert de abajo sólo entiende rutas de entidad completa con un objeto por
+ * valor (`buildings.TH-14` = {...}), que es como se dan de alta o se fusionan
+ * entidades. Pero un documento de obra casi siempre aporta el dato suelto —un
+ * porcentaje, un estado—, y esa forma llegaba intacta al contrato, que sólo
+ * convierte en comodín los segmentos numéricos: `buildings.*.progress` casaba,
+ * `buildings.TH-14.progress` no, y el dato se rechazaba por no pertenecer al
+ * modelo. Traducirlo aquí deja una sola representación canónica —posiciones—
+ * viajando por el contrato, la publicación y la base de datos.
+ *
+ * Devuelve null cuando no hay nada que traducir o cuando la entidad nombrada no
+ * existe: inventar una posición escribiría el dato en otro edificio.
+ */
+function resolveDeepSpatialKey(segments: string[], workingValues: LiveDataMap) {
+  if (segments[0] === "buildings" && segments.length > 2) {
+    const current = materializeLiveRoot("buildings", buildings, workingValues) as Building[];
+    const buildingIndex = /^\d+$/.test(segments[1])
+      ? Number(segments[1])
+      : ownEntityIndex(current, identityToken(segments[1]));
+    if (buildingIndex < 0 || !current[buildingIndex]) return null;
+    if (segments[2] === "units" && segments.length > 4) {
+      const units = current[buildingIndex].units ?? [];
+      const unitIndex = /^\d+$/.test(segments[3])
+        ? Number(segments[3])
+        : ownEntityIndex(units, identityToken(segments[3]));
+      if (unitIndex < 0 || !units[unitIndex]) return null;
+      return ["buildings", buildingIndex, "units", unitIndex, ...segments.slice(4)].join(".");
+    }
+    return ["buildings", buildingIndex, ...segments.slice(2)].join(".");
+  }
+  if (segments[0] === "urbanismAreas" && segments.length > 2) {
+    const current = materializeLiveRoot("urbanismAreas", urbanismAreas, workingValues) as UrbanismArea[];
+    const areaIndex = /^\d+$/.test(segments[1])
+      ? Number(segments[1])
+      : ownEntityIndex(current, identityToken(segments[1]));
+    if (areaIndex < 0 || !current[areaIndex]) return null;
+    return ["urbanismAreas", areaIndex, ...segments.slice(2)].join(".");
+  }
+  return null;
+}
+
+/**
  * Resolves natural identity paths emitted by document extraction to stable
  * numeric slots. Existing identities are updated in place; new identities are
  * appended after the highest reserved slot, never into a deletion hole.
@@ -132,7 +178,12 @@ export function resolveSpatialIdentityUpdates(
   for (const { originalIndex, update } of ordered) {
     const segments = update.key.split(".");
     if (!isRecord(update.value)) {
-      resolved[originalIndex] = update;
+      // Un dato suelto sobre una entidad ya existente (lo habitual en un parte
+      // de obra) sólo necesita que su nombre se traduzca a posición.
+      const deepKey = resolveDeepSpatialKey(segments, workingValues);
+      const next = deepKey && deepKey !== update.key ? { ...update, key: deepKey } : update;
+      resolved[originalIndex] = next;
+      workingValues[next.key] = next.value;
       continue;
     }
 

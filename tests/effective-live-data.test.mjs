@@ -921,3 +921,45 @@ test("central redactor preserves operational suppliers but removes their amounts
     undefined,
   );
 });
+
+test("un dato suelto nombrando el edificio de obra llega a su posición real", async () => {
+  const resolveSpatialIdentityUpdates = await loadSpatialIdentityResolver();
+  // TH-14 es el edificio de shortName "14", que vive en la posición 13: si la
+  // traducción se saltara, el contrato rechazaría la clave por no pertenecer al
+  // modelo, o peor, "14" se leería como posición y el avance entraría en TH-13.
+  const [update] = resolveSpatialIdentityUpdates(
+    [{ key: "buildings.TH-14.progress", value: 62.5 }],
+    {},
+  );
+  assert.equal(update.key, "buildings.13.progress");
+  assert.equal(update.value, 62.5);
+});
+
+test("un dato suelto de apartamento traduce edificio y unidad a la vez", async () => {
+  const resolveSpatialIdentityUpdates = await loadSpatialIdentityResolver();
+  const [update] = resolveSpatialIdentityUpdates(
+    [{ key: "buildings.TH-14.units.14-101.progress", value: 35 }],
+    {},
+  );
+  assert.equal(update.key, "buildings.13.units.0.progress");
+});
+
+test("una clave que ya viene por posición no se toca", async () => {
+  const resolveSpatialIdentityUpdates = await loadSpatialIdentityResolver();
+  const [update] = resolveSpatialIdentityUpdates(
+    [{ key: "buildings.13.progress", value: 70 }],
+    {},
+  );
+  assert.equal(update.key, "buildings.13.progress");
+});
+
+test("un edificio inexistente conserva su clave en vez de inventar una posición", async () => {
+  const resolveSpatialIdentityUpdates = await loadSpatialIdentityResolver();
+  // Se deja tal cual a propósito: la validación posterior la rechazará con
+  // aviso, que es preferible a escribir el dato en un edificio cualquiera.
+  const [update] = resolveSpatialIdentityUpdates(
+    [{ key: "buildings.TH-99.progress", value: 100 }],
+    {},
+  );
+  assert.equal(update.key, "buildings.TH-99.progress");
+});

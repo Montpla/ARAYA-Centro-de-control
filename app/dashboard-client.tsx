@@ -1455,6 +1455,11 @@ const defaultUploadArea: Record<View, UploadArea> = {
   usuarios: "direccion",
 };
 
+// Espejo de UNSUPPORTED_EXTENSIONS (lib/ai-document-extraction.ts): formatos
+// que el sistema archiva íntegros pero cuyo contenido no sabe leer, así que
+// ninguna de sus cifras llega al panel.
+const ARCHIVE_ONLY_EXTENSIONS = ["mpp", "dwg", "zip"];
+
 async function uploadProjectFile(
   file: File,
   input: {
@@ -7563,6 +7568,13 @@ function UploadModal({
     setError("");
   }
 
+  // El aviso se da al elegir el archivo, no al terminar de subirlo: quien trae
+  // el corte del mes en un .mpp necesita saber antes de esperar la subida que
+  // sus cifras no van a llegar al panel.
+  const archiveOnlyExtension = selectedFile
+    ? ARCHIVE_ONLY_EXTENSIONS.find((extension) => selectedFile.name.toLowerCase().endsWith(`.${extension}`)) ?? ""
+    : "";
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedFile || saving) return;
@@ -7613,7 +7625,7 @@ function UploadModal({
             />
           )}
           <strong>{selectedFile ? selectedFile.name : "Selecciona o arrastra un archivo"}</strong>
-          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON, PowerPoint, PDF, Word, MPP, DWG, imagen o ZIP · máximo 50 MB"}</span>
+          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON, PowerPoint, PDF, Word o imagen actualizan cifras · MPP, DWG y ZIP solo se archivan · máximo 50 MB"}</span>
         </div>
         <div className="upload-source-actions" aria-label="Opciones de carga en móvil">
           <label>
@@ -7627,6 +7639,20 @@ function UploadModal({
           </label>
           <small>Ideal para avance de obra, incidencias, albaranes y evidencias de campo.</small>
         </div>
+        {archiveOnlyExtension && (
+          <div className="callout warn">
+            <strong>Este archivo se guardará, pero sus datos no actualizarán el panel</strong>
+            <p>
+              Los <b>.{archiveOnlyExtension}</b> se conservan como documento descargable y quedan registrados con su
+              autor y su fecha, pero el sistema no puede leer las cifras de dentro: los avances, los colores de la
+              implantación y los porcentajes seguirán como están.
+            </p>
+            <p>
+              Para que las cifras se actualicen, exporta el mismo corte a <b>Excel</b> desde el programa de origen
+              (en Microsoft Project: <i>Archivo → Guardar como → Libro de Excel</i>) y sube ese archivo.
+            </p>
+          </div>
+        )}
         {!online && <div className="callout warn"><strong>Modo sin conexión</strong><p>Puedes consultar datos, pero las nuevas cargas se reactivarán cuando vuelva internet.</p></div>}
         <details className="upload-advanced-options">
           <summary>
