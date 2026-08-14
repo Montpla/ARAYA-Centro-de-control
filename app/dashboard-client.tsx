@@ -6627,6 +6627,31 @@ function SourcesView({
           </a>
         </div>
       </section>
+      <section className="panel staff-guide-card">
+        <div className="staff-guide-mark" aria-hidden="true">PDF</div>
+        <div>
+          <span className="section-kicker">GUÍA DE CARGA · POR QUÉ ESPERA UN ARCHIVO</span>
+          <h3>Subí un archivo y el programa no cambió nada</h3>
+          <p>Cuatro páginas que explican qué pasa al cargar un documento, las seis comprobaciones que debe superar para publicarse solo y cómo saber en qué fase se quedó.</p>
+        </div>
+        <div className="staff-guide-actions">
+          <a
+            className="button primary"
+            href="/data-center/guias/guia-carga-de-archivos-araya.pdf"
+            data-file-title="Guía de carga de archivos · Centro de Control ARAYA.pdf"
+          >
+            Abrir guía
+          </a>
+          <a
+            className="button secondary"
+            href="/data-center/guias/guia-carga-de-archivos-araya.pdf"
+            download="guia-carga-de-archivos-araya.pdf"
+            data-file-viewer-bypass="true"
+          >
+            Descargar PDF
+          </a>
+        </div>
+      </section>
       <section className="stat-grid wide">
         <StatCard eyebrow="Fuentes visibles" value={`${visibleSources.length}`} detail={canAccessFinance ? "Repositorio completo autorizado" : "Documentación operativa autorizada"} />
         <StatCard eyebrow="Datos gobernados" value={`${visibleAuthorityMatrix.length}`} detail="Indicadores con fuente principal y regla de prevalencia" />
