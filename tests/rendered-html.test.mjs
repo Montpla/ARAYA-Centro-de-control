@@ -1024,7 +1024,11 @@ test("simple uploads request automatic publication only for extracted structured
   assert.doesNotMatch(filesRoute, /update\(documentDataProposals\)[\s\S]*?status: "publicado"/);
   assert.match(publisher, /UPDATE document_data_proposals[\s\S]*?status = 'publicado'/);
   assert.match(filesRoute, /publicaci[^\n]+no pudo confirmarse[^\n]+[\s\S]*requiresReview: true[\s\S]*reviewStatus: "cambios_solicitados"/i);
-  assert.match(filesRoute, /todav[^\n]+no modifica cifras ni gr[^\n]+ficas/i);
+  // Una subida que no publica nada tiene que decirlo con todas las letras. El
+  // texto anterior ("queda pendiente de interpretación; todavía no modifica
+  // cifras ni gráficas") sugería que el proceso seguía en marcha, y quien subía
+  // el corte del mes se quedaba esperando algo que ya había terminado.
+  assert.match(filesRoute, /nothingExtractedMessage\(/);
   assert.match(publisher, /SET status = 'integrado', processing_stage = 'sincronizado'/);
   assert.match(publisher, /processing_progress = 100/);
   assert.match(publisher, /requires_review = 0/);

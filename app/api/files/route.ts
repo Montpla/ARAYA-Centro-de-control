@@ -52,6 +52,7 @@ import { assertLiveDataContracts, getContractRootsSnapshot, validateLiveDataCont
 import { normalizeLiveDataUpdates, publishLiveDataUpdates } from "../../../lib/publish-live-data";
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-upsert";
+import { nothingExtractedMessage } from "../../../lib/upload-messages";
 import {
   proposalPointerWasCommitted,
   stagedGenerationMayBeDeleted,
@@ -1173,7 +1174,11 @@ export async function POST(request: Request) {
         file: publicFileRow(currentRow, user),
         message: automaticMessage || (normalizedUpdates.length
           ? `Archivo registrado en ${areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea}. Se han preparado ${normalizedUpdates.length} cambios para revisión.`
-          : `Archivo registrado en ${areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea}. El original aparece de inmediato y queda pendiente de interpretación; todavía no modifica cifras ni gráficas.`),
+          : nothingExtractedMessage(
+              areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea,
+              extension,
+              extraction.warnings,
+            )),
       },
       { status: 201 },
     );

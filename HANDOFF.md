@@ -565,6 +565,29 @@ relleno, identificador interno, apartamentos, retrocompatibilidad de las
 posiciones y descarte limpio de lo inexistente) y por cuatro casos nuevos en
 `tests/effective-live-data.test.mjs` para la traducción profunda.
 
+## El aviso cuando una subida no mueve ninguna cifra (14/08/2026)
+
+Cierra la misma clase de fallo que las cuatro barreras de la sección anterior,
+pero por el lado de la comunicacion. Cuando no se publicaba ningun dato, la
+respuesta decia:
+
+> "El original aparece de inmediato y queda pendiente de interpretacion;
+> todavia no modifica cifras ni graficas."
+
+Ese texto sugiere que el trabajo sigue en marcha. Cuando el formato no se lee,
+o cuando las claves extraidas se descartan por no encajar en el modelo, **no va
+a ocurrir nada mas**: la extraccion ya termino en esa misma peticion. Quien
+subia el corte del mes se quedaba esperando un procesamiento inexistente, y el
+panel seguia mostrando los mismos valores sin que nada senalara el problema.
+
+`nothingExtractedMessage` (`lib/upload-messages.ts`) dice ahora que el archivo
+queda archivado y descargable pero que ninguna cifra ha entrado, distingue el
+caso del formato que no se lee —con la salida concreta: exportar a Excel o
+CSV— y arrastra los dos primeros avisos de la extraccion en vez de dejarlos
+solo en el registro interno. Vive en `lib/` y no en la propia ruta porque un
+`route.ts` de Next no debe exportar ayudantes, y asi es verificable
+directamente (`tests/upload-messages.test.mjs`).
+
 ## Plan de Cloudflare: Workers Paid desde el 14/08/2026 (leer antes de optimizar la carga)
 
 La cuenta estuvo en **Workers Free** hasta el 14/08/2026, y eso rompía la
