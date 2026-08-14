@@ -2470,6 +2470,25 @@ function applicationServerKey(value: string) {
   return copy.buffer;
 }
 
+// Una suscripción push queda atada a la clave VAPID con la que se creó. Si el
+// servidor cambia de claves —como al migrar de Sites a Cloudflare, o al
+// generarlas por primera vez— la suscripción antigua que el navegador sigue
+// guardando ya no sirve: el servicio push rechaza los envíos y no llega nada,
+// sin ningún error visible en la aplicación. Antes se reutilizaba tal cual con
+// getSubscription(), así que la única salida era borrar los datos del sitio a
+// mano en cada dispositivo. Comparando la clave se detecta y se rehace sola.
+function subscriptionMatchesServerKey(
+  subscription: PushSubscription,
+  expected: ArrayBuffer,
+) {
+  const current = subscription.options?.applicationServerKey;
+  if (!current) return false;
+  const currentBytes = new Uint8Array(current);
+  const expectedBytes = new Uint8Array(expected);
+  if (currentBytes.length !== expectedBytes.length) return false;
+  return currentBytes.every((byte, index) => byte === expectedBytes[index]);
+}
+
 function buildDeviceNotifications(
   snapshot: ControlRoomSnapshot | null,
   liveSync: LiveSyncState,
@@ -8224,11 +8243,19 @@ export function DashboardClient({
         }
         await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
         const registration = await navigator.serviceWorker.ready;
+        const expectedKey = applicationServerKey(serverPublicKey);
         let subscription = await registration.pushManager.getSubscription();
+        if (subscription && !subscriptionMatchesServerKey(subscription, expectedKey)) {
+          // Suscripción creada con una clave VAPID anterior: se retira para
+          // poder crear una válida. Sin esto el dispositivo quedaría mudo
+          // para siempre sin que nada lo indicara.
+          await subscription.unsubscribe().catch(() => undefined);
+          subscription = null;
+        }
         if (!subscription) {
           subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: applicationServerKey(serverPublicKey),
+            applicationServerKey: expectedKey,
           });
         }
         const subscriptionResponse = await fetch("/api/push/subscription", {

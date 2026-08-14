@@ -561,6 +561,31 @@ test("push readiness distinguishes device permission from server capability", as
   );
 });
 
+// Una suscripción push queda atada a la clave VAPID con la que se creó. Al
+// generar claves nuevas —o migrarlas de plataforma— la suscripción que el
+// navegador conserva deja de valer: el servicio push rechaza los envíos y no
+// llega nada, sin error visible. Reutilizarla con getSubscription() sin
+// comprobar la clave dejaba el dispositivo mudo hasta borrar los datos del
+// sitio a mano, en cada dispositivo y persona.
+test("stale push subscriptions from an older VAPID key are replaced automatically", async () => {
+  const dashboard = await read("app/dashboard-client.tsx");
+
+  expectPatterns(dashboard, [
+    /function subscriptionMatchesServerKey\(/,
+    /subscription\.options\?\.applicationServerKey/,
+    /currentBytes\.every\(\(byte, index\) => byte === expectedBytes\[index\]\)/,
+    /if \(subscription && !subscriptionMatchesServerKey\(subscription, expectedKey\)\)/,
+    /await subscription\.unsubscribe\(\)/,
+  ], "stale push subscription recovery");
+
+  // La suscripción existente no puede volver a aceptarse sin comprobarla.
+  assert.doesNotMatch(
+    dashboard,
+    /let subscription = await registration\.pushManager\.getSubscription\(\);\s*\n\s*if \(!subscription\) \{/,
+    "getSubscription() no debe reutilizarse sin validar la clave del servidor",
+  );
+});
+
 test("service worker receives push and opens only a same-origin destination", () => {
   expectPatterns(serviceWorker, [
     /self\.addEventListener\(["']push["']/,
