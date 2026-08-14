@@ -8108,6 +8108,11 @@ export function DashboardClient({
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
   const [serverNotifications, setServerNotifications] = useState<ServerNotification[]>([]);
   const [pushSubscriptionReady, setPushSubscriptionReady] = useState(false);
+  // Distinto de pushSubscriptionReady: aquí se guarda si el *servidor* puede
+  // enviar avisos (claves VAPID presentes), no si este dispositivo tiene
+  // suscripción. Sin esta señal, un servidor sin configurar era
+  // indistinguible de todo correcto. null = todavía sin consultar.
+  const [pushServerConfigured, setPushServerConfigured] = useState<boolean | null>(null);
   const [deviceSecurityReady, setDeviceSecurityReady] = useState(false);
   const [biometricSupported, setBiometricSupported] = useState(false);
   const [biometricRecord, setBiometricRecord] = useState<LocalBiometricRecord | null>(null);
@@ -8210,7 +8215,10 @@ export function DashboardClient({
         });
         if (!configResponse.ok) throw new Error("Configuración push no disponible.");
         const config = await configResponse.json() as PushConfigResponse;
-        if (!config.enabled || !config.publicKey) {
+        const serverPublicKey = config.publicKey ?? "";
+        const serverReady = Boolean(config.enabled) && serverPublicKey.length > 0;
+        setPushServerConfigured(serverReady);
+        if (!serverReady) {
           setPushSubscriptionReady(false);
           return false;
         }
@@ -8220,7 +8228,7 @@ export function DashboardClient({
         if (!subscription) {
           subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: applicationServerKey(config.publicKey),
+            applicationServerKey: applicationServerKey(serverPublicKey),
           });
         }
         const subscriptionResponse = await fetch("/api/push/subscription", {
@@ -9518,6 +9526,7 @@ export function DashboardClient({
             notifications={deviceNotifications}
             readIds={effectiveReadNotificationIds}
             notificationPermission={notificationPermission}
+            pushServerConfigured={pushServerConfigured}
             biometricSupported={biometricSupported}
             biometricConfigured={Boolean(biometricRecord)}
             biometricBusy={biometricBusy}

@@ -193,6 +193,7 @@ export function DeviceCenter({
   notifications,
   readIds,
   notificationPermission,
+  pushServerConfigured,
   biometricSupported,
   biometricConfigured,
   biometricBusy,
@@ -212,6 +213,8 @@ export function DeviceCenter({
   notifications: DeviceNotificationItem[];
   readIds: string[];
   notificationPermission: DeviceNotificationPermission;
+  // null mientras no se ha podido consultar /api/push/config todavía.
+  pushServerConfigured: boolean | null;
   biometricSupported: boolean;
   biometricConfigured: boolean;
   biometricBusy: boolean;
@@ -229,11 +232,22 @@ export function DeviceCenter({
   onLockNow: () => void;
 }) {
   const unread = notifications.filter((item) => !readIds.includes(item.id)).length;
+  // El permiso del navegador y la capacidad real de enviar avisos son cosas
+  // distintas: sin claves VAPID en el servidor, el permiso puede estar
+  // concedido y aun así no llegar nada con la aplicación cerrada. Antes esto
+  // se mostraba como "Activadas · ACTIVO", que es justo lo que hacía
+  // invisible el problema.
+  const pushBlockedOnServer = notificationPermission === "granted" && pushServerConfigured === false;
   const permissionLabel =
+    pushBlockedOnServer ? "Solo con la aplicación abierta" :
     notificationPermission === "granted" ? "Activadas" :
     notificationPermission === "denied" ? "Bloqueadas por el dispositivo" :
     notificationPermission === "unsupported" ? "No disponibles" :
     "Pendientes de activar";
+  const permissionState =
+    pushBlockedOnServer ? "LIMITADO" :
+    notificationPermission === "granted" ? "ACTIVO" :
+    "CONFIGURAR";
 
   return (
     <div className="device-center-backdrop" role="presentation" onMouseDown={onClose}>
@@ -257,9 +271,19 @@ export function DeviceCenter({
           <div className="device-capability-heading">
             <span className="device-capability-icon">●</span>
             <div><strong>Notificaciones del dispositivo</strong><small>{permissionLabel}</small></div>
-            <i className={notificationPermission === "granted" ? "ready" : ""}>{notificationPermission === "granted" ? "ACTIVO" : "CONFIGURAR"}</i>
+            <i className={permissionState === "ACTIVO" ? "ready" : ""}>{permissionState}</i>
           </div>
-          <p>Recibe avisos cuando llega una revisión viva, una acción o una incidencia crítica mientras Bricket Control está activo.</p>
+          {pushBlockedOnServer ? (
+            <p>
+              Este dispositivo tiene permiso, pero el servidor todavía no puede
+              enviar avisos: faltan las claves de notificación (VAPID) en el
+              entorno de producción. Mientras tanto solo verás avisos con la
+              aplicación abierta, no con el teléfono bloqueado. Avisa al
+              administrador del Centro de Control.
+            </p>
+          ) : (
+            <p>Recibe avisos cuando llega una revisión viva, una acción o una incidencia crítica mientras Bricket Control está activo.</p>
+          )}
           <div className="device-capability-actions">
             {notificationPermission !== "granted" && notificationPermission !== "unsupported" && (
               <button className="button primary" type="button" onClick={onEnableNotifications}>Activar notificaciones</button>
