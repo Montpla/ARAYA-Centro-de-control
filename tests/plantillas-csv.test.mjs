@@ -140,13 +140,15 @@ test("el urbanismo se actualiza por el identificador de su área", async () => {
 
 test("las plantillas generadas sólo contienen claves que el modelo admite", async () => {
   const ingestion = await loadIngestion();
-  const archivos = [
-    "01-avance-edificios.csv",
-    "02-avance-apartamentos-1de2.csv",
-    "03-urbanismo.csv",
-    "04-curva-s-mensual.csv",
-    "05-resumen-proyecto.csv",
-  ];
+  // Todas las plantillas generadas, no una muestra: cada lista del modelo tiene
+  // sus propios campos y su propia forma de nombrarse, así que una que quedara
+  // fuera de la comprobación podría estar publicando claves que el contrato
+  // rechaza sin que nada lo detectara.
+  const { readdir } = await import("node:fs/promises");
+  const archivos = (await readdir(new URL("../plantillas/", import.meta.url)))
+    .filter((nombre) => nombre.endsWith(".csv"))
+    .sort();
+  assert.ok(archivos.length >= 15, `esperaba al menos 15 plantillas, hay ${archivos.length}`);
   for (const archivo of archivos) {
     const csv = await readFile(new URL(`../plantillas/${archivo}`, import.meta.url), "utf8");
     // Se rellena cada fila con un número para comprobar que ninguna clave de la
