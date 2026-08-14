@@ -545,7 +545,7 @@ test("service worker receives push and opens only a same-origin destination", ()
     /fetch\(["']\/api\/push\/config["']/,
     /registration\.pushManager\.subscribe\(/,
     /fetch\(["']\/api\/push\/subscription["']/,
-    /fetch\(["']\/api\/notifications\?limit=100["']/,
+    /fetchWithEtag\(["']\/api\/notifications\?limit=100["']/,
     /fetch\(["']\/api\/presence["']/,
   ], "dashboard client");
 });

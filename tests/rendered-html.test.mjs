@@ -428,7 +428,7 @@ test("all variable dashboard values use a versioned live-data layer with five-se
     readFile("lib/publish-live-data.ts", "utf8"),
     readFile("app/globals.css", "utf8"),
   ]);
-  assert.match(dashboard, /fetch\("\/api\/live-data"/);
+  assert.match(dashboard, /fetchWithEtag\("\/api\/live-data"/);
   assert.match(dashboard, /applyLiveValuesToTargets/);
   assert.match(dashboard, /setInterval\(\(\) => void refreshLiveData\(\), 5_000\)/);
   assert.match(dashboard, /Gráficas, cifras, porcentajes, cronograma y avance/);
@@ -480,9 +480,11 @@ test("providers open a protected, live invoice ledger with auditable source reco
   assert.match(invoiceData, /PAYABLE_SOURCE_URL/);
   assert.match(route, /requireApiUser\(\{ finance: true \}\)/);
   assert.match(route, /antonelyPayableInvoiceLines/);
-  assert.match(route, /Cache-Control", "private, no-store"/);
+  // conditionalJson fija Cache-Control: private, no-store y añade el ETag
+  // del sondeo condicional (304 sin cuerpo cuando no hay cambios).
+  assert.match(route, /conditionalJson\(request/);
   assert.match(liveData, /"antonelyPayableInvoiceLines"/);
-  assert.match(dashboard, /fetch\("\/api\/payables"/);
+  assert.match(dashboard, /fetchWithEtag\("\/api\/payables"/);
   assert.match(dashboard, /window\.setInterval\(\(\) => void refreshPayables\(\), 5_000\)/);
   assert.match(dashboard, /Proveedores y facturas registradas/);
   assert.match(dashboard, /Abrir proveedor/);
@@ -690,7 +692,9 @@ test("points three to eight add a live operational control room without autonomo
   assert.match(route, /requestKey/);
   assert.match(route, /No tienes acceso para crear acciones financieras/);
   assert.match(route, /La creación del informe completo requiere acceso financiero/);
-  assert.match(route, /Cache-Control", "private, no-store"/);
+  // conditionalJson fija Cache-Control: private, no-store y añade el ETag
+  // del sondeo condicional (304 sin cuerpo cuando no hay cambios).
+  assert.match(route, /conditionalJson\(request/);
   assert.match(control, /buildControlRoomBaseline/);
   assert.match(control, /duplicateApartmentCodes/);
   assert.match(control, /delayedPackages/);

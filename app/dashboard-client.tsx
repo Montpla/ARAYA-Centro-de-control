@@ -150,6 +150,23 @@ import type {
 // existente in place. Los campos mutados in place (projectSnapshot.x = y,
 // monthlyPlan[i] = {...}) sobrevivían porque seguían siendo el mismo objeto;
 // los reasignados (juneReport = liveJuneReportFinance(...), etc.) no.
+// Sondeo condicional: cada endpoint de 5s guarda el ETag de su última
+// respuesta y lo reenvía en If-None-Match. Un 304 sin cuerpo significa "sin
+// cambios": el llamante conserva su estado (o el payload cacheado) y se evita
+// re-descargar el JSON completo en cada ciclo. Importante: Response.ok es
+// false en un 304, así que cada llamante comprueba status === 304 antes que
+// su manejo de error.
+type EtagState = { etag: string };
+
+async function fetchWithEtag(url: string, state: EtagState, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  if (state.etag) headers.set("If-None-Match", state.etag);
+  const response = await fetch(url, { ...init, cache: "no-store", headers });
+  const etag = response.headers.get("ETag");
+  if (response.ok && etag) state.etag = etag;
+  return response;
+}
+
 let dashboardBootstrapInstalled = false;
 function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
   if (dashboardBootstrapInstalled) return;
@@ -3950,9 +3967,11 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
   useEffect(() => {
     if (!canAccessFinance) return;
     let active = true;
+    const payablesEtag: EtagState = { etag: "" };
     const refreshPayables = async () => {
       try {
-        const response = await fetch("/api/payables", { cache: "no-store" });
+        const response = await fetchWithEtag("/api/payables", payablesEtag);
+        if (response.status === 304) return;
         if (!response.ok) throw new Error("No se pudo consultar el detalle de facturas.");
         const payload = await response.json() as PayablesDataset;
         if (!active) return;
@@ -7815,9 +7834,14 @@ export function DashboardClient({
     (item) => !effectiveReadNotificationIds.includes(item.id),
   ).length;
 
+  const controlRoomEtagRef = useRef<EtagState>({ etag: "" });
   const refreshControlRoom = useCallback(async () => {
     try {
-      const response = await fetch("/api/control-room", { cache: "no-store" });
+      const response = await fetchWithEtag("/api/control-room", controlRoomEtagRef.current);
+      if (response.status === 304) {
+        setControlRoomError("");
+        return;
+      }
       const payload = (await response.json()) as ControlRoomSnapshot & { error?: string };
       if (!response.ok) throw new Error(payload.error || "Sala operativa no disponible.");
       setControlRoom(payload);
@@ -8024,14 +8048,15 @@ export function DashboardClient({
   useEffect(() => {
     let active = true;
     let refreshing = false;
+    const notificationsEtag: EtagState = { etag: "" };
     const refreshNotifications = async () => {
       if (refreshing || !navigator.onLine) return;
       refreshing = true;
       try {
-        const response = await fetch("/api/notifications?limit=100", {
+        const response = await fetchWithEtag("/api/notifications?limit=100", notificationsEtag, {
           credentials: "same-origin",
-          cache: "no-store",
         });
+        if (response.status === 304) return;
         if (!response.ok) throw new Error("Notificaciones no disponibles.");
         const payload = await response.json() as ServerNotificationsResponse;
         const incoming = Array.isArray(payload.notifications)
@@ -8209,14 +8234,30 @@ export function DashboardClient({
   useEffect(() => {
     let active = true;
     let refreshing = false;
+    type LivePayload = {
+      healthy?: boolean;
+      values?: LiveDataMap;
+      revision?: number;
+      refreshedAt?: string;
+      latestEvent?: LiveSyncState["latestEvent"];
+      currentUser?: DashboardUser;
+    };
+    type DashboardPayload = {
+      metrics?: CustomMetric[];
+      suppliers?: Supplier[];
+    };
+    const liveEtag: EtagState = { etag: "" };
+    const dashboardEtag: EtagState = { etag: "" };
+    let cachedLive: LivePayload | null = null;
+    let cachedDashboard: DashboardPayload | null = null;
 
     async function refreshLiveData() {
       if (refreshing) return;
       refreshing = true;
       try {
         const [liveResponse, dashboardResponse] = await Promise.all([
-          fetch("/api/live-data", { cache: "no-store" }),
-          fetch("/api/dashboard", { cache: "no-store" }),
+          fetchWithEtag("/api/live-data", liveEtag),
+          fetchWithEtag("/api/dashboard", dashboardEtag),
         ]);
         if ([liveResponse.status, dashboardResponse.status].some((status) => status === 401 || status === 403)) {
           removeBiometricRecord(currentUser.id);
@@ -8224,21 +8265,33 @@ export function DashboardClient({
           window.location.assign("/signout-with-chatgpt?return_to=/");
           return;
         }
-        if (!liveResponse.ok || !dashboardResponse.ok) throw new Error("Sincronización no disponible");
+        const liveNotModified = liveResponse.status === 304 && cachedLive !== null;
+        const dashboardNotModified = dashboardResponse.status === 304 && cachedDashboard !== null;
+        if (liveNotModified && dashboardNotModified) {
+          // Sin cambios en el servidor: la cinta de conexión sigue viva y el
+          // resto del estado se conserva sin re-aplicar ni re-renderizar.
+          if (active) {
+            setLiveSync((current) => ({
+              ...current,
+              status: "connected",
+              refreshedAt: new Date().toISOString(),
+            }));
+          }
+          return;
+        }
+        if ((!liveResponse.ok && !liveNotModified) || (!dashboardResponse.ok && !dashboardNotModified)) {
+          throw new Error("Sincronización no disponible");
+        }
         const [liveData, dashboardData] = await Promise.all([
-          liveResponse.json() as Promise<{
-            healthy?: boolean;
-            values?: LiveDataMap;
-            revision?: number;
-            refreshedAt?: string;
-            latestEvent?: LiveSyncState["latestEvent"];
-            currentUser?: DashboardUser;
-          }>,
-          dashboardResponse.json() as Promise<{
-            metrics?: CustomMetric[];
-            suppliers?: Supplier[];
-          }>,
+          liveNotModified
+            ? Promise.resolve(cachedLive as LivePayload)
+            : liveResponse.json() as Promise<LivePayload>,
+          dashboardNotModified
+            ? Promise.resolve(cachedDashboard as DashboardPayload)
+            : dashboardResponse.json() as Promise<DashboardPayload>,
         ]);
+        cachedLive = liveData;
+        cachedDashboard = dashboardData;
         if (!active) return;
         const refreshedUser = liveData.currentUser;
         if (
