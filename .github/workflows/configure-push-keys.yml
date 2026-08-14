@@ -23,11 +23,12 @@ on:
   workflow_dispatch:
     inputs:
       contacto:
-        description: enriquemontesplaza@gmail.com
+        description: "Correo de contacto (ya viene relleno; cámbialo solo si quieres otro)"
         required: true
         type: string
+        default: enriquemontesplaza@gmail.com
       confirmar:
-        description: generar
+        description: 'Escribe la palabra: generar'
         required: true
         type: string
 
