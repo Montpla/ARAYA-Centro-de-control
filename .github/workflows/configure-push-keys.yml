@@ -1,0 +1,109 @@
+name: Configurar claves de notificaciones (VAPID)
+
+# Genera el par de claves VAPID y lo guarda como secretos del Worker en
+# Cloudflare, sin que las claves pasen por el chat, por un correo ni por los
+# logs de esta ejecución.
+#
+# Por qué existe: al migrar de Sites a Cloudflare Workers se migró
+# OPENAI_API_KEY pero no las claves de notificaciones, que se quedaron en el
+# entorno antiguo (ver HANDOFF.md). Sin ellas el servidor no puede enviar
+# ningún aviso push: el permiso del navegador se concede, la aplicación se
+# rinde en silencio y no llega nada al teléfono.
+#
+# La clave privada se genera dentro del runner, se enmascara en el log y se
+# envía directamente a Cloudflare por stdin. Nadie llega a verla, ni siquiera
+# quien lanza el workflow.
+#
+# CUIDADO: si ya había claves configuradas, esto las sustituye y **todas las
+# suscripciones existentes dejan de funcionar** — cada persona tendría que
+# volver a activar las notificaciones en su dispositivo. Por eso pide una
+# confirmación explícita.
+
+on:
+  workflow_dispatch:
+    inputs:
+      contacto:
+        description: "Correo de contacto para VAPID_SUBJECT (sin el prefijo mailto:)"
+        required: true
+        type: string
+      confirmar:
+        description: 'Escribe "generar" para confirmar (sustituye claves anteriores si las hubiera)'
+        required: true
+        type: string
+
+concurrency:
+  group: configure-push-keys
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Comprobar confirmación y correo
+        env:
+          CONTACTO: ${{ inputs.contacto }}
+          CONFIRMAR: ${{ inputs.confirmar }}
+        run: |
+          if [ "$CONFIRMAR" != "generar" ]; then
+            echo "::error::Confirmación incorrecta. Escribe exactamente: generar"
+            exit 1
+          fi
+          case "$CONTACTO" in
+            *@*.*) ;;
+            *) echo "::error::El contacto debe ser un correo válido, sin mailto:"; exit 1 ;;
+          esac
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Generar claves y guardarlas en Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CONTACTO: ${{ inputs.contacto }}
+        run: |
+          set -euo pipefail
+
+          # Par de claves EC P-256 en el formato base64url que espera Web Push.
+          node -e '
+            const { webcrypto } = require("node:crypto");
+            const b64url = (buf) => Buffer.from(buf).toString("base64")
+              .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+            (async () => {
+              const pair = await webcrypto.subtle.generateKey(
+                { name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"],
+              );
+              const pub = await webcrypto.subtle.exportKey("raw", pair.publicKey);
+              const jwk = await webcrypto.subtle.exportKey("jwk", pair.privateKey);
+              require("node:fs").writeFileSync(".vapid.json", JSON.stringify({
+                publicKey: b64url(pub),
+                privateKey: jwk.d,
+              }));
+            })();
+          '
+
+          PUBLIC_KEY="$(node -p 'require("./.vapid.json").publicKey')"
+          PRIVATE_KEY="$(node -p 'require("./.vapid.json").privateKey')"
+          rm -f .vapid.json
+
+          # Enmascarar antes de cualquier uso: si algo las imprimiera por
+          # error, el log mostraría *** en su lugar.
+          echo "::add-mask::$PRIVATE_KEY"
+          echo "::add-mask::$PUBLIC_KEY"
+
+          printf '%s' "$PUBLIC_KEY" | npx wrangler secret put VAPID_PUBLIC_KEY --config wrangler.deploy.jsonc
+          printf '%s' "$PRIVATE_KEY" | npx wrangler secret put VAPID_PRIVATE_KEY --config wrangler.deploy.jsonc
+          printf 'mailto:%s' "$CONTACTO" | npx wrangler secret put VAPID_SUBJECT --config wrangler.deploy.jsonc
+
+          echo "Claves VAPID configuradas en el Worker."
+          echo "Siguiente paso: cada persona debe volver a activar las notificaciones en su dispositivo."
