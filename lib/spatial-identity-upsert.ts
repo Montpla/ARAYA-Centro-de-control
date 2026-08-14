@@ -3,6 +3,7 @@ import {
   LiveDataMap,
   LiveDataUpdate,
   LiveDataValue,
+  findNamedEntityIndex,
   materializeLiveRoot,
   namingToken,
 } from "./live-data";
@@ -159,6 +160,37 @@ function resolveDeepSpatialKey(segments: string[], workingValues: LiveDataMap) {
 }
 
 /**
+ * Traduce a posición el nombre de una entidad en cualquier otra colección del
+ * modelo: `cxpCategories.Edificaciones.amount`, `monthlyPlan.jul.actual`,
+ * `costBreakdown.Construcción.june`.
+ *
+ * Sólo 5 de las 26 colecciones traen id, así que las económicas —CxP, coste,
+ * anticipos, ventas, permisos, plan mensual— sólo podían dirigirse por su
+ * posición en la lista. Con eso, que el orden cambiara o que la extracción
+ * errara el número bastaba para que un importe entrara en otra partida sin que
+ * nada lo señalara. Es el mismo fallo que tenían los edificios, sobre cifras
+ * económicas.
+ *
+ * Necesita las colecciones de partida (`roots`) porque, a diferencia de
+ * edificios y urbanismo, no se pueden importar de antemano: son medio centenar
+ * y viven repartidas por varios módulos.
+ */
+function resolveNamedListKey(
+  segments: string[],
+  workingValues: LiveDataMap,
+  roots: Record<string, unknown> | undefined,
+) {
+  if (!roots || segments.length < 3 || /^\d+$/.test(segments[1])) return null;
+  const baseline = roots[segments[0]];
+  if (!Array.isArray(baseline)) return null;
+  const current = materializeLiveRoot(segments[0], baseline, workingValues);
+  if (!Array.isArray(current)) return null;
+  const index = findNamedEntityIndex(current, segments[1]);
+  if (index < 0 || !current[index]) return null;
+  return [segments[0], index, ...segments.slice(2)].join(".");
+}
+
+/**
  * Resolves natural identity paths emitted by document extraction to stable
  * numeric slots. Existing identities are updated in place; new identities are
  * appended after the highest reserved slot, never into a deletion hole.
@@ -166,6 +198,7 @@ function resolveDeepSpatialKey(segments: string[], workingValues: LiveDataMap) {
 export function resolveSpatialIdentityUpdates(
   updates: LiveDataUpdate[],
   currentValues: LiveDataMap,
+  roots?: Record<string, unknown>,
 ) {
   const workingValues: LiveDataMap = { ...currentValues };
   const ordered = updates.map((update, originalIndex) => ({ originalIndex, update })).sort((left, right) => {
@@ -180,7 +213,8 @@ export function resolveSpatialIdentityUpdates(
     if (!isRecord(update.value)) {
       // Un dato suelto sobre una entidad ya existente (lo habitual en un parte
       // de obra) sólo necesita que su nombre se traduzca a posición.
-      const deepKey = resolveDeepSpatialKey(segments, workingValues);
+      const deepKey = resolveDeepSpatialKey(segments, workingValues) ??
+        resolveNamedListKey(segments, workingValues, roots);
       const next = deepKey && deepKey !== update.key ? { ...update, key: deepKey } : update;
       resolved[originalIndex] = next;
       workingValues[next.key] = next.value;

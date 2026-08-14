@@ -565,6 +565,43 @@ relleno, identificador interno, apartamentos, retrocompatibilidad de las
 posiciones y descarte limpio de lo inexistente) y por cuatro casos nuevos en
 `tests/effective-live-data.test.mjs` para la traducción profunda.
 
+## Las cifras economicas tambien se dirigen por nombre (14/08/2026)
+
+Al preguntar el usuario si el fallo de los edificios pasaba tambien con las
+cuentas, una auditoria de las 26 colecciones de lista del modelo mostro que
+**solo 5 traen id** (buildings, urbanismAreas, customMetrics, dataSources y
+timeline). Las 21 restantes -CxP, coste, anticipos, ventas, permisos, plan
+mensual- se distinguen por su nombre de negocio ("Edificaciones",
+"Construccion", "Grupo Alugav"), por su mes ("jun 25") o por su entidad
+emisora, y ninguno de esos campos se reconocia: la unica forma de dirigir un
+importe era su posicion en la lista. Bastaba con que el orden cambiara o con
+que la extraccion errara el numero para que **el dinero entrara en otra
+partida sin que nada lo senalara** — el mismo fallo de los edificios, sobre
+cifras economicas.
+
+`ENTITY_NAMING_KEYS` reconoce ahora tambien `name`, `month`, `period`,
+`entity`, `category`, `concept` y `label`, y `resolveNamedListKey`
+(`lib/spatial-identity-upsert.ts`) traduce esos nombres a posicion para
+cualquier coleccion, no solo las espaciales. Necesita las colecciones de
+partida como argumento (`getContractRootsSnapshot()`) porque son medio centenar
+y viven repartidas por varios modulos.
+
+Dos cautelas que salieron de aqui y conviene no deshacer:
+
+- **El prefijo de tipo solo se recorta si detras viene un numero.** La primera
+  version lo quitaba siempre, y "Torres del Este" quedaba en "sdeleste" y
+  "Torre Norte" en "norte". Con nombres tecnicos daba igual, pero al admitir
+  nombres de negocio dos partidas distintas podian colapsar en el mismo token.
+
+- **Un nombre que senala a dos entidades no escribe en ninguna.** Elegir la
+  primera repartiria el importe a cara o cruz entre dos lineas. Esto no es
+  teorico: la Curva S abarca 27 meses y solo lleva ano en el primero de cada
+  uno, asi que **"jul" designa a la vez a julio de 2025, 2026 y 2027** (y
+  "ago" igual). Como el avance fisico global sale de la ultima fila con
+  ejecutado no nulo, escribir en el ano equivocado desplazaria el KPI principal
+  del proyecto. Por eso la plantilla `04-curva-s-mensual.csv` usa posiciones y
+  no etiquetas de mes.
+
 ## El aviso cuando una subida no mueve ninguna cifra (14/08/2026)
 
 Cierra la misma clase de fallo que las cuatro barreras de la sección anterior,
