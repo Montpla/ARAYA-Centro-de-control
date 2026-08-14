@@ -1904,11 +1904,11 @@ errores de `npm run lint` preexistentes en `app/dashboard-client.tsx`
 (react/no-unescaped-entities ×2 y un setState-en-efecto), ajenos a este
 cambio; el pipeline de despliegue no ejecuta lint, así que no bloquean.
 
-**Pendiente tras el despliegue a producción** (el push a `main` despliega y
-verifica solo): comprobar con sesión autenticada real que la guía y un par
-de documentos más abren; si funciona, restaurar lo revertido el 13/08 — el
-botón "Guía de uso" de la cabecera y la verificación autenticada de la guía
-en `deploy.mjs`.
+**Desplegado y verificado el 14/08/2026**: el push a `main` (ejecución 23 de
+`deploy.yml`) pasó la cadena completa en verde, incluida la verificación
+autenticada real contra producción. Lo revertido el 13/08 quedó restaurado
+el mismo día — ver "Restauración de la guía y su guarda de regresión" al
+final de este documento.
 
 ## Mejoras de tiempo real (14/08/2026)
 
@@ -2018,13 +2018,44 @@ distancia en vez de dejar que la inmediatez de la interfaz la disimule.
 prueba falla si alguna clave no existe en `LIVE_DATA_ROOTS` (un mapeo mal
 escrito dejaría el semáforo apagado para siempre sin que nadie lo notara).
 
-### Pendiente de estas cuatro
+### Estado de estas cuatro
 
-Verificar en producción con sesión real tras el despliegue, y aplicar la
-migración 0021 antes de usar el modo TV. Las opciones propuestas y no
-implementadas todavía (SSE, WebSockets con Durable Objects, resumen diario
-por cron, recordatorios al responsable de área, consolidación de los ~6
-sondeos por pestaña) siguen sobre la mesa.
+Desplegadas y verificadas en producción el 14/08/2026 (ejecución 23 de
+`deploy.yml`, en verde con verificación autenticada real). La migración
+`0021_tv_device_tokens.sql` la aplicó el usuario en D1 remoto ese mismo día,
+tabla e índice único confirmados.
+
+Las opciones propuestas y no implementadas todavía (SSE, WebSockets con
+Durable Objects, resumen diario por cron, recordatorios al responsable de
+área, consolidación de los ~6 sondeos por pestaña) siguen sobre la mesa.
+
+## Restauración de la guía y su guarda de regresión (14/08/2026)
+
+Con el 404 de `/data-center/` ya corregido y desplegado, se restauró lo que
+el 13/08 hubo que revertir precisamente porque el bug seguía abierto:
+
+- **Botón "Guía de uso" en la cabecera** (`Header` en
+  `app/dashboard-client.tsx`, junto al selector de moneda). Abre el PDF
+  corporativo en el visor interno. Se suma a los accesos que nunca se
+  quitaron: `Centro de datos`, `Usuarios y accesos` y `Más` en móvil.
+- **Verificación autenticada de documentos en `scripts/deploy.mjs`**, ahora
+  pidiendo **dos** documentos en vez de uno: la guía y el informe IFC de
+  julio. Piden carpetas distintas a propósito, para distinguir "falta un
+  objeto suelto en R2" de "toda la ruta `/data-center/` está rota otra vez".
+  Se restauró sin el código de diagnóstico temporal (volcados de cabeceras y
+  del cuerpo) que acompañaba a la versión del 13/08.
+- **Aserción en `tests/live-sync-consistency.test.mjs`** que exige que
+  `deploy.mjs` siga pidiendo esos dos documentos.
+
+Por qué importa esta guarda: `app/data-center/[...path]/route.ts` sirve estos
+archivos **solo desde R2**, y esa subida vive fuera del build
+(`scripts/sync-historical-documents.mjs`). Ninguna prueba local puede ver si
+el objeto llegó realmente a R2 en un despliegue concreto — hace falta una
+sesión autenticada contra producción. Es exactamente el hueco por el que los
+23 documentos estuvieron rotos desde que se crearon sin que nadie lo notara.
+
+A partir de ahora, cada despliegue falla en voz alta si un documento fijo
+deja de abrirse.
 
 ## Criterios de continuidad
 

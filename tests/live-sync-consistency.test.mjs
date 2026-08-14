@@ -148,4 +148,14 @@ test("every /data-center/ document referenced from the app exists on disk and th
   // Y el pipeline de despliegue debe ejecutarlo siempre, no como paso manual
   // aparte que alguien tenga que recordar correr.
   assert.match(deployScript, /sync-historical-documents\.mjs/);
+
+  // La verificación autenticada contra producción debe seguir pidiendo dos
+  // documentos reales con la cookie de sesión: es la única comprobación que
+  // detecta si la sincronización a R2 falló, si el objeto desapareció, o si
+  // algo volvió a eclipsar la ruta /data-center/ (el bug del 13/08, que
+  // ninguna prueba local llegó a ver). Se revirtió aquel día porque no podía
+  // pasar mientras el bug siguiera abierto; restaurada el 14/08 con la causa
+  // ya corregida y verificada en producción.
+  assert.match(deployScript, /guia-corporativa-bricket-control-personal-obra\.pdf/);
+  assert.match(deployScript, /informe-analisis-ifc-2026-07-29\.pdf/);
 });
