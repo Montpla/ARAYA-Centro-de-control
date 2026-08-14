@@ -505,6 +505,46 @@ Para cambios visuales de posición, comprobar:
 4. Que al pulsarlo se abra la ficha correcta.
 5. Que la vista técnica siga operativa.
 
+## Plan de Cloudflare: Workers Paid desde el 14/08/2026 (leer antes de optimizar la carga)
+
+La cuenta estuvo en **Workers Free** hasta el 14/08/2026, y eso rompía la
+carga de archivos en producción de una forma que costó identificar: subir un
+`.mpp` de 5,23 MB devolvía en la interfaz `Unexpected token '<', "<!DOCTYPE
+"... is not valid JSON`. Ese error no es un fallo de la aplicación: es la
+página HTML de error de Cloudflare colándose donde el cliente esperaba JSON,
+porque el Worker se quedaba sin **tiempo de CPU** (Free: 10 ms por
+invocación) al leer el archivo, calcular su SHA-256 y enviarlo a R2.
+
+Encajaba con todo lo observado: los CSV y JSON pequeños funcionaban desde
+siempre, y los informes reales (Excel, PPTX, MPP de varios MB) no. En el
+panel de Cloudflare se veía `9.397 / 100.000 requests` y `Upgrade`
+disponible, las dos señales del plan gratuito.
+
+**Workers Paid** (5 $/mes) sube el límite a 30 s de CPU por invocación y
+elimina el techo de 100.000 peticiones diarias. No requiere ningún cambio de
+código ni un despliegue: el límite es de cuenta y se aplica al instante.
+
+Dos cosas que conviene no olvidar:
+
+- **El techo de peticiones era un problema latente y grave**, no solo un
+  límite teórico. El dashboard consulta unos 4 endpoints cada 5 s por
+  pestaña abierta: ~23.000 peticiones por persona y jornada de 8 h. Con
+  cuatro personas en la oficina de República Dominicana se agotaban las
+  100.000 antes del final del día y la aplicación dejaba de responder **para
+  todos**. Si algún día se vuelve al plan gratuito, esto reaparece.
+- **La alternativa sin pagar habría sido parcial**, y por eso se descartó:
+  evitar que el Worker procese el archivo (streaming directo a R2, SHA-256
+  en el navegador) arregla `.mpp`, `.dwg` y `.zip` — justo los tres formatos
+  que solo se archivan — pero no los Excel ni los PDF, que necesitan estar
+  en memoria para que `extractStructuredUpdates` y `extractDocumentWithAI`
+  lean sus cifras. Es decir, habría dejado sin resolver precisamente los
+  archivos que alimentan el dashboard.
+
+Si en el futuro hay que volver a bajar el consumo de CPU o de peticiones, el
+camino con más recorrido es consolidar los ~4 sondeos por pestaña en uno
+solo (sigue pendiente, ver "Mejoras de tiempo real"), no reescribir la
+carga.
+
 ## Publicación con Cloudflare Workers (vigente)
 
 Implementado el 13/08/2026, a petición explícita del usuario de automatizar
