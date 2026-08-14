@@ -552,6 +552,16 @@ cuando haya una migración nueva, aplicarla aparte, una sola vez:
 npx wrangler d1 execute araya-centro-control-d1 --remote --file=drizzle/<archivo>.sql
 ```
 
+Desde el 14/08/2026 ese comando **ya no exige un ordenador con wrangler
+instalado y credenciales de Cloudflare a mano**:
+`.github/workflows/migrate-d1.yml` lo ejecuta desde la pestaña **Actions**
+de GitHub (workflow "Aplicar migración D1"). Se dispara solo a mano, pide el
+nombre del archivo y la confirmación literal `aplicar`, rechaza rutas o
+subidas de directorio, imprime el SQL antes de ejecutarlo y reutiliza los
+secretos que ya usa `deploy.yml` — ninguna credencial nueva. Las migraciones
+siguen igual de fuera del pipeline automático: lo que cambió es quién puede
+lanzarlas y desde dónde, no cuándo.
+
 ### Despliegue automático al hacer push (GitHub Actions)
 
 Añadido el 13/08/2026, a petición explícita del usuario tras preguntar qué
@@ -2028,6 +2038,43 @@ tabla e índice único confirmados.
 Las opciones propuestas y no implementadas todavía (SSE, WebSockets con
 Durable Objects, resumen diario por cron, recordatorios al responsable de
 área, consolidación de los ~6 sondeos por pestaña) siguen sobre la mesa.
+
+## Guías de uso: segunda guía y panel unificado (14/08/2026)
+
+El personal de República Dominicana preguntaba con frecuencia por qué el
+programa "no funciona" cuando suben un archivo y las cifras no cambian. No
+es un fallo — es la cadena de comprobaciones de la publicación automática
+(ver `app/api/files/route.ts`, `canPublishAutomatically`) — pero nadie fuera
+del equipo técnico tenía forma de saberlo.
+
+- **Guía nueva**: "Subí un archivo y el programa no cambió nada", 4 páginas.
+  Explica el recorrido en tres pasos (se guarda / se lee / se publica), qué
+  formatos se interpretan, las seis comprobaciones que debe superar un dato
+  para publicarse solo — con la más frecuente primero: que el concepto
+  exista en el catálogo del contrato vivo — y cómo comprobar en qué fase se
+  quedó cada archivo. Todo el contenido salió de leer el código, no de
+  suposiciones.
+- **Generador**: `scripts/generate_upload_guide_pdf.py`. **Importa** las
+  utilidades de `generate_staff_guide_pdf.py` (colores, fuentes, retículas,
+  helpers de dibujo) en vez de duplicarlas, así que un cambio de identidad
+  visual se hace una sola vez. Copia el PDF a
+  `historical/data-center/guias/`, de modo que el Centro de datos lo sirve y
+  el despliegue lo sube a R2 sin pasos manuales.
+- **Panel unificado**: con una sola guía, el botón de la cabecera podía
+  abrir el PDF directamente; con dos deja de servir. Ahora la cabecera,
+  `Usuarios y accesos` y `Más` en móvil abren el mismo panel `GuidesPanel`, y
+  el Centro de datos lista ambas en una sola tarjeta.
+- **`staffGuides` es la fuente única** (en `app/dashboard-client.tsx`):
+  título, descripción, páginas y rutas de cada guía. El panel y la tarjeta
+  lo recorren. **Añadir una guía en el futuro es añadir una entrada a esa
+  lista** — aparece en los cuatro accesos a la vez. Al añadir la segunda a
+  mano hubo que tocar varios puntos; ese es exactamente el patrón que esta
+  lista evita.
+
+Para regenerar cualquiera de los dos PDF hace falta `reportlab` (`pip
+install reportlab`). Las páginas se revisaron renderizadas una a una antes
+de publicar; conviene seguir haciéndolo, porque un texto que se sale de su
+caja no lo detecta ninguna prueba.
 
 ## Restauración de la guía y su guarda de regresión (14/08/2026)
 
