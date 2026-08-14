@@ -505,6 +505,66 @@ Para cambios visuales de posición, comprobar:
 4. Que al pulsarlo se abra la ficha correcta.
 5. Que la vista técnica siga operativa.
 
+## Por qué la implantación nunca se actualizaba (14/08/2026)
+
+El usuario llevaba meses subiendo el corte mensual de obra y viendo que los
+colores de los edificios, sus porcentajes y el indicador de urbanismo no se
+movían: seguían clavados en los valores de fábrica. No era un fallo, eran
+**cuatro barreras encadenadas**, todas silenciosas — el archivo constaba como
+procesado y nada avisaba de que sus cifras se habían quedado por el camino.
+
+**1. El archivo era un `.mpp`.** Microsoft Project está en
+`UNSUPPORTED_EXTENSIONS`: se archiva íntegro y nunca se lee. Y `extractionMode`
+lo rotulaba **"Importación especializada"**, que da a entender exactamente lo
+contrario. Ese rótulo, más que el propio límite, es lo que sostuvo el
+malentendido durante meses. Ahora se llama "Solo archivo (sus datos no
+actualizan el panel)" y el modal de carga avisa **al elegir el fichero**, no
+después de subirlo.
+
+**2. El guion invalidaba la clave.** `keyPattern` sólo admitía segmentos
+`[A-Za-z][A-Za-z0-9]*` o `\d+`, así que `buildings.TH-14.progress` se rechazaba
+por "no pertenecer al modelo vivo" — y también `buildings.edificio-14.progress`,
+con el identificador que genera el propio sistema. Cualquier clave que nombrara
+un edificio por su código moría en la validación. Los segmentos hijos admiten
+ahora guiones; la raíz sigue siendo alfanumérica y `forbiddenPathSegments`
+sigue cortando `__proto__` y compañía.
+
+**3. El contrato sólo comodinizaba números.** `buildings.*.progress` casaba con
+`buildings.13.progress` pero no con `buildings.TH-14.progress`. Se resuelve
+traduciendo el nombre a posición **antes** de que la clave viaje
+(`resolveDeepSpatialKey`, en `lib/spatial-identity-upsert.ts`), de modo que por
+el contrato, la publicación y la base de datos sigue circulando una sola
+representación canónica: posiciones. El upsert que ya existía sólo cubría rutas
+de entidad completa con objeto por valor (`buildings.TH-14` = `{...}`), y un
+parte de obra casi siempre trae el dato suelto.
+
+**4. Había dos normalizaciones distintas.** `identityToken` reducía "TH-14" a
+"th14", que no casa con el `shortName` "14" del edificio. Ahora ambos módulos
+comparten `namingToken` (`lib/live-data.ts`), que descarta acentos,
+separadores, el prefijo de tipo (`TH`, `edificio`, `torre`, `apartamento`…) y
+los ceros de relleno: "TH-14", "edificio-14", "TH-014" y "14" colapsan en el
+mismo token.
+
+**La trampa que conviene no olvidar:** los 26 edificios **no están ordenados
+por su código**. La posición 0 es el edificio "3" (rotulado TH-03) y el
+edificio "14" (TH-14) vive en la posición 13. Por eso un número suelto en una
+clave significa posición y nunca número de edificio — `buildings.14` apunta a
+TH-13, no a TH-14. Se ha mantenido así por retrocompatibilidad estricta (las
+claves ya publicadas traen posiciones y reinterpretarlas habría movido datos
+asentados), y el prompt de extracción lo advierte ahora de forma explícita,
+con la instrucción de escribir siempre el nombre visible.
+
+`setPath` (`lib/live-data.ts`) resuelve además nombres al materializar, como
+red de seguridad: antes hacía `Number("TH-14")` → `NaN`, escribía en una
+propiedad "NaN" del array y el dato se perdía sin error ni aviso. Un nombre que
+no corresponde a ninguna entidad viva se descarta entero en vez de inventar una
+posición, que crearía un edificio fantasma en la implantación.
+
+Cubierto por `tests/live-key-naming.test.mjs` (nombres de obra, ceros de
+relleno, identificador interno, apartamentos, retrocompatibilidad de las
+posiciones y descarte limpio de lo inexistente) y por cuatro casos nuevos en
+`tests/effective-live-data.test.mjs` para la traducción profunda.
+
 ## Plan de Cloudflare: Workers Paid desde el 14/08/2026 (leer antes de optimizar la carga)
 
 La cuenta estuvo en **Workers Free** hasta el 14/08/2026, y eso rompía la
