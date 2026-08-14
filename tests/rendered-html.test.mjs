@@ -137,16 +137,30 @@ test("normalized source data contains 26 buildings and 156 apartments", async ()
   assert.match(source, /urbanismAreas/);
 });
 
-test("project selector keeps ARAYA separate from the fictional demo project", async () => {
+test("la promoción de demostración ya no forma parte del Centro de Control", async () => {
+  // Mirador del Parque era un proyecto ficticio para enseñar el programa. Se
+  // retiró el 14/08/2026 por petición expresa: la aplicación ya está en uso
+  // real y un proyecto simulado conviviendo con el de obra es una fuente de
+  // confusión, no una ayuda.
   const source = await readFile("app/dashboard-client.tsx", "utf8");
-  assert.match(source, /type ProjectId = "araya" \| "mirador"/);
-  assert.match(source, /MIRADOR DEL PARQUE/);
-  assert.match(source, /Proyecto ficticio de demostración/);
-  assert.match(source, /Todos los nombres, cifras y documentos de Mirador del Parque son simulados/);
+  assert.doesNotMatch(source, /mirador/i, "no debe quedar rastro de la promoción de demostración");
+  assert.doesNotMatch(source, /demoBuildings|DemoProjectContent|DemoMasterplan|DemoOverview/);
+});
+
+test("el selector de promociones sigue montado para dar de alta las que pida el cliente", async () => {
+  // Se conserva a propósito la estructura completa —tipo, registro, selector y
+  // distintivo de demostración—: la intención es ir añadiendo promociones según
+  // las pida el cliente, y desmontarla obligaría a rehacerla entera.
+  const source = await readFile("app/dashboard-client.tsx", "utf8");
+  assert.match(source, /type ProjectId = "araya"/);
+  assert.match(source, /const projects: Record<ProjectId/);
   assert.match(source, /role="listbox"/);
   assert.match(source, /setActiveProjectId/);
-  assert.match(source, /14 edificios · 84 apartamentos/);
-  assert.match(source, /DemoProjectContent/);
+  assert.match(source, /demo: boolean/);
+  assert.match(source, /demo-badge/);
+  // La advertencia sobre los datos sin segmentar tiene que seguir junto al
+  // tipo: dar de alta una promoción nueva hoy le mostraría las cifras de ARAYA.
+  assert.match(source, /NO están separados por promoción/);
 });
 
 test("sidebar uses the official Bricket brand mark", async () => {

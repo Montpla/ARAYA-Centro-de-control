@@ -159,17 +159,37 @@ La Curva S dispone de un control `Pantalla completa` en todas sus apariciones:
 - En tablet y móvil conserva el desplazamiento horizontal para no comprimir ni
   recortar los 27 meses de la gráfica.
 
-El selector de proyecto activo permite abrir dos promociones:
+El selector de promocion activa contiene hoy una sola: `ARAYA`, el proyecto
+real, con sus datos documentales y todas las funciones.
 
-- `ARAYA`: proyecto real, con sus datos documentales y todas las funciones
-  existentes.
-- `MIRADOR DEL PARQUE`: proyecto ficticio de demostración, con 14 edificios,
-  84 apartamentos, urbanismo, planificación, cronología, proveedores, métricas y
-  fuentes simuladas. Toda la interfaz lo identifica como `PROYECTO DEMO`.
+`MIRADOR DEL PARQUE` era un proyecto ficticio de demostracion (14 edificios, 84
+apartamentos, urbanismo, planificacion, cronologia, proveedores y fuentes
+simuladas) que servia para ensenar el programa. **Se retiro el 14/08/2026 por
+peticion expresa**: la aplicacion ya esta en uso real y un proyecto simulado
+conviviendo con el de obra confunde mas de lo que ayuda. Con el se fueron su
+componente de contenido, sus datos de ejemplo, la rama de busqueda que los
+recorria y unas 50 reglas de CSS que quedaron huerfanas.
 
-Los datos de ambos proyectos están separados. El agente IA y las altas
-persistentes de métricas o proveedores permanecen vinculados únicamente a
-ARAYA para evitar mezclar registros reales con la demostración.
+**La estructura multipromocion se conserva entera a proposito** —el tipo
+`ProjectId`, el registro `projects`, el selector y el distintivo
+`PROYECTO DEMO`—, porque la intencion es ir dando de alta promociones nuevas
+segun las pida el cliente. Desmontarla obligaria a rehacerla.
+
+### Antes de dar de alta una promocion nueva
+
+Anadir una entrada a `projects` y ampliar la union `ProjectId` hace aparecer la
+promocion en el selector, pero **no le da datos propios**: de las 23 tablas,
+solo `uploaded_files` y `notification_events` llevan `project_id`. Los datos
+vivos —avances, cifras, edificios, apartamentos, urbanismo, curva S— son
+globales, asi que una promocion nueva mostraria exactamente las mismas cifras
+que ARAYA.
+
+Darla de alta de verdad exige antes segmentar esos datos por promocion:
+anadir `project_id` a las tablas de datos vivos y a sus indices, filtrar por el
+en `readEffectiveLiveData` y en la publicacion, y decidir que hacer con el
+historico ya publicado (que es de ARAYA). Es un trabajo de calado, no una linea
+de configuracion. La advertencia esta tambien junto a `type ProjectId` en
+`app/dashboard-client.tsx`, que es donde la va a leer quien lo intente.
 
 La carga documental colaborativa está disponible en todas las pestañas de
 ARAYA mediante `+ Cargar archivo` y también dentro del chat del agente:
