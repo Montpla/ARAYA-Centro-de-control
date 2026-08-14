@@ -1,21 +1,23 @@
 #!/usr/bin/env node
-// Sube a R2 todos los documentos fijos bajo public/data-center/.
+// Sube a R2 todos los documentos fijos bajo historical/data-center/.
 //
 // `app/data-center/[...path]/route.ts` es la única ruta que los sirve, y
 // wrangler.deploy.jsonc la marca `run_worker_first: ["/data-center/*"]`: esas
 // peticiones nunca las resuelve la capa de activos estáticos (`dist/client`),
 // siempre pasan por el Worker, que busca el objeto en el bucket R2 `FILES`
-// bajo la clave `historical${pathname}`. Colocar un archivo en
-// public/data-center/... lo deja en el repo y en el build, pero es
-// completamente invisible para esa ruta si nadie lo sube también a R2.
+// bajo la clave `historical${pathname}`. El directorio del repo replica esa
+// clave: historical/data-center/<ruta> ↔ clave R2 historical/data-center/<ruta>
+// ↔ URL /data-center/<ruta>.
 //
-// Así estuvieron rotos en producción (404) los 23 documentos fijos del
-// Centro de Control — guía corporativa, fuentes de junio/julio y balances
-// del fideicomiso — desde que se crearon: la subida a R2 nunca se
-// automatizó ni se volvió a comprobar en vivo tras el primer despliegue.
+// Estos documentos NO deben vivir bajo public/: vinext registra todo public/
+// como rutas de archivo estático que ganan a las rutas dinámicas de la app
+// (orden de Next.js), así que un archivo en public/data-center/... eclipsa a
+// route.ts y la petición acaba en env.ASSETS.fetch(), que devuelve 404 vacío
+// porque public/.assetsignore excluye data-center/** de los activos. Ese era
+// el 404 de producción de todos los documentos fijos del Centro de Control.
 //
-// Para que esto no pueda volver a pasar, este script recorre todo
-// public/data-center/ y sincroniza cada archivo con su clave R2
+// Para que la subida a R2 no pueda volver a olvidarse, este script recorre
+// todo historical/data-center/ y sincroniza cada archivo con su clave R2
 // correspondiente en cada `npm run deploy` — no depende de una lista a
 // mano que alguien tenga que recordar actualizar.
 
@@ -26,7 +28,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const WRANGLER_CONFIG = "wrangler.deploy.jsonc";
-const SOURCE_DIR = path.join(ROOT, "public", "data-center");
+const SOURCE_DIR = path.join(ROOT, "historical", "data-center");
 
 const config = JSON.parse(readFileSync(path.join(ROOT, WRANGLER_CONFIG), "utf8"));
 const bucketName = config.r2_buckets?.find((bucket) => bucket.binding === "FILES")?.bucket_name;
@@ -73,7 +75,7 @@ if (!statSync(SOURCE_DIR, { throwIfNoEntry: false })?.isDirectory()) {
 }
 
 const files = collectFiles(SOURCE_DIR);
-console.log(`  ${files.length} documento(s) bajo public/data-center/`);
+console.log(`  ${files.length} documento(s) bajo historical/data-center/`);
 
 for (const filePath of files) {
   const relativePath = path.relative(SOURCE_DIR, filePath).split(path.sep).join("/");

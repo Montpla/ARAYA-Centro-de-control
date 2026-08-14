@@ -386,7 +386,7 @@ Fuente DWG original del usuario:
 
 Copia incorporada al Centro de datos:
 
-`public/data-center/002-implantacion-general.dwg`
+`historical/data-center/002-implantacion-general.dwg`
 
 Activos principales:
 
@@ -646,14 +646,14 @@ Incorporado el 29/07/2026:
 
 Copias descargables:
 
-`public/data-center/junio-2026/`
+`historical/data-center/junio-2026/`
 
 Archivo de Antonely:
 
 - Origen:
   `C:\Users\Usuario1\OneDrive\Desktop\Antonely\Datos para Informe Jun-26.xlsx`
 - Copia:
-  `public/data-center/junio-2026/datos-para-informe-jun-26.xlsx`
+  `historical/data-center/junio-2026/datos-para-informe-jun-26.xlsx`
 - SHA-256:
   `C87ABEA3FEA21BB44D598313C2FAA8719F22FF4B265C30EBD45358897B9D590F`
 - Hojas: costes acumulados, cuentas por pagar, anticipos y balance.
@@ -748,7 +748,7 @@ Se recibieron siete archivos y se revisaron completos:
 - Cuatro páginas PDF.
 - Los dos archivos `CUADRO COMPARATIVO-PROVEEDORES 30-07-2026` son copias
   binarias idénticas. Se conservan ambos, pero solo uno alimenta los datos.
-- Los originales están en `public/data-center/julio-2026/`.
+- Los originales están en `historical/data-center/julio-2026/`.
 
 Nuevos módulos:
 
@@ -798,7 +798,7 @@ Implementación:
 ### Flujo de obra Fase I reprogramado
 
 Archivo integrado:
-`public/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx`.
+`historical/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx`.
 
 - Se revisaron sus seis hojas, 1.137 fórmulas y todas las páginas renderizadas.
   No contiene errores de fórmula ni enlaces externos.
@@ -839,7 +839,7 @@ expresamente iniciar el punto 2.
 - La copia binaria del comparativo de proveedores continúa almacenada para
   trazabilidad, pero queda excluida de cálculos.
 - Los cuatro estados de Fiduciaria Universal quedaron incorporados en
-  `public/data-center/junio-2026/fideicomiso/` y en una pestaña financiera
+  `historical/data-center/junio-2026/fideicomiso/` y en una pestaña financiera
   independiente `Fideicomiso`.
 - `app/fiduciary-statements-data.ts` conserva el estado de situación, balance de
   comprobación, resultados de junio, resultados acumulados y conciliación con
@@ -1074,7 +1074,7 @@ Implementado y publicado el 31/07/2026:
   las fichas, las fuentes y el visor. Las cargas privadas siguen pasando por
   autorización y conservan la restricción financiera.
 - Se incorporó la guía de siete páginas
-  `public/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`.
+  `historical/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`.
   Se puede abrir o descargar desde `Centro de datos` y desde `Más → Guía de
   uso` en móvil.
 - El original editable se genera con
@@ -1608,7 +1608,7 @@ escritorio (`UsersAdminView`) ahora tiene una tarjeta "Guía de uso para el
 personal" con botón "Abrir guía", además de los accesos ya existentes en
 `Centro de datos` y `Más → Guía de uso` en móvil (ver "Apertura documental y
 guía corporativa de la versión 41"). El PDF servido en
-`public/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`
+`historical/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`
 se regeneró con la URL corregida.
 
 **Estado real de instalación por plataforma**:
@@ -1679,7 +1679,9 @@ correspondiente, verificados con descarga y comparación de tamaño en bytes
 contra el original local.
 
 **Arreglo de fondo**: `scripts/sync-historical-documents.mjs` (nuevo) recorre
-recursivamente todo `public/data-center/` y sube cada archivo a R2 bajo su
+recursivamente todo el directorio de documentos fijos (hoy
+`historical/data-center/`; en su versión original `public/data-center/`, ver
+la sección de resolución del 14/08/2026) y sube cada archivo a R2 bajo su
 clave `historical/data-center/<ruta relativa>`, con el tipo de contenido
 resuelto por extensión (debe reflejar `canonicalMimeByExtension` en
 `route.ts`). No depende de una lista a mano — cualquier archivo nuevo que se
@@ -1691,7 +1693,7 @@ es un comando aparte que alguien tenga que acordarse de correr.
 prueba que extrae todas las rutas `/data-center/...` referenciadas en
 `app/dashboard-client.tsx`, `app/demo-data.ts` y
 `app/antonely-payable-invoices.ts`, y falla si alguna no tiene un archivo
-correspondiente en `public/data-center/`; además confirma por patrón que el
+correspondiente en el directorio de documentos fijos; además confirma por patrón que el
 script de sincronización sigue recorriendo el directorio completo (no una
 lista a mano) y que `deploy.mjs` sigue invocándolo. Esto no prueba que el
 archivo llegue a R2 en cada entorno, pero si alguien añade un enlace a un
@@ -1700,17 +1702,26 @@ y mientras el paso del pipeline exista, todo lo que sí está en el repo queda
 sincronizado en cada despliegue sin intervención manual.
 
 **Al añadir un documento fijo nuevo en el futuro**: basta con colocarlo bajo
-`public/data-center/...` y enlazarlo desde la app con esa misma ruta — el
-siguiente `npm run deploy` lo sube a R2 solo. No hace falta tocar
+`historical/data-center/...` (NUNCA bajo `public/data-center/` — ver la
+resolución del 14/08/2026 más abajo; una prueba lo impide) y enlazarlo desde
+la app con la ruta `/data-center/...` equivalente — el siguiente
+`npm run deploy` lo sube a R2 solo. No hace falta tocar
 `scripts/sync-historical-documents.mjs`.
 
 Verificado con `wrangler r2 object get --file` sobre una muestra (el DWG de
 18,4 MB, un balance del fideicomiso, el informe IFC) comparando bytes
 descargados contra el archivo local: coinciden exactamente.
 
-## `/data-center/[...path]` sigue devolviendo 404 en producción — sin resolver (13/08/2026)
+## `/data-center/[...path]` devolvía 404 en producción — RESUELTO el 14/08/2026 (ver sección siguiente)
 
-**Esto NO está arreglado.** La sección anterior (los 23 documentos subidos a
+Esta sección conserva el diagnóstico del 13/08 tal como quedó al cerrar
+aquella sesión. La causa raíz se encontró y corrigió al día siguiente; la
+sección siguiente documenta la resolución. La hipótesis nº2 de aquí abajo
+era esencialmente correcta, con un matiz: la decisión no la toma Cloudflare
+sino el propio router de vinext, y no consulta `env.ASSETS` — consulta un
+manifiesto de rutas públicas generado en build.
+
+La sección anterior (los 23 documentos subidos a
 R2) es un arreglo real y necesario, pero no basta: con sesión autenticada
 real, **cualquier** URL `/data-center/...` — la guía, un informe, un balance,
 todos probados — sigue devolviendo 404 en producción, aunque el objeto
@@ -1830,6 +1841,74 @@ que decide entre `env.ASSETS.fetch()` y el enrutado de la app, en vez de
 seguir probando cambios a ciegas en producción. Si se encuentra y arregla la
 causa real, restaurar el botón de la cabecera y la verificación en
 `deploy.mjs` que se revirtieron aquí.
+
+## Resolución del 404 de `/data-center/[...path]` (14/08/2026)
+
+Causa raíz encontrada por lectura del código de vinext 0.0.50 (sin
+experimentos en producción), corregida y validada en local. La cadena
+completa del bug:
+
+1. **vinext registra todo `public/` como rutas de archivo estático que ganan
+   a las rutas dinámicas de la app** (fiel al orden de resolución de
+   Next.js: archivo público antes que ruta dinámica). En build,
+   `scanPublicFileRoutes` (`vinext/dist/utils/public-routes.js`) recorre
+   `public/` completo — **sin mirar `.assetsignore`** — y graba el resultado
+   como un `Set` literal (`__publicFiles`) dentro de `dist/server/index.js`.
+2. En cada petición, `resolvePublicFileRoute`
+   (`vinext/dist/server/request-pipeline.js`) consulta ese Set **antes** del
+   enrutado hacia `app/.../route.ts`. Como los 23 documentos vivían en
+   `public/data-center/...`, toda URL `/data-center/...` coincidía y el
+   handler devolvía una "señal de archivo estático" (cabecera interna
+   `VINEXT_STATIC_FILE_HEADER`) — por eso `route.ts` **nunca se ejecutaba**
+   y ningún log ni `try/catch` suyo aparecía jamás.
+3. El entry del Worker (`app-router-entry.js` → `resolveStaticAssetSignal`
+   en `worker-utils.js`) resuelve esa señal con `env.ASSETS.fetch()`. Pero
+   `public/.assetsignore` excluye `data-center/**` de los activos
+   desplegados (a propósito, para que nadie los lea sin autenticación), así
+   que ASSETS devolvía 404 con cuerpo vacío, y `mergeHeaders` le fusionaba
+   las cabeceras del middleware (`Vary: *`, `Cache-Control: private…`) —
+   exactamente el 404 vacío "con cabeceras de la app" observado el 13/08.
+   Esto también explica por qué desactivar el matcher de `proxy.ts`
+   (hipótesis nº1) no cambió nada: el eclipse ocurre después del
+   middleware, en la resolución de archivos públicos.
+
+**Arreglo estructural**: los documentos privados no deben vivir bajo
+`public/`. Se movieron los 23 con `git mv` de `public/data-center/` a
+`historical/data-center/` (directorio nuevo del repo cuya ruta replica
+exactamente la clave R2 `historical/data-center/<ruta>`; la URL pública
+sigue siendo `/data-center/<ruta>` y no cambió ningún enlace de la app).
+Con `public/data-center/` inexistente, el manifiesto `__publicFiles` del
+build ya no contiene ninguna entrada `/data-center/...` (verificado en
+`dist/server/index.js` tras `npm run build`), las peticiones llegan por fin
+a `app/data-center/[...path]/route.ts` y este las sirve desde R2 — donde
+los 23 objetos ya estaban desde el 13/08, byte a byte.
+
+Cambios acompañantes:
+
+- `scripts/sync-historical-documents.mjs`: `SOURCE_DIR` pasa a
+  `historical/data-center/`; mismo recorrido recursivo y mismas claves R2.
+- `tests/live-sync-consistency.test.mjs`: la comprobación de existencia usa
+  `historical${ruta}` y una prueba nueva falla si `public/data-center/`
+  vuelve a existir (recrearlo reintroduciría el eclipse: el archivo se
+  serviría o bien como 404 vacío con `.assetsignore`, o bien **sin
+  autenticación** sin él).
+- `tests/rendered-html.test.mjs`: rutas de lectura actualizadas al
+  directorio nuevo.
+- `public/.assetsignore` conserva `data-center/**` como defensa en
+  profundidad.
+
+Validación local: `npx tsc --noEmit`, `npm run build`, 101/101 pruebas y
+`git diff --check` en verde; manifiesto `__publicFiles` del bundle sin
+entradas `/data-center/...` y `dist/client/` sin el directorio. Nota: hay 3
+errores de `npm run lint` preexistentes en `app/dashboard-client.tsx`
+(react/no-unescaped-entities ×2 y un setState-en-efecto), ajenos a este
+cambio; el pipeline de despliegue no ejecuta lint, así que no bloquean.
+
+**Pendiente tras el despliegue a producción** (el push a `main` despliega y
+verifica solo): comprobar con sesión autenticada real que la guía y un par
+de documentos más abren; si funciona, restaurar lo revertido el 13/08 — el
+botón "Guía de uso" de la cabecera y la verificación autenticada de la guía
+en `deploy.mjs`.
 
 ## Criterios de continuidad
 

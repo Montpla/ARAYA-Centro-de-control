@@ -208,7 +208,7 @@ test("June 2026 reports are integrated with traceable downloads and reconciliati
     "lamina-flujo-mayo-2026.pptx",
     "presentacion-informe-araya-junio-2026.pdf",
   ]) {
-    const file = await readFile(`public/data-center/junio-2026/${filename}`);
+    const file = await readFile(`historical/data-center/junio-2026/${filename}`);
     assert.ok(file.length > 1000);
     assert.match(data, new RegExp(filename.replaceAll(".", "\\.")));
   }
@@ -721,7 +721,7 @@ test("tablet and mobile mode provides navigation, camera, notifications, biometr
     readFile("app/error.tsx", "utf8"),
     readFile("public/manifest.webmanifest", "utf8"),
     readFile("public/sw.js", "utf8"),
-    readFile("public/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf"),
+    readFile("historical/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf"),
   ]);
   assert.match(dashboard, /mobile-bottom-nav/);
   assert.match(dashboard, /mobile-menu-sheet/);
@@ -797,13 +797,13 @@ test("July supplier, procurement, budget and IFC sources are audited and connect
     readFile("app/dashboard-client.tsx", "utf8"),
     readFile("app/demo-data.ts", "utf8"),
     readFile("app/procurement-data.ts", "utf8"),
-    readFile("public/data-center/julio-2026/cuadro-comparativo-proveedores-2026-07-30.xlsx"),
-    readFile("public/data-center/julio-2026/cuadro-comparativo-proveedores-2026-07-30-copia.xlsx"),
-    readFile("public/data-center/julio-2026/comparativo-presupuesto-edificio-tipo-a.xls"),
-    readFile("public/data-center/julio-2026/contactos-proveedores-araya.xls"),
-    readFile("public/data-center/julio-2026/desviacion-mensual-junio-2026.xlsx"),
-    readFile("public/data-center/julio-2026/informe-analisis-ifc-2026-07-29.pdf"),
-    readFile("public/data-center/julio-2026/informe-analisis-proveedores-2026-07-30.pdf"),
+    readFile("historical/data-center/julio-2026/cuadro-comparativo-proveedores-2026-07-30.xlsx"),
+    readFile("historical/data-center/julio-2026/cuadro-comparativo-proveedores-2026-07-30-copia.xlsx"),
+    readFile("historical/data-center/julio-2026/comparativo-presupuesto-edificio-tipo-a.xls"),
+    readFile("historical/data-center/julio-2026/contactos-proveedores-araya.xls"),
+    readFile("historical/data-center/julio-2026/desviacion-mensual-junio-2026.xlsx"),
+    readFile("historical/data-center/julio-2026/informe-analisis-ifc-2026-07-29.pdf"),
+    readFile("historical/data-center/julio-2026/informe-analisis-proveedores-2026-07-30.pdf"),
   ]);
   assert.match(procurement, /uniqueSuppliers: supplierDirectory\.length/);
   assert.match(procurement, /sourceRows: supplierContactRows\.length/);
@@ -843,7 +843,7 @@ test("reprogrammed Phase I flow remains separate from physical progress and glob
     readFile("app/demo-data.ts", "utf8"),
     readFile("app/reprogrammed-flow-data.ts", "utf8"),
     readFile("app/api/agent/route.ts", "utf8"),
-    readFile("public/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx"),
+    readFile("historical/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx"),
   ]);
   assert.match(data, /source-reprogrammed-flow-phase-1/);
   assert.match(data, /overallProgress: 18\.23/);
@@ -876,10 +876,10 @@ test("data governance registers every integrated source once and every download 
   assert.equal(new Set(sourceIds).size, sourceIds.length);
   assert.equal(downloadUrls.length, sourceIds.length);
   for (const sourceId of sourceIds) assert.match(governance, new RegExp(`"${sourceId}"`));
-  for (const url of downloadUrls) await access(`public${url}`);
+  for (const url of downloadUrls) await access(`historical${url}`);
 
-  const original = await readFile("public/data-center/julio-2026/cuadro-comparativo-proveedores-2026-07-30.xlsx");
-  const duplicate = await readFile("public/data-center/julio-2026/cuadro-comparativo-proveedores-2026-07-30-copia.xlsx");
+  const original = await readFile("historical/data-center/julio-2026/cuadro-comparativo-proveedores-2026-07-30.xlsx");
+  const duplicate = await readFile("historical/data-center/julio-2026/cuadro-comparativo-proveedores-2026-07-30-copia.xlsx");
   assert.equal(createHash("sha256").update(original).digest("hex"), createHash("sha256").update(duplicate).digest("hex"));
 });
 
