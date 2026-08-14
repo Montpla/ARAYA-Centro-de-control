@@ -1,4 +1,6 @@
 import { and, desc, eq, isNull, notInArray, or, sql } from "drizzle-orm";
+import { controlRoomAlertCandidates, scheduleBusinessAlerts } from "../../../lib/business-alerts";
+import { conditionalJson } from "../../../lib/conditional-json";
 import {
   cxpAging,
   financialProjection,
@@ -369,13 +371,14 @@ async function controlRoomPayload(auth: ControlRoomUser) {
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const authResult = await requireApiUser();
   if (!authResult.user) return authResult.response;
   const payload = await controlRoomPayload(authResult.user);
-  const response = Response.json(payload);
-  response.headers.set("Cache-Control", "private, no-store");
-  return response;
+  // Avisos de negocio derivados del estado recién calculado (desviación
+  // física sobre umbral, acciones vencidas); idempotentes, en segundo plano.
+  scheduleBusinessAlerts(controlRoomAlertCandidates(payload));
+  return conditionalJson(request, payload);
 }
 
 export async function POST(request: Request) {

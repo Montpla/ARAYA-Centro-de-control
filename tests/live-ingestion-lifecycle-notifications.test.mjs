@@ -545,7 +545,158 @@ test("service worker receives push and opens only a same-origin destination", ()
     /fetch\(["']\/api\/push\/config["']/,
     /registration\.pushManager\.subscribe\(/,
     /fetch\(["']\/api\/push\/subscription["']/,
-    /fetch\(["']\/api\/notifications\?limit=100["']/,
+    /fetchWithEtag\(["']\/api\/notifications\?limit=100["']/,
     /fetch\(["']\/api\/presence["']/,
   ], "dashboard client");
+});
+
+// El modo TV es la única superficie de la aplicación que sirve datos sin una
+// sesión de usuario: la autoriza un token de dispositivo. Una pantalla en la
+// oficina de obra es semi-pública, así que el recorte financiero no puede ser
+// opcional ni depender de que alguien recuerde aplicarlo.
+test("TV mode serves a token-scoped, non-financial snapshot and never stores the raw token", async () => {
+  const [tvRoute, tvTokensRoute, tvPage, tvClient, journal, migration, schemaSource] = await Promise.all([
+    read("app/api/tv/route.ts"),
+    read("app/api/admin/tv-tokens/route.ts"),
+    read("app/tv/page.tsx"),
+    read("app/tv/tv-client.tsx"),
+    read("drizzle/meta/_journal.json"),
+    read("drizzle/0021_tv_device_tokens.sql"),
+    read("db/schema.ts"),
+  ]);
+
+  // La vía de datos es la del usuario sin permiso financiero, no una copia
+  // paralela que pueda divergir con el tiempo.
+  expectPatterns(tvRoute, [
+    /readEffectiveLiveData\(false\)/,
+    /buildControlRoomBaseline\(false,/,
+    /notInArray\(controlActions\.area, financeProtectedAreaValues\(\)\)/,
+  ], "tv route financial scope");
+  // Y no debe filtrarse ninguna raíz financiera por otra vía.
+  assert.doesNotMatch(tvRoute, /readEffectiveLiveData\(true\)/);
+  assert.doesNotMatch(tvRoute, /payables|antonelyPayableInvoiceLines|fiduciary|cxpAging/i);
+
+  // El token viaja por Authorization o query, pero solo su hash llega a D1.
+  expectPatterns(tvRoute, [
+    /createHash\("sha256"\)/,
+    /eq\(tvDeviceTokens\.tokenHash, hashToken\(token\)\)/,
+    /tokenRow\.revokedAt/,
+    /new Date\(tokenRow\.expiresAt\)\.getTime\(\) < Date\.now\(\)/,
+  ], "tv token validation");
+  assert.doesNotMatch(tvRoute, /eq\(tvDeviceTokens\.tokenHash, token\)/);
+
+  // Crear y revocar pantallas es exclusivo de administradores.
+  const adminGuards = tvTokensRoute.match(/requireApiUser\(\{ admin: true \}\)/g) ?? [];
+  assert.equal(adminGuards.length, 3, "GET, POST y PATCH de tv-tokens deben exigir administrador");
+  expectPatterns(tvTokensRoute, [
+    /tokenHash: hashToken\(token\)/,
+    /randomBytes\(32\)/,
+  ], "tv token creation");
+  // publicToken() nunca puede devolver el hash ni el token en claro.
+  const publicTokenBlock = tvTokensRoute.match(/function publicToken[\s\S]*?\n\}/)?.[0] ?? "";
+  assert.ok(publicTokenBlock, "no se encontró publicToken()");
+  assert.doesNotMatch(publicTokenBlock, /tokenHash/);
+
+  // La pantalla retira el token de la barra de direcciones tras guardarlo.
+  expectPatterns(tvClient, [
+    /sessionStorage\.setItem\(TOKEN_STORAGE_KEY/,
+    /history\.replaceState\(null, "", "\/tv"\)/,
+    /Authorization`?: `Bearer \$\{token\}`/,
+  ], "tv client token handling");
+  assert.match(tvPage, /export const dynamic = "force-dynamic"/);
+
+  // La migración debe existir y estar encadenada en el journal, o el
+  // despliegue quedaría con la tabla ausente.
+  assert.match(migration, /CREATE TABLE `tv_device_tokens`/);
+  assert.match(migration, /CREATE UNIQUE INDEX `tv_device_tokens_token_hash_idx`/);
+  assert.match(journal, /"idx": 21[\s\S]*?"tag": "0021_tv_device_tokens"/);
+  assert.match(schemaSource, /export const tvDeviceTokens = sqliteTable\(/);
+});
+
+async function loadBusinessAlertCandidates() {
+  const source = await read("lib/business-alerts.ts");
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      esModuleInterop: true,
+    },
+  }).outputText;
+  const compiledModule = { exports: {} };
+  const require = (specifier) => {
+    if (specifier === "./notifications") return { emitMissingNotifications: async () => ({ created: 0 }) };
+    if (specifier === "./live-data") return liveDataModule;
+    if (specifier === "vinext/shims/request-context") return { getRequestExecutionContext: () => null };
+    throw new Error(`Unexpected import: ${specifier}`);
+  };
+  vm.runInNewContext(output, {
+    module: compiledModule,
+    exports: compiledModule.exports,
+    require,
+    console,
+    JSON,
+    Date,
+    Number,
+    Math,
+  });
+  return compiledModule.exports;
+}
+
+test("business alerts derive idempotent, audience-safe candidates from polled state", async () => {
+  const alerts = await loadBusinessAlertCandidates();
+
+  // Desviación física bajo el umbral: un aviso por mes de corte, audiencia global.
+  const deviation = alerts.controlRoomAlertCandidates({
+    planning: { kpiDeviationPoints: -3.9, curveCutoffLabel: "2026-07" },
+    actions: [],
+  });
+  assert.equal(deviation.length, 1);
+  assert.equal(deviation[0].kind, "deviation_alert");
+  assert.equal(deviation[0].audience, "all");
+  assert.equal(deviation[0].subjectId, "2026-07:3");
+  assert.match(deviation[0].title, /3,9 puntos/);
+
+  // Dentro del umbral o sin corte: sin candidatos.
+  assert.equal(alerts.controlRoomAlertCandidates({
+    planning: { kpiDeviationPoints: -2.9, curveCutoffLabel: "2026-07" },
+  }).length, 0);
+  assert.equal(alerts.controlRoomAlertCandidates({
+    planning: { kpiDeviationPoints: -9, curveCutoffLabel: "" },
+  }).length, 0);
+
+  // Acciones vencidas: solo abiertas y con fecha pasada; el área financiera
+  // degrada la audiencia a "finance" (fail-closed), el resto a su área.
+  const actions = alerts.controlRoomAlertCandidates({
+    actions: [
+      { id: "a1", title: "Cerrar pendiente", area: "obra", status: "open", dueDate: "2026-01-01" },
+      { id: "a2", title: "Completada", area: "obra", status: "completed", dueDate: "2026-01-01" },
+      { id: "a3", title: "Futura", area: "obra", status: "open", dueDate: "2999-01-01" },
+      { id: "a4", title: "CxP", area: "finanzas", status: "open", dueDate: "2026-01-01" },
+    ],
+  });
+  assert.equal(actions.length, 2);
+  assert.equal(actions[0].audience, "area:obra");
+  assert.equal(actions[0].subjectId, "a1:2026-01-01");
+  assert.equal(actions[1].audience, "finance");
+
+  // Facturas envejecidas: agregado financiero, nunca por debajo del índice 3.
+  const payables = alerts.payablesAlertCandidates({
+    cutoff: "2026-06-30",
+    invoices: [
+      { amountDop: 1000, agingIndex: 5 },
+      { amountDop: 2000, agingIndex: 3 },
+      { amountDop: 9999, agingIndex: 2 },
+      { amountDop: -500, agingIndex: 5 },
+    ],
+  });
+  assert.equal(payables.length, 1);
+  assert.equal(payables[0].audience, "finance");
+  assert.equal(payables[0].subjectId, "2026-06-30:2");
+  assert.match(payables[0].title, /2 facturas/);
+  assert.equal(alerts.payablesAlertCandidates({ invoices: [] }).length, 0);
+
+  // Y los endpoints sondeados deben seguir programando la emisión.
+  expectPatterns(controlRoomRoute, [
+    /scheduleBusinessAlerts\(controlRoomAlertCandidates\(payload\)\)/,
+  ], "control room business alerts");
 });

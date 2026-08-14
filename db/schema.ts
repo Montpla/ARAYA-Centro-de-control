@@ -529,3 +529,21 @@ export const reportSnapshots = sqliteTable(
   ],
 );
 
+
+export const tvDeviceTokens = sqliteTable(
+  "tv_device_tokens",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tokenHash: text("token_hash").notNull(),
+    label: text("label").notNull().default(""),
+    createdByEmail: text("created_by_email").notNull().default(""),
+    createdByName: text("created_by_name").notNull().default(""),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at").notNull().default(""),
+    lastUsedAt: text("last_used_at").notNull().default(""),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("tv_device_tokens_token_hash_idx").on(table.tokenHash),
+  ],
+);

@@ -1,4 +1,5 @@
 import { requireApiUser } from "../../../lib/access-control";
+import { conditionalJson } from "../../../lib/conditional-json";
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import {
   LiveDataUpdate,
@@ -32,7 +33,7 @@ function publicEvent(row: Awaited<ReturnType<typeof readEffectiveLiveData>>["lat
   };
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await authenticatedUser();
   if (!auth.user) return auth.response;
 
@@ -48,7 +49,11 @@ export async function GET() {
       updatedAt: point.updatedAt,
       updatedByName: point.updatedByName,
     }]));
-    const response = Response.json({
+    // ETag condicional: el 304 sin cuerpo evita re-descargar valores y
+    // procedencia completos en cada ciclo de 5s sin cambios. currentUser
+    // forma parte del hash a propósito: un cambio de rol/permiso produce un
+    // 200 con cuerpo nuevo y el cliente detecta el cambio como siempre.
+    return conditionalJson(request, {
       values: live.values,
       provenance,
       revision: live.revision,
@@ -57,9 +62,7 @@ export async function GET() {
       refreshedAt: new Date().toISOString(),
       refreshIntervalMs: 5_000,
       healthy: true,
-    });
-    response.headers.set("Cache-Control", "private, no-store");
-    return response;
+    }, { volatile: ["refreshedAt"] });
   } catch {
     const response = Response.json({
       error: "La fuente viva no estÃ¡ disponible temporalmente.",

@@ -12823,3 +12823,360 @@ button.financial-detail-row:focus-visible {
     min-height: 62px;
   }
 }
+
+/* ============================================================
+   Modo TV/obra: pantalla siempre encendida (oficina de obra y
+   central). Tipografía dimensionada para leerse a varios metros
+   y contraste alto; el layout usa unidades relativas al viewport
+   para adaptarse a televisores de 1080p y 4K sin cambios.
+   ============================================================ */
+
+.tv-shell {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 1.2vh;
+  padding: 2.2vh 2.4vw;
+  background: radial-gradient(circle at 20% 0%, #16233a 0%, #0b1220 55%, #070b14 100%);
+  color: #f4f7fb;
+  font-family: var(--font-sans, "Segoe UI", system-ui, sans-serif);
+  overflow: hidden;
+  cursor: none;
+}
+
+.tv-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  padding-bottom: 1.4vh;
+}
+
+.tv-brand {
+  display: flex;
+  align-items: center;
+  gap: 1.2vw;
+}
+
+.tv-brand > img {
+  width: clamp(44px, 3.4vw, 84px);
+  height: auto;
+}
+
+.tv-brand strong {
+  display: block;
+  font-size: clamp(22px, 1.9vw, 44px);
+  letter-spacing: 0.02em;
+}
+
+.tv-brand span {
+  display: block;
+  font-size: clamp(13px, 1vw, 24px);
+  color: #9fb2cc;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.tv-clock {
+  text-align: right;
+}
+
+.tv-clock strong {
+  display: block;
+  font-size: clamp(26px, 2.4vw, 56px);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-clock span {
+  font-size: clamp(12px, 0.9vw, 22px);
+  color: #9fb2cc;
+}
+
+.tv-slide {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2vh;
+  min-height: 0;
+  animation: tv-fade-in 600ms ease;
+}
+
+@keyframes tv-fade-in {
+  from { opacity: 0; transform: translateY(1.4vh); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-slide { animation: none; }
+}
+
+.tv-slide > h2 {
+  margin: 0;
+  font-size: clamp(20px, 1.7vw, 40px);
+  font-weight: 600;
+  color: #9fb2cc;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.tv-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.4vh 1.2vw;
+}
+
+.tv-kpi-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.tv-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4vh;
+  padding: 2vh 1.4vw;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tv-kpi > span {
+  font-size: clamp(12px, 0.95vw, 22px);
+  color: #9fb2cc;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.tv-kpi > strong {
+  font-size: clamp(30px, 3.1vw, 72px);
+  font-weight: 700;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-kpi > small {
+  font-size: clamp(12px, 0.9vw, 20px);
+  color: #8fa3bd;
+}
+
+.tv-kpi.tv-good { border-color: rgba(60, 200, 140, 0.5); }
+.tv-kpi.tv-good > strong { color: #4ee0a4; }
+.tv-kpi.tv-warn { border-color: rgba(240, 190, 70, 0.55); }
+.tv-kpi.tv-warn > strong { color: #ffd166; }
+.tv-kpi.tv-bad { border-color: rgba(255, 110, 110, 0.55); }
+.tv-kpi.tv-bad > strong { color: #ff8080; }
+
+.tv-curve {
+  width: 100%;
+  height: auto;
+  max-height: 62vh;
+}
+
+.tv-curve-grid {
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 1;
+}
+
+.tv-curve-axis {
+  fill: #9fb2cc;
+  font-size: 20px;
+}
+
+.tv-curve-planned {
+  fill: none;
+  stroke: #3ad0e0;
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+
+.tv-curve-actual {
+  fill: none;
+  stroke: #f0b429;
+  stroke-width: 6;
+  stroke-linejoin: round;
+}
+
+.tv-curve-actual-dot {
+  fill: #f0b429;
+}
+
+.tv-legend {
+  display: flex;
+  gap: 2vw;
+  font-size: clamp(14px, 1.1vw, 26px);
+}
+
+.tv-legend > span::before {
+  content: "";
+  display: inline-block;
+  width: 2.2vw;
+  height: 6px;
+  margin-right: 0.6vw;
+  vertical-align: middle;
+  border-radius: 3px;
+}
+
+.tv-legend-planned::before { background: #3ad0e0; }
+.tv-legend-actual::before { background: #f0b429; }
+
+.tv-action-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1vh;
+}
+
+.tv-action-list > li {
+  padding: 1.4vh 1.2vw;
+  border-radius: 14px;
+  background: rgba(255, 110, 110, 0.1);
+  border-left: 6px solid #ff8080;
+}
+
+.tv-action-list strong {
+  display: block;
+  font-size: clamp(18px, 1.5vw, 34px);
+}
+
+.tv-action-list span {
+  font-size: clamp(13px, 1vw, 22px);
+  color: #c6d3e4;
+}
+
+.tv-all-clear {
+  margin: 0;
+  font-size: clamp(20px, 1.8vw, 40px);
+  color: #4ee0a4;
+}
+
+.tv-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  padding-top: 1.2vh;
+  font-size: clamp(12px, 0.95vw, 22px);
+  color: #9fb2cc;
+}
+
+.tv-dots {
+  display: inline-flex;
+  gap: 0.6vw;
+}
+
+.tv-dot {
+  width: clamp(8px, 0.6vw, 14px);
+  height: clamp(8px, 0.6vw, 14px);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.tv-dot-active {
+  background: #f0b429;
+}
+
+.tv-empty {
+  grid-row: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2vh;
+  text-align: center;
+}
+
+.tv-empty > img {
+  width: clamp(64px, 6vw, 140px);
+}
+
+.tv-empty > h1 {
+  margin: 0;
+  font-size: clamp(24px, 2.4vw, 54px);
+}
+
+.tv-empty > p {
+  margin: 0;
+  font-size: clamp(15px, 1.2vw, 28px);
+  color: #9fb2cc;
+  max-width: 60ch;
+}
+
+/* Tarjeta de administración de pantallas en Usuarios y accesos. */
+.tv-screens-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tv-screens-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.tv-screens-form > input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.tv-screens-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tv-screens-list > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.tv-screen-revoked {
+  opacity: 0.55;
+}
+
+.tv-screen-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(240, 180, 41, 0.14);
+  border: 1px solid rgba(240, 180, 41, 0.4);
+  word-break: break-all;
+}
+
+/* Semáforo de frescura junto al nombre del indicador. La cifra manda: el
+   punto informa de la edad real del dato sin competir con ella. */
+.freshness-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+  flex: none;
+}
+
+.freshness-fresh { background: #2fbf87; }
+.freshness-aging { background: #e0a020; }
+.freshness-stale { background: #e05252; }
+
+@media (prefers-contrast: more) {
+  .freshness-dot {
+    outline: 1px solid currentColor;
+    outline-offset: 1px;
+  }
+}

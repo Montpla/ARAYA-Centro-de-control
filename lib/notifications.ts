@@ -1,5 +1,5 @@
 import { getDb } from "../db";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { buildPushPayload } from "@block65/webcrypto-web-push";
 import {
   appUsers,
@@ -210,6 +210,38 @@ export async function emitNotification(input: NotificationInput) {
   await deliverPushNotification(event).catch(() => undefined);
 
   return event;
+}
+
+// Emisión idempotente por lotes para avisos de negocio derivados de estado
+// (desviación sobre umbral, acciones o facturas vencidas). Los sondeos de 5s
+// pueden invocarla en cada ciclo: una sola consulta determina qué avisos
+// existen ya por (kind, subjectType, subjectId) y solo se insertan los que
+// faltan. No hay índice único que lo garantice a nivel de base de datos; una
+// carrera entre dos sondeos simultáneos puede duplicar un aviso puntual —
+// coste aceptado frente a exigir una migración remota de D1.
+export async function emitMissingNotifications(candidates: NotificationInput[]) {
+  if (!candidates.length) return { created: 0 };
+  const records = candidates.map((candidate) => prepareNotificationRecord(candidate));
+  const db = getDb();
+  const existing = await db
+    .select({
+      kind: notificationEvents.kind,
+      subjectType: notificationEvents.subjectType,
+      subjectId: notificationEvents.subjectId,
+    })
+    .from(notificationEvents)
+    .where(inArray(notificationEvents.subjectId, records.map((record) => record.subjectId)));
+  const seen = new Set(existing.map((row) => `${row.kind}::${row.subjectType}::${row.subjectId}`));
+  let created = 0;
+  for (const record of records) {
+    const key = `${record.kind}::${record.subjectType}::${record.subjectId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const [event] = await db.insert(notificationEvents).values(record).returning();
+    created += 1;
+    await deliverPushNotification(event).catch(() => undefined);
+  }
+  return { created };
 }
 
 async function ensureNotificationFanout(eventId: number) {

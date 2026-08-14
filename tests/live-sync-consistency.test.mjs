@@ -95,11 +95,11 @@ test("overallProgress and plannedProgress always come from the same monthlyPlan 
 // Guarda contra la misma clase de bug en un sitio distinto: app/data-center/
 // [...path]/route.ts nunca sirve estos archivos desde dist/client
 // (run_worker_first en wrangler.deploy.jsonc); siempre lee de R2 bajo la
-// clave historical${pathname}. Un archivo listo en public/data-center/ pero
-// nunca subido a R2 se ve perfecto en el repo y devuelve 404 en producción —
-// así estuvieron rotos los 23 documentos fijos del Centro de Control (guía
-// corporativa, fuentes de junio/julio, balances del fideicomiso) desde que
-// se crearon, sin que ninguna prueba lo detectara.
+// clave historical${pathname}. Un archivo listo en historical/data-center/
+// pero nunca subido a R2 se ve perfecto en el repo y devuelve 404 en
+// producción — así estuvieron rotos los 23 documentos fijos del Centro de
+// Control (guía corporativa, fuentes de junio/julio, balances del
+// fideicomiso) desde que se crearon, sin que ninguna prueba lo detectara.
 test("every /data-center/ document referenced from the app exists on disk and the deploy pipeline syncs all of them to R2", async () => {
   const [dashboard, demoData, payableInvoices, syncScript, deployScript] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),
@@ -122,13 +122,25 @@ test("every /data-center/ document referenced from the app exists on disk and th
 
   for (const referencedPath of referencedPaths) {
     await assert.doesNotReject(
-      access(`public${referencedPath}`),
-      `${referencedPath} se referencia en la app pero no existe en public/data-center/ (quedaría en 404 en producción)`,
+      access(`historical${referencedPath}`),
+      `${referencedPath} se referencia en la app pero no existe en historical/data-center/ (quedaría en 404 en producción)`,
     );
   }
 
-  // El script de sincronización debe recorrer todo public/data-center/, no
-  // depender de una lista a mano que alguien tenga que recordar actualizar
+  // Ningún documento debe volver a colocarse bajo public/data-center/: vinext
+  // registra todo public/ como rutas de archivo estático que eclipsan a
+  // app/data-center/[...path]/route.ts (orden de Next.js: archivo público
+  // gana a ruta dinámica), y como public/.assetsignore excluye data-center/**
+  // de los activos desplegados, la petición terminaba en env.ASSETS.fetch()
+  // con un 404 de cuerpo vacío. Esa fue la causa raíz del 404 de producción
+  // de los 23 documentos fijos (13/08/2026).
+  await assert.rejects(
+    access("public/data-center"),
+    "public/data-center/ no debe existir: un archivo ahí eclipsa a route.ts y vuelve a producir el 404 vacío en producción",
+  );
+
+  // El script de sincronización debe recorrer todo historical/data-center/,
+  // no depender de una lista a mano que alguien tenga que recordar actualizar
   // cada vez que se añade un documento nuevo.
   assert.match(syncScript, /collectFiles\(SOURCE_DIR\)/);
   assert.match(syncScript, /historical\/data-center\/\$\{relativePath\}/);

@@ -18,6 +18,11 @@ import {
 } from "../lib/unit-progress";
 import { computedView } from "../lib/computed-view";
 import {
+  STAT_CARD_FRESHNESS_KEYS,
+  readFreshness,
+} from "../lib/data-freshness";
+import type { FreshnessLevel, ProvenanceEntry } from "../lib/data-freshness";
+import {
   liveAntonelyDetailTotals,
   liveDataAuthorityMatrix,
   liveDataGovernanceSummary,
@@ -150,6 +155,23 @@ import type {
 // existente in place. Los campos mutados in place (projectSnapshot.x = y,
 // monthlyPlan[i] = {...}) sobrevivían porque seguían siendo el mismo objeto;
 // los reasignados (juneReport = liveJuneReportFinance(...), etc.) no.
+// Sondeo condicional: cada endpoint de 5s guarda el ETag de su última
+// respuesta y lo reenvía en If-None-Match. Un 304 sin cuerpo significa "sin
+// cambios": el llamante conserva su estado (o el payload cacheado) y se evita
+// re-descargar el JSON completo en cada ciclo. Importante: Response.ok es
+// false en un 304, así que cada llamante comprueba status === 304 antes que
+// su manejo de error.
+type EtagState = { etag: string };
+
+async function fetchWithEtag(url: string, state: EtagState, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  if (state.etag) headers.set("If-None-Match", state.etag);
+  const response = await fetch(url, { ...init, cache: "no-store", headers });
+  const etag = response.headers.get("ETag");
+  if (response.ok && etag) state.etag = etag;
+  return response;
+}
+
 let dashboardBootstrapInstalled = false;
 function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
   if (dashboardBootstrapInstalled) return;
@@ -772,6 +794,52 @@ const WorkspaceDetailContext = createContext<{
   enabled: false,
   openDetail: () => undefined,
 });
+
+// Procedencia por clave viva tal como la publica /api/live-data. Se comparte
+// por contexto porque los indicadores están repartidos por todo el árbol y no
+// tendría sentido bajarla por props hasta cada uno.
+const ProvenanceContext = createContext<Record<string, ProvenanceEntry>>({});
+
+const freshnessBadgeLabel: Record<FreshnessLevel, string> = {
+  fresh: "Al día",
+  aging: "Un cierre pendiente",
+  stale: "Desactualizado",
+  unknown: "Sin procedencia",
+};
+
+// Punto de color junto al indicador: comunica la edad real del dato sin
+// competir visualmente con la cifra. El texto completo va en title/aria para
+// que no se pierda en lectores de pantalla.
+function FreshnessDot({ eyebrow }: { eyebrow: string }) {
+  const provenance = useContext(ProvenanceContext);
+  const keys = STAT_CARD_FRESHNESS_KEYS[eyebrow];
+  const reading = useMemo(
+    () => (keys ? readFreshness(provenance, keys) : null),
+    [keys, provenance],
+  );
+  if (!reading || reading.level === "unknown") return null;
+  return (
+    <i
+      className={`freshness-dot freshness-${reading.level}`}
+      title={`${freshnessBadgeLabel[reading.level]} · ${reading.label}`}
+      aria-label={`Frescura del dato: ${freshnessBadgeLabel[reading.level]}. ${reading.label}`}
+      role="img"
+    />
+  );
+}
+
+// Detalle textual para la ficha contextual del KPI, donde sí hay espacio.
+function freshnessDetailMetrics(eyebrow: string, provenance: Record<string, ProvenanceEntry>) {
+  const keys = STAT_CARD_FRESHNESS_KEYS[eyebrow];
+  if (!keys) return [];
+  const reading = readFreshness(provenance, keys);
+  if (reading.level === "unknown") return [];
+  return [
+    { label: "Frescura del dato", value: `${freshnessBadgeLabel[reading.level]} · ${reading.ageDays} días` },
+    ...(reading.cutoff ? [{ label: "Corte", value: reading.cutoff }] : []),
+    ...(reading.sourceName ? [{ label: "Última fuente", value: reading.sourceName }] : []),
+  ];
+}
 
 const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
   resumen: {
@@ -2473,6 +2541,7 @@ function StatCard({
   tone?: "neutral" | "warn" | "danger" | "good";
 }) {
   const workspace = useContext(WorkspaceDetailContext);
+  const provenance = useContext(ProvenanceContext);
   const link = statCardLinks[eyebrow];
   if (workspace.enabled && link) {
     return (
@@ -2485,12 +2554,15 @@ function StatCard({
           title: eyebrow,
           summary: detail,
           status: "live",
-          metrics: [{ label: "Valor actual", value }],
+          metrics: [
+            { label: "Valor actual", value },
+            ...freshnessDetailMetrics(eyebrow, provenance),
+          ],
           sourceIds: link.sourceIds,
           actions: [{ label: `Abrir ${navItems.find((item) => item.id === link.view)?.label ?? "sección"}`, view: link.view }],
         })}
       >
-        <span>{eyebrow}</span>
+        <span>{eyebrow}<FreshnessDot eyebrow={eyebrow} /></span>
         <strong>{value}</strong>
         <small>{detail}</small>
         <em>Abrir detalle →</em>
@@ -2499,7 +2571,7 @@ function StatCard({
   }
   return (
     <article className={`stat-card ${tone}`}>
-      <span>{eyebrow}</span>
+      <span>{eyebrow}<FreshnessDot eyebrow={eyebrow} /></span>
       <strong>{value}</strong>
       <small>{detail}</small>
     </article>
@@ -3950,9 +4022,11 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
   useEffect(() => {
     if (!canAccessFinance) return;
     let active = true;
+    const payablesEtag: EtagState = { etag: "" };
     const refreshPayables = async () => {
       try {
-        const response = await fetch("/api/payables", { cache: "no-store" });
+        const response = await fetchWithEtag("/api/payables", payablesEtag);
+        if (response.status === 304) return;
         if (!response.ok) throw new Error("No se pudo consultar el detalle de facturas.");
         const payload = await response.json() as PayablesDataset;
         if (!active) return;
@@ -5188,6 +5262,143 @@ function DeleteUserModal({
   );
 }
 
+type TvScreenToken = {
+  id: number;
+  label: string;
+  createdByName: string;
+  expiresAt: string;
+  revokedAt: string;
+  lastUsedAt: string;
+  createdAt: string;
+  active: boolean;
+};
+
+// Pantallas del modo TV/obra. El enlace con el token en claro solo se puede
+// copiar en el momento de crearlo: el servidor guarda únicamente su hash, así
+// que no hay forma de volver a mostrarlo. Revocar corta el acceso al instante.
+function TvScreensCard() {
+  const [screens, setScreens] = useState<TvScreenToken[]>([]);
+  const [label, setLabel] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [freshLink, setFreshLink] = useState("");
+  const [message, setMessage] = useState("");
+
+  const refreshScreens = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/tv-tokens", { cache: "no-store" });
+      const payload = await response.json() as { tokens?: TvScreenToken[]; error?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo consultar las pantallas.");
+      setScreens(payload.tokens ?? []);
+      setMessage("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo consultar las pantallas.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshScreens();
+  }, [refreshScreens]);
+
+  async function createScreen() {
+    setCreating(true);
+    setFreshLink("");
+    try {
+      const response = await fetch("/api/admin/tv-tokens", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: label.trim() }),
+      });
+      const payload = await response.json() as { url?: string; error?: string; message?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo crear la pantalla.");
+      setFreshLink(payload.url ? `${window.location.origin}${payload.url}` : "");
+      setMessage(payload.message ?? "");
+      setLabel("");
+      await refreshScreens();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo crear la pantalla.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function revokeScreen(id: number) {
+    try {
+      const response = await fetch("/api/admin/tv-tokens", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const payload = await response.json() as { error?: string; message?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo revocar la pantalla.");
+      setMessage(payload.message ?? "");
+      await refreshScreens();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo revocar la pantalla.");
+    }
+  }
+
+  return (
+    <section className="panel tv-screens-card">
+      <div className="panel-heading">
+        <div><span className="section-kicker">PANTALLAS</span><h3>Modo TV para obra y oficina</h3></div>
+      </div>
+      <p>
+        Genera un enlace para una pantalla siempre encendida. Muestra avance,
+        Curva S y acciones vencidas en rotación, sin datos financieros y sin
+        pedir usuario ni contraseña en el dispositivo. Copia el enlace al
+        crearlo: por seguridad no vuelve a mostrarse.
+      </p>
+      <div className="tv-screens-form">
+        <input
+          type="text"
+          value={label}
+          maxLength={120}
+          placeholder="Nombre de la pantalla (p. ej. Oficina de obra)"
+          onChange={(event) => setLabel(event.target.value)}
+        />
+        <button className="button" type="button" onClick={() => void createScreen()} disabled={creating}>
+          {creating ? "Creando…" : "Crear pantalla"}
+        </button>
+      </div>
+      {freshLink && (
+        <div className="tv-screen-link" role="status">
+          <code>{freshLink}</code>
+          <button
+            className="button ghost"
+            type="button"
+            onClick={() => void navigator.clipboard?.writeText(freshLink)}
+          >
+            Copiar enlace
+          </button>
+        </div>
+      )}
+      {message && <div className="access-message" role="status">{message}</div>}
+      {screens.length > 0 && (
+        <ul className="tv-screens-list">
+          {screens.map((screen) => (
+            <li key={screen.id} className={screen.active ? "" : "tv-screen-revoked"}>
+              <span>
+                <strong>{screen.label}</strong>
+                <small>
+                  {screen.active
+                    ? `Activa hasta ${screen.expiresAt.slice(0, 10)}`
+                    : screen.revokedAt ? "Revocada" : "Caducada"}
+                  {screen.lastUsedAt ? ` · último uso ${screen.lastUsedAt.slice(0, 10)}` : " · sin usar todavía"}
+                </small>
+              </span>
+              {screen.active && (
+                <button className="button ghost" type="button" onClick={() => void revokeScreen(screen.id)}>
+                  Revocar
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function UsersAdminView({
   currentUser,
   onCurrentAvatarUpdated,
@@ -5394,6 +5605,8 @@ function UsersAdminView({
           aplicación.
         </p>
       </section>
+
+      <TvScreensCard />
 
       <section className="panel access-directory">
         <div className="panel-heading">
@@ -7758,6 +7971,8 @@ export function DashboardClient({
     refreshedAt: "",
     latestEvent: null,
   });
+  // Procedencia por clave viva; alimenta el semáforo de frescura de los KPI.
+  const [liveProvenance, setLiveProvenance] = useState<Record<string, ProvenanceEntry>>({});
   const [controlRoom, setControlRoom] = useState<ControlRoomSnapshot | null>(null);
   const [controlRoomLoading, setControlRoomLoading] = useState(true);
   const [controlRoomError, setControlRoomError] = useState("");
@@ -7815,9 +8030,14 @@ export function DashboardClient({
     (item) => !effectiveReadNotificationIds.includes(item.id),
   ).length;
 
+  const controlRoomEtagRef = useRef<EtagState>({ etag: "" });
   const refreshControlRoom = useCallback(async () => {
     try {
-      const response = await fetch("/api/control-room", { cache: "no-store" });
+      const response = await fetchWithEtag("/api/control-room", controlRoomEtagRef.current);
+      if (response.status === 304) {
+        setControlRoomError("");
+        return;
+      }
       const payload = (await response.json()) as ControlRoomSnapshot & { error?: string };
       if (!response.ok) throw new Error(payload.error || "Sala operativa no disponible.");
       setControlRoom(payload);
@@ -8024,14 +8244,15 @@ export function DashboardClient({
   useEffect(() => {
     let active = true;
     let refreshing = false;
+    const notificationsEtag: EtagState = { etag: "" };
     const refreshNotifications = async () => {
       if (refreshing || !navigator.onLine) return;
       refreshing = true;
       try {
-        const response = await fetch("/api/notifications?limit=100", {
+        const response = await fetchWithEtag("/api/notifications?limit=100", notificationsEtag, {
           credentials: "same-origin",
-          cache: "no-store",
         });
+        if (response.status === 304) return;
         if (!response.ok) throw new Error("Notificaciones no disponibles.");
         const payload = await response.json() as ServerNotificationsResponse;
         const incoming = Array.isArray(payload.notifications)
@@ -8209,14 +8430,31 @@ export function DashboardClient({
   useEffect(() => {
     let active = true;
     let refreshing = false;
+    type LivePayload = {
+      healthy?: boolean;
+      values?: LiveDataMap;
+      provenance?: Record<string, ProvenanceEntry>;
+      revision?: number;
+      refreshedAt?: string;
+      latestEvent?: LiveSyncState["latestEvent"];
+      currentUser?: DashboardUser;
+    };
+    type DashboardPayload = {
+      metrics?: CustomMetric[];
+      suppliers?: Supplier[];
+    };
+    const liveEtag: EtagState = { etag: "" };
+    const dashboardEtag: EtagState = { etag: "" };
+    let cachedLive: LivePayload | null = null;
+    let cachedDashboard: DashboardPayload | null = null;
 
     async function refreshLiveData() {
       if (refreshing) return;
       refreshing = true;
       try {
         const [liveResponse, dashboardResponse] = await Promise.all([
-          fetch("/api/live-data", { cache: "no-store" }),
-          fetch("/api/dashboard", { cache: "no-store" }),
+          fetchWithEtag("/api/live-data", liveEtag),
+          fetchWithEtag("/api/dashboard", dashboardEtag),
         ]);
         if ([liveResponse.status, dashboardResponse.status].some((status) => status === 401 || status === 403)) {
           removeBiometricRecord(currentUser.id);
@@ -8224,21 +8462,33 @@ export function DashboardClient({
           window.location.assign("/signout-with-chatgpt?return_to=/");
           return;
         }
-        if (!liveResponse.ok || !dashboardResponse.ok) throw new Error("Sincronización no disponible");
+        const liveNotModified = liveResponse.status === 304 && cachedLive !== null;
+        const dashboardNotModified = dashboardResponse.status === 304 && cachedDashboard !== null;
+        if (liveNotModified && dashboardNotModified) {
+          // Sin cambios en el servidor: la cinta de conexión sigue viva y el
+          // resto del estado se conserva sin re-aplicar ni re-renderizar.
+          if (active) {
+            setLiveSync((current) => ({
+              ...current,
+              status: "connected",
+              refreshedAt: new Date().toISOString(),
+            }));
+          }
+          return;
+        }
+        if ((!liveResponse.ok && !liveNotModified) || (!dashboardResponse.ok && !dashboardNotModified)) {
+          throw new Error("Sincronización no disponible");
+        }
         const [liveData, dashboardData] = await Promise.all([
-          liveResponse.json() as Promise<{
-            healthy?: boolean;
-            values?: LiveDataMap;
-            revision?: number;
-            refreshedAt?: string;
-            latestEvent?: LiveSyncState["latestEvent"];
-            currentUser?: DashboardUser;
-          }>,
-          dashboardResponse.json() as Promise<{
-            metrics?: CustomMetric[];
-            suppliers?: Supplier[];
-          }>,
+          liveNotModified
+            ? Promise.resolve(cachedLive as LivePayload)
+            : liveResponse.json() as Promise<LivePayload>,
+          dashboardNotModified
+            ? Promise.resolve(cachedDashboard as DashboardPayload)
+            : dashboardResponse.json() as Promise<DashboardPayload>,
         ]);
+        cachedLive = liveData;
+        cachedDashboard = dashboardData;
         if (!active) return;
         const refreshedUser = liveData.currentUser;
         if (
@@ -8267,6 +8517,7 @@ export function DashboardClient({
           ...(Array.isArray(dashboardData.suppliers) ? dashboardData.suppliers : []),
           ...initialSuppliers,
         ]);
+        setLiveProvenance(liveData.provenance ?? {});
         setLiveSync({
           status: "connected",
           revision: liveData.revision ?? 0,
@@ -8752,6 +9003,7 @@ export function DashboardClient({
       enabled: activeProjectId === "araya",
       openDetail: setWorkspaceDetail,
     }}>
+    <ProvenanceContext.Provider value={liveProvenance}>
     <div className="app-shell" onClickCapture={openFileInViewer}>
       <aside className="sidebar">
         <div className="brand">
@@ -9252,6 +9504,7 @@ export function DashboardClient({
 
       {notice && <div className="upload-toast" role="status"><strong>Bricket Control</strong><span>{notice}</span></div>}
     </div>
+    </ProvenanceContext.Provider>
     </WorkspaceDetailContext.Provider>
   );
 }

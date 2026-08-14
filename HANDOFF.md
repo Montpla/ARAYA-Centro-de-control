@@ -386,7 +386,7 @@ Fuente DWG original del usuario:
 
 Copia incorporada al Centro de datos:
 
-`public/data-center/002-implantacion-general.dwg`
+`historical/data-center/002-implantacion-general.dwg`
 
 Activos principales:
 
@@ -646,14 +646,14 @@ Incorporado el 29/07/2026:
 
 Copias descargables:
 
-`public/data-center/junio-2026/`
+`historical/data-center/junio-2026/`
 
 Archivo de Antonely:
 
 - Origen:
   `C:\Users\Usuario1\OneDrive\Desktop\Antonely\Datos para Informe Jun-26.xlsx`
 - Copia:
-  `public/data-center/junio-2026/datos-para-informe-jun-26.xlsx`
+  `historical/data-center/junio-2026/datos-para-informe-jun-26.xlsx`
 - SHA-256:
   `C87ABEA3FEA21BB44D598313C2FAA8719F22FF4B265C30EBD45358897B9D590F`
 - Hojas: costes acumulados, cuentas por pagar, anticipos y balance.
@@ -748,7 +748,7 @@ Se recibieron siete archivos y se revisaron completos:
 - Cuatro páginas PDF.
 - Los dos archivos `CUADRO COMPARATIVO-PROVEEDORES 30-07-2026` son copias
   binarias idénticas. Se conservan ambos, pero solo uno alimenta los datos.
-- Los originales están en `public/data-center/julio-2026/`.
+- Los originales están en `historical/data-center/julio-2026/`.
 
 Nuevos módulos:
 
@@ -798,7 +798,7 @@ Implementación:
 ### Flujo de obra Fase I reprogramado
 
 Archivo integrado:
-`public/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx`.
+`historical/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx`.
 
 - Se revisaron sus seis hojas, 1.137 fórmulas y todas las páginas renderizadas.
   No contiene errores de fórmula ni enlaces externos.
@@ -839,7 +839,7 @@ expresamente iniciar el punto 2.
 - La copia binaria del comparativo de proveedores continúa almacenada para
   trazabilidad, pero queda excluida de cálculos.
 - Los cuatro estados de Fiduciaria Universal quedaron incorporados en
-  `public/data-center/junio-2026/fideicomiso/` y en una pestaña financiera
+  `historical/data-center/junio-2026/fideicomiso/` y en una pestaña financiera
   independiente `Fideicomiso`.
 - `app/fiduciary-statements-data.ts` conserva el estado de situación, balance de
   comprobación, resultados de junio, resultados acumulados y conciliación con
@@ -1074,7 +1074,7 @@ Implementado y publicado el 31/07/2026:
   las fichas, las fuentes y el visor. Las cargas privadas siguen pasando por
   autorización y conservan la restricción financiera.
 - Se incorporó la guía de siete páginas
-  `public/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`.
+  `historical/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`.
   Se puede abrir o descargar desde `Centro de datos` y desde `Más → Guía de
   uso` en móvil.
 - El original editable se genera con
@@ -1608,7 +1608,7 @@ escritorio (`UsersAdminView`) ahora tiene una tarjeta "Guía de uso para el
 personal" con botón "Abrir guía", además de los accesos ya existentes en
 `Centro de datos` y `Más → Guía de uso` en móvil (ver "Apertura documental y
 guía corporativa de la versión 41"). El PDF servido en
-`public/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`
+`historical/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf`
 se regeneró con la URL corregida.
 
 **Estado real de instalación por plataforma**:
@@ -1679,7 +1679,9 @@ correspondiente, verificados con descarga y comparación de tamaño en bytes
 contra el original local.
 
 **Arreglo de fondo**: `scripts/sync-historical-documents.mjs` (nuevo) recorre
-recursivamente todo `public/data-center/` y sube cada archivo a R2 bajo su
+recursivamente todo el directorio de documentos fijos (hoy
+`historical/data-center/`; en su versión original `public/data-center/`, ver
+la sección de resolución del 14/08/2026) y sube cada archivo a R2 bajo su
 clave `historical/data-center/<ruta relativa>`, con el tipo de contenido
 resuelto por extensión (debe reflejar `canonicalMimeByExtension` en
 `route.ts`). No depende de una lista a mano — cualquier archivo nuevo que se
@@ -1691,7 +1693,7 @@ es un comando aparte que alguien tenga que acordarse de correr.
 prueba que extrae todas las rutas `/data-center/...` referenciadas en
 `app/dashboard-client.tsx`, `app/demo-data.ts` y
 `app/antonely-payable-invoices.ts`, y falla si alguna no tiene un archivo
-correspondiente en `public/data-center/`; además confirma por patrón que el
+correspondiente en el directorio de documentos fijos; además confirma por patrón que el
 script de sincronización sigue recorriendo el directorio completo (no una
 lista a mano) y que `deploy.mjs` sigue invocándolo. Esto no prueba que el
 archivo llegue a R2 en cada entorno, pero si alguien añade un enlace a un
@@ -1700,17 +1702,26 @@ y mientras el paso del pipeline exista, todo lo que sí está en el repo queda
 sincronizado en cada despliegue sin intervención manual.
 
 **Al añadir un documento fijo nuevo en el futuro**: basta con colocarlo bajo
-`public/data-center/...` y enlazarlo desde la app con esa misma ruta — el
-siguiente `npm run deploy` lo sube a R2 solo. No hace falta tocar
+`historical/data-center/...` (NUNCA bajo `public/data-center/` — ver la
+resolución del 14/08/2026 más abajo; una prueba lo impide) y enlazarlo desde
+la app con la ruta `/data-center/...` equivalente — el siguiente
+`npm run deploy` lo sube a R2 solo. No hace falta tocar
 `scripts/sync-historical-documents.mjs`.
 
 Verificado con `wrangler r2 object get --file` sobre una muestra (el DWG de
 18,4 MB, un balance del fideicomiso, el informe IFC) comparando bytes
 descargados contra el archivo local: coinciden exactamente.
 
-## `/data-center/[...path]` sigue devolviendo 404 en producción — sin resolver (13/08/2026)
+## `/data-center/[...path]` devolvía 404 en producción — RESUELTO el 14/08/2026 (ver sección siguiente)
 
-**Esto NO está arreglado.** La sección anterior (los 23 documentos subidos a
+Esta sección conserva el diagnóstico del 13/08 tal como quedó al cerrar
+aquella sesión. La causa raíz se encontró y corrigió al día siguiente; la
+sección siguiente documenta la resolución. La hipótesis nº2 de aquí abajo
+era esencialmente correcta, con un matiz: la decisión no la toma Cloudflare
+sino el propio router de vinext, y no consulta `env.ASSETS` — consulta un
+manifiesto de rutas públicas generado en build.
+
+La sección anterior (los 23 documentos subidos a
 R2) es un arreglo real y necesario, pero no basta: con sesión autenticada
 real, **cualquier** URL `/data-center/...` — la guía, un informe, un balance,
 todos probados — sigue devolviendo 404 en producción, aunque el objeto
@@ -1830,6 +1841,190 @@ que decide entre `env.ASSETS.fetch()` y el enrutado de la app, en vez de
 seguir probando cambios a ciegas en producción. Si se encuentra y arregla la
 causa real, restaurar el botón de la cabecera y la verificación en
 `deploy.mjs` que se revirtieron aquí.
+
+## Resolución del 404 de `/data-center/[...path]` (14/08/2026)
+
+Causa raíz encontrada por lectura del código de vinext 0.0.50 (sin
+experimentos en producción), corregida y validada en local. La cadena
+completa del bug:
+
+1. **vinext registra todo `public/` como rutas de archivo estático que ganan
+   a las rutas dinámicas de la app** (fiel al orden de resolución de
+   Next.js: archivo público antes que ruta dinámica). En build,
+   `scanPublicFileRoutes` (`vinext/dist/utils/public-routes.js`) recorre
+   `public/` completo — **sin mirar `.assetsignore`** — y graba el resultado
+   como un `Set` literal (`__publicFiles`) dentro de `dist/server/index.js`.
+2. En cada petición, `resolvePublicFileRoute`
+   (`vinext/dist/server/request-pipeline.js`) consulta ese Set **antes** del
+   enrutado hacia `app/.../route.ts`. Como los 23 documentos vivían en
+   `public/data-center/...`, toda URL `/data-center/...` coincidía y el
+   handler devolvía una "señal de archivo estático" (cabecera interna
+   `VINEXT_STATIC_FILE_HEADER`) — por eso `route.ts` **nunca se ejecutaba**
+   y ningún log ni `try/catch` suyo aparecía jamás.
+3. El entry del Worker (`app-router-entry.js` → `resolveStaticAssetSignal`
+   en `worker-utils.js`) resuelve esa señal con `env.ASSETS.fetch()`. Pero
+   `public/.assetsignore` excluye `data-center/**` de los activos
+   desplegados (a propósito, para que nadie los lea sin autenticación), así
+   que ASSETS devolvía 404 con cuerpo vacío, y `mergeHeaders` le fusionaba
+   las cabeceras del middleware (`Vary: *`, `Cache-Control: private…`) —
+   exactamente el 404 vacío "con cabeceras de la app" observado el 13/08.
+   Esto también explica por qué desactivar el matcher de `proxy.ts`
+   (hipótesis nº1) no cambió nada: el eclipse ocurre después del
+   middleware, en la resolución de archivos públicos.
+
+**Arreglo estructural**: los documentos privados no deben vivir bajo
+`public/`. Se movieron los 23 con `git mv` de `public/data-center/` a
+`historical/data-center/` (directorio nuevo del repo cuya ruta replica
+exactamente la clave R2 `historical/data-center/<ruta>`; la URL pública
+sigue siendo `/data-center/<ruta>` y no cambió ningún enlace de la app).
+Con `public/data-center/` inexistente, el manifiesto `__publicFiles` del
+build ya no contiene ninguna entrada `/data-center/...` (verificado en
+`dist/server/index.js` tras `npm run build`), las peticiones llegan por fin
+a `app/data-center/[...path]/route.ts` y este las sirve desde R2 — donde
+los 23 objetos ya estaban desde el 13/08, byte a byte.
+
+Cambios acompañantes:
+
+- `scripts/sync-historical-documents.mjs`: `SOURCE_DIR` pasa a
+  `historical/data-center/`; mismo recorrido recursivo y mismas claves R2.
+- `tests/live-sync-consistency.test.mjs`: la comprobación de existencia usa
+  `historical${ruta}` y una prueba nueva falla si `public/data-center/`
+  vuelve a existir (recrearlo reintroduciría el eclipse: el archivo se
+  serviría o bien como 404 vacío con `.assetsignore`, o bien **sin
+  autenticación** sin él).
+- `tests/rendered-html.test.mjs`: rutas de lectura actualizadas al
+  directorio nuevo.
+- `public/.assetsignore` conserva `data-center/**` como defensa en
+  profundidad.
+
+Validación local: `npx tsc --noEmit`, `npm run build`, 101/101 pruebas y
+`git diff --check` en verde; manifiesto `__publicFiles` del bundle sin
+entradas `/data-center/...` y `dist/client/` sin el directorio. Nota: hay 3
+errores de `npm run lint` preexistentes en `app/dashboard-client.tsx`
+(react/no-unescaped-entities ×2 y un setState-en-efecto), ajenos a este
+cambio; el pipeline de despliegue no ejecuta lint, así que no bloquean.
+
+**Pendiente tras el despliegue a producción** (el push a `main` despliega y
+verifica solo): comprobar con sesión autenticada real que la guía y un par
+de documentos más abren; si funciona, restaurar lo revertido el 13/08 — el
+botón "Guía de uso" de la cabecera y la verificación autenticada de la guía
+en `deploy.mjs`.
+
+## Mejoras de tiempo real (14/08/2026)
+
+Cuatro mejoras pedidas por el usuario tras revisar el estado del Centro de
+Control ("dame opciones para que la gente que lo usa lo pueda ver todo en
+tiempo real"). Se implementaron en el orden que eligió: 4, 1, 3 y 7 de la
+lista de opciones propuesta.
+
+### 1. Sondeo condicional con ETag (304 sin cuerpo)
+
+`lib/conditional-json.ts` calcula un ETag débil estable del payload —
+excluyendo del hash los campos volátiles como `refreshedAt`, no del cuerpo —
+y devuelve `304` sin cuerpo cuando el cliente reenvía el mismo
+`If-None-Match`. Aplicado a `/api/live-data`, `/api/dashboard`,
+`/api/control-room`, `/api/notifications` y `/api/payables`.
+
+El payload se sigue calculando siempre: el `GET` de notificaciones actúa
+además como relevo del outbox de push y no puede saltarse. Lo que se ahorra
+es la transferencia del JSON íntegro en cada ciclo sin cambios, que es el
+caso común; en móvil y tablet en obra eso reduce datos y batería.
+
+En el cliente, `fetchWithEtag` (en `app/dashboard-client.tsx`) guarda el
+ETag por endpoint. **Trampa a recordar**: `Response.ok` es `false` en un
+304, así que cada llamante comprueba `status === 304` *antes* que su manejo
+de error, o un 304 se interpretaría como fallo de red. Si live-data y
+dashboard responden ambos 304, solo se refresca la cinta de conexión, sin
+re-aplicar valores ni re-renderizar. Un cambio de rol o permiso altera el
+hash (`currentUser` va en el payload), así que produce un 200 y la
+detección de cambios de usuario sigue funcionando igual.
+
+### 2. Avisos push de negocio
+
+`lib/business-alerts.ts` deriva avisos del estado que los endpoints
+sondeados acaban de calcular, sin consultas extra cuando no hay candidatos:
+
+- Desviación física de 3 o más puntos bajo el plan operativo del mismo mes
+  (`DEVIATION_ALERT_POINTS`), una vez por mes de corte.
+- Acciones vencidas y aún abiertas, una vez por acción y fecha; audiencia
+  `area:<área>`, degradada a `finance` en áreas protegidas (fail-closed).
+- Facturas CxP con 2 meses o más de antigüedad
+  (`PAYABLE_AGING_ALERT_INDEX`), agregado para audiencia financiera.
+
+La emisión es idempotente por lotes (`emitMissingNotifications` en
+`lib/notifications.ts`): una consulta resuelve qué avisos existen ya por
+`(kind, subjectType, subjectId)` y solo inserta los que faltan, de modo que
+un sondeo de 5 s puede invocarla en cada ciclo. **No hay índice único que lo
+garantice en base de datos**: una carrera entre dos sondeos simultáneos
+puede duplicar un aviso puntual. Es un coste aceptado a cambio de no exigir
+otra migración remota; si algún día molesta, la solución es un índice único
+sobre esa terna.
+
+### 3. Modo TV/obra
+
+Pantalla siempre encendida para la oficina de obra y la central: `/tv`, con
+tres paneles en rotación cada 15 s (avance y KPIs, Curva S, acciones
+vencidas), refresco cada 30 s con el mismo ETag condicional, y tipografía en
+unidades de viewport para leerse a varios metros en 1080p o 4K.
+
+- Acceso **sin sesión de usuario**: un administrador crea el enlace desde
+  `Usuarios y accesos` → "Modo TV para obra y oficina". Así nadie teclea
+  credenciales en un dispositivo compartido.
+- `randomBytes(32)` genera el token; en D1 solo se guarda su hash SHA-256
+  (mismo patrón que `user_sessions`). El enlace en claro se muestra **una
+  sola vez** al crearlo — no hay forma de recuperarlo — y el cliente lo
+  retira de la barra de direcciones tras guardarlo en `sessionStorage`.
+- Caducidad de 90 días por defecto, máximo 20 pantallas activas, revocación
+  inmediata.
+- El contenido es deliberadamente **no financiero**, y la vía de datos es la
+  misma que ve un usuario sin permiso financiero
+  (`readEffectiveLiveData(false)`, `buildControlRoomBaseline(false, ...)`),
+  nunca una copia paralela que pueda divergir: una pantalla en obra es
+  semi-pública por naturaleza. Una prueba fija ese recorte.
+- Archivos: `app/tv/`, `app/api/tv/`, `app/api/admin/tv-tokens/`, tabla
+  `tv_device_tokens`.
+
+**Migración pendiente de aplicar en D1 remoto** (deliberadamente fuera del
+pipeline, como todas):
+
+```
+npx wrangler d1 execute araya-centro-control-d1 --remote --file=drizzle/0021_tv_device_tokens.sql
+```
+
+Hasta que se aplique, `/tv` y la tarjeta de administración avisan de que la
+tabla falta; **el resto de la aplicación funciona con normalidad**.
+
+### 4. Semáforo de frescura por KPI
+
+`lib/data-freshness.ts` traduce la procedencia que `/api/live-data` ya
+publicaba (y que el cliente ignoraba) en un punto de color junto al nombre
+de cada indicador: verde hasta 35 días, ámbar hasta 70, rojo por encima —
+los umbrales salen del ciclo de cierre mensual del proyecto. El detalle
+completo (edad, corte y última fuente) aparece en la ficha contextual del
+KPI.
+
+La edad se mide contra la **fecha de corte** del dato, no contra la de
+publicación: un Excel de junio subido en agosto sigue siendo un dato de
+junio. Sin corte declarado se usa la publicación y queda señalado como tal.
+Cuando no hay procedencia, **no se muestra semáforo**: preferimos callar
+antes que atribuir a un KPI una frescura que no le corresponde.
+
+Esta es la mejora más honesta de las cuatro: el resto acelera el transporte,
+pero el cuello de botella real del "tiempo real" es que las cifras solo
+cambian cuando alguien sube un archivo nuevo. El semáforo hace visible esa
+distancia en vez de dejar que la inmediatez de la interfaz la disimule.
+
+`STAT_CARD_FRESHNESS_KEYS` mapea cada indicador a sus raíces vivas, y una
+prueba falla si alguna clave no existe en `LIVE_DATA_ROOTS` (un mapeo mal
+escrito dejaría el semáforo apagado para siempre sin que nadie lo notara).
+
+### Pendiente de estas cuatro
+
+Verificar en producción con sesión real tras el despliegue, y aplicar la
+migración 0021 antes de usar el modo TV. Las opciones propuestas y no
+implementadas todavía (SSE, WebSockets con Durable Objects, resumen diario
+por cron, recordatorios al responsable de área, consolidación de los ~6
+sondeos por pestaña) siguen sobre la mesa.
 
 ## Criterios de continuidad
 

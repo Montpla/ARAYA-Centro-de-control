@@ -2,9 +2,10 @@ import { desc } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { customMetrics, suppliers } from "../../../db/schema";
 import { requireApiUser } from "../../../lib/access-control";
+import { conditionalJson } from "../../../lib/conditional-json";
 import { scheduleNotificationDispatch } from "../../../lib/notification-dispatch";
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireApiUser();
   if (!auth.user) return auth.response;
   try {
@@ -18,7 +19,7 @@ export async function GET() {
     const visibleSuppliers = auth.user.financeAccess
       ? supplierRows
       : supplierRows.map((supplier) => ({ ...supplier, amount: undefined }));
-    return Response.json({ metrics: metricsRows, suppliers: visibleSuppliers });
+    return conditionalJson(request, { metrics: metricsRows, suppliers: visibleSuppliers });
   } catch {
     return Response.json({ metrics: [], suppliers: [], demo: true });
   }

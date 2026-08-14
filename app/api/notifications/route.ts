@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { notificationEvents, notificationReads } from "../../../db/schema";
 import { requireApiUser } from "../../../lib/access-control";
+import { conditionalJson } from "../../../lib/conditional-json";
 import {
   D1JsonDatabase,
   MAX_NOTIFICATION_RECEIPTS,
@@ -97,7 +98,7 @@ export async function GET(request: Request) {
     : [];
   const readByEvent = new Map(readRows.map((row) => [row.notificationId, row]));
 
-  return responseWithNoStore({
+  return conditionalJson(request, {
     notifications: visibleRows.map((row) => {
       const receipt = readByEvent.get(row.id);
       return {
@@ -121,7 +122,7 @@ export async function GET(request: Request) {
     cursor,
     refreshIntervalMs: 5_000,
     refreshedAt: new Date().toISOString(),
-  });
+  }, { volatile: ["refreshedAt"] });
 }
 
 export async function PATCH(request: Request) {
