@@ -526,6 +526,41 @@ test("Ventas y cobranza shares the fail-closed finance permission on every serve
   ], "client navigation privacy");
 });
 
+// Un servidor sin claves VAPID configuradas se comportaba igual que uno
+// correcto: /api/push/config devolvía enabled:false, el cliente se rendía en
+// silencio y el panel seguía anunciando "Activadas · ACTIVO" porque solo
+// miraba el permiso del navegador. El usuario veía todo en verde y no le
+// llegaba nada al teléfono. La capacidad del servidor y el permiso del
+// dispositivo son cosas distintas y deben mostrarse por separado.
+test("push readiness distinguishes device permission from server capability", async () => {
+  const [dashboard, deviceCenter] = await Promise.all([
+    read("app/dashboard-client.tsx"),
+    read("app/device-center.tsx"),
+  ]);
+
+  // El cliente registra si el servidor puede enviar, no solo si hay suscripción.
+  expectPatterns(dashboard, [
+    /const \[pushServerConfigured, setPushServerConfigured\] = useState<boolean \| null>\(null\)/,
+    /setPushServerConfigured\(serverReady\)/,
+    /pushServerConfigured=\{pushServerConfigured\}/,
+  ], "client push server capability");
+
+  // Y el panel lo muestra en vez de anunciar ACTIVO sin matices.
+  expectPatterns(deviceCenter, [
+    /pushServerConfigured: boolean \| null/,
+    /const pushBlockedOnServer = notificationPermission === "granted" && pushServerConfigured === false/,
+    /pushBlockedOnServer \? "LIMITADO"/,
+    /faltan las claves de notificación \(VAPID\)/,
+  ], "device center push diagnosis");
+
+  // El distintivo verde solo puede encenderse con el servidor listo.
+  assert.doesNotMatch(
+    deviceCenter,
+    /className=\{notificationPermission === "granted" \? "ready" : ""\}/,
+    "el distintivo ACTIVO no debe depender solo del permiso del navegador",
+  );
+});
+
 test("service worker receives push and opens only a same-origin destination", () => {
   expectPatterns(serviceWorker, [
     /self\.addEventListener\(["']push["']/,
