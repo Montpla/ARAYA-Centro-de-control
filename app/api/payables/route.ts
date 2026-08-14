@@ -1,4 +1,5 @@
 import { requireApiUser } from "../../../lib/access-control";
+import { payablesAlertCandidates, scheduleBusinessAlerts } from "../../../lib/business-alerts";
 import { conditionalJson } from "../../../lib/conditional-json";
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import { materializeLiveRoot } from "../../../lib/live-data";
@@ -47,5 +48,8 @@ export async function GET(request: Request) {
     // The verified June source remains available if the live database is offline.
   }
 
-  return conditionalJson(request, buildPayablesDataset(lines, metadata));
+  const dataset = buildPayablesDataset(lines, metadata);
+  // Aviso financiero idempotente sobre facturas envejecidas, en segundo plano.
+  scheduleBusinessAlerts(payablesAlertCandidates(dataset));
+  return conditionalJson(request, dataset);
 }

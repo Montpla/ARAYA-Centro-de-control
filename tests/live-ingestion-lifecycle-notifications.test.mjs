@@ -549,3 +549,91 @@ test("service worker receives push and opens only a same-origin destination", ()
     /fetch\(["']\/api\/presence["']/,
   ], "dashboard client");
 });
+
+async function loadBusinessAlertCandidates() {
+  const source = await read("lib/business-alerts.ts");
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      esModuleInterop: true,
+    },
+  }).outputText;
+  const compiledModule = { exports: {} };
+  const require = (specifier) => {
+    if (specifier === "./notifications") return { emitMissingNotifications: async () => ({ created: 0 }) };
+    if (specifier === "./live-data") return liveDataModule;
+    if (specifier === "vinext/shims/request-context") return { getRequestExecutionContext: () => null };
+    throw new Error(`Unexpected import: ${specifier}`);
+  };
+  vm.runInNewContext(output, {
+    module: compiledModule,
+    exports: compiledModule.exports,
+    require,
+    console,
+    JSON,
+    Date,
+    Number,
+    Math,
+  });
+  return compiledModule.exports;
+}
+
+test("business alerts derive idempotent, audience-safe candidates from polled state", async () => {
+  const alerts = await loadBusinessAlertCandidates();
+
+  // Desviación física bajo el umbral: un aviso por mes de corte, audiencia global.
+  const deviation = alerts.controlRoomAlertCandidates({
+    planning: { kpiDeviationPoints: -3.9, curveCutoffLabel: "2026-07" },
+    actions: [],
+  });
+  assert.equal(deviation.length, 1);
+  assert.equal(deviation[0].kind, "deviation_alert");
+  assert.equal(deviation[0].audience, "all");
+  assert.equal(deviation[0].subjectId, "2026-07:3");
+  assert.match(deviation[0].title, /3,9 puntos/);
+
+  // Dentro del umbral o sin corte: sin candidatos.
+  assert.equal(alerts.controlRoomAlertCandidates({
+    planning: { kpiDeviationPoints: -2.9, curveCutoffLabel: "2026-07" },
+  }).length, 0);
+  assert.equal(alerts.controlRoomAlertCandidates({
+    planning: { kpiDeviationPoints: -9, curveCutoffLabel: "" },
+  }).length, 0);
+
+  // Acciones vencidas: solo abiertas y con fecha pasada; el área financiera
+  // degrada la audiencia a "finance" (fail-closed), el resto a su área.
+  const actions = alerts.controlRoomAlertCandidates({
+    actions: [
+      { id: "a1", title: "Cerrar pendiente", area: "obra", status: "open", dueDate: "2026-01-01" },
+      { id: "a2", title: "Completada", area: "obra", status: "completed", dueDate: "2026-01-01" },
+      { id: "a3", title: "Futura", area: "obra", status: "open", dueDate: "2999-01-01" },
+      { id: "a4", title: "CxP", area: "finanzas", status: "open", dueDate: "2026-01-01" },
+    ],
+  });
+  assert.equal(actions.length, 2);
+  assert.equal(actions[0].audience, "area:obra");
+  assert.equal(actions[0].subjectId, "a1:2026-01-01");
+  assert.equal(actions[1].audience, "finance");
+
+  // Facturas envejecidas: agregado financiero, nunca por debajo del índice 3.
+  const payables = alerts.payablesAlertCandidates({
+    cutoff: "2026-06-30",
+    invoices: [
+      { amountDop: 1000, agingIndex: 5 },
+      { amountDop: 2000, agingIndex: 3 },
+      { amountDop: 9999, agingIndex: 2 },
+      { amountDop: -500, agingIndex: 5 },
+    ],
+  });
+  assert.equal(payables.length, 1);
+  assert.equal(payables[0].audience, "finance");
+  assert.equal(payables[0].subjectId, "2026-06-30:2");
+  assert.match(payables[0].title, /2 facturas/);
+  assert.equal(alerts.payablesAlertCandidates({ invoices: [] }).length, 0);
+
+  // Y los endpoints sondeados deben seguir programando la emisión.
+  expectPatterns(controlRoomRoute, [
+    /scheduleBusinessAlerts\(controlRoomAlertCandidates\(payload\)\)/,
+  ], "control room business alerts");
+});
