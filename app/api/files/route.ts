@@ -909,7 +909,10 @@ export async function POST(request: Request) {
       });
     }
     const identityResolvedUpdates = currentLiveData
-      ? resolveSpatialIdentityUpdates(extraction.updates, currentLiveData.values)
+      // Las colecciones de partida permiten traducir a posición el nombre de
+      // una entidad en cualquier lista del modelo, no sólo en las espaciales:
+      // las económicas no tienen id y sólo se distinguen por su nombre.
+      ? resolveSpatialIdentityUpdates(extraction.updates, currentLiveData.values, getContractRootsSnapshot())
       : extraction.updates;
     const extractedUpdates = identityResolvedUpdates.length
       ? normalizeLiveDataUpdates({

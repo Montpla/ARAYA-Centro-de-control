@@ -78,3 +78,77 @@ test("las claves que no nombran ninguna entidad no alteran el resto", () => {
   });
   assert.equal(result[indexOfCode("14")].progress, 51);
 });
+
+// --- Listas económicas -------------------------------------------------------
+// Sólo 5 de las 26 colecciones del modelo traen id. Las económicas se
+// distinguen por su nombre de negocio, su mes o su entidad emisora, así que
+// hasta ahora un importe sólo podía dirigirse por su posición en la lista.
+
+test("una partida de CxP se actualiza por su nombre", async () => {
+  const { cxpCategories } = await import("../app/june-report-data.ts");
+  const objetivo = cxpCategories[0].name;
+  const resultado = materializeLiveRoot("cxpCategories", cxpCategories, {
+    [`cxpCategories.${objetivo}.amount`]: 12345.67,
+  });
+  const partida = resultado.find((item) => item.name === objetivo);
+  assert.equal(partida.amount, 12345.67);
+  // Ninguna otra partida puede haberse movido.
+  for (const item of resultado) {
+    if (item.name !== objetivo) {
+      const original = cxpCategories.find((base) => base.name === item.name);
+      assert.equal(item.amount, original.amount);
+    }
+  }
+});
+
+test("un mes con año se actualiza por su nombre", async () => {
+  const { monthlyPlan } = await import("../app/demo-data.ts");
+  const indice = monthlyPlan.findIndex((entry) => entry.month === "ene 26");
+  assert.ok(indice > 0, "el plan debe contener ene 26");
+  const resultado = materializeLiveRoot("monthlyPlan", monthlyPlan, {
+    "monthlyPlan.ene 26.actual": 33.3,
+  });
+  assert.equal(resultado[indice].actual, 33.3);
+});
+
+test("un mes repetido en la serie no se resuelve por su etiqueta", async () => {
+  // La Curva S abarca 27 meses y sólo lleva año en el primero de cada uno, así
+  // que "jul" designa a la vez a julio de 2025, 2026 y 2027. Como de la última
+  // fila con ejecutado sale el avance físico global, escribir en el año
+  // equivocado desplazaría el KPI principal del proyecto. Se descarta.
+  const { monthlyPlan } = await import("../app/demo-data.ts");
+  const repetidos = monthlyPlan.filter((entry) => entry.month === "jul");
+  assert.ok(repetidos.length > 1, "jul debe seguir apareciendo más de una vez");
+  const resultado = materializeLiveRoot("monthlyPlan", monthlyPlan, {
+    "monthlyPlan.jul.actual": 99,
+  });
+  assert.ok(resultado.every((entry, indice) => entry.actual === monthlyPlan[indice].actual));
+});
+
+test("un nombre que señala a dos partidas no escribe en ninguna", () => {
+  // Escribir en la primera repartiría el importe a cara o cruz entre dos
+  // líneas distintas, que sobre cifras económicas es peor que no escribir.
+  const lista = [
+    { name: "Obra", amount: 10 },
+    { name: "obra", amount: 20 },
+  ];
+  const resultado = materializeLiveRoot("cxpCategories", lista, {
+    "cxpCategories.Obra.amount": 999,
+  });
+  assert.equal(resultado[0].amount, 10);
+  assert.equal(resultado[1].amount, 20);
+});
+
+test("los nombres de negocio no se recortan por empezar como un tipo", () => {
+  // "Torres del Este" llegó a normalizarse como "sdeleste" al descartar el
+  // prefijo sin comprobar que detrás viniera un número.
+  const lista = [
+    { name: "Torres del Este", amount: 10 },
+    { name: "Torre Norte", amount: 20 },
+  ];
+  const resultado = materializeLiveRoot("cxpCategories", lista, {
+    "cxpCategories.Torre Norte.amount": 55,
+  });
+  assert.equal(resultado[0].amount, 10, "Torres del Este no debe verse afectada");
+  assert.equal(resultado[1].amount, 55);
+});

@@ -153,7 +153,10 @@ test("upload quarantine, idempotent resume and automatic runtime contracts fail 
     /const affirmativeContentClassification = extractedUpdates\.length > 0/,
     /resolvedDocumentType = PROVISIONAL_DOCUMENT_TYPE;[\s\S]*?financeProtectedUpload = true;[\s\S]*?protectionResolved = false/,
     /financeProtectedUpload && !user\.financeAccess/,
-    /resolveSpatialIdentityUpdates\(extraction\.updates, currentLiveData\.values\)/,
+    // Se le pasan además las colecciones de partida para poder traducir a
+    // posición el nombre de una entidad en cualquier lista, no sólo en las
+    // espaciales: las económicas no tienen id y sólo se distinguen por nombre.
+    /resolveSpatialIdentityUpdates\(extraction\.updates, currentLiveData\.values, getContractRootsSnapshot\(\)\)/,
     /const liveValues = currentLiveData\?\.values \?\? \{\}/,
     /automaticContractIsSafe\(normalizedUpdates, liveValues\)/,
     /individualUpdateContractIsSafe\(update, liveValues\)/,

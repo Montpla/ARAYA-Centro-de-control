@@ -284,7 +284,31 @@ export function compactLiveEntities<T extends object>(value: Array<T | null | un
 // de una clave. `shortName` está aquí y no en stableArrayIdentity porque no
 // identifica a la entidad de forma única en todo el modelo (sirve para
 // nombrarla en una clave, no para reconciliar dos listas completas).
-const ENTITY_NAMING_KEYS = ["id", "code", "shortName", "unitId", "apartmentId", "buildingId"];
+//
+// La segunda mitad de la lista existe porque sólo 5 de las 26 colecciones del
+// modelo traen id: las demás —las de cuentas, CxP, ventas, presupuesto y plan
+// mensual— se distinguen por su nombre de negocio ("Edificaciones",
+// "Construcción", "Grupo Alugav"), por su mes ("jun 25") o por su entidad
+// emisora. Sin ellos, la única forma de dirigir un importe era su posición en
+// la lista, y basta con que el orden cambie o con que la extracción se
+// equivoque de número para que el dinero entre en otra partida sin que nada lo
+// señale — el mismo fallo que tenían los edificios, pero sobre cifras
+// económicas.
+const ENTITY_NAMING_KEYS = [
+  "id",
+  "code",
+  "shortName",
+  "unitId",
+  "apartmentId",
+  "buildingId",
+  "name",
+  "month",
+  "period",
+  "entity",
+  "category",
+  "concept",
+  "label",
+];
 
 function stableArrayIdentity(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "";
@@ -309,9 +333,15 @@ export function namingToken(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]/g, "");
   if (!compact) return "";
-  const withoutPrefix = compact.replace(/^(th|edificio|torre|apartamento|apto|unidad)/, "");
-  const withoutPadding = withoutPrefix.replace(/^0+(?=\d)/, "");
-  return withoutPadding || withoutPrefix || compact;
+  // El prefijo de tipo se descarta únicamente cuando lo que queda detrás es un
+  // número, que es la forma en que se nombra una entidad enumerada ("TH-14",
+  // "edificio-14", "apartamento-101"). Recortarlo sin esa condición estropea
+  // los nombres de negocio, que también empiezan por esas palabras: "Torres
+  // del Este" quedaba en "sdeleste" y "Torre Norte" en "norte", con el riesgo
+  // de que dos partidas distintas colapsaran en el mismo token y un importe
+  // acabara en la línea equivocada.
+  const withoutPrefix = compact.replace(/^(th|edificio|torre|apartamento|apto|unidad)(?=\d)/, "");
+  return withoutPrefix.replace(/^0+(?=\d)/, "") || withoutPrefix;
 }
 
 // Resuelve qué posición de una colección viva nombra un segmento de clave.
@@ -328,16 +358,34 @@ function resolveArrayIndex(cursor: unknown[], segment: string) {
   if (/^\d+$/.test(segment)) return Number(segment);
   const wanted = namingToken(segment);
   if (!wanted) return -1;
+  let found = -1;
   for (let index = 0; index < cursor.length; index += 1) {
     const item = cursor[index];
     if (!item || typeof item !== "object" || Array.isArray(item)) continue;
     const record = item as Record<string, unknown>;
-    for (const key of ENTITY_NAMING_KEYS) {
+    const matches = ENTITY_NAMING_KEYS.some((key) => {
       const raw = record[key];
-      if (typeof raw === "string" && namingToken(raw) === wanted) return index;
-    }
+      return typeof raw === "string" && namingToken(raw) === wanted;
+    });
+    if (!matches) continue;
+    // Un nombre que señala a dos entidades no señala a ninguna. Escribir en la
+    // primera que aparezca repartiría el dato a cara o cruz entre dos partidas
+    // —y en las listas económicas eso es un importe en la línea equivocada—,
+    // así que se descarta y el aviso posterior deja constancia.
+    if (found >= 0) return -1;
+    found = index;
   }
-  return -1;
+  return found;
+}
+
+/**
+ * Posición que un nombre designa dentro de una colección viva, o -1 si no
+ * designa ninguna o designa más de una. Comparte regla con la materialización
+ * para que un nombre no se resuelva de una forma al traducir la clave y de
+ * otra al aplicarla.
+ */
+export function findNamedEntityIndex(values: unknown[], name: string) {
+  return resolveArrayIndex(values, name);
 }
 
 function setPath(target: unknown, path: string[], value: LiveDataValue) {
