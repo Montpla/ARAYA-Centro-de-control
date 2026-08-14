@@ -1910,6 +1910,122 @@ de documentos más abren; si funciona, restaurar lo revertido el 13/08 — el
 botón "Guía de uso" de la cabecera y la verificación autenticada de la guía
 en `deploy.mjs`.
 
+## Mejoras de tiempo real (14/08/2026)
+
+Cuatro mejoras pedidas por el usuario tras revisar el estado del Centro de
+Control ("dame opciones para que la gente que lo usa lo pueda ver todo en
+tiempo real"). Se implementaron en el orden que eligió: 4, 1, 3 y 7 de la
+lista de opciones propuesta.
+
+### 1. Sondeo condicional con ETag (304 sin cuerpo)
+
+`lib/conditional-json.ts` calcula un ETag débil estable del payload —
+excluyendo del hash los campos volátiles como `refreshedAt`, no del cuerpo —
+y devuelve `304` sin cuerpo cuando el cliente reenvía el mismo
+`If-None-Match`. Aplicado a `/api/live-data`, `/api/dashboard`,
+`/api/control-room`, `/api/notifications` y `/api/payables`.
+
+El payload se sigue calculando siempre: el `GET` de notificaciones actúa
+además como relevo del outbox de push y no puede saltarse. Lo que se ahorra
+es la transferencia del JSON íntegro en cada ciclo sin cambios, que es el
+caso común; en móvil y tablet en obra eso reduce datos y batería.
+
+En el cliente, `fetchWithEtag` (en `app/dashboard-client.tsx`) guarda el
+ETag por endpoint. **Trampa a recordar**: `Response.ok` es `false` en un
+304, así que cada llamante comprueba `status === 304` *antes* que su manejo
+de error, o un 304 se interpretaría como fallo de red. Si live-data y
+dashboard responden ambos 304, solo se refresca la cinta de conexión, sin
+re-aplicar valores ni re-renderizar. Un cambio de rol o permiso altera el
+hash (`currentUser` va en el payload), así que produce un 200 y la
+detección de cambios de usuario sigue funcionando igual.
+
+### 2. Avisos push de negocio
+
+`lib/business-alerts.ts` deriva avisos del estado que los endpoints
+sondeados acaban de calcular, sin consultas extra cuando no hay candidatos:
+
+- Desviación física de 3 o más puntos bajo el plan operativo del mismo mes
+  (`DEVIATION_ALERT_POINTS`), una vez por mes de corte.
+- Acciones vencidas y aún abiertas, una vez por acción y fecha; audiencia
+  `area:<área>`, degradada a `finance` en áreas protegidas (fail-closed).
+- Facturas CxP con 2 meses o más de antigüedad
+  (`PAYABLE_AGING_ALERT_INDEX`), agregado para audiencia financiera.
+
+La emisión es idempotente por lotes (`emitMissingNotifications` en
+`lib/notifications.ts`): una consulta resuelve qué avisos existen ya por
+`(kind, subjectType, subjectId)` y solo inserta los que faltan, de modo que
+un sondeo de 5 s puede invocarla en cada ciclo. **No hay índice único que lo
+garantice en base de datos**: una carrera entre dos sondeos simultáneos
+puede duplicar un aviso puntual. Es un coste aceptado a cambio de no exigir
+otra migración remota; si algún día molesta, la solución es un índice único
+sobre esa terna.
+
+### 3. Modo TV/obra
+
+Pantalla siempre encendida para la oficina de obra y la central: `/tv`, con
+tres paneles en rotación cada 15 s (avance y KPIs, Curva S, acciones
+vencidas), refresco cada 30 s con el mismo ETag condicional, y tipografía en
+unidades de viewport para leerse a varios metros en 1080p o 4K.
+
+- Acceso **sin sesión de usuario**: un administrador crea el enlace desde
+  `Usuarios y accesos` → "Modo TV para obra y oficina". Así nadie teclea
+  credenciales en un dispositivo compartido.
+- `randomBytes(32)` genera el token; en D1 solo se guarda su hash SHA-256
+  (mismo patrón que `user_sessions`). El enlace en claro se muestra **una
+  sola vez** al crearlo — no hay forma de recuperarlo — y el cliente lo
+  retira de la barra de direcciones tras guardarlo en `sessionStorage`.
+- Caducidad de 90 días por defecto, máximo 20 pantallas activas, revocación
+  inmediata.
+- El contenido es deliberadamente **no financiero**, y la vía de datos es la
+  misma que ve un usuario sin permiso financiero
+  (`readEffectiveLiveData(false)`, `buildControlRoomBaseline(false, ...)`),
+  nunca una copia paralela que pueda divergir: una pantalla en obra es
+  semi-pública por naturaleza. Una prueba fija ese recorte.
+- Archivos: `app/tv/`, `app/api/tv/`, `app/api/admin/tv-tokens/`, tabla
+  `tv_device_tokens`.
+
+**Migración pendiente de aplicar en D1 remoto** (deliberadamente fuera del
+pipeline, como todas):
+
+```
+npx wrangler d1 execute araya-centro-control-d1 --remote --file=drizzle/0021_tv_device_tokens.sql
+```
+
+Hasta que se aplique, `/tv` y la tarjeta de administración avisan de que la
+tabla falta; **el resto de la aplicación funciona con normalidad**.
+
+### 4. Semáforo de frescura por KPI
+
+`lib/data-freshness.ts` traduce la procedencia que `/api/live-data` ya
+publicaba (y que el cliente ignoraba) en un punto de color junto al nombre
+de cada indicador: verde hasta 35 días, ámbar hasta 70, rojo por encima —
+los umbrales salen del ciclo de cierre mensual del proyecto. El detalle
+completo (edad, corte y última fuente) aparece en la ficha contextual del
+KPI.
+
+La edad se mide contra la **fecha de corte** del dato, no contra la de
+publicación: un Excel de junio subido en agosto sigue siendo un dato de
+junio. Sin corte declarado se usa la publicación y queda señalado como tal.
+Cuando no hay procedencia, **no se muestra semáforo**: preferimos callar
+antes que atribuir a un KPI una frescura que no le corresponde.
+
+Esta es la mejora más honesta de las cuatro: el resto acelera el transporte,
+pero el cuello de botella real del "tiempo real" es que las cifras solo
+cambian cuando alguien sube un archivo nuevo. El semáforo hace visible esa
+distancia en vez de dejar que la inmediatez de la interfaz la disimule.
+
+`STAT_CARD_FRESHNESS_KEYS` mapea cada indicador a sus raíces vivas, y una
+prueba falla si alguna clave no existe en `LIVE_DATA_ROOTS` (un mapeo mal
+escrito dejaría el semáforo apagado para siempre sin que nadie lo notara).
+
+### Pendiente de estas cuatro
+
+Verificar en producción con sesión real tras el despliegue, y aplicar la
+migración 0021 antes de usar el modo TV. Las opciones propuestas y no
+implementadas todavía (SSE, WebSockets con Durable Objects, resumen diario
+por cron, recordatorios al responsable de área, consolidación de los ~6
+sondeos por pestaña) siguen sobre la mesa.
+
 ## Criterios de continuidad
 
 - Mostrar únicamente datos aportados o derivados de las fuentes.

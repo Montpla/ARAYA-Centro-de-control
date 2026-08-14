@@ -13157,3 +13157,26 @@ button.financial-detail-row:focus-visible {
   border: 1px solid rgba(240, 180, 41, 0.4);
   word-break: break-all;
 }
+
+/* Semáforo de frescura junto al nombre del indicador. La cifra manda: el
+   punto informa de la edad real del dato sin competir con ella. */
+.freshness-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+  flex: none;
+}
+
+.freshness-fresh { background: #2fbf87; }
+.freshness-aging { background: #e0a020; }
+.freshness-stale { background: #e05252; }
+
+@media (prefers-contrast: more) {
+  .freshness-dot {
+    outline: 1px solid currentColor;
+    outline-offset: 1px;
+  }
+}

@@ -18,6 +18,11 @@ import {
 } from "../lib/unit-progress";
 import { computedView } from "../lib/computed-view";
 import {
+  STAT_CARD_FRESHNESS_KEYS,
+  readFreshness,
+} from "../lib/data-freshness";
+import type { FreshnessLevel, ProvenanceEntry } from "../lib/data-freshness";
+import {
   liveAntonelyDetailTotals,
   liveDataAuthorityMatrix,
   liveDataGovernanceSummary,
@@ -789,6 +794,52 @@ const WorkspaceDetailContext = createContext<{
   enabled: false,
   openDetail: () => undefined,
 });
+
+// Procedencia por clave viva tal como la publica /api/live-data. Se comparte
+// por contexto porque los indicadores están repartidos por todo el árbol y no
+// tendría sentido bajarla por props hasta cada uno.
+const ProvenanceContext = createContext<Record<string, ProvenanceEntry>>({});
+
+const freshnessBadgeLabel: Record<FreshnessLevel, string> = {
+  fresh: "Al día",
+  aging: "Un cierre pendiente",
+  stale: "Desactualizado",
+  unknown: "Sin procedencia",
+};
+
+// Punto de color junto al indicador: comunica la edad real del dato sin
+// competir visualmente con la cifra. El texto completo va en title/aria para
+// que no se pierda en lectores de pantalla.
+function FreshnessDot({ eyebrow }: { eyebrow: string }) {
+  const provenance = useContext(ProvenanceContext);
+  const keys = STAT_CARD_FRESHNESS_KEYS[eyebrow];
+  const reading = useMemo(
+    () => (keys ? readFreshness(provenance, keys) : null),
+    [keys, provenance],
+  );
+  if (!reading || reading.level === "unknown") return null;
+  return (
+    <i
+      className={`freshness-dot freshness-${reading.level}`}
+      title={`${freshnessBadgeLabel[reading.level]} · ${reading.label}`}
+      aria-label={`Frescura del dato: ${freshnessBadgeLabel[reading.level]}. ${reading.label}`}
+      role="img"
+    />
+  );
+}
+
+// Detalle textual para la ficha contextual del KPI, donde sí hay espacio.
+function freshnessDetailMetrics(eyebrow: string, provenance: Record<string, ProvenanceEntry>) {
+  const keys = STAT_CARD_FRESHNESS_KEYS[eyebrow];
+  if (!keys) return [];
+  const reading = readFreshness(provenance, keys);
+  if (reading.level === "unknown") return [];
+  return [
+    { label: "Frescura del dato", value: `${freshnessBadgeLabel[reading.level]} · ${reading.ageDays} días` },
+    ...(reading.cutoff ? [{ label: "Corte", value: reading.cutoff }] : []),
+    ...(reading.sourceName ? [{ label: "Última fuente", value: reading.sourceName }] : []),
+  ];
+}
 
 const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
   resumen: {
@@ -2490,6 +2541,7 @@ function StatCard({
   tone?: "neutral" | "warn" | "danger" | "good";
 }) {
   const workspace = useContext(WorkspaceDetailContext);
+  const provenance = useContext(ProvenanceContext);
   const link = statCardLinks[eyebrow];
   if (workspace.enabled && link) {
     return (
@@ -2502,12 +2554,15 @@ function StatCard({
           title: eyebrow,
           summary: detail,
           status: "live",
-          metrics: [{ label: "Valor actual", value }],
+          metrics: [
+            { label: "Valor actual", value },
+            ...freshnessDetailMetrics(eyebrow, provenance),
+          ],
           sourceIds: link.sourceIds,
           actions: [{ label: `Abrir ${navItems.find((item) => item.id === link.view)?.label ?? "sección"}`, view: link.view }],
         })}
       >
-        <span>{eyebrow}</span>
+        <span>{eyebrow}<FreshnessDot eyebrow={eyebrow} /></span>
         <strong>{value}</strong>
         <small>{detail}</small>
         <em>Abrir detalle →</em>
@@ -2516,7 +2571,7 @@ function StatCard({
   }
   return (
     <article className={`stat-card ${tone}`}>
-      <span>{eyebrow}</span>
+      <span>{eyebrow}<FreshnessDot eyebrow={eyebrow} /></span>
       <strong>{value}</strong>
       <small>{detail}</small>
     </article>
@@ -7916,6 +7971,8 @@ export function DashboardClient({
     refreshedAt: "",
     latestEvent: null,
   });
+  // Procedencia por clave viva; alimenta el semáforo de frescura de los KPI.
+  const [liveProvenance, setLiveProvenance] = useState<Record<string, ProvenanceEntry>>({});
   const [controlRoom, setControlRoom] = useState<ControlRoomSnapshot | null>(null);
   const [controlRoomLoading, setControlRoomLoading] = useState(true);
   const [controlRoomError, setControlRoomError] = useState("");
@@ -8376,6 +8433,7 @@ export function DashboardClient({
     type LivePayload = {
       healthy?: boolean;
       values?: LiveDataMap;
+      provenance?: Record<string, ProvenanceEntry>;
       revision?: number;
       refreshedAt?: string;
       latestEvent?: LiveSyncState["latestEvent"];
@@ -8459,6 +8517,7 @@ export function DashboardClient({
           ...(Array.isArray(dashboardData.suppliers) ? dashboardData.suppliers : []),
           ...initialSuppliers,
         ]);
+        setLiveProvenance(liveData.provenance ?? {});
         setLiveSync({
           status: "connected",
           revision: liveData.revision ?? 0,
@@ -8944,6 +9003,7 @@ export function DashboardClient({
       enabled: activeProjectId === "araya",
       openDetail: setWorkspaceDetail,
     }}>
+    <ProvenanceContext.Provider value={liveProvenance}>
     <div className="app-shell" onClickCapture={openFileInViewer}>
       <aside className="sidebar">
         <div className="brand">
@@ -9444,6 +9504,7 @@ export function DashboardClient({
 
       {notice && <div className="upload-toast" role="status"><strong>Bricket Control</strong><span>{notice}</span></div>}
     </div>
+    </ProvenanceContext.Provider>
     </WorkspaceDetailContext.Provider>
   );
 }
