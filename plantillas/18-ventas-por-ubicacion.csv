@@ -1,0 +1,17 @@
+clave,valor,descripcion,valor actual
+salesLocations.0.total,,Interior · total,49
+salesLocations.0.garden,,Interior · garden,13
+salesLocations.0.sunset,,Interior · sunset,16
+salesLocations.0.balcony,,Interior · balcony,20
+salesLocations.1.total,,Parque Central + Vista · total,20
+salesLocations.1.garden,,Parque Central + Vista · garden,6
+salesLocations.1.sunset,,Parque Central + Vista · sunset,8
+salesLocations.1.balcony,,Parque Central + Vista · balcony,6
+salesLocations.2.total,,Parque Central · total,13
+salesLocations.2.garden,,Parque Central · garden,4
+salesLocations.2.sunset,,Parque Central · sunset,5
+salesLocations.2.balcony,,Parque Central · balcony,4
+salesLocations.3.total,,Lateral · total,10
+salesLocations.3.garden,,Lateral · garden,5
+salesLocations.3.sunset,,Lateral · sunset,3
+salesLocations.3.balcony,,Lateral · balcony,2

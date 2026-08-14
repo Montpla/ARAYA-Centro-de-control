@@ -27,16 +27,44 @@ importa que el dato entre bien y a la primera.
 
 ## Qué hay en cada archivo
 
+**Obra**
+
 | Archivo | Para qué |
 |---|---|
 | `01-avance-edificios.csv` | Avance, previsto, desviación y fin previsto de cada edificio |
 | `02-avance-apartamentos-*.csv` | Avance y fase de cada apartamento — es lo que **da color** a la implantación |
 | `03-urbanismo.csv` | Avance de cada área de urbanismo |
-| `04-curva-s-mensual.csv` | Plan mensual: previsto y ejecutado acumulado. De aquí sale el **avance físico global** |
+| `04-curva-s-mensual.csv` | Plan mensual: previsto y ejecutado. De aquí sale el **avance físico global** |
 | `05-resumen-proyecto.csv` | Los indicadores generales del proyecto |
+| `06-paquetes-de-obra.csv` | Avance y desviación por paquete |
+| `07-disciplinas.csv` | Avance por disciplina de construcción |
+| `08-urbanismo-informe.csv` | Urbanismo según el informe mensual |
+
+**Economía**
+
+| Archivo | Para qué |
+|---|---|
+| `09-cxp-por-categoria.csv` | Cuentas por pagar por categoría |
+| `10-cxp-vencimientos.csv` | Cuentas por pagar por antigüedad |
+| `11-desglose-de-coste.csv` | Desglose de coste acumulado y del mes |
+| `12-anticipos.csv` | Anticipos a proveedores |
+| `14-proyeccion-financiera.csv` | Ingresos, costes, neto y acumulado por mes |
+| `15-financiacion.csv` | Procesos de financiación |
+| `16-cubicaciones.csv` | Cubicaciones medidas y contabilizadas |
+
+**Comercial**
+
+| Archivo | Para qué |
+|---|---|
+| `17-ventas-por-modelo.csv` | Unidades vendidas por modelo |
+| `18-ventas-por-ubicacion.csv` | Ventas por ubicación |
+| `19-morosidad.csv` | Clientes e importes en mora |
 
 Los apartamentos van en dos archivos porque cada carga admite un máximo de 250
 filas. Puedes subirlos por separado, en cualquier orden.
+
+Las cifras económicas y comerciales solo las puede subir alguien con acceso
+autorizado a Finanzas o a Ventas y cobranza.
 
 ## Cómo se regeneran
 

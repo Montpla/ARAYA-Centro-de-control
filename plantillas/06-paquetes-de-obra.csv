@@ -1,0 +1,45 @@
+clave,valor,descripcion,valor actual
+workPackages.Infraestructura.progress,,Infraestructura · avance (%),55
+workPackages.Infraestructura.deviationDays,,Infraestructura · desviación (días),58
+workPackages.Superestructura.progress,,Superestructura · avance (%),45
+workPackages.Superestructura.deviationDays,,Superestructura · desviación (días),7
+workPackages.Escalera.progress,,Escalera · avance (%),26
+workPackages.Escalera.deviationDays,,Escalera · desviación (días),7
+workPackages.Albañilería.progress,,Albañilería · avance (%),31
+workPackages.Albañilería.deviationDays,,Albañilería · desviación (días),7
+workPackages.Estucado.progress,,Estucado · avance (%),26
+workPackages.Estucado.deviationDays,,Estucado · desviación (días),14
+workPackages.Revestimientos.progress,,Revestimientos · avance (%),4
+workPackages.Revestimientos.deviationDays,,Revestimientos · desviación (días),10
+workPackages.Vidrio y aluminio.progress,,Vidrio y aluminio · avance (%),0
+workPackages.Vidrio y aluminio.deviationDays,,Vidrio y aluminio · desviación (días),7
+workPackages.Herrería.progress,,Herrería · avance (%),0
+workPackages.Herrería.deviationDays,,Herrería · desviación (días),8
+workPackages.Impermeabilización.progress,,Impermeabilización · avance (%),0
+workPackages.Impermeabilización.deviationDays,,Impermeabilización · desviación (días),7
+workPackages.Instalación de gas y aguas residuales.progress,,Instalación de gas y aguas residuales · avance (%),23
+workPackages.Instalación de gas y aguas residuales.deviationDays,,Instalación de gas y aguas residuales · desviación (días),7
+workPackages.Pintura.progress,,Pintura · avance (%),0
+workPackages.Pintura.deviationDays,,Pintura · desviación (días),7
+workPackages.Piso de vinyl.progress,,Piso de vinyl · avance (%),0
+workPackages.Piso de vinyl.deviationDays,,Piso de vinyl · desviación (días),7
+workPackages.Carpintería.progress,,Carpintería · avance (%),0
+workPackages.Carpintería.deviationDays,,Carpintería · desviación (días),7
+workPackages.Zócalo y masilla.progress,,Zócalo y masilla · avance (%),0
+workPackages.Zócalo y masilla.deviationDays,,Zócalo y masilla · desviación (días),7
+workPackages.Instalaciones eléctricas.progress,,Instalaciones eléctricas · avance (%),0
+workPackages.Instalaciones eléctricas.deviationDays,,Instalaciones eléctricas · desviación (días),7
+workPackages.Instalaciones sanitarias.progress,,Instalaciones sanitarias · avance (%),0
+workPackages.Instalaciones sanitarias.deviationDays,,Instalaciones sanitarias · desviación (días),7
+workPackages.Plafón en techo.progress,,Plafón en techo · avance (%),0
+workPackages.Plafón en techo.deviationDays,,Plafón en techo · desviación (días),7
+workPackages.Mampara baños.progress,,Mampara baños · avance (%),0
+workPackages.Mampara baños.deviationDays,,Mampara baños · desviación (días),7
+workPackages.Texturizado.progress,,Texturizado · avance (%),0
+workPackages.Texturizado.deviationDays,,Texturizado · desviación (días),14
+workPackages.Patios y obras exteriores.progress,,Patios y obras exteriores · avance (%),0
+workPackages.Patios y obras exteriores.deviationDays,,Patios y obras exteriores · desviación (días),7
+workPackages.Panel solar.progress,,Panel solar · avance (%),0
+workPackages.Panel solar.deviationDays,,Panel solar · desviación (días),7
+workPackages.Remates y limpieza.progress,,Remates y limpieza · avance (%),0
+workPackages.Remates y limpieza.deviationDays,,Remates y limpieza · desviación (días),7

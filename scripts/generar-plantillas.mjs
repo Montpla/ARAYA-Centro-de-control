@@ -116,6 +116,106 @@ registrar("05-resumen-proyecto", "Resumen del proyecto", camposResumen
   .filter(([campo]) => campo in projectSnapshot)
   .map(([campo, descripcion]) => fila(`projectSnapshot.${campo}`, descripcion, projectSnapshot[campo])));
 
+// --- Resto del modelo: gestión, economía y comercial -------------------------
+//
+// Las listas de esta parte se recorren solas en vez de escribirse a mano: son
+// una veintena, cambian de campos con cada informe, y mantenerlas manualmente
+// garantizaba que acabaran desfasadas respecto al modelo real.
+//
+// Cada una se nombra por el campo con el que la reconoce el sistema, salvo que
+// ese campo se repita dentro de la lista. Ahí se vuelve a las posiciones: un
+// nombre que señala a dos filas no se resuelve —y con razón, porque repartir un
+// importe a cara o cruz entre dos partidas es peor que no escribirlo—, así que
+// una plantilla que los usara no publicaría nada. Le pasa a la Curva S, que
+// repite "jul" tres veces al no llevar año más que en enero.
+const CAMPOS_NOMBRE = ["id", "code", "name", "month", "period", "entity", "category", "concept", "label"];
+
+const ETIQUETAS = {
+  amount: "importe", amountDop: "importe (DOP)", amountUsd: "importe (USD)",
+  cumulative: "acumulado", june: "junio", income: "ingresos", costs: "costes",
+  net: "neto", percent: "porcentaje (%)", progress: "avance (%)",
+  planned: "previsto (%)", measured: "medido", accounting: "contabilizado",
+  clients: "clientes", value: "unidades", total: "total", deviationDays: "desviación (días)",
+};
+
+// Espejo de keyPattern (lib/live-data.ts) para un solo segmento hijo.
+const SEGMENTO_VALIDO = /^[\p{L}\p{N}][\p{L}\p{N} _-]*$/u;
+
+function tokenNombre(value) {
+  return String(value ?? "").trim().toLowerCase()
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+}
+
+function plantillaDeLista(archivo, titulo, raiz, lista) {
+  if (!Array.isArray(lista) || !lista.length) return;
+  const muestra = lista.find((item) => item && typeof item === "object");
+  if (!muestra) return;
+  const campoNombre = CAMPOS_NOMBRE.find((campo) => typeof muestra[campo] === "string" && muestra[campo]);
+  const camposNumericos = Object.keys(muestra).filter((campo) => typeof muestra[campo] === "number");
+  if (!camposNumericos.length) return;
+
+  const tokens = campoNombre ? lista.map((item) => tokenNombre(item[campoNombre])) : [];
+  // Un nombre sólo sirve para dirigir un dato si identifica a una sola fila y
+  // si cabe entero en un segmento de clave. Lo segundo no es teórico: el punto
+  // es el separador de segmentos, así que "Inst. eléctricas" partiría la clave
+  // por la mitad y el dato se perdería. Cuando cualquiera de las dos
+  // condiciones falla se usan posiciones en toda la lista, no sólo en la fila
+  // problemática, para que la plantilla no mezcle dos formas de nombrar.
+  const nombresUsables = Boolean(campoNombre) &&
+    lista.every((item) => SEGMENTO_VALIDO.test(String(item[campoNombre] ?? "")));
+  const nombresUnicos = nombresUsables && new Set(tokens).size === tokens.length && tokens.every(Boolean);
+
+  registrar(archivo, titulo, lista.flatMap((item, indice) => {
+    const referencia = nombresUnicos ? item[campoNombre] : String(indice);
+    const rotulo = campoNombre ? item[campoNombre] : `fila ${indice + 1}`;
+    return camposNumericos.map((campo) => fila(
+      `${raiz}.${referencia}.${campo}`,
+      `${rotulo} · ${ETIQUETAS[campo] ?? campo}`,
+      item[campo],
+    ));
+  }));
+}
+
+const [demo, junio] = await Promise.all([
+  import("../app/demo-data.ts"),
+  import("../app/june-report-data.ts"),
+]);
+const modelo = { ...demo, ...junio };
+
+const RESTO = [
+  ["06-paquetes-de-obra", "Paquetes de obra", "workPackages"],
+  ["07-disciplinas", "Disciplinas de construcción", "constructionDisciplines"],
+  ["08-urbanismo-informe", "Urbanismo (informe)", "urbanismReportAreas"],
+  ["09-cxp-por-categoria", "Cuentas por pagar por categoría", "cxpCategories"],
+  ["10-cxp-vencimientos", "Cuentas por pagar por antigüedad", "cxpAging"],
+  ["11-desglose-de-coste", "Desglose de coste", "costBreakdown"],
+  ["12-anticipos", "Anticipos a proveedores", "advances"],
+  ["14-proyeccion-financiera", "Proyección financiera", "financialProjection"],
+  ["15-financiacion", "Procesos de financiación", "financingProcesses"],
+  ["16-cubicaciones", "Cubicaciones", "cubicaciones"],
+  ["17-ventas-por-modelo", "Ventas por modelo", "salesModels"],
+  ["18-ventas-por-ubicacion", "Ventas por ubicación", "salesLocations"],
+  ["19-morosidad", "Morosidad", "arrearsBreakdown"],
+];
+
+// El nombre con el que un módulo exporta una lista no siempre coincide con el
+// de la raíz publicable: `antonelyPayableVendors` se exporta así pero el modelo
+// la llama `antonelyPayableVendorsAll`, y una plantilla generada con el nombre
+// del export produce claves que el contrato rechaza en bloque. Comprobarlo aquí
+// convierte ese error silencioso en un fallo ruidoso al generar.
+const { LIVE_DATA_ROOTS } = await import("../lib/live-data.ts");
+const raicesValidas = new Set(LIVE_DATA_ROOTS);
+const raicesInvalidas = RESTO.filter(([, , raiz]) => !raicesValidas.has(raiz));
+if (raicesInvalidas.length) {
+  console.error("Estas raíces no pertenecen al modelo vivo y no se pueden publicar:");
+  for (const [, titulo, raiz] of raicesInvalidas) console.error(`  ${raiz} (${titulo})`);
+  process.exit(1);
+}
+
+for (const [archivo, titulo, raiz] of RESTO) {
+  plantillaDeLista(archivo, titulo, raiz, modelo[raiz]);
+}
+
 await mkdir(SALIDA, { recursive: true });
 for (const plantilla of plantillas) {
   await writeFile(new URL(plantilla.archivo, SALIDA), csv(plantilla.filas), "utf8");

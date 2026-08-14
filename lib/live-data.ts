@@ -136,14 +136,18 @@ const mixedProtectedSourceIds = new Set([
   "source-june-pdf",
 ]);
 // La raíz sigue siendo un identificador alfanumérico (son los nombres fijos de
-// LIVE_DATA_ROOTS). Los segmentos hijos admiten además guiones porque son los
-// que nombran entidades reales: "TH-14", "edificio-14", "14-101". Sin esto,
-// cualquier clave que nombrara un edificio por su código se rechazaba por
-// inválida antes de llegar a resolverse, que es la razón de fondo por la que
-// las actualizaciones de implantación nunca cuajaban. No se admiten puntos ni
-// barras dentro de un segmento, y forbiddenPathSegments sigue cortando
-// __proto__, constructor y prototype.
-const keyPattern = /^[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z0-9][A-Za-z0-9-]*)*$/;
+// LIVE_DATA_ROOTS). Los segmentos hijos son mucho más abiertos porque nombran
+// entidades reales, y esas se llaman como se llaman: "TH-14", "edificio-14" o
+// "14-101", pero también "Albañilería", "Vidrio y aluminio" y "Zócalo y
+// masilla". Admitiendo sólo ASCII sin espacios, la mitad de las partidas de
+// obra y de las cuentas no podían nombrarse en una clave y se rechazaban por
+// "no pertenecer al modelo vivo" — la misma razón de fondo por la que las
+// actualizaciones de implantación nunca cuajaban.
+//
+// Lo que sigue prohibido es lo que importa: el punto, que es el separador de
+// segmentos; la barra; y empezar por un carácter que no sea letra o dígito,
+// que corta `__proto__` y compañía incluso antes que forbiddenPathSegments.
+const keyPattern = /^[A-Za-z][A-Za-z0-9]*(?:\.[\p{L}\p{N}][\p{L}\p{N} _-]*)*$/u;
 const forbiddenPathSegments = new Set(["__proto__", "constructor", "prototype"]);
 
 export function isLiveDataKey(key: string) {
