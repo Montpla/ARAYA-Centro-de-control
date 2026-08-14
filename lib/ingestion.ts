@@ -249,6 +249,13 @@ function normalizeUpdate(
   if (!isLiveDataKey(key)) return { warning: `La clave ${key || "(vacía)"} no pertenece al modelo vivo de ARAYA.` };
   const rawValue = candidate.value ?? candidate.valor ?? candidate.dato;
   if (rawValue === undefined) return { warning: `La clave ${key} no contiene un valor.` };
+  // Una celda en blanco significa "este dato no lo toco", nunca "ponlo a
+  // vacío". Sin esto, subir una plantilla con tres filas rellenas publicaba
+  // cadenas vacías en todas las demás y borraba los avances reales: en un CSV
+  // la celda vacía llega como "" y no como undefined, así que no la frenaba el
+  // control de arriba. Para publicar una cadena vacía a propósito hay que
+  // escribir "" de forma explícita, que JSON.parse sí distingue.
+  if (typeof rawValue === "string" && !rawValue.trim()) return {};
   return {
     update: {
       key,
