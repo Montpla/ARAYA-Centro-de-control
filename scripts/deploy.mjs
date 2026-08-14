@@ -104,6 +104,40 @@ async function smokeVerify() {
     process.exit(1);
   }
   console.log(`✔ Centro de datos responde (${controlRoom.documents.total} expedientes con seguimiento activo).`);
+
+  // Guarda de regresión de los documentos fijos. app/data-center/[...path]/
+  // route.ts los sirve solo desde R2 (nunca desde dist/client), y esa subida
+  // vive fuera del build normal (scripts/sync-historical-documents.mjs). Si
+  // esa sincronización falla, si alguien borra el objeto en R2, o si un
+  // archivo vuelve a colocarse bajo public/ y eclipsa la ruta —el bug del
+  // 13/08, que estuvo abierto sin que ninguna prueba local lo detectara—,
+  // esta es la única comprobación que lo nota, porque necesita una sesión
+  // real contra producción.
+  //
+  // Se piden dos documentos a propósito: la guía (la que abre el botón de la
+  // cabecera) y un informe de otra carpeta, para distinguir un objeto suelto
+  // que falta de un fallo estructural de toda la ruta.
+  for (const [descripcion, ruta] of [
+    ["Guía corporativa", "/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf"],
+    ["Informe IFC de julio", "/data-center/julio-2026/informe-analisis-ifc-2026-07-29.pdf"],
+  ]) {
+    const documentResponse = await fetch(`${PRODUCTION_URL}${ruta}`, {
+      headers: { Cookie: `araya_session=${sessionMatch[1]}` },
+    });
+    if (!documentResponse.ok) {
+      console.error(
+        `✖ ${ruta} devolvió ${documentResponse.status} con sesión autenticada. ` +
+        "El objeto no está en R2, o algo volvió a eclipsar /data-center/ (¿un archivo bajo public/?).",
+      );
+      process.exit(1);
+    }
+    const contentType = documentResponse.headers.get("content-type") ?? "";
+    if (!contentType.includes("pdf")) {
+      console.error(`✖ ${ruta} respondió ${documentResponse.status} pero con Content-Type "${contentType}" (se esperaba PDF).`);
+      process.exit(1);
+    }
+    console.log(`✔ ${descripcion} accesible con sesión autenticada (${documentResponse.status}, ${contentType}).`);
+  }
 }
 
 console.log("=== Pipeline de despliegue: Centro de Control ARAYA ===");
