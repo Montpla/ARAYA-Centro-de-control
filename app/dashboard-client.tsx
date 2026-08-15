@@ -7019,7 +7019,7 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
             <span>Adjuntar archivo</span>
             <input
               type="file"
-              accept=".xlsx,.xls,.csv,.json,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
+              accept=".xlsx,.xls,.csv,.json,.xml,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
               onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
             />
           </label>
@@ -7614,7 +7614,7 @@ function UploadModal({
           <input
             type="file"
             required
-            accept=".xlsx,.xls,.csv,.json,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
+            accept=".xlsx,.xls,.csv,.json,.xml,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
             onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
           />
           {previewUrl && (
@@ -7626,7 +7626,7 @@ function UploadModal({
             />
           )}
           <strong>{selectedFile ? selectedFile.name : "Selecciona o arrastra un archivo"}</strong>
-          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON, PowerPoint, PDF, Word o imagen actualizan cifras · MPP, DWG y ZIP solo se archivan · máximo 50 MB"}</span>
+          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON, XML de Project, PowerPoint, PDF, Word o imagen actualizan cifras · MPP, DWG y ZIP solo se archivan · máximo 50 MB"}</span>
         </div>
         <div className="upload-source-actions" aria-label="Opciones de carga en móvil">
           <label>
@@ -7648,10 +7648,18 @@ function UploadModal({
               autor y su fecha, pero el sistema no puede leer las cifras de dentro: los avances, los colores de la
               implantación y los porcentajes seguirán como están.
             </p>
-            <p>
-              Para que las cifras se actualicen, exporta el mismo corte a <b>Excel</b> desde el programa de origen
-              (en Microsoft Project: <i>Archivo → Guardar como → Libro de Excel</i>) y sube ese archivo.
-            </p>
+            {archiveOnlyExtension === "mpp" ? (
+              <p>
+                Vuelve a guardarlo desde Microsoft Project como <b>XML</b>
+                (<i>Archivo → Guardar como → tipo «XML (*.xml)»</i>) y sube ese archivo: el sistema lee
+                el plan entero y actualiza el avance de cada edificio.
+              </p>
+            ) : (
+              <p>
+                Para que las cifras se actualicen, exporta el mismo corte a <b>Excel</b> o <b>CSV</b>
+                desde el programa de origen y sube ese archivo.
+              </p>
+            )}
           </div>
         )}
         {!online && <div className="callout warn"><strong>Modo sin conexión</strong><p>Puedes consultar datos, pero las nuevas cargas se reactivarán cuando vuelva internet.</p></div>}

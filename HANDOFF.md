@@ -525,6 +525,41 @@ Para cambios visuales de posición, comprobar:
 4. Que al pulsarlo se abra la ficha correcta.
 5. Que la vista técnica siga operativa.
 
+## Los planes de Project se leen en XML (14/08/2026)
+
+Los `.mpp` son un formato binario cerrado. Se comprobaron las alternativas antes
+de descartarlos: **MPXJ** —la libreria de referencia— es Java y no tiene version
+JavaScript, y **Aspose.Tasks** es una API en la nube por suscripcion. Ninguna
+sirve dentro de un Worker sin pagar, asi que el corte mensual de obra llevaba
+meses subiendose en un formato que la aplicacion archivaba sin leer.
+
+La salida es que **Project guarda en XML de forma nativa** (Archivo → Guardar
+como → tipo «XML»). Ese formato, MSPDI, esta documentado por Microsoft, trae
+`PercentComplete` por tarea y se lee sin dependencias. Es mejor que exportar a
+Excel: conserva el plan entero —nombres, porcentajes, fechas, jerarquia—
+mientras que un Excel depende de que columnas eligiera quien lo genero.
+
+`lib/project-xml.ts` lee las tareas y deriva el avance de cada edificio:
+
+- **Las tareas resumen quedan fuera.** Su porcentaje lo calcula Project
+  agregando a las hijas; contarlo seria contar dos veces lo mismo.
+- **Varias tareas del mismo edificio se promedian**, que es lo que representa su
+  avance en un plan por capitulos.
+- **El codigo de edificio se busca con un patron estricto** (`TH-14`,
+  `Edificio 14`, `Ed. 7`). Una tarea llamada "Fase 14" lleva un numero pero no
+  nombra un edificio, y adivinarlo meteria el avance en el equivocado — el
+  mismo error que costo meses detectar.
+- **Se contrasta con los edificios que existen** (`knownBuildingTokens` en la
+  ruta de subida), asi una tarea rotulada "TH-99" no da de alta un edificio
+  fantasma en la implantacion.
+
+El modulo no importa nada del modelo de datos a proposito: se puede leer un
+plan de Project sin arrastrar medio sistema detras, y por eso normaliza el
+codigo localmente en vez de llamar a `namingToken`.
+
+El `.mpp` sigue archivandose sin leer, pero su rotulo y su mensaje llevan ahora
+a la via buena en vez de a una exportacion a Excel.
+
 ## Por qué la implantación nunca se actualizaba (14/08/2026)
 
 El usuario llevaba meses subiendo el corte mensual de obra y viendo que los

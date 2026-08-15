@@ -22,6 +22,11 @@ export function nothingExtractedMessage(
   warnings: string[] = [],
 ) {
   const base = `Archivo registrado en ${areaLabel} y disponible para descarga`;
+  if (extension === "mpp") {
+    // El .mpp es el caso con salida propia: Project guarda en XML de forma
+    // nativa y ese formato sí se lee entero, con el avance de cada tarea.
+    return `${base}, pero los .mpp no se leen por dentro: ninguna de sus cifras ha actualizado el panel. Vuelve a guardarlo desde Microsoft Project como XML (Archivo → Guardar como → tipo «XML») y súbelo: de ese formato sí se lee el plan completo y se actualiza el avance de cada edificio.`;
+  }
   if (ARCHIVE_ONLY_EXTENSIONS.has(extension)) {
     return `${base}, pero los .${extension} no se leen por dentro: ninguna de sus cifras ha actualizado el panel, y no lo hará más adelante. Para que las cifras entren, exporta el mismo corte a Excel o CSV y súbelo.`;
   }

@@ -1,4 +1,5 @@
 import { LiveDataUpdate, LiveDataValue, isLiveDataKey } from "./live-data";
+import { extractProjectXmlUpdates, isProjectXml } from "./project-xml";
 
 export type DocumentAnalysis = {
   documentType: string;
@@ -122,6 +123,10 @@ function extractionMode(extension: string) {
   if (extension === "csv" || extension === "json") {
     return { id: "estructurada_automatica", label: "Extracción estructurada automática" };
   }
+  // El XML de Project se lee entero y sin interpretación, igual que un CSV.
+  if (extension === "xml") {
+    return { id: "plan_project", label: "Plan de Microsoft Project (XML)" };
+  }
   if (extension === "xls" || extension === "xlsx") {
     return { id: "importador_tabular", label: "Importador tabular asistido" };
   }
@@ -130,7 +135,10 @@ function extractionMode(extension: string) {
   // contrario y costó meses de informes de Project subidos con la expectativa
   // razonable de que actualizaran la implantación. El nombre dice ahora lo que
   // el sistema hace de verdad.
-  if (extension === "mpp" || extension === "dwg" || extension === "zip") {
+  if (extension === "mpp") {
+    return { id: "solo_archivo", label: "Solo archivo · guárdalo como XML para que se lea" };
+  }
+  if (extension === "dwg" || extension === "zip") {
     return { id: "solo_archivo", label: "Solo archivo (sus datos no actualizan el panel)" };
   }
   if (["jpg", "jpeg", "png"].includes(extension)) {
@@ -271,9 +279,17 @@ function normalizeUpdate(
 export function extractStructuredUpdates(
   bytes: ArrayBuffer,
   extension: string,
-  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string },
+  defaults: {
+    area: string;
+    cutoff: string;
+    sourceCurrency: "DOP" | "USD";
+    sourceName: string;
+    // Los edificios que existen ahora mismo, para no dar de alta uno inventado
+    // a partir de una tarea mal rotulada del plan.
+    knownBuildingTokens?: Set<string>;
+  },
 ): StructuredExtraction {
-  if (extension !== "csv" && extension !== "json") {
+  if (extension !== "csv" && extension !== "json" && extension !== "xml") {
     return {
       updates: [],
       summary: "El original está catalogado. Falta ejecutar el importador específico del formato.",
@@ -281,6 +297,35 @@ export function extractStructuredUpdates(
     };
   }
   const text = new TextDecoder("utf-8").decode(bytes);
+
+  // El XML de Project entra por su propio lector: no son pares clave/valor sino
+  // un plan de obra entero, del que se derivan los avances por edificio. Es la
+  // via para los cortes mensuales que antes llegaban en .mpp y se archivaban
+  // sin leer, porque ese formato binario no se puede abrir sin un conversor de
+  // pago.
+  if (extension === "xml") {
+    if (!isProjectXml(text)) {
+      return {
+        updates: [],
+        summary: "El XML no es un plan de Microsoft Project.",
+        warnings: ["Sólo se interpretan los XML guardados desde Project con Archivo → Guardar como → XML."],
+      };
+    }
+    const plan = extractProjectXmlUpdates(text, defaults.knownBuildingTokens);
+    return {
+      updates: plan.updates.map((update) => ({
+        key: update.key,
+        value: update.value,
+        area: defaults.area,
+        cutoff: defaults.cutoff,
+        sourceCurrency: defaults.sourceCurrency,
+        sourceName: defaults.sourceName,
+      })),
+      summary: plan.summary,
+      warnings: plan.warnings,
+    };
+  }
+
   let candidates: Record<string, unknown>[] = [];
   try {
     if (extension === "json") {

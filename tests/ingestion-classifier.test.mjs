@@ -4,10 +4,18 @@ import test from "node:test";
 import ts from "typescript";
 
 const source = await readFile("lib/ingestion.ts", "utf8");
-const executableSource = source.replace(
-  /import \{ LiveDataUpdate, LiveDataValue, isLiveDataKey \} from "\.\/live-data";/,
-  "const isLiveDataKey = () => true;",
-);
+// Este fichero se evalúa como data URL, que no resuelve rutas relativas, así
+// que los dos imports locales se sustituyen por sustitutos. Aquí sólo se prueba
+// el clasificador documental, que no usa ninguno de los dos.
+const executableSource = source
+  .replace(
+    /import \{ LiveDataUpdate, LiveDataValue, isLiveDataKey \} from "\.\/live-data";/,
+    "const isLiveDataKey = () => true;",
+  )
+  .replace(
+    /import \{ extractProjectXmlUpdates, isProjectXml \} from "\.\/project-xml";/,
+    "const isProjectXml = () => false;\nconst extractProjectXmlUpdates = () => ({ updates: [], warnings: [], summary: \"\", taskCount: 0 });",
+  );
 const transpiled = ts.transpileModule(executableSource, {
   compilerOptions: {
     module: ts.ModuleKind.ESNext,

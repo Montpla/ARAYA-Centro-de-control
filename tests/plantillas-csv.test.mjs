@@ -5,6 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import * as demoData from "../app/demo-data.ts";
 import * as liveData from "../lib/live-data.ts";
+import * as projectXml from "../lib/project-xml.ts";
 
 // A diferencia de tests/ingestion-classifier.test.mjs, aquí se carga el
 // isLiveDataKey de verdad en vez de sustituirlo por () => true: la validación
@@ -22,6 +23,7 @@ async function loadIngestion() {
   const compiledModule = { exports: {} };
   const require = (specifier) => {
     if (specifier === "./live-data") return liveData;
+    if (specifier === "./project-xml") return projectXml;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {
@@ -163,4 +165,36 @@ test("las plantillas generadas sólo contienen claves que el modelo admite", asy
     assert.equal(extraccion.warnings.length, 0, `${archivo}: ${extraccion.warnings.join(" · ")}`);
     assert.ok(extraccion.updates.length > 0, `${archivo} no produjo ninguna actualización`);
   }
+});
+
+test("un plan de Project en XML actualiza los edificios que nombra", async () => {
+  // El recorrido que antes se rompía: el corte mensual llegaba en .mpp y se
+  // archivaba sin leer. Guardado como XML desde Project, sus tareas mueven el
+  // avance de los edificios sin intervención.
+  const ingestion = await loadIngestion();
+  const plan = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<Project xmlns="http://schemas.microsoft.com/project">',
+    "<Tasks>",
+    "<Task><UID>1</UID><Name>TH-14 Estructura</Name><PercentComplete>60</PercentComplete><Summary>0</Summary></Task>",
+    "<Task><UID>2</UID><Name>Reunión semanal</Name><PercentComplete>100</PercentComplete><Summary>0</Summary></Task>",
+    "</Tasks></Project>",
+  ].join("\n");
+  const extraccion = ingestion.extractStructuredUpdates(comoCsv(plan), "xml", {
+    ...defaults,
+    knownBuildingTokens: new Set(["14"]),
+  });
+  assert.equal(extraccion.updates.length, 1);
+  assert.equal(extraccion.updates[0].key, "buildings.TH-14.progress");
+  assert.equal(extraccion.updates[0].value, 60);
+
+  const resolveSpatialIdentityUpdates = await loadResolver();
+  const [resuelta] = resolveSpatialIdentityUpdates(extraccion.updates, {});
+  assert.equal(resuelta.key, "buildings.13.progress", "TH-14 vive en la posición 13");
+
+  const resultado = liveData.materializeLiveRoot("buildings", demoData.buildings, {
+    [resuelta.key]: resuelta.value,
+  });
+  assert.equal(resultado[13].shortName, "14");
+  assert.equal(resultado[13].progress, 60);
 });
