@@ -2403,10 +2403,37 @@ del equipo técnico tenía forma de saberlo.
   mano hubo que tocar varios puntos; ese es exactamente el patrón que esta
   lista evita.
 
-Para regenerar cualquiera de los dos PDF hace falta `reportlab` (`pip
-install reportlab`). Las páginas se revisaron renderizadas una a una antes
-de publicar; conviene seguir haciéndolo, porque un texto que se sale de su
-caja no lo detecta ninguna prueba.
+Para regenerar cualquiera de los PDF hace falta `reportlab` (`pip install
+reportlab`). Las páginas se revisaron renderizadas una a una antes de
+publicar; conviene seguir haciéndolo, porque un texto que se sale de su caja
+no lo detecta ninguna prueba.
+
+### Tercera guía: «Qué pasa con cada archivo» (15/08/2026)
+
+Con casi todos los formatos leyéndose ya solos, la pregunta del personal dejó
+de ser «¿por qué no cambió nada?» y pasó a ser «esto que voy a subir, ¿va a
+actualizar el panel?». Ésa es la que responde la tercera guía, y la que
+justifica que exista aparte de la de carga: se consulta **antes** de subir,
+con el archivo ya elegido, no después de que algo no haya funcionado.
+
+- **Generador**: `scripts/generate_formats_guide_pdf.py`, que importa las
+  mismas utilidades que las otras dos. 4 páginas.
+- **La agrupación es la información**: los formatos van por lo que les pasa
+  —se lee tal cual / se interpreta / sólo se guarda— y no por programa ni por
+  orden alfabético, porque el resultado es lo único que necesita saber quien
+  sube el archivo. La franja de color de cada bloque lleva ese estado.
+- **Una página entera para el `.mpp`**, con sus dos salidas (exportar a XML
+  desde Project, o escribir los porcentajes a mano) y con el motivo por el
+  que no se puede leer, para que no se lea como una tarea pendiente.
+- **La guía de carga se corrigió a la vez.** Su página 2 seguía listando el
+  ZIP entre los formatos que «sólo se archivan», que dejó de ser cierto
+  cuando los comprimidos empezaron a abrirse. Dos guías que se contradicen
+  son peores que una sola, así que la lista se actualizó en el mismo cambio:
+  el ZIP y el XML de Project pasaron al lado de los que sí se leen.
+
+Añadir esta tercera guía costó **una entrada en `staffGuides`** y el retoque
+del párrafo que decía «dos documentos breves» — que es exactamente lo que esa
+lista única prometía.
 
 ## Restauración de la guía y su guarda de regresión (14/08/2026)
 

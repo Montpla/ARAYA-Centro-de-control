@@ -5327,6 +5327,18 @@ const staffGuides = [
     fileName: "guia-carga-de-archivos-araya.pdf",
     viewerTitle: "Guía de carga de archivos · Centro de Control ARAYA.pdf",
   },
+  {
+    id: "formatos",
+    kicker: "ANTES DE SUBIR",
+    title: "Qué pasa con cada archivo",
+    detail:
+      "Qué formatos actualizan el panel solos, cuáles pasan por revisión y " +
+      "las dos salidas del .mpp de Microsoft Project.",
+    pages: "4 páginas",
+    url: "/data-center/guias/guia-formatos-araya.pdf",
+    fileName: "guia-formatos-araya.pdf",
+    viewerTitle: "Guía de formatos · Centro de Control ARAYA.pdf",
+  },
 ] as const;
 
 function GuidesPanel({
@@ -6045,12 +6057,14 @@ function UsersAdminView({
           <button className="button" type="button" onClick={onOpenGuide}>Abrir guías</button>
         </div>
         <p>
-          Dos documentos breves: la guía corporativa (navegación, permisos,
+          Tres documentos breves: la guía corporativa (navegación, permisos,
           carga documental, instalación en móvil, tablet y ordenador, cámara,
-          avisos y seguridad) y la guía de carga, que explica por qué un
-          archivo recién subido no siempre cambia las cifras. Compártelas con
-          cada persona al darla de alta — el enlace y el código QR de dentro
-          llevan directo a esta misma aplicación.
+          avisos y seguridad), la guía de carga, que explica por qué un archivo
+          recién subido no siempre cambia las cifras, y la de formatos, que
+          dice de un vistazo qué hace el programa con cada tipo de archivo y
+          qué salidas tiene un <b>.mpp</b>. Compártelas con cada persona al
+          darla de alta — el enlace y el código QR de dentro llevan directo a
+          esta misma aplicación.
         </p>
       </section>
 

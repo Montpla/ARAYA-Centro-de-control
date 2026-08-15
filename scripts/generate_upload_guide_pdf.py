@@ -220,7 +220,8 @@ def page_recorrido(c: canvas.Canvas) -> None:
         [
             "Excel (.xlsx, .xls) y CSV",
             "PDF y Word",
-            "PowerPoint",
+            "PowerPoint y XML de Project",
+            "Carpetas comprimidas ZIP",
             "Fotos (.jpg, .png)",
         ],
         MARGIN_X + 14,
@@ -241,7 +242,6 @@ def page_recorrido(c: canvas.Canvas) -> None:
         [
             "Planos DWG",
             "Cronogramas MPP (Project)",
-            "Carpetas comprimidas ZIP",
         ],
         x2 + 14,
         y - 42,
@@ -253,7 +253,8 @@ def page_recorrido(c: canvas.Canvas) -> None:
     draw_wrapped(
         c,
         "Se guardan y se pueden descargar, pero el programa no lee cifras "
-        "dentro de ellos.",
+        "dentro de ellos. El .mpp tiene dos salidas: la guía de formatos las "
+        "explica.",
         x2 + 14,
         y - box_h + 34,
         col_w - 28,
