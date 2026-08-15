@@ -33,6 +33,7 @@ import {
   financeProtectedDocumentTypeValues,
   isCommercialLiveKey,
   isFinancialLiveKey,
+  namingToken,
   requiresFinanceAccessForArea,
   requiresFinanceAccessForDocument,
 } from "../../../lib/live-data";
@@ -79,6 +80,7 @@ const allowedExtensions = new Set([
   "pptx",
   "xls",
   "xlsx",
+  "xml",
   "zip",
 ]);
 const inlinePreviewExtensions = new Set([
@@ -104,6 +106,7 @@ const canonicalMimeByExtension: Record<string, string> = {
   pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   xls: "application/vnd.ms-excel",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xml: "application/xml",
 };
 
 type StoredObject = {
@@ -203,6 +206,24 @@ function isSafeLiveValue(value: unknown, depth = 0): boolean {
       isSafeLiveValue(item, depth + 1));
   }
   return false;
+}
+
+// Códigos de los edificios que existen ahora mismo, en la forma normalizada con
+// la que se comparan los nombres. Se derivan del modelo de partida en vez de
+// escribirse a mano para que un edificio nuevo entre solo.
+function knownBuildingTokens() {
+  const roots = getContractRootsSnapshot();
+  const lista = Array.isArray(roots.buildings) ? roots.buildings : [];
+  const tokens = new Set<string>();
+  for (const item of lista) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    for (const campo of ["shortName", "id", "code"]) {
+      const valor = record[campo];
+      if (typeof valor === "string" && valor) tokens.add(namingToken(valor));
+    }
+  }
+  return tokens;
 }
 
 function isSafeAutomaticStructuredUpdate(update: ReturnType<typeof normalizeLiveDataUpdates>[number]) {
@@ -878,6 +899,10 @@ export async function POST(request: Request) {
       cutoff: effectiveCutoff,
       sourceCurrency: sourceCurrency === "USD" ? "USD" : "DOP",
       sourceName: candidate.name,
+      // Los edificios que existen ahora mismo. Sin esta lista, una tarea del
+      // plan rotulada "TH-99" daría de alta un edificio fantasma en la
+      // implantación; con ella, simplemente se deja fuera y se avisa.
+      knownBuildingTokens: knownBuildingTokens(),
     });
     let extraction: Awaited<ReturnType<typeof extractDocumentWithAI>> = {
       ...deterministicExtraction,

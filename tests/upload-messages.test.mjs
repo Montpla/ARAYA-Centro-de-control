@@ -5,17 +5,22 @@ import { nothingExtractedMessage } from "../lib/upload-messages.ts";
 // El mensaje que sustituyen estas pruebas ("queda pendiente de interpretación")
 // sostuvo meses de espera: daba a entender que el procesamiento seguía en
 // marcha cuando en realidad ya había terminado sin publicar nada.
-test("un formato que no se lee lo dice y no deja esperando", () => {
+test("el mpp señala la salida que sí funciona", () => {
+  // Los .mpp tienen una salida propia y mejor que la del resto: Project guarda
+  // en XML de forma nativa y ese formato se lee entero, así que el mensaje
+  // lleva ahí en vez de a una exportación a Excel, que pierde estructura.
   const mensaje = nothingExtractedMessage("Obra", "mpp");
   assert.match(mensaje, /no se leen por dentro/);
-  assert.match(mensaje, /no lo hará más adelante/);
-  assert.match(mensaje, /Excel o CSV/);
+  assert.match(mensaje, /XML/);
+  assert.match(mensaje, /Guardar como/);
   assert.doesNotMatch(mensaje, /pendiente de interpretación/);
 });
 
-test("dwg y zip reciben el mismo trato que mpp", () => {
+test("dwg y zip siguen sin tener salida y lo dicen", () => {
   for (const extension of ["dwg", "zip"]) {
-    assert.match(nothingExtractedMessage("Obra", extension), /no se leen por dentro/);
+    const mensaje = nothingExtractedMessage("Obra", extension);
+    assert.match(mensaje, /no lo hará más adelante/);
+    assert.match(mensaje, /Excel o CSV/);
   }
 });
 
