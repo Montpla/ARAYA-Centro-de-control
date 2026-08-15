@@ -530,6 +530,40 @@ export const reportSnapshots = sqliteTable(
 );
 
 
+/**
+ * Tokens de carga automática.
+ *
+ * Permiten que un equipo de la oficina envíe un archivo sin que nadie inicie
+ * sesión —el caso que los motiva es el corte mensual saliendo solo desde
+ * Microsoft Project—, y a diferencia de los de TV, éstos escriben.
+ *
+ * Por eso llevan `ownerEmail`: la carga se atribuye a esa persona y el
+ * expediente tiene un responsable con nombre y apellidos en la auditoría, igual
+ * que si lo hubiera subido a mano. El token no es un usuario ni tiene permisos
+ * propios; hereda los de quien lo emitió, incluido el acceso financiero, así
+ * que revocar o desactivar a esa persona lo inutiliza.
+ */
+export const uploadAgentTokens = sqliteTable(
+  "upload_agent_tokens",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    tokenHash: text("token_hash").notNull(),
+    label: text("label").notNull().default(""),
+    ownerEmail: text("owner_email").notNull(),
+    createdByEmail: text("created_by_email").notNull().default(""),
+    createdByName: text("created_by_name").notNull().default(""),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at").notNull().default(""),
+    lastUsedAt: text("last_used_at").notNull().default(""),
+    useCount: integer("use_count").notNull().default(0),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("upload_agent_tokens_token_hash_idx").on(table.tokenHash),
+    index("upload_agent_tokens_owner_idx").on(table.ownerEmail),
+  ],
+);
+
 export const tvDeviceTokens = sqliteTable(
   "tv_device_tokens",
   {

@@ -54,6 +54,7 @@ import { normalizeLiveDataUpdates, publishLiveDataUpdates } from "../../../lib/p
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-upsert";
 import { nothingExtractedMessage } from "../../../lib/upload-messages";
+import { readUploadAgentToken, resolveUploadAgentToken } from "../../../lib/upload-agent-auth";
 import {
   proposalPointerWasCommitted,
   stagedGenerationMayBeDeleted,
@@ -601,9 +602,31 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await authenticatedUser();
-  if (!auth.user) return auth.response;
-  const user = auth.user;
+  // La carga admite dos identidades: la sesión de una persona en el navegador y
+  // un token de carga automática, que es lo que permite que el corte mensual
+  // llegue solo desde el equipo de la oficina sin que nadie inicie sesión.
+  //
+  // El token no es un usuario ni tiene permisos propios: se resuelve a la
+  // persona que lo emitió y a partir de ahí el recorrido es exactamente el
+  // mismo —clasificación, extracción, contrato, publicación y auditoría—, así
+  // que una carga automática no puede hacer nada que su responsable no pudiera
+  // hacer a mano, ni se salta ninguna comprobación.
+  const agentToken = readUploadAgentToken(request);
+  let user: FileRegistryUser;
+  if (agentToken) {
+    const agent = await resolveUploadAgentToken(agentToken);
+    if (!agent) {
+      return Response.json(
+        { error: "El token de carga automática no es válido, ha caducado o se ha revocado." },
+        { status: 401 },
+      );
+    }
+    user = agent.user;
+  } else {
+    const auth = await authenticatedUser();
+    if (!auth.user) return auth.response;
+    user = auth.user;
+  }
 
   let formData: FormData;
   try {
