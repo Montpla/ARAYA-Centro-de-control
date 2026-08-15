@@ -1,4 +1,5 @@
 import type { Unit, UnitDiscipline } from "../app/demo-data";
+import { weightedUnitProgress } from "./progress-model.ts";
 
 // Shared between the client dashboard (colors, labels) and the server-side
 // spatial live-data materializer (the computed project-wide overallProgress),
@@ -36,7 +37,7 @@ export function unitOverallProgress(
   unit: Unit,
   constructionDisciplines: readonly { name: string; progress: number }[],
 ): number {
-  const disciplines = unitDisciplines(unit, constructionDisciplines);
-  const total = disciplines.reduce((sum, discipline) => sum + (discipline.progress ?? 0), 0);
-  return total / disciplines.length;
+  // Media ponderada por fase de obra, no media simple: unos acabados pendientes
+  // pesan más que una estructura pendiente. El reparto vive en progress-model.
+  return weightedUnitProgress(unitDisciplines(unit, constructionDisciplines));
 }
