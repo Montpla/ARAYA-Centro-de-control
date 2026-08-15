@@ -5393,6 +5393,18 @@ function GuidesPanel({
   );
 }
 
+type UploadAgentToken = {
+  id: number;
+  label: string;
+  ownerEmail: string;
+  expiresAt: string;
+  revokedAt: string;
+  lastUsedAt: string;
+  useCount: number;
+  createdAt: string;
+  active: boolean;
+};
+
 type TvScreenToken = {
   id: number;
   label: string;
@@ -5403,6 +5415,153 @@ type TvScreenToken = {
   createdAt: string;
   active: boolean;
 };
+
+// Cargas automáticas: un equipo envía archivos sin que nadie inicie sesión, que
+// es lo que permite que el corte mensual salga solo desde Microsoft Project.
+//
+// El panel existe porque quien administra el Centro de Control no suele estar
+// en la oficina donde se suben los archivos: sin él habría que llamar a la API
+// a mano para dar de alta cada equipo, y eso es justo lo que impedía repartir
+// los accesos en remoto.
+function UploadAgentsCard({ users }: { users: Array<{ email: string; displayName: string; active: boolean }> }) {
+  const [tokens, setTokens] = useState<UploadAgentToken[]>([]);
+  const [label, setLabel] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [freshToken, setFreshToken] = useState("");
+  const [message, setMessage] = useState("");
+
+  const refreshTokens = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/upload-tokens", { cache: "no-store" });
+      const payload = await response.json() as { tokens?: UploadAgentToken[]; error?: string };
+      if (response.ok) setTokens(payload.tokens ?? []);
+      else setMessage(payload.error ?? "");
+    } catch {
+      // Un fallo de red aquí no debe romper la pantalla de usuarios: la lista
+      // se queda como estaba y se reintenta al volver a entrar.
+    }
+  }, []);
+
+  useEffect(() => { void refreshTokens(); }, [refreshTokens]);
+
+  async function createToken() {
+    if (creating) return;
+    setCreating(true);
+    setMessage("");
+    setFreshToken("");
+    try {
+      const response = await fetch("/api/admin/upload-tokens", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: label.trim(), ownerEmail: ownerEmail.trim() }),
+      });
+      const payload = await response.json() as { secret?: string; error?: string; message?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo crear la carga automática.");
+      setFreshToken(payload.secret ?? "");
+      setMessage(payload.message ?? "");
+      setLabel("");
+      await refreshTokens();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo crear la carga automática.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function revokeToken(id: number) {
+    try {
+      const response = await fetch("/api/admin/upload-tokens", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const payload = await response.json() as { error?: string; message?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo revocar la carga automática.");
+      setMessage(payload.message ?? "");
+      await refreshTokens();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "No se pudo revocar la carga automática.");
+    }
+  }
+
+  return (
+    <section className="panel tv-screens-card">
+      <div className="panel-heading">
+        <div><span className="section-kicker">CARGAS AUTOMÁTICAS</span><h3>Equipos que envían archivos solos</h3></div>
+      </div>
+      <p>
+        Genera un token para un equipo de la oficina. Con él, la macro de
+        Microsoft Project envía el plan cada vez que se guarda, sin que nadie
+        entre aquí. Copia el token al crearlo: por seguridad no vuelve a
+        mostrarse.
+      </p>
+      <p className="quality-note">
+        Las cargas se atribuyen a la persona que elijas y heredan sus permisos,
+        así que aparecerán a su nombre en la auditoría. Conviene un token por
+        equipo y no uno compartido por todos: si un ordenador se pierde, se
+        revoca solo ese y los demás siguen funcionando.
+      </p>
+      <div className="tv-screens-form">
+        <input
+          type="text"
+          value={label}
+          maxLength={120}
+          placeholder="Nombre del equipo (p. ej. Portátil de planificación)"
+          onChange={(event) => setLabel(event.target.value)}
+        />
+        <select value={ownerEmail} onChange={(event) => setOwnerEmail(event.target.value)}>
+          <option value="">A nombre de…</option>
+          {users.filter((item) => item.active).map((item) => (
+            <option key={item.email} value={item.email}>{item.displayName || item.email}</option>
+          ))}
+        </select>
+        <button className="button" type="button" onClick={() => void createToken()} disabled={creating || !ownerEmail}>
+          {creating ? "Creando…" : "Crear carga automática"}
+        </button>
+      </div>
+      {freshToken && (
+        <div className="tv-screen-link" role="status">
+          <code>{freshToken}</code>
+          <button
+            className="button ghost"
+            type="button"
+            onClick={() => void navigator.clipboard?.writeText(freshToken)}
+          >
+            Copiar token
+          </button>
+        </div>
+      )}
+      {message && <div className="access-message" role="status">{message}</div>}
+      {tokens.length > 0 && (
+        <ul className="tv-screens-list">
+          {tokens.map((token) => (
+            <li key={token.id} className={token.active ? "" : "tv-screen-revoked"}>
+              <span>
+                <strong>{token.label}</strong>
+                <small>
+                  {token.ownerEmail}
+                  {" · "}
+                  {token.active
+                    ? `activa hasta ${token.expiresAt.slice(0, 10)}`
+                    : token.revokedAt ? "revocada" : "caducada"}
+                  {token.lastUsedAt
+                    ? ` · ${token.useCount} envíos, último el ${token.lastUsedAt.slice(0, 10)}`
+                    : " · sin usar todavía"}
+                </small>
+              </span>
+              {token.active && (
+                <button className="button ghost" type="button" onClick={() => void revokeToken(token.id)}>
+                  Revocar
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 // Pantallas del modo TV/obra. El enlace con el token en claro solo se puede
 // copiar en el momento de crearlo: el servidor guarda únicamente su hash, así
@@ -5737,6 +5896,8 @@ function UsersAdminView({
           llevan directo a esta misma aplicación.
         </p>
       </section>
+
+      <UploadAgentsCard users={configuredUsers} />
 
       <TvScreensCard />
 
