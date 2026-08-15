@@ -6,6 +6,7 @@ import ts from "typescript";
 import * as demoData from "../app/demo-data.ts";
 import * as liveData from "../lib/live-data.ts";
 import * as projectXml from "../lib/project-xml.ts";
+import * as xlsxReader from "../lib/xlsx-reader.ts";
 
 // A diferencia de tests/ingestion-classifier.test.mjs, aquí se carga el
 // isLiveDataKey de verdad en vez de sustituirlo por () => true: la validación
@@ -24,6 +25,7 @@ async function loadIngestion() {
   const require = (specifier) => {
     if (specifier === "./live-data") return liveData;
     if (specifier === "./project-xml") return projectXml;
+    if (specifier === "./xlsx-reader") return xlsxReader;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {
@@ -77,7 +79,7 @@ function comoCsv(texto) {
 async function publicar(csv) {
   const ingestion = await loadIngestion();
   const resolveSpatialIdentityUpdates = await loadResolver();
-  const extraccion = ingestion.extractStructuredUpdates(comoCsv(csv), "csv", defaults);
+  const extraccion = await ingestion.extractStructuredUpdates(comoCsv(csv), "csv", defaults);
   const resueltas = resolveSpatialIdentityUpdates(extraccion.updates, {});
   const values = {};
   for (const update of resueltas) values[update.key] = update.value;
@@ -161,7 +163,7 @@ test("las plantillas generadas sólo contienen claves que el modelo admite", asy
       partes[1] = "1";
       return partes.join(",");
     }).join("\n");
-    const extraccion = ingestion.extractStructuredUpdates(comoCsv(relleno), "csv", defaults);
+    const extraccion = await ingestion.extractStructuredUpdates(comoCsv(relleno), "csv", defaults);
     assert.equal(extraccion.warnings.length, 0, `${archivo}: ${extraccion.warnings.join(" · ")}`);
     assert.ok(extraccion.updates.length > 0, `${archivo} no produjo ninguna actualización`);
   }
@@ -180,7 +182,7 @@ test("un plan de Project en XML actualiza los edificios que nombra", async () =>
     "<Task><UID>2</UID><Name>Reunión semanal</Name><PercentComplete>100</PercentComplete><Summary>0</Summary></Task>",
     "</Tasks></Project>",
   ].join("\n");
-  const extraccion = ingestion.extractStructuredUpdates(comoCsv(plan), "xml", {
+  const extraccion = await ingestion.extractStructuredUpdates(comoCsv(plan), "xml", {
     ...defaults,
     knownBuildingTokens: new Set(["14"]),
   });

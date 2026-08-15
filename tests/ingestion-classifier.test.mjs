@@ -13,8 +13,12 @@ const executableSource = source
     "const isLiveDataKey = () => true;",
   )
   .replace(
-    /import \{ extractProjectXmlUpdates, isProjectXml \} from "\.\/project-xml";/,
-    "const isProjectXml = () => false;\nconst extractProjectXmlUpdates = () => ({ updates: [], warnings: [], summary: \"\", taskCount: 0 });",
+    /import \{ readXlsxRows, rowsToRecords \} from "\.\/xlsx-reader";/,
+    "const readXlsxRows = async () => [];\nconst rowsToRecords = () => ({ headerRow: -1, records: [] });",
+  )
+  .replace(
+    /import \{ buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml \} from "\.\/project-xml";/,
+    "const isProjectXml = () => false;\nconst buildingCodeFromTaskName = () => \"\";\nconst extractProjectXmlUpdates = () => ({ updates: [], warnings: [], summary: \"\", taskCount: 0 });",
   );
 const transpiled = ts.transpileModule(executableSource, {
   compilerOptions: {
@@ -41,11 +45,11 @@ test("deterministic ingestion classifier passes the 24-document evaluation set",
   }
 });
 
-test("structured CSV prepares model updates without publishing them", () => {
+test("structured CSV prepares model updates without publishing them", async () => {
   const bytes = new TextEncoder().encode(
     "key,value,area,cutoff,moneda\nprojectSnapshot.overallProgress,18.9,obra,2026-07-30,DOP",
   ).buffer;
-  const result = ingestion.extractStructuredUpdates(bytes, "csv", {
+  const result = await ingestion.extractStructuredUpdates(bytes, "csv", {
     area: "obra",
     cutoff: "2026-07-30",
     sourceCurrency: "DOP",
@@ -57,11 +61,11 @@ test("structured CSV prepares model updates without publishing them", () => {
   assert.match(result.summary, /preparados para contraste/);
 });
 
-test("semicolon CSV preserves decimal commas", () => {
+test("semicolon CSV preserves decimal commas", async () => {
   const bytes = new TextEncoder().encode(
     "clave;valor;area;corte;moneda\nprojectSnapshot.overallProgress;18,23;obra;2026-06-30;DOP",
   ).buffer;
-  const result = ingestion.extractStructuredUpdates(bytes, "csv", {
+  const result = await ingestion.extractStructuredUpdates(bytes, "csv", {
     area: "obra",
     cutoff: "2026-06-30",
     sourceCurrency: "DOP",

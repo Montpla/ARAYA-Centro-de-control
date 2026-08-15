@@ -1,5 +1,6 @@
 import { LiveDataUpdate, LiveDataValue, isLiveDataKey } from "./live-data";
-import { extractProjectXmlUpdates, isProjectXml } from "./project-xml";
+import { buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml } from "./project-xml";
+import { readXlsxRows, rowsToRecords } from "./xlsx-reader";
 
 export type DocumentAnalysis = {
   documentType: string;
@@ -127,8 +128,14 @@ function extractionMode(extension: string) {
   if (extension === "xml") {
     return { id: "plan_project", label: "Plan de Microsoft Project (XML)" };
   }
-  if (extension === "xls" || extension === "xlsx") {
-    return { id: "importador_tabular", label: "Importador tabular asistido" };
+  // El .xlsx se lee celda a celda, sin IA, así que su rótulo ya no puede
+  // prometer una lectura "asistida": lo que hay en la celda es lo que entra.
+  // El .xls antiguo sí sigue dependiendo de la interpretación.
+  if (extension === "xlsx") {
+    return { id: "hoja_directa", label: "Hoja de cálculo leída directamente" };
+  }
+  if (extension === "xls") {
+    return { id: "importador_tabular", label: "Importador tabular asistido (.xls antiguo)" };
   }
   // .mpp, .dwg y .zip se archivan tal cual: ninguna de sus cifras llega al
   // panel. El rótulo anterior ("Importación especializada") daba a entender lo
@@ -276,7 +283,80 @@ function normalizeUpdate(
   };
 }
 
-export function extractStructuredUpdates(
+// Cabeceras con las que la obra rotula sus tablas de avance. No se intenta
+// adivinar más allá de esta lista: una columna que no esté aquí se ignora, que
+// es preferible a interpretar como avance una columna de otra cosa.
+const CABECERAS_EDIFICIO = ["edificio", "edificios", "torre", "bloque", "codigo", "código"];
+const CABECERAS_AVANCE = [
+  "% avance", "avance", "avance (%)", "% ejecutado", "ejecutado", "avance real",
+  "% real", "progreso", "% completado",
+];
+
+function numeroDeCelda(valor: string) {
+  const limpio = valor.replace(/%/g, "").trim().replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
+  const numero = Number(limpio);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+/**
+ * Lee una tabla de avance por edificio de una hoja corriente.
+ *
+ * Es el caso que de verdad ahorra trabajo: la oficina mantiene su Excel con una
+ * columna de edificio y otra de porcentaje, y hasta ahora ese archivo sólo se
+ * podía interpretar con IA. Aquí se lee tal cual, y sólo se acepta lo que es
+ * inequívoco: la fila tiene que nombrar un edificio reconocible y traer un
+ * número entre 0 y 100.
+ */
+function extractSheetProgress(
+  filas: Array<Record<string, string>>,
+  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string; knownBuildingTokens?: Set<string> },
+): StructuredExtraction | null {
+  const { records } = rowsToRecords(filas, [...CABECERAS_EDIFICIO, ...CABECERAS_AVANCE]);
+  if (!records.length) return null;
+
+  const columnas = Object.keys(records[0] ?? {});
+  const columnaEdificio = columnas.find((columna) => CABECERAS_EDIFICIO.includes(columna));
+  const columnaAvance = columnas.find((columna) => CABECERAS_AVANCE.includes(columna));
+  if (!columnaEdificio || !columnaAvance) return null;
+
+  const updates: LiveDataUpdate[] = [];
+  const warnings: string[] = [];
+  let descartadas = 0;
+  for (const registro of records.slice(0, 250)) {
+    const etiqueta = registro[columnaEdificio] ?? "";
+    const codigo = buildingCodeFromTaskName(etiqueta) ||
+      (/^\s*(?:th[\s-]*)?(\d{1,3})\s*$/i.test(etiqueta)
+        ? `TH-${etiqueta.replace(/\D/g, "").padStart(2, "0")}`
+        : "");
+    const valor = numeroDeCelda(registro[columnaAvance] ?? "");
+    if (!codigo || valor === null || valor < 0 || valor > 100) {
+      if (etiqueta) descartadas += 1;
+      continue;
+    }
+    if (defaults.knownBuildingTokens && !defaults.knownBuildingTokens.has(codigo.replace(/^TH-/i, "").replace(/^0+(?=\d)/, ""))) {
+      descartadas += 1;
+      continue;
+    }
+    updates.push({
+      key: `buildings.${codigo}.progress`,
+      value: valor,
+      area: defaults.area,
+      cutoff: defaults.cutoff,
+      sourceCurrency: defaults.sourceCurrency,
+      sourceName: defaults.sourceName,
+    });
+  }
+
+  if (!updates.length) return null;
+  if (descartadas) warnings.push(`${descartadas} filas no nombran un edificio reconocible y se han dejado fuera.`);
+  return {
+    updates,
+    summary: `${updates.length} edificios actualizados desde la tabla de la hoja de cálculo.`,
+    warnings,
+  };
+}
+
+export async function extractStructuredUpdates(
   bytes: ArrayBuffer,
   extension: string,
   defaults: {
@@ -288,14 +368,61 @@ export function extractStructuredUpdates(
     // a partir de una tarea mal rotulada del plan.
     knownBuildingTokens?: Set<string>;
   },
-): StructuredExtraction {
-  if (extension !== "csv" && extension !== "json" && extension !== "xml") {
+): Promise<StructuredExtraction> {
+  if (!["csv", "json", "xml", "xlsx"].includes(extension)) {
     return {
       updates: [],
       summary: "El original está catalogado. Falta ejecutar el importador específico del formato.",
       warnings: [],
     };
   }
+  // Una hoja de cálculo se lee celda a celda, sin IA de por medio. Es lo que
+  // permite subir el Excel tal y como lo trabaja la oficina —sin convertirlo a
+  // CSV ni a XML— y que lo escrito en la celda sea exactamente lo que se
+  // publica. Se admiten dos formas, porque son las dos que llegan de verdad:
+  // la plantilla de clave y valor, y la tabla de avance con sus cabeceras.
+  if (extension === "xlsx") {
+    let filas;
+    try {
+      filas = await readXlsxRows(bytes);
+    } catch {
+      return {
+        updates: [],
+        summary: "La hoja de cálculo no se pudo abrir.",
+        warnings: ["Comprueba que el archivo es un .xlsx (Excel moderno) y no un .xls antiguo."],
+      };
+    }
+
+    const porClave = rowsToRecords(filas, ["clave", "key", "campo"]);
+    if (porClave.records.length) {
+      const warnings: string[] = [];
+      const updates: LiveDataUpdate[] = [];
+      for (const registro of porClave.records.slice(0, 250)) {
+        const normalizado = normalizeUpdate(registro, defaults);
+        if (normalizado.warning) warnings.push(normalizado.warning);
+        if (normalizado.update) updates.push(normalizado.update);
+      }
+      return {
+        updates,
+        summary: updates.length
+          ? `${updates.length} datos leídos directamente de la hoja de cálculo.`
+          : "La hoja tiene columnas de clave y valor, pero ninguna fila rellenada.",
+        warnings,
+      };
+    }
+
+    const tabla = extractSheetProgress(filas, defaults);
+    if (tabla) return tabla;
+
+    return {
+      updates: [],
+      summary: "No se reconoció ninguna tabla de datos en la hoja.",
+      warnings: [
+        "Se esperan columnas de clave y valor, o una tabla con una columna de edificio y otra de avance.",
+      ],
+    };
+  }
+
   const text = new TextDecoder("utf-8").decode(bytes);
 
   // El XML de Project entra por su propio lector: no son pares clave/valor sino

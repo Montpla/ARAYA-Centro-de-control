@@ -7626,7 +7626,7 @@ function UploadModal({
             />
           )}
           <strong>{selectedFile ? selectedFile.name : "Selecciona o arrastra un archivo"}</strong>
-          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON, XML de Project, PowerPoint, PDF, Word o imagen actualizan cifras · MPP, DWG y ZIP solo se archivan · máximo 50 MB"}</span>
+          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON y XML de Project se leen tal cual · PDF, Word, PowerPoint e imágenes se interpretan · MPP, DWG y ZIP solo se archivan · máximo 50 MB"}</span>
         </div>
         <div className="upload-source-actions" aria-label="Opciones de carga en móvil">
           <label>

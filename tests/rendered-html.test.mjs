@@ -664,7 +664,9 @@ test("point two adds controlled ingestion, automatic structured publication and 
   assert.match(reviewRoute, /action === "reject"/);
   assert.match(reviewRoute, /publishLiveDataUpdates/);
   assert.match(ingestion, /export function analyzeDocument/);
-  assert.match(ingestion, /extension !== "csv" && extension !== "json"/);
+  // La lectura sin IA cubre ya cuatro formatos: los pares clave/valor de un CSV
+  // o JSON, el plan de Project en XML y las hojas de Excel leídas celda a celda.
+  assert.match(ingestion, /\["csv", "json", "xml", "xlsx"\]\.includes\(extension\)/);
   assert.match(publisher, /live_data_history/);
   assert.match(publisher, /INSERT INTO live_data_history/);
   assert.match(publisher, /await database\.batch\(atomicStatements\)/);
