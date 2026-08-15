@@ -606,6 +606,18 @@ clasificacion, extraccion, contrato, publicacion y auditoria. No hay rama
 aparte, asi que una carga automatica no puede hacer nada que su responsable no
 pudiera hacer a mano.
 
+Los emite y revoca un administrador desde **Usuarios y accesos → Cargas
+automaticas**, con un maximo de 10 activos. El panel existe porque quien
+administra el Centro de Control no suele estar en la oficina donde se suben los
+archivos: sin el habria que llamar a la API a mano para dar de alta cada equipo,
+y eso impedia repartir los accesos en remoto.
+
+**Conviene un token por equipo, no uno compartido por todos.** Con uno por
+equipo, perder un ordenador se resuelve revocando solo ese; con uno compartido
+hay que revocarlo y reconfigurar todos los demas, y ademas todas las cargas
+aparecen bajo la misma persona en la auditoria, que deja de distinguir quien
+envio que.
+
 ### El token vive fuera del navegador, asi que el diseno asume que puede filtrarse
 
 Es la unica credencial del sistema que reside en un equipo ajeno, dentro de un
@@ -623,9 +635,6 @@ fichero de macro. Las garantias que limitan el dano:
 - **Solo carga.** No abre el panel, no lee datos y no consulta el registro.
 - **Deja rastro**: fecha y contador de usos, y la carga queda atribuida a una
   persona con nombre y apellidos en la auditoria.
-
-Los emite y revoca un administrador en `/api/admin/upload-tokens`, con un maximo
-de 10 activos.
 
 ## Los planes de Project se leen en XML (14/08/2026)
 

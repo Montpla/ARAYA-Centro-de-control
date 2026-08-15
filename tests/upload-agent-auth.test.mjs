@@ -11,6 +11,7 @@ const fuente = await readFile(new URL("../lib/upload-agent-auth.ts", import.meta
 const rutaCarga = await readFile(new URL("../app/api/files/route.ts", import.meta.url), "utf8");
 const rutaAdmin = await readFile(new URL("../app/api/admin/upload-tokens/route.ts", import.meta.url), "utf8");
 const migracion = await readFile(new URL("../drizzle/0022_upload_agent_tokens.sql", import.meta.url), "utf8");
+const cliente = await readFile(new URL("../app/dashboard-client.tsx", import.meta.url), "utf8");
 
 test("el token nunca se guarda en claro", () => {
   // Igual que las sesiones y los tokens de TV: en la base sólo vive el hash,
@@ -79,4 +80,22 @@ test("el token en claro sólo viaja en la respuesta de creación", () => {
   );
   assert.ok(cuerpoPublico.length > 0, "publicToken debe existir");
   assert.doesNotMatch(cuerpoPublico, /secret|tokenHash/);
+});
+
+test("las cargas automáticas se administran desde el panel, no llamando a la API", () => {
+  // Quien administra el Centro de Control no suele estar en la oficina donde se
+  // suben los archivos. Sin panel habría que llamar a la API a mano para dar de
+  // alta cada equipo, que es justo lo que impedía repartir accesos en remoto.
+  assert.match(cliente, /function UploadAgentsCard/);
+  assert.match(cliente, /<UploadAgentsCard users=\{configuredUsers\} \/>/);
+  assert.match(cliente, /\/api\/admin\/upload-tokens/);
+  assert.match(cliente, /method: "PATCH"[\s\S]{0,200}upload-tokens|upload-tokens[\s\S]{0,200}method: "PATCH"/);
+});
+
+test("el panel avisa de lo que implica compartir un token", () => {
+  // Un token por equipo permite revocar sólo el ordenador afectado si se
+  // pierde; uno compartido por todos obliga a reconfigurarlos todos.
+  assert.match(cliente, /un token por\s*\n?\s*equipo y no uno compartido/);
+  assert.match(cliente, /heredan sus permisos/);
+  assert.match(cliente, /no vuelve a\s*\n?\s*mostrarse/);
 });
