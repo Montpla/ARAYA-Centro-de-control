@@ -664,9 +664,19 @@ test("point two adds controlled ingestion, automatic structured publication and 
   assert.match(reviewRoute, /action === "reject"/);
   assert.match(reviewRoute, /publishLiveDataUpdates/);
   assert.match(ingestion, /export function analyzeDocument/);
-  // La lectura sin IA cubre ya cuatro formatos: los pares clave/valor de un CSV
-  // o JSON, el plan de Project en XML y las hojas de Excel leídas celda a celda.
-  assert.match(ingestion, /\["csv", "json", "xml", "xlsx", "docx", "pptx"\]\.includes\(extension\)/);
+  // La lectura sin IA cubre los formatos con los que trabaja la oficina: los
+  // pares clave/valor de un CSV o JSON, el plan de Project en XML, las hojas de
+  // Excel celda a celda, las tablas de Word y PowerPoint, el texto de un PDF y
+  // lo que venga dentro de un comprimido.
+  //
+  // Se comprueba formato a formato en vez de contra la lista literal: fijar el
+  // array entero obligaba a tocar esta prueba cada vez que se añadía un lector,
+  // sin que el cambio dijera nada sobre si el lector nuevo funciona.
+  const admitidos = ingestion.match(/if \(!\[([^\]]*)\]\.includes\(extension\)\)/);
+  assert.ok(admitidos, "debe existir la lista de extensiones que se leen sin IA");
+  for (const formato of ["csv", "json", "xml", "xlsx", "docx", "pptx", "zip", "pdf"]) {
+    assert.match(admitidos[1], new RegExp(`"${formato}"`), formato);
+  }
   assert.match(publisher, /live_data_history/);
   assert.match(publisher, /INSERT INTO live_data_history/);
   assert.match(publisher, /await database\.batch\(atomicStatements\)/);
