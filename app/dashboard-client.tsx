@@ -1456,10 +1456,15 @@ const defaultUploadArea: Record<View, UploadArea> = {
   usuarios: "direccion",
 };
 
-// Espejo de UNSUPPORTED_EXTENSIONS (lib/ai-document-extraction.ts): formatos
-// que el sistema archiva íntegros pero cuyo contenido no sabe leer, así que
-// ninguna de sus cifras llega al panel.
-const ARCHIVE_ONLY_EXTENSIONS = ["mpp", "dwg", "zip"];
+// Formatos que el sistema archiva íntegros pero cuyo contenido no sabe leer,
+// así que ninguna de sus cifras llega al panel.
+//
+// No es ya el espejo exacto de UNSUPPORTED_EXTENSIONS (lib/ai-document-
+// extraction.ts): un ZIP sigue sin poder enviarse a la lectura con IA, pero se
+// abre antes y se procesa lo que lleva dentro, así que sus cifras sí llegan.
+// Avisar aquí de lo contrario desanimaba a subir el corte del mes comprimido,
+// que es como viene casi siempre.
+const ARCHIVE_ONLY_EXTENSIONS = ["mpp", "dwg"];
 
 async function uploadProjectFile(
   file: File,
@@ -5563,6 +5568,158 @@ function UploadAgentsCard({ users }: { users: Array<{ email: string; displayName
   );
 }
 
+// Actualización de avances escribiendo el porcentaje, sin archivo de por medio.
+//
+// Casi todo lo que llega a la oficina se lee solo, pero queda un formato que no
+// se puede leer de ninguna manera: el .mpp de Microsoft Project, que es un
+// binario sin documentar. La salida buena es exportarlo a XML, y así se explica
+// al subirlo, pero eso depende de que quien lo tenga pueda abrir Project. Esta
+// pantalla es la salida que no depende de nada: se escribe el porcentaje y se
+// publica por el mismo camino que un archivo, con su corte, su procedencia y su
+// entrada en el histórico.
+function ManualProgressCard() {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const [cutoff, setCutoff] = useState(hoy);
+  const [borrador, setBorrador] = useState<Record<string, string>>({});
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState("");
+  const [error, setError] = useState("");
+
+  // Se ordenan por código y no por avance: quien viene a corregir un edificio
+  // concreto lo busca por su número, y una lista que se reordena sola al
+  // publicar obliga a buscarlo otra vez.
+  const ordenados = [...buildings].sort(
+    (izquierda, derecha) => Number(izquierda.shortName) - Number(derecha.shortName),
+  );
+
+  const cambios = ordenados
+    .map((building) => {
+      const escrito = borrador[building.shortName];
+      if (escrito === undefined || !escrito.trim()) return null;
+      const valor = Number(escrito.replace(",", "."));
+      if (!Number.isFinite(valor) || valor < 0 || valor > 100) return null;
+      // Escribir el mismo número que ya había no es un cambio: publicarlo
+      // llenaría el histórico de revisiones que no mueven nada.
+      if (Math.abs(valor - building.progress) < 0.005) return null;
+      return { key: `buildings.${building.shortName}.progress`, value: valor };
+    })
+    .filter((cambio): cambio is { key: string; value: number } => cambio !== null);
+
+  const invalidos = Object.entries(borrador).filter(([, escrito]) => {
+    if (!escrito.trim()) return false;
+    const valor = Number(escrito.replace(",", "."));
+    return !Number.isFinite(valor) || valor < 0 || valor > 100;
+  });
+
+  async function publicar() {
+    if (guardando || !cambios.length) return;
+    setGuardando(true);
+    setMensaje("");
+    setError("");
+    try {
+      const response = await fetch("/api/live-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          updates: cambios,
+          area: "obra",
+          cutoff,
+          // La procedencia dice de dónde salió cada cifra. Un dato escrito a
+          // mano tiene que distinguirse de uno leído de un archivo, porque no
+          // hay original al que volver si alguien lo discute.
+          sourceName: "Actualización manual de avances",
+          message: `Avance actualizado a mano en ${cambios.length} edificio${cambios.length === 1 ? "" : "s"}.`,
+        }),
+      });
+      const payload = await response.json() as { message?: string; error?: string };
+      if (!response.ok) throw new Error(payload.error || "No se pudo publicar el avance.");
+      setMensaje(payload.message ?? "Avance publicado.");
+      setBorrador({});
+    } catch (fallo) {
+      setError(fallo instanceof Error ? fallo.message : "No se pudo publicar el avance.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <section className="panel tv-screens-card">
+      <div className="panel-heading">
+        <div><span className="section-kicker">AVANCE SIN ARCHIVO</span><h3>Actualizar porcentajes a mano</h3></div>
+      </div>
+      <p>
+        Escribe el avance de los edificios que hayan cambiado y publícalo. Los
+        que dejes en blanco se quedan como están. Sirve para el corte que llega
+        en un <b>.mpp</b> —el único formato que no se puede leer— o para
+        corregir una cifra suelta sin volver a subir el archivo entero.
+      </p>
+      <p className="quality-note">
+        Se publica igual que una carga: queda con tu nombre, con la fecha de
+        corte que indiques y con su entrada en el histórico, así que se puede
+        revisar y deshacer después. Todas las pantallas lo verán en menos de
+        cinco segundos.
+      </p>
+      <label className="manual-progress-cutoff">
+        Fecha de corte
+        <input type="date" value={cutoff} max={hoy} onChange={(event) => setCutoff(event.target.value)} />
+      </label>
+      <div className="manual-progress-grid">
+        {ordenados.map((building) => {
+          const escrito = borrador[building.shortName] ?? "";
+          const valor = Number(escrito.replace(",", "."));
+          const malo = Boolean(escrito.trim()) && (!Number.isFinite(valor) || valor < 0 || valor > 100);
+          return (
+            <label key={building.shortName} className={malo ? "manual-progress-item invalid" : "manual-progress-item"}>
+              <span>
+                <strong>TH-{building.shortName.padStart(2, "0")}</strong>
+                <small>ahora {number.format(building.progress)}%</small>
+              </span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={escrito}
+                placeholder="—"
+                aria-label={`Nuevo avance de TH-${building.shortName.padStart(2, "0")}`}
+                onChange={(event) => setBorrador((actual) => ({
+                  ...actual,
+                  [building.shortName]: event.target.value,
+                }))}
+              />
+            </label>
+          );
+        })}
+      </div>
+      {invalidos.length > 0 && (
+        <div className="callout warn">
+          <strong>Hay {invalidos.length} valor{invalidos.length === 1 ? "" : "es"} fuera de rango</strong>
+          <p>Un avance es un porcentaje entre 0 y 100. Esos campos no se publicarán.</p>
+        </div>
+      )}
+      <div className="tv-screens-form">
+        <button
+          className="button primary"
+          type="button"
+          onClick={() => void publicar()}
+          disabled={guardando || !cambios.length}
+        >
+          {guardando
+            ? "Publicando…"
+            : cambios.length
+              ? `Publicar ${cambios.length} cambio${cambios.length === 1 ? "" : "s"}`
+              : "Sin cambios que publicar"}
+        </button>
+        {cambios.length > 0 && (
+          <button className="button ghost" type="button" onClick={() => setBorrador({})}>
+            Descartar
+          </button>
+        )}
+      </div>
+      {mensaje && <div className="access-message" role="status">{mensaje}</div>}
+      {error && <div className="callout warn" role="alert"><strong>{error}</strong></div>}
+    </section>
+  );
+}
+
 // Pantallas del modo TV/obra. El enlace con el token en claro solo se puede
 // copiar en el momento de crearlo: el servidor guarda únicamente su hash, así
 // que no hay forma de volver a mostrarlo. Revocar corta el acceso al instante.
@@ -5896,6 +6053,8 @@ function UsersAdminView({
           llevan directo a esta misma aplicación.
         </p>
       </section>
+
+      <ManualProgressCard />
 
       <UploadAgentsCard users={configuredUsers} />
 
@@ -7787,7 +7946,7 @@ function UploadModal({
             />
           )}
           <strong>{selectedFile ? selectedFile.name : "Selecciona o arrastra un archivo"}</strong>
-          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON y XML de Project se leen tal cual · PDF, Word, PowerPoint e imágenes se interpretan · MPP, DWG y ZIP solo se archivan · máximo 50 MB"}</span>
+          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON, XML de Project, Word, PowerPoint, PDF y ZIP se leen tal cual · las imágenes y los PDF escaneados se interpretan · MPP y DWG solo se archivan · máximo 50 MB"}</span>
         </div>
         <div className="upload-source-actions" aria-label="Opciones de carga en móvil">
           <label>
@@ -7810,11 +7969,18 @@ function UploadModal({
               implantación y los porcentajes seguirán como están.
             </p>
             {archiveOnlyExtension === "mpp" ? (
-              <p>
-                Vuelve a guardarlo desde Microsoft Project como <b>XML</b>
-                (<i>Archivo → Guardar como → tipo «XML (*.xml)»</i>) y sube ese archivo: el sistema lee
-                el plan entero y actualiza el avance de cada edificio.
-              </p>
+              <>
+                <p>
+                  Vuelve a guardarlo desde Microsoft Project como <b>XML</b>
+                  (<i>Archivo → Guardar como → tipo «XML (*.xml)»</i>) y sube ese archivo: el sistema lee
+                  el plan entero y actualiza el avance de cada edificio.
+                </p>
+                <p>
+                  Si ahora mismo no puedes abrir Project, en <b>Usuarios → Actualizar porcentajes a
+                  mano</b> se escriben los avances directamente y se publican igual que una carga,
+                  con su corte y su histórico.
+                </p>
+              </>
             ) : (
               <p>
                 Para que las cifras se actualicen, exporta el mismo corte a <b>Excel</b> o <b>CSV</b>
