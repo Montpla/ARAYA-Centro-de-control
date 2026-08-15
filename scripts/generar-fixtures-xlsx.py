@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Genera las hojas .xlsx que usan las pruebas del lector de Excel.
+"""Genera los documentos de Office que usan las pruebas de lectura directa.
 
 Se construyen a mano, con la misma estructura que escribe Excel —ZIP con
 sharedStrings y sheet1—, para poder fijar los casos que importan: un membrete
@@ -90,3 +90,55 @@ construir(SALIDA / "tabla-obra.xlsx", [
     ["TH-03", 44, "En albanileria"],
     ["Zona comun", 10, "No es un edificio"],
 ])
+
+
+# --- Word y PowerPoint -------------------------------------------------------
+# Comparten envoltorio con Excel (ZIP con XML), asi que sus tablas se leen con
+# el mismo mecanismo. El informe en Word trae ademas una celda troceada en dos
+# fragmentos, que es como Word guarda el texto cuando cambia el formato.
+
+DOCX_CON_TABLA = """<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+<w:p><w:r><w:t>Informe mensual de avance - julio 2026</w:t></w:r></w:p>
+<w:tbl>
+<w:tr><w:tc><w:p><w:r><w:t>Edificio</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>% Avance</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>TH-</w:t></w:r><w:r><w:t>14</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>62,5</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>TH-03</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>44</w:t></w:r></w:p></w:tc></w:tr>
+<w:tr><w:tc><w:p><w:r><w:t>Zona comun</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>10</w:t></w:r></w:p></w:tc></w:tr>
+</w:tbl></w:body></w:document>"""
+
+DOCX_SIN_TABLA = """<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>
+<w:p><w:r><w:t>Acta de reunion de obra. El edificio 14 avanza segun lo previsto.</w:t></w:r></w:p>
+</w:body></w:document>"""
+
+
+def docx(ruta, documento):
+    with zipfile.ZipFile(ruta, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("word/document.xml", documento)
+    print(f"{ruta.name}")
+
+
+def diapositiva(filas):
+    tr = "".join(
+        "<a:tr>" + "".join(
+            f"<a:tc><a:txBody><a:p><a:r><a:t>{c}</a:t></a:r></a:p></a:txBody></a:tc>"
+            for c in fila
+        ) + "</a:tr>"
+        for fila in filas
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+        'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        f"<p:cSld><p:spTree><a:tbl>{tr}</a:tbl></p:spTree></p:cSld></p:sld>"
+    )
+
+
+docx(SALIDA / "informe-obra.docx", DOCX_CON_TABLA)
+docx(SALIDA / "sin-tablas.docx", DOCX_SIN_TABLA)
+
+with zipfile.ZipFile(SALIDA / "comite-obra.pptx", "w", zipfile.ZIP_DEFLATED) as z:
+    z.writestr("ppt/slides/slide1.xml", diapositiva([["Portada"], ["Comite de obra"]]))
+    z.writestr("ppt/slides/slide2.xml", diapositiva([["Edificio", "% Avance"], ["TH-14", "62,5"], ["TH-07", "21"]]))
+print("comite-obra.pptx")

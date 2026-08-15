@@ -525,6 +525,30 @@ Para cambios visuales de posición, comprobar:
 4. Que al pulsarlo se abra la ficha correcta.
 5. Que la vista técnica siga operativa.
 
+## Word y PowerPoint: se leen sus tablas (14/08/2026)
+
+Los tres formatos modernos de Office comparten envoltorio —un ZIP con XML—, asi
+que una vez resuelto el ZIP para las hojas de calculo, leer tambien las tablas
+de un informe en Word o de una presentacion de comite sale casi gratis.
+
+**Solo se leen las TABLAS, y es una decision, no una limitacion pendiente.** El
+texto corrido de un informe sigue pasando por la interpretacion con IA, porque
+una frase como "el edificio 14 va por el 60%" no es un dato estructurado por
+bien que se lea. La lectura directa aporta su garantia justo donde hay filas y
+columnas; fuera de ahi seria adivinar con otro nombre.
+
+Dos detalles del formato que conviene no perder:
+
+- **Word trocea el texto de una celda** en varios `<w:t>` cuando cambia el
+  formato o pasa el corrector ortografico, asi que hay que recomponer la celda
+  entera en vez de leer el primer fragmento.
+- **Las diapositivas se ordenan por numero, no alfabeticamente**: con diez o
+  mas, `slide10` iria antes que `slide2` y las tablas saldrian desordenadas.
+
+`lib/ooxml-tables.ts` devuelve las filas en el mismo formato que las hojas de
+calculo (columna → texto), de modo que la logica que ya interpreta una tabla de
+avance sirve igual venga de donde venga.
+
 ## Las hojas de Excel se leen sin IA (14/08/2026)
 
 Un `.xlsx` es un ZIP que contiene XML, y el runtime trae `DecompressionStream`

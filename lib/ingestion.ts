@@ -1,6 +1,7 @@
 import { LiveDataUpdate, LiveDataValue, isLiveDataKey } from "./live-data";
 import { buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml } from "./project-xml";
 import { readXlsxRows, rowsToRecords } from "./xlsx-reader";
+import { readOfficeTables } from "./ooxml-tables";
 
 export type DocumentAnalysis = {
   documentType: string;
@@ -147,6 +148,12 @@ function extractionMode(extension: string) {
   }
   if (extension === "dwg" || extension === "zip") {
     return { id: "solo_archivo", label: "Solo archivo (sus datos no actualizan el panel)" };
+  }
+  // De Word y PowerPoint se leen las tablas sin interpretación; su texto
+  // corrido sigue pasando por la lectura asistida, porque una frase no es un
+  // dato estructurado por bien que se lea.
+  if (extension === "docx" || extension === "pptx") {
+    return { id: "tablas_directas", label: "Tablas leídas directamente · el texto se interpreta" };
   }
   if (["jpg", "jpeg", "png"].includes(extension)) {
     return { id: "evidencia_visual", label: "Lectura de evidencia visual" };
@@ -369,13 +376,65 @@ export async function extractStructuredUpdates(
     knownBuildingTokens?: Set<string>;
   },
 ): Promise<StructuredExtraction> {
-  if (!["csv", "json", "xml", "xlsx"].includes(extension)) {
+  if (!["csv", "json", "xml", "xlsx", "docx", "pptx"].includes(extension)) {
     return {
       updates: [],
       summary: "El original está catalogado. Falta ejecutar el importador específico del formato.",
       warnings: [],
     };
   }
+  // Word y PowerPoint comparten envoltorio con Excel: un ZIP con XML. De ellos
+  // se leen sólo las TABLAS, que es donde hay estructura de verdad; el texto
+  // corrido de un informe sigue necesitando interpretación, porque "el edificio
+  // 14 va por el 60%" no es un dato estructurado por bien que se lea.
+  if (extension === "docx" || extension === "pptx") {
+    let tablas;
+    try {
+      tablas = await readOfficeTables(bytes, extension);
+    } catch {
+      return {
+        updates: [],
+        summary: "El documento no se pudo abrir.",
+        warnings: [`Comprueba que el archivo es un .${extension} moderno y no una versión antigua.`],
+      };
+    }
+    if (!tablas.length) {
+      return {
+        updates: [],
+        summary: "El documento no contiene ninguna tabla.",
+        warnings: ["Sólo se leen las tablas; el texto corrido se interpreta aparte."],
+      };
+    }
+    for (const filas of tablas) {
+      const porClave = rowsToRecords(filas, ["clave", "key", "campo"]);
+      if (porClave.records.length) {
+        const warnings: string[] = [];
+        const updates: LiveDataUpdate[] = [];
+        for (const registro of porClave.records.slice(0, 250)) {
+          const normalizado = normalizeUpdate(registro, defaults);
+          if (normalizado.warning) warnings.push(normalizado.warning);
+          if (normalizado.update) updates.push(normalizado.update);
+        }
+        if (updates.length) {
+          return {
+            updates,
+            summary: `${updates.length} datos leídos de una tabla del documento.`,
+            warnings,
+          };
+        }
+      }
+      const tabla = extractSheetProgress(filas, defaults);
+      if (tabla) return tabla;
+    }
+    return {
+      updates: [],
+      summary: `Se leyeron ${tablas.length} tablas, pero ninguna tiene una forma reconocible.`,
+      warnings: [
+        "Se esperan columnas de clave y valor, o una tabla con una columna de edificio y otra de avance.",
+      ],
+    };
+  }
+
   // Una hoja de cálculo se lee celda a celda, sin IA de por medio. Es lo que
   // permite subir el Excel tal y como lo trabaja la oficina —sin convertirlo a
   // CSV ni a XML— y que lo escrito en la celda sea exactamente lo que se

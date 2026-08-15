@@ -16,6 +16,7 @@ async function leerFixture(nombre) {
 }
 
 async function loadIngestion() {
+  const ooxml = await cargarOoxmlTables();
   const source = await readFile(new URL("../lib/ingestion.ts", import.meta.url), "utf8");
   const output = ts.transpileModule(source, {
     compilerOptions: {
@@ -29,6 +30,7 @@ async function loadIngestion() {
     if (specifier === "./live-data") return liveData;
     if (specifier === "./project-xml") return projectXml;
     if (specifier === "./xlsx-reader") return xlsxReader;
+    if (specifier === "./ooxml-tables") return ooxml;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {
@@ -46,6 +48,31 @@ async function loadIngestion() {
     Promise,
   });
   return compiledModule.exports;
+}
+
+// ooxml-tables importa a xlsx-reader por ruta relativa sin extensión, que Node
+// no resuelve al cargar el .ts directamente, así que se compila igual que el
+// resto de módulos del proyecto.
+async function cargarOoxmlTables() {
+  const source = await readFile(new URL("../lib/ooxml-tables.ts", import.meta.url), "utf8");
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      esModuleInterop: true,
+    },
+  }).outputText;
+  const compiled = { exports: {} };
+  vm.runInNewContext(output, {
+    module: compiled,
+    exports: compiled.exports,
+    require: (specifier) => {
+      if (specifier === "./xlsx-reader") return xlsxReader;
+      throw new Error(`Import inesperado: ${specifier}`);
+    },
+    console, JSON, Map, Set, Number, Object, Array, String, Promise, TextDecoder,
+  });
+  return compiled.exports;
 }
 
 const defaults = {
