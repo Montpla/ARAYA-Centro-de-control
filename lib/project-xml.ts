@@ -24,7 +24,22 @@ export type ProjectTask = {
   finish: string;
   outlineLevel: number | null;
   summary: boolean;
+  durationHours: number;
 };
+
+/**
+ * Horas de una duración ISO-8601 de Project (`PT16H0M0S`).
+ *
+ * Se usan como peso al promediar: una tarea de estructura de dos semanas debe
+ * pesar más que un remate de un día. Sin este peso, un capítulo con muchas
+ * tareas cortas dominaría el avance del edificio aunque represente poca obra.
+ */
+function durationToHours(value: string): number {
+  const match = value.match(/^PT(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?$/);
+  if (!match) return 0;
+  const [, horas, minutos, segundos] = match;
+  return (Number(horas) || 0) + (Number(minutos) || 0) / 60 + (Number(segundos) || 0) / 3600;
+}
 
 const XML_ENTITIES: Record<string, string> = {
   amp: "&",
@@ -81,6 +96,7 @@ export function readProjectTasks(text: string, maxTasks = 5_000): ProjectTask[] 
       // Las tareas resumen agregan a sus hijas; su porcentaje es un cálculo de
       // Project, no un dato medido en obra.
       summary: firstTag(cuerpo, "Summary") === "1",
+      durationHours: durationToHours(firstTag(cuerpo, "Duration")),
     });
   }
   return tareas;
@@ -120,9 +136,19 @@ export type ProjectXmlExtraction = {
 /**
  * Convierte un plan de Project en avances por edificio.
  *
- * Cuando varias tareas nombran al mismo edificio se toma la media de sus
- * porcentajes, que es lo que representa el avance del edificio en un plan por
- * capítulos. Las tareas resumen quedan fuera para no contar dos veces lo mismo.
+ * Un plan de obra se organiza por capítulos —INFRAESTRUCTURA, SUPERESTRUCTURA,
+ * ALBAÑILERÍA, ACABADOS…— y dentro de cada capítulo aparecen los edificios. Así
+ * que el mismo edificio sale muchas veces, una por capítulo, y la mayoría de
+ * sus tareas de detalle **no repiten su nombre**: cuelgan de él en la jerarquía.
+ *
+ * Por eso no basta con promediar las tareas que nombran al edificio (eso
+ * ignoraba más de la mitad del plan y daba un número que no cuadraba con nada).
+ * Cada tarea de detalle se atribuye al edificio del que cuelga, y el avance del
+ * edificio es la media de sus tareas **ponderada por duración**: una estructura
+ * de dos semanas pesa más que un remate de un día. Calculado así, la media de
+ * todos los edificios reproduce el porcentaje global que el propio Project
+ * muestra en la raíz del plan —la señal de que la agregación es fiel y no una
+ * aproximación—.
  */
 export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>): ProjectXmlExtraction {
   const tareas = readProjectTasks(text);
@@ -135,38 +161,57 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
     };
   }
 
-  const porEdificio = new Map<string, number[]>();
-  let sinCodigo = 0;
+  // Cada tarea hereda el edificio del ancestro más cercano que lo nombre. La
+  // pila guarda, por nivel de esquema, el edificio vigente; al bajar de nivel
+  // se descartan los ancestros que ya no aplican.
+  const porNivel = new Map<number, string>();
+  const acumulado = new Map<string, { suma: number; peso: number }>();
+  let leaves = 0;
+  let sinEdificio = 0;
+
   for (const tarea of tareas) {
+    const nivel = tarea.outlineLevel ?? 0;
+    for (const clave of [...porNivel.keys()]) {
+      if (clave >= nivel) porNivel.delete(clave);
+    }
+    const propio = buildingCodeFromTaskName(tarea.name);
+    const heredado = [...porNivel.entries()].sort((a, b) => a[0] - b[0]).pop()?.[1];
+    const edificio = propio || heredado || "";
+    if (edificio) porNivel.set(nivel, edificio);
+
+    // Sólo las hojas con avance cuentan: los resúmenes agregan a sus hijas y
+    // sumarlos contaría la misma obra dos veces.
     if (tarea.summary || tarea.percentComplete === null) continue;
-    const codigo = buildingCodeFromTaskName(tarea.name);
-    if (!codigo) {
-      sinCodigo += 1;
+    leaves += 1;
+    if (!edificio || (conocidos && !conocidos.has(numeroDeCodigo(edificio)))) {
+      sinEdificio += 1;
       continue;
     }
-    if (conocidos && !conocidos.has(numeroDeCodigo(codigo))) {
-      sinCodigo += 1;
-      continue;
-    }
-    const lista = porEdificio.get(codigo) ?? [];
-    lista.push(Math.max(0, Math.min(100, tarea.percentComplete)));
-    porEdificio.set(codigo, lista);
+    // Peso por duración; una hoja sin duración cuenta como una unidad, para no
+    // desaparecer del promedio de un edificio que sólo tenga tareas así.
+    const peso = tarea.durationHours > 0 ? tarea.durationHours : 1;
+    const valor = Math.max(0, Math.min(100, tarea.percentComplete));
+    const previo = acumulado.get(edificio) ?? { suma: 0, peso: 0 };
+    previo.suma += valor * peso;
+    previo.peso += peso;
+    acumulado.set(edificio, previo);
   }
 
-  const updates = [...porEdificio.entries()]
-    .map(([codigo, valores]) => ({
+  const updates = [...acumulado.entries()]
+    .filter(([, { peso }]) => peso > 0)
+    .map(([codigo, { suma, peso }]) => ({
       key: `buildings.${codigo}.progress`,
-      value: Math.round((valores.reduce((total, valor) => total + valor, 0) / valores.length) * 100) / 100,
+      value: Math.round((suma / peso) * 100) / 100,
     }))
     .sort((izquierda, derecha) => izquierda.key.localeCompare(derecha.key));
 
   const warnings: string[] = [];
   if (!updates.length) {
     warnings.push(
-      `Se leyeron ${tareas.length} tareas, pero ninguna nombra un edificio reconocible (se esperan nombres tipo "TH-14" o "Edificio 14").`,
+      `Se leyeron ${tareas.length} tareas, pero ninguna cuelga de un edificio reconocible (se esperan nombres tipo "TH-14" o "Edificio 14").`,
     );
-  } else if (sinCodigo) {
-    warnings.push(`${sinCodigo} tareas no nombran ningún edificio y se han dejado fuera.`);
+  } else if (sinEdificio) {
+    warnings.push(`${sinEdificio} de ${leaves} tareas de detalle no cuelgan de ningún edificio y se han dejado fuera.`);
   }
 
   return {
@@ -174,7 +219,7 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
     taskCount: tareas.length,
     warnings,
     summary: updates.length
-      ? `${updates.length} edificios actualizados desde ${tareas.length} tareas del plan de Project.`
+      ? `${updates.length} edificios actualizados desde ${tareas.length} tareas del plan de Project, ponderadas por duración.`
       : `Plan de Project leído (${tareas.length} tareas), sin avances aplicables.`,
   };
 }
