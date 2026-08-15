@@ -36,7 +36,7 @@ async function inflateRaw(data: Uint8Array) {
  * cuando el archivo se escribió en streaming, que es justo como los genera
  * Excel al guardar desde algunas versiones.
  */
-async function readZipEntries(bytes: ArrayBuffer, wanted: (name: string) => boolean) {
+export async function readZipEntries(bytes: ArrayBuffer, wanted: (name: string) => boolean) {
   const view = new DataView(bytes);
   const all = new Uint8Array(bytes);
   // El fin del directorio central está al final, tras un comentario de longitud
@@ -81,7 +81,7 @@ async function readZipEntries(bytes: ArrayBuffer, wanted: (name: string) => bool
 
 const XML_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 
-function decodeXml(value: string) {
+export function decodeXml(value: string) {
   return value.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, entity: string) => {
     if (entity.startsWith("#x") || entity.startsWith("#X")) {
       const code = Number.parseInt(entity.slice(2), 16);

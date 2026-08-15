@@ -13,6 +13,10 @@ const executableSource = source
     "const isLiveDataKey = () => true;",
   )
   .replace(
+    /import \{ readOfficeTables \} from "\.\/ooxml-tables";/,
+    "const readOfficeTables = async () => [];",
+  )
+  .replace(
     /import \{ readXlsxRows, rowsToRecords \} from "\.\/xlsx-reader";/,
     "const readXlsxRows = async () => [];\nconst rowsToRecords = () => ({ headerRow: -1, records: [] });",
   )
