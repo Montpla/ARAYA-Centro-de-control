@@ -105,7 +105,7 @@ test("promedia las tareas de un mismo edificio", () => {
 test("deja fuera las tareas que no nombran ningún edificio y lo dice", () => {
   const resultado = extractProjectXmlUpdates(planDeObra, edificiosReales);
   assert.equal(resultado.updates.length, 2, "sólo TH-14 y TH-03");
-  assert.ok(resultado.warnings.some((aviso) => /no nombran ningún edificio/.test(aviso)));
+  assert.ok(resultado.warnings.some((aviso) => /no cuelgan de ningún edificio/.test(aviso)));
   assert.match(resultado.summary, /2 edificios actualizados/);
 });
 
@@ -119,6 +119,21 @@ test("un XML que no es de Project se rechaza con una indicación útil", () => {
   const resultado = extractProjectXmlUpdates("<catalogo><item/></catalogo>", edificiosReales);
   assert.equal(resultado.updates.length, 0);
   assert.ok(resultado.warnings.length > 0);
+});
+
+test("atribuye a un edificio las tareas que cuelgan de él sin nombrarlo", () => {
+  // Un plan real se organiza por capítulos y las tareas de detalle no repiten
+  // el nombre del edificio: cuelgan de él. Deben contar igualmente.
+  const plan = `<?xml version="1.0"?>
+<Project xmlns="http://schemas.microsoft.com/project"><Tasks>
+  <Task><Name>Edificio 3</Name><PercentComplete>0</PercentComplete><OutlineLevel>1</OutlineLevel><Summary>1</Summary></Task>
+  <Task><Name>Estructura</Name><PercentComplete>80</PercentComplete><Duration>PT300H0M0S</Duration><OutlineLevel>2</OutlineLevel><Summary>0</Summary></Task>
+  <Task><Name>Remates</Name><PercentComplete>0</PercentComplete><Duration>PT20H0M0S</Duration><OutlineLevel>2</OutlineLevel><Summary>0</Summary></Task>
+</Tasks></Project>`;
+  const r = extractProjectXmlUpdates(plan, new Set(["3"]));
+  const th03 = r.updates.find((u) => u.key === "buildings.TH-03.progress");
+  // Ponderado por duración: 80·300 + 0·20 sobre 320 = 75, no la media simple 40.
+  assert.equal(th03.value, 75);
 });
 
 test("los porcentajes se acotan al rango razonable", () => {

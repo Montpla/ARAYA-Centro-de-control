@@ -119,33 +119,39 @@ export type DataSource = {
   downloadUrl?: string;
 };
 
-const buildingRows: Array<[string, number, number, string, number]> = [
-  ["3", 40.6, 58, "12/11/2026", 100],
-  ["2", 34.4, 62, "26/11/2026", 100],
-  ["4", 25.0, 21, "26/11/2026", 100],
-  ["6", 28.1, 41, "26/11/2026", 100],
-  ["1", 31.2, 51, "26/11/2026", 100],
-  ["5", 28.1, 30, "26/11/2026", 100],
-  ["9", 21.9, 9, "26/11/2026", 100],
-  ["8", 12.2, 0, "26/11/2026", 90],
-  ["7", 12.2, -11, "26/11/2026", 90],
-  ["12", 12.2, -13, "03/12/2026", 90],
-  ["11", 5.9, 20, "18/01/2027", 90],
-  ["10", 5.9, 4, "18/01/2027", 90],
-  ["15", 3.1, 14, "10/02/2027", 0],
-  ["14", 3.1, 14, "19/02/2027", 0],
-  ["13", 0, 14, "02/03/2027", 0],
-  ["18", 0, 13, "10/03/2027", 0],
-  ["17", 0, 11, "19/03/2027", 0],
-  ["16", 0, 13, "30/03/2027", 0],
-  ["71", 0, 12, "07/04/2027", 0],
-  ["70", 0, 10, "16/04/2027", 0],
-  ["73", 0, 12, "27/04/2027", 0],
-  ["72", 0, 9, "05/05/2027", 0],
-  ["75", 0, 9, "14/05/2027", 0],
-  ["74", 0, 10, "24/05/2027", 0],
-  ["77", 0, 7, "01/06/2027", 0],
-  ["76", 0, 7, "07/06/2027", 0],
+// Avance de cada edificio según el corte del plan de obra del 30/07/2026
+// (Araya 26 edificios · CORTE_30072026). Se lee del XML de Microsoft Project y
+// se agrega ponderando cada tarea por su duración, atribuida al edificio del que
+// cuelga en la jerarquía del plan; así la media global reproduce el 22% que el
+// propio Project muestra en la raíz. Columnas: [código, avance %, desvío días,
+// fin previsto].
+const buildingRows: Array<[string, number, number, string]> = [
+  ["3", 54.8, 58, "12/11/2026"],
+  ["2", 46.4, 62, "26/11/2026"],
+  ["4", 42.1, 21, "26/11/2026"],
+  ["6", 45.9, 41, "26/11/2026"],
+  ["1", 47.8, 51, "26/11/2026"],
+  ["5", 45.9, 30, "26/11/2026"],
+  ["9", 38.0, 9, "26/11/2026"],
+  ["8", 32.6, 0, "26/11/2026"],
+  ["7", 30.6, -11, "26/11/2026"],
+  ["12", 27.1, -13, "03/12/2026"],
+  ["11", 25.2, 20, "18/01/2027"],
+  ["10", 25.2, 4, "18/01/2027"],
+  ["15", 14.3, 14, "10/02/2027"],
+  ["14", 14.3, 14, "19/02/2027"],
+  ["13", 14.3, 14, "02/03/2027"],
+  ["18", 0, 13, "10/03/2027"],
+  ["17", 0, 11, "19/03/2027"],
+  ["16", 0, 13, "30/03/2027"],
+  ["71", 0, 12, "07/04/2027"],
+  ["70", 0, 10, "16/04/2027"],
+  ["73", 0, 12, "27/04/2027"],
+  ["72", 0, 9, "05/05/2027"],
+  ["75", 0, 9, "14/05/2027"],
+  ["74", 0, 10, "24/05/2027"],
+  ["77", 0, 7, "01/06/2027"],
+  ["76", 0, 7, "07/06/2027"],
 ];
 
 const apartmentCodes = ["101", "102", "201", "202", "301", "302"];
@@ -170,8 +176,8 @@ function makeUnits(building: string, buildingProgress: number): Unit[] {
     phase: currentPhaseName(buildingProgress),
     deviationDays: 0,
     responsible: "Pendiente de asignar",
-    lastUpdated: "30/06/2026",
-    source: "Cubicación de obra · junio 2026",
+    lastUpdated: "30/07/2026",
+    source: "Plan de obra Project · corte 30/07/2026",
     disciplines: [
       { id: "superestructura", name: "Superestructura", progress: faseDe("superestructura"), status: "integrado" },
       { id: "albanileria", name: "Albañilería", progress: faseDe("albanileria"), status: "integrado" },
