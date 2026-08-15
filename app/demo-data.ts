@@ -1,3 +1,9 @@
+import {
+  currentPhaseName,
+  phasesFromBuildingProgress,
+  unitProgressFromBuildingProgress,
+} from "../lib/progress-model.ts";
+
 export type UnitStatus = "terminada" | "en_curso" | "bloqueada" | "pendiente";
 
 export type UnitDiscipline = {
@@ -144,35 +150,40 @@ const buildingRows: Array<[string, number, number, string, number]> = [
 
 const apartmentCodes = ["101", "102", "201", "202", "301", "302"];
 
-function makeUnits(building: string, structureProgress: number): Unit[] {
+// El avance de cada apartamento y de cada disciplina se deriva del porcentaje
+// real del edificio (el de la cubicación), en cascada por fases de obra. Así
+// las tres cifras dejan de contradecirse: el edificio ya no puede ir al 40,6%
+// con sus apartamentos al 100%. La regla vive en lib/progress-model.ts, un solo
+// sitio donde cambiar los pesos el día que la oficina fije los suyos.
+function makeUnits(building: string, buildingProgress: number): Unit[] {
+  const unitProgress = unitProgressFromBuildingProgress(buildingProgress);
+  const fases = phasesFromBuildingProgress(buildingProgress);
+  const faseDe = (id: string) => fases.find((fase) => fase.id === id)?.progress ?? 0;
+  const estado: Unit["status"] =
+    unitProgress >= 100 ? "terminada" : unitProgress > 0 ? "en_curso" : "pendiente";
   return apartmentCodes.map((apartment) => ({
     id: `${building}-${apartment}`,
     code: `${building}-${apartment}`,
     floor: Number(apartment[0]),
-    progress: structureProgress,
-    status:
-      structureProgress === 100
-        ? "terminada"
-        : structureProgress > 0
-          ? "en_curso"
-          : "pendiente",
-    phase: "Superestructura",
+    progress: unitProgress,
+    status: estado,
+    phase: currentPhaseName(buildingProgress),
     deviationDays: 0,
     responsible: "Pendiente de asignar",
     lastUpdated: "30/06/2026",
-    source: "Informe de obra · junio 2026",
+    source: "Cubicación de obra · junio 2026",
     disciplines: [
-      { id: "superestructura", name: "Superestructura", progress: structureProgress, status: "integrado" },
-      { id: "albanileria", name: "Albañilería", progress: null, status: "pendiente" },
-      { id: "instalaciones", name: "Instalaciones", progress: null, status: "pendiente" },
-      { id: "acabados", name: "Acabados", progress: null, status: "pendiente" },
+      { id: "superestructura", name: "Superestructura", progress: faseDe("superestructura"), status: "integrado" },
+      { id: "albanileria", name: "Albañilería", progress: faseDe("albanileria"), status: "integrado" },
+      { id: "instalaciones", name: "Instalaciones", progress: faseDe("instalaciones"), status: "integrado" },
+      { id: "acabados", name: "Acabados", progress: faseDe("acabados"), status: "integrado" },
     ],
     issues: [],
   }));
 }
 
 export const buildings: Building[] = buildingRows.map(
-  ([code, progress, deviationDays, forecastFinish, structureProgress]) => ({
+  ([code, progress, deviationDays, forecastFinish]) => ({
     id: `edificio-${code}`,
     name: `Edificio ${code}`,
     shortName: code,
@@ -180,7 +191,7 @@ export const buildings: Building[] = buildingRows.map(
     planProgress: null,
     deviationDays,
     forecastFinish,
-    units: makeUnits(code, structureProgress),
+    units: makeUnits(code, progress),
   }),
 );
 
