@@ -19,7 +19,16 @@ function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
-function publicUser(row: typeof appUsers.$inferSelect): AuthorizedUser {
+/**
+ * Convierte una fila de usuario en la identidad que ven las rutas.
+ *
+ * Se exporta para que los tokens de carga automática resuelvan a exactamente
+ * la misma identidad que una sesión: aquí vive la regla de que un
+ * administrador tiene acceso financiero aunque su casilla diga lo contrario, y
+ * duplicarla en otro sitio acabaría en dos criterios distintos sobre quién
+ * puede publicar cifras.
+ */
+export function publicUser(row: typeof appUsers.$inferSelect): AuthorizedUser {
   return {
     id: row.id,
     email: row.email,

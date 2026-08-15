@@ -588,6 +588,45 @@ que `rowsToRecords` rellena con cadena vacia toda columna de la cabecera.
 `extractStructuredUpdates` pasa a ser asincrona por la descompresion; sus
 llamadores y varias pruebas se actualizaron en consecuencia.
 
+## Carga automatica desde Microsoft Project (14/08/2026)
+
+El XML resolvio que el plan se pudiera leer, pero seguia exigiendo dos pasos
+manuales cada mes: guardar como XML y subirlo. La carga automatica los elimina.
+
+**En el equipo de la oficina**: `scripts/araya-project-autoenvio.bas`, una macro
+para Project que al guardar exporta el plan a XML en una carpeta temporal, lo
+envia al Centro de Control y borra el temporal. El disparador va en el modulo
+`ThisProject` con `Project_BeforeSave`, y lleva `On Error Resume Next` a
+proposito: si falla la red, se pierde ese envio, nunca el guardado.
+
+**En el servidor**: la tabla `upload_agent_tokens` y `lib/upload-agent-auth.ts`.
+El POST de `/api/files` acepta ahora dos identidades —la sesion del navegador y
+un token de carga—, y a partir de ahi el recorrido es **exactamente el mismo**:
+clasificacion, extraccion, contrato, publicacion y auditoria. No hay rama
+aparte, asi que una carga automatica no puede hacer nada que su responsable no
+pudiera hacer a mano.
+
+### El token vive fuera del navegador, asi que el diseno asume que puede filtrarse
+
+Es la unica credencial del sistema que reside en un equipo ajeno, dentro de un
+fichero de macro. Las garantias que limitan el dano:
+
+- **Solo se guarda el hash SHA-256.** El token en claro se muestra una vez al
+  crearlo y no vuelve a existir en la base.
+- **Caduca (180 dias por defecto) y se revoca al instante**, sin depender de que
+  nadie toque el equipo de la oficina.
+- **No es un usuario ni tiene permisos propios.** Se emite a nombre de una
+  persona, hereda los suyos y se comprueban en cada uso mediante el mismo
+  `publicUser` que resuelve una sesion: si se desactiva, se borra o pierde el
+  acceso financiero, el token deja de servir. Un token robado nunca puede mas
+  que su responsable.
+- **Solo carga.** No abre el panel, no lee datos y no consulta el registro.
+- **Deja rastro**: fecha y contador de usos, y la carga queda atribuida a una
+  persona con nombre y apellidos en la auditoria.
+
+Los emite y revoca un administrador en `/api/admin/upload-tokens`, con un maximo
+de 10 activos.
+
 ## Los planes de Project se leen en XML (14/08/2026)
 
 Los `.mpp` son un formato binario cerrado. Se comprobaron las alternativas antes
