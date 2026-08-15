@@ -12819,6 +12819,57 @@ button.financial-detail-row:focus-visible {
   word-break: break-all;
 }
 
+/* Rejilla de avance manual. Los edificios se ven todos a la vez —son pocos y
+   caben— para poder repasar el corte entero sin desplazarse, que es como se
+   comprueba un parte de obra. */
+.manual-progress-cutoff {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 220px;
+  font-size: 0.82rem;
+}
+
+.manual-progress-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 8px;
+}
+
+.manual-progress-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.manual-progress-item > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.manual-progress-item small {
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.manual-progress-item > input {
+  width: 68px;
+  flex: none;
+  text-align: right;
+}
+
+/* Un valor fuera de rango se marca en el propio campo: el aviso de abajo dice
+   cuántos hay, pero sin esto habría que ir buscándolos uno a uno. */
+.manual-progress-item.invalid {
+  background: rgba(224, 82, 82, 0.16);
+  border: 1px solid rgba(224, 82, 82, 0.5);
+}
+
 /* Semáforo de frescura junto al nombre del indicador. La cifra manda: el
    punto informa de la edad real del dato sin competir con ella. */
 .freshness-dot {

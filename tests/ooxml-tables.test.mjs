@@ -6,6 +6,7 @@ import ts from "typescript";
 import * as liveData from "../lib/live-data.ts";
 import * as projectXml from "../lib/project-xml.ts";
 import * as xlsxReader from "../lib/xlsx-reader.ts";
+import * as pdfText from "../lib/pdf-text.ts";
 
 async function compilar(ruta, requerir) {
   const source = await readFile(new URL(ruta, import.meta.url), "utf8");
@@ -47,6 +48,7 @@ async function cargarIngestion() {
     if (especificador === "./project-xml") return projectXml;
     if (especificador === "./xlsx-reader") return xlsxReader;
     if (especificador === "./ooxml-tables") return ooxml;
+    if (especificador === "./pdf-text") return pdfText;
     throw new Error(`Import inesperado: ${especificador}`);
   });
 }

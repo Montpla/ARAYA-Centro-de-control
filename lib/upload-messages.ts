@@ -1,6 +1,9 @@
 // Formatos que se archivan íntegros pero cuyo contenido no se lee, así que
 // ninguna de sus cifras llega al panel.
-const ARCHIVE_ONLY_EXTENSIONS = new Set(["mpp", "dwg", "zip"]);
+// Un ZIP salió de esta lista al empezar a abrirse y procesarse lo que lleva
+// dentro. Mantenerlo aquí decía a quien subía el corte del mes comprimido que
+// sus cifras no iban a llegar, justo cuando ya llegaban.
+const ARCHIVE_ONLY_EXTENSIONS = new Set(["mpp", "dwg"]);
 
 /**
  * Explica por qué una subida no ha movido ninguna cifra.

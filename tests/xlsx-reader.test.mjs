@@ -6,6 +6,7 @@ import ts from "typescript";
 import * as liveData from "../lib/live-data.ts";
 import * as projectXml from "../lib/project-xml.ts";
 import * as xlsxReader from "../lib/xlsx-reader.ts";
+import * as pdfText from "../lib/pdf-text.ts";
 
 // Las hojas de prueba se generan con scripts/generar-fixtures-xlsx.py y tienen
 // la forma de las reales: un título de la oficina encima, la cabecera más
@@ -31,6 +32,7 @@ async function loadIngestion() {
     if (specifier === "./project-xml") return projectXml;
     if (specifier === "./xlsx-reader") return xlsxReader;
     if (specifier === "./ooxml-tables") return ooxml;
+    if (specifier === "./pdf-text") return pdfText;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {

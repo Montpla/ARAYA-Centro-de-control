@@ -219,8 +219,9 @@ ARAYA mediante `+ Cargar archivo` y también dentro del chat del agente:
 - Las contradicciones no se sustituyen silenciosamente: conservan la
   procedencia y quedan observadas para conciliación.
 - Límite actual: 50 MB. Se pueden archivar Excel, CSV, JSON, PowerPoint, PDF,
-  Word, MPP, DWG, imágenes y ZIP, pero admitir la carga no implica poder
-  interpretar semánticamente el formato.
+  Word, MPP, DWG, imágenes y ZIP. De todos ellos sólo MPP y DWG se quedan en
+  archivo sin leer; el resto se interpreta (los dos primeros grupos de forma
+  determinista, las imágenes y los PDF escaneados con IA).
 
 Rutas y persistencia:
 
@@ -274,13 +275,18 @@ necesidad de recompilar o volver a desplegar.
 - Las alertas del resumen se recalculan con los modelos vivos y se priorizan
   por el área del usuario sin ocultar los controles transversales.
 
-Importante: CSV/JSON estructurado conforme al contrato vivo se interpreta de
-forma determinista. PDF, XLS/XLSX, PPT/PPTX, DOC/DOCX e imágenes requieren
-`OPENAI_API_KEY` en Sites para su interpretación semántica automática; sin esa
-clave el original queda seguro y pendiente de extracción/revisión. DWG, MPP y
-ZIP se archivan, pero no se interpretan. Sólo una revisión publicada modifica
-cifras, gráficos o elementos espaciales, y se propaga en un máximo de cinco
-segundos.
+Importante: se interpretan de forma **determinista**, sin IA de por medio,
+CSV/JSON conforme al contrato vivo, el XML de Project (MSPDI), XLS/XLSX, las
+tablas de DOC/DOCX y PPT/PPTX, el texto de un PDF digital y el contenido de un
+ZIP (se abre y se procesa lo que lleva dentro). Las **imágenes** y los **PDF
+escaneados** —que son fotografías, no texto— requieren `OPENAI_API_KEY` en
+Sites para su interpretación semántica; sin esa clave el original queda seguro
+y pendiente de revisión. **DWG y MPP** se archivan pero no se interpretan: para
+el `.mpp` la salida buena es exportarlo a XML desde Project, y la que no depende
+de nada es la pantalla de actualización manual (Usuarios → «Actualizar
+porcentajes a mano»), que publica por el mismo camino que una carga. Sólo una
+revisión publicada modifica cifras, gráficos o elementos espaciales, y se
+propaga en un máximo de cinco segundos.
 
 La aplicación exige identidad ChatGPT y pertenencia activa a `app_users` antes
 de renderizar el dashboard. Desde el 11/08/2026 Sites está en modo `public`, de
@@ -2429,6 +2435,80 @@ sesión autenticada contra producción. Es exactamente el hueco por el que los
 
 A partir de ahora, cada despliegue falla en voz alta si un documento fijo
 deja de abrirse.
+
+## Comprimidos, PDF y avance a mano (15/08/2026)
+
+Con esto se cierra el recorrido que empezó con «los Excel no actualizan nada»:
+**todo lo que llega a la oficina se lee, salvo dos formatos que no se pueden
+leer, y para esos hay una salida que no depende de leerlos.**
+
+### Comprimidos
+
+El corte del mes casi nunca llega como un archivo suelto: llega comprimido. El
+ZIP se archivaba entero sin mirar dentro, así que un envío de cinco hojas
+correctas no movía una sola cifra. Ahora se abre y se procesa su contenido:
+
+- **Por orden de utilidad** (CSV, JSON, XML, XLSX, DOCX, PPTX), no por orden
+  alfabético: si dentro viene la plantilla y también el informe de comité, manda
+  la plantilla.
+- **`__MACOSX/` se salta.** Un ZIP hecho en macOS lleva copias ocultas de cada
+  archivo; leerlas duplicaba datos y producía avisos sin sentido.
+- **El nombre interno se conserva en la procedencia**, así en la auditoría se ve
+  de cuál de los archivos del ZIP salió cada cifra, no sólo que «venía en el
+  comprimido».
+
+### PDF
+
+Un PDF **no guarda tablas ni párrafos**: guarda instrucciones de dibujo
+(«escribe este texto en esta coordenada»). No se puede reconstruir su estructura
+con garantías y `lib/pdf-text.ts` no lo intenta — recupera el texto y busca en él
+parejas inequívocas de edificio y porcentaje:
+
+- Se exige **cercanía** entre el código y el número, y el hueco **corta en el
+  edificio siguiente**. Un avance atribuido al edificio equivocado es peor que
+  no tener el dato.
+- Sólo se leen los flujos comprimidos con **Flate**, que es lo que usa
+  prácticamente todo generador moderno.
+- Un **PDF escaneado** es una fotografía de un papel: no contiene texto. Se
+  detecta y se dice, en vez de devolver vacío sin explicación, y ahí sí sigue
+  haciendo falta la lectura con IA.
+
+Dos detalles del formato costaron encontrarlos: la palabra `stream` aparece
+dentro de `endstream`, así que la búsqueda de flujos encontraba posiciones
+falsas; y el salto de línea que precede a `endstream` no forma parte de los
+datos comprimidos — incluirlo hacía fallar la descompresión y el flujo entero se
+descartaba en silencio.
+
+### Avance a mano
+
+El `.mpp` es el único formato sin ninguna vía de lectura (ver la sección de
+Project). La salida buena sigue siendo exportarlo a XML, pero eso depende de que
+quien lo tenga pueda abrir Project. **Usuarios → «Actualizar porcentajes a
+mano»** no depende de nada: se escribe el avance y se publica **por el mismo
+camino que una carga**, con su fecha de corte, su procedencia («Actualización
+manual de avances»), su autor y su entrada en el histórico. No es un atajo que
+se salte los controles — usa `POST /api/live-data`, que ya exige administrador y
+comprueba los permisos financieros.
+
+Las guardas que lleva son las que evitan modos de fallo ya vistos en este
+proyecto: un campo en blanco **no publica nada** (publicar `""` borraría el
+avance existente, que es lo que pasaba leyendo celdas vacías de Excel); escribir
+el mismo valor que ya había **no genera revisión**, para que el histórico no se
+llene de entradas que no movieron nada; y las claves van por **código de
+edificio** (`buildings.TH-14.progress`), no por posición.
+
+### Dos arreglos en las pruebas
+
+- Los **sustitutos de módulos** se buscaban por la lista exacta de nombres
+  importados, así que añadir un lector dejaba el import intacto y el fallo salía
+  como un volcado de base64 ilegible. Ahora se buscan por módulo y, si falta
+  uno, la prueba dice cuál falta y dónde añadirlo.
+- Los **ZIP guardan la fecha de cada entrada**, así que regenerar los ficheros
+  de prueba cambiaba todos los bytes sin cambiar el contenido y cualquier rebase
+  se convertía en un conflicto binario irresoluble a mano. Con fecha fija en
+  `scripts/generar-fixtures-xlsx.py`, regenerar sin tocar los casos no produce
+  ningún cambio. Los ficheros de ZIP y PDF se generan también desde ese script,
+  en vez de existir como binarios sin origen.
 
 ## Criterios de continuidad
 

@@ -16,12 +16,19 @@ test("el mpp señala la salida que sí funciona", () => {
   assert.doesNotMatch(mensaje, /pendiente de interpretación/);
 });
 
-test("dwg y zip siguen sin tener salida y lo dicen", () => {
-  for (const extension of ["dwg", "zip"]) {
-    const mensaje = nothingExtractedMessage("Obra", extension);
-    assert.match(mensaje, /no lo hará más adelante/);
-    assert.match(mensaje, /Excel o CSV/);
-  }
+test("el dwg sigue sin tener salida y lo dice", () => {
+  const mensaje = nothingExtractedMessage("Obra", "dwg");
+  assert.match(mensaje, /no lo hará más adelante/);
+  assert.match(mensaje, /Excel o CSV/);
+});
+
+test("el zip ya no se anuncia como formato que no se lee", () => {
+  // Los comprimidos se abren y se procesa lo que llevan dentro. Seguir
+  // diciendo que sus cifras no van a llegar desanimaba a subir el corte del
+  // mes, que es justo como viene casi siempre.
+  const mensaje = nothingExtractedMessage("Obra", "zip");
+  assert.doesNotMatch(mensaje, /no lo hará más adelante/);
+  assert.match(mensaje, /siguen como estaban/);
 });
 
 test("un formato legible sin datos aprovechables arrastra el motivo concreto", () => {

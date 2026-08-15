@@ -1,7 +1,8 @@
 import { LiveDataUpdate, LiveDataValue, isLiveDataKey } from "./live-data";
 import { buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml } from "./project-xml";
-import { readXlsxRows, rowsToRecords } from "./xlsx-reader";
+import { readXlsxRows, readZipEntries, rowsToRecords } from "./xlsx-reader";
 import { readOfficeTables } from "./ooxml-tables";
+import { findBuildingProgress, readPdfText } from "./pdf-text";
 
 export type DocumentAnalysis = {
   documentType: string;
@@ -376,13 +377,124 @@ export async function extractStructuredUpdates(
     knownBuildingTokens?: Set<string>;
   },
 ): Promise<StructuredExtraction> {
-  if (!["csv", "json", "xml", "xlsx", "docx", "pptx"].includes(extension)) {
+  if (!["csv", "json", "xml", "xlsx", "docx", "pptx", "zip", "pdf"].includes(extension)) {
     return {
       updates: [],
       summary: "El original está catalogado. Falta ejecutar el importador específico del formato.",
       warnings: [],
     };
   }
+  // Un PDF no guarda tablas: guarda instrucciones de dibujo, así que su
+  // estructura no se puede reconstruir con garantías. Lo que sí se puede es
+  // recuperar el texto y buscar en él parejas inequívocas de edificio y
+  // porcentaje. Si no aparece ninguna, el documento sigue su camino hacia la
+  // lectura con IA, que es la herramienta adecuada para el texto corrido.
+  if (extension === "pdf") {
+    let lectura;
+    try {
+      lectura = await readPdfText(bytes);
+    } catch {
+      return { updates: [], summary: "El PDF no se pudo abrir para leer su texto.", warnings: [] };
+    }
+
+    if (lectura.scanned) {
+      return {
+        updates: [],
+        summary: "El PDF es un escaneo: no contiene texto, sino la imagen de un documento.",
+        warnings: ["Se interpretará con lectura asistida, que es lo que sirve para una imagen."],
+      };
+    }
+
+    const filas = findBuildingProgress(lectura.text, defaults.knownBuildingTokens);
+    if (!filas.length) {
+      return {
+        updates: [],
+        summary: lectura.text
+          ? "Se leyó el texto del PDF, sin avances por edificio reconocibles."
+          : "No se pudo extraer texto de este PDF.",
+        warnings: [],
+      };
+    }
+
+    return {
+      updates: filas.map((fila) => ({
+        key: `buildings.${fila.code}.progress`,
+        value: fila.value,
+        area: defaults.area,
+        cutoff: defaults.cutoff,
+        sourceCurrency: defaults.sourceCurrency,
+        sourceName: defaults.sourceName,
+      })),
+      summary: `${filas.length} edificios actualizados desde el texto del PDF.`,
+      warnings: [],
+    };
+  }
+
+  // Un ZIP se abre y se procesa lo que lleve dentro. Es habitual que el corte
+  // mensual llegue como carpeta comprimida con varios archivos, y hasta ahora
+  // el conjunto se archivaba entero sin mirarlo.
+  //
+  // Se recorren por orden de fiabilidad —primero lo que se lee sin
+  // interpretación— y se devuelve el primero que aporte datos. Se procesa uno y
+  // no todos a propósito: dos archivos del mismo ZIP pueden contradecirse, y
+  // publicar los dos dejaría el resultado a merced del orden de compresión.
+  if (extension === "zip") {
+    const PRIORIDAD = ["csv", "json", "xml", "xlsx", "docx", "pptx"];
+    let entradas;
+    try {
+      entradas = await readZipEntries(bytes, (name) => {
+        const limpio = name.toLowerCase();
+        // Se ignoran las carpetas y los restos que mete macOS al comprimir.
+        if (limpio.endsWith("/") || limpio.startsWith("__macosx/") || limpio.includes("/.")) return false;
+        return PRIORIDAD.some((ext) => limpio.endsWith(`.${ext}`));
+      });
+    } catch {
+      return {
+        updates: [],
+        summary: "El archivo comprimido no se pudo abrir.",
+        warnings: ["Comprueba que es un .zip y que no está dañado ni protegido con contraseña."],
+      };
+    }
+
+    if (!entradas.length) {
+      return {
+        updates: [],
+        summary: "El comprimido no contiene ningún archivo que se pueda leer.",
+        warnings: [`Dentro se buscan ${PRIORIDAD.join(", ")}. Los demás se conservan, pero sus datos no entran.`],
+      };
+    }
+
+    const ordenadas = [...entradas].sort((izquierda, derecha) => {
+      const posicion = (nombre: string) =>
+        PRIORIDAD.findIndex((ext) => nombre.toLowerCase().endsWith(`.${ext}`));
+      return posicion(izquierda.name) - posicion(derecha.name);
+    });
+
+    const avisos: string[] = [];
+    for (const entrada of ordenadas) {
+      const interna = entrada.name.slice(entrada.name.lastIndexOf(".") + 1).toLowerCase();
+      const copia = entrada.data.slice().buffer;
+      const resultado = await extractStructuredUpdates(copia, interna, {
+        ...defaults,
+        sourceName: `${defaults.sourceName} › ${entrada.name}`,
+      });
+      if (resultado.updates.length) {
+        return {
+          updates: resultado.updates,
+          summary: `${resultado.summary} (desde ${entrada.name}, dentro del comprimido)`,
+          warnings: resultado.warnings,
+        };
+      }
+      if (resultado.warnings.length) avisos.push(`${entrada.name}: ${resultado.warnings[0]}`);
+    }
+
+    return {
+      updates: [],
+      summary: `Se abrieron ${entradas.length} archivos del comprimido, sin datos aplicables.`,
+      warnings: avisos.slice(0, 3),
+    };
+  }
+
   // Word y PowerPoint comparten envoltorio con Excel: un ZIP con XML. De ellos
   // se leen sólo las TABLAS, que es donde hay estructura de verdad; el texto
   // corrido de un informe sigue necesitando interpretación, porque "el edificio

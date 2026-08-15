@@ -9,9 +9,24 @@ ningun edificio. Ejecutar tras cambiar los casos:
     python3 scripts/generar-fixtures-xlsx.py
 """
 import zipfile
+import zlib
 from pathlib import Path
 
 SALIDA = Path(__file__).resolve().parent.parent / "tests" / "fixtures"
+
+# Los ZIP guardan la fecha de cada entrada, asi que regenerar sin mas cambiaba
+# todos los bytes aunque el contenido fuese identico. Eso convertia cualquier
+# rebase en un conflicto binario imposible de resolver a mano. Con una fecha
+# fija, regenerar sin tocar los casos no produce ningun cambio.
+FECHA_FIJA = (2026, 1, 1, 0, 0, 0)
+
+
+def anadir(z, nombre, datos):
+    entrada = zipfile.ZipInfo(nombre, date_time=FECHA_FIJA)
+    entrada.compress_type = zipfile.ZIP_DEFLATED
+    entrada.external_attr = 0o644 << 16
+    z.writestr(entrada, datos)
+
 
 
 def celda(ref, valor, compartidas):
@@ -61,10 +76,10 @@ def construir(ruta, filas):
         '<sheets><sheet name="Hoja1" sheetId="1" r:id="rId1"/></sheets></workbook>'
     )
     with zipfile.ZipFile(ruta, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("[Content_Types].xml", tipos)
-        z.writestr("xl/workbook.xml", libro)
-        z.writestr("xl/sharedStrings.xml", sst)
-        z.writestr("xl/worksheets/sheet1.xml", hoja)
+        anadir(z, "[Content_Types].xml", tipos)
+        anadir(z, "xl/workbook.xml", libro)
+        anadir(z, "xl/sharedStrings.xml", sst)
+        anadir(z, "xl/worksheets/sheet1.xml", hoja)
     print(f"{ruta.name}: {len(filas)} filas")
 
 
@@ -115,7 +130,7 @@ DOCX_SIN_TABLA = """<?xml version="1.0" encoding="UTF-8"?>
 
 def docx(ruta, documento):
     with zipfile.ZipFile(ruta, "w", zipfile.ZIP_DEFLATED) as z:
-        z.writestr("word/document.xml", documento)
+        anadir(z, "word/document.xml", documento)
     print(f"{ruta.name}")
 
 
@@ -139,6 +154,60 @@ docx(SALIDA / "informe-obra.docx", DOCX_CON_TABLA)
 docx(SALIDA / "sin-tablas.docx", DOCX_SIN_TABLA)
 
 with zipfile.ZipFile(SALIDA / "comite-obra.pptx", "w", zipfile.ZIP_DEFLATED) as z:
-    z.writestr("ppt/slides/slide1.xml", diapositiva([["Portada"], ["Comite de obra"]]))
-    z.writestr("ppt/slides/slide2.xml", diapositiva([["Edificio", "% Avance"], ["TH-14", "62,5"], ["TH-07", "21"]]))
+    anadir(z, "ppt/slides/slide1.xml", diapositiva([["Portada"], ["Comite de obra"]]))
+    anadir(z, "ppt/slides/slide2.xml", diapositiva([["Edificio", "% Avance"], ["TH-14", "62,5"], ["TH-07", "21"]]))
 print("comite-obra.pptx")
+
+
+# --- Comprimidos y PDF -------------------------------------------------------
+#
+# Un ZIP de obra real no llega limpio: trae la carpeta oculta que mete macOS al
+# comprimir y algun archivo suelto que no son datos. Ambos entran aqui a
+# proposito, porque lo que se prueba es que se ignoren.
+
+with zipfile.ZipFile(SALIDA / "corte-mensual.zip", "w", zipfile.ZIP_DEFLATED) as z:
+    anadir(z, "__MACOSX/._basura", b"\x00\x01")
+    anadir(z, "notas.txt", "esto no se lee")
+    anadir(
+        z,
+        "avance/avance-julio.csv",
+        "clave,valor,descripcion\n"
+        "buildings.TH-14.progress,62.5,TH-14\n"
+        "buildings.TH-07.progress,21,TH-07\n",
+    )
+print("corte-mensual.zip")
+
+
+def pdf(ruta, flujo):
+    """Escribe el PDF minimo que necesita el lector: un flujo Flate y poco mas.
+
+    No es un PDF completo —no lleva catalogo de paginas ni fuentes—, pero si
+    tiene lo unico que el lector mira: `stream ... endstream` con los datos
+    comprimidos dentro. Fabricarlo asi mantiene la prueba legible y sin
+    depender de ninguna libreria de generacion.
+    """
+    comprimido = zlib.compress(flujo)
+    cuerpo = (
+        b"%PDF-1.4\n1 0 obj\n<< /Length "
+        + str(len(comprimido)).encode()
+        + b" /Filter /FlateDecode >>\nstream\n"
+        + comprimido
+        + b"\nendstream\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"
+    )
+    ruta.write_bytes(cuerpo)
+    print(ruta.name)
+
+
+# La ultima linea nombra una zona comun sin codigo de edificio: no debe salir
+# ninguna cifra de ella.
+pdf(
+    SALIDA / "informe-avance.pdf",
+    b"BT /F1 12 Tf 72 720 Td (Informe de avance - julio 2026) Tj ET\n"
+    b"BT /F1 12 Tf 72 700 Td (TH-14 estructura 62,5 %) Tj ET\n"
+    b"BT /F1 12 Tf 72 680 Td (TH-07 albanileria 21 %) Tj ET\n"
+    b"BT /F1 12 Tf 72 660 Td (Zona comun 10 %) Tj ET",
+)
+
+# Un escaneo es una fotografia: hay flujo, pero dentro no hay una sola cadena
+# de texto. Se imita con bytes en blanco.
+pdf(SALIDA / "escaneado.pdf", b"\x00" * 512)

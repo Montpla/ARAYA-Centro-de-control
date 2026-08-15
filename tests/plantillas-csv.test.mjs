@@ -7,6 +7,7 @@ import * as demoData from "../app/demo-data.ts";
 import * as liveData from "../lib/live-data.ts";
 import * as projectXml from "../lib/project-xml.ts";
 import * as xlsxReader from "../lib/xlsx-reader.ts";
+import * as pdfText from "../lib/pdf-text.ts";
 
 // A diferencia de tests/ingestion-classifier.test.mjs, aquí se carga el
 // isLiveDataKey de verdad en vez de sustituirlo por () => true: la validación
@@ -28,6 +29,7 @@ async function loadIngestion() {
     if (specifier === "./project-xml") return projectXml;
     if (specifier === "./xlsx-reader") return xlsxReader;
     if (specifier === "./ooxml-tables") return ooxml;
+    if (specifier === "./pdf-text") return pdfText;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {

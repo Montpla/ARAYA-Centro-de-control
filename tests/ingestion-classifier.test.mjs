@@ -4,26 +4,47 @@ import test from "node:test";
 import ts from "typescript";
 
 const source = await readFile("lib/ingestion.ts", "utf8");
+
 // Este fichero se evalúa como data URL, que no resuelve rutas relativas, así
-// que los dos imports locales se sustituyen por sustitutos. Aquí sólo se prueba
-// el clasificador documental, que no usa ninguno de los dos.
-const executableSource = source
-  .replace(
-    /import \{ LiveDataUpdate, LiveDataValue, isLiveDataKey \} from "\.\/live-data";/,
-    "const isLiveDataKey = () => true;",
-  )
-  .replace(
-    /import \{ readOfficeTables \} from "\.\/ooxml-tables";/,
-    "const readOfficeTables = async () => [];",
-  )
-  .replace(
-    /import \{ readXlsxRows, rowsToRecords \} from "\.\/xlsx-reader";/,
-    "const readXlsxRows = async () => [];\nconst rowsToRecords = () => ({ headerRow: -1, records: [] });",
-  )
-  .replace(
-    /import \{ buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml \} from "\.\/project-xml";/,
-    "const isProjectXml = () => false;\nconst buildingCodeFromTaskName = () => \"\";\nconst extractProjectXmlUpdates = () => ({ updates: [], warnings: [], summary: \"\", taskCount: 0 });",
-  );
+// que los imports locales se sustituyen por sustitutos. Aquí sólo se prueba el
+// clasificador documental, que no usa ninguno de ellos.
+//
+// La sustitución mira el módulo y no la lista de nombres importados: escribirla
+// contra la lista exacta hacía que añadir un lector nuevo —o una función más a
+// uno existente— dejara el import intacto, y el fallo aparecía como un volcado
+// de base64 ilegible en vez de decir qué faltaba.
+const sustitutos = {
+  "./live-data": "const isLiveDataKey = () => true;",
+  "./ooxml-tables": "const readOfficeTables = async () => [];",
+  "./xlsx-reader": [
+    "const readXlsxRows = async () => [];",
+    "const readZipEntries = async () => [];",
+    "const rowsToRecords = () => ({ headerRow: -1, records: [] });",
+  ].join("\n"),
+  "./project-xml": [
+    "const isProjectXml = () => false;",
+    'const buildingCodeFromTaskName = () => "";',
+    'const extractProjectXmlUpdates = () => ({ updates: [], warnings: [], summary: "", taskCount: 0 });',
+  ].join("\n"),
+  "./pdf-text": [
+    'const readPdfText = async () => ({ text: "", streams: 0, scanned: false });',
+    "const findBuildingProgress = () => [];",
+  ].join("\n"),
+};
+
+const executableSource = source.replace(
+  /import \{[^}]*\} from "(\.\/[^"]+)";/g,
+  (_linea, modulo) => {
+    const sustituto = sustitutos[modulo];
+    if (!sustituto) {
+      throw new Error(
+        `lib/ingestion.ts importa "${modulo}" y esta prueba no tiene un sustituto para él. ` +
+          "Añádelo al mapa `sustitutos` de tests/ingestion-classifier.test.mjs.",
+      );
+    }
+    return sustituto;
+  },
+);
 const transpiled = ts.transpileModule(executableSource, {
   compilerOptions: {
     module: ts.ModuleKind.ESNext,
