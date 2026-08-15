@@ -525,6 +525,45 @@ Para cambios visuales de posición, comprobar:
 4. Que al pulsarlo se abra la ficha correcta.
 5. Que la vista técnica siga operativa.
 
+## Las hojas de Excel se leen sin IA (14/08/2026)
+
+Un `.xlsx` es un ZIP que contiene XML, y el runtime trae `DecompressionStream`
+con `deflate-raw`, que es el mismo algoritmo del ZIP. Eso permite abrirlo dentro
+del Worker sin arrastrar una libreria de hojas de calculo, que son grandes y
+traen sus propias dependencias.
+
+Importa porque **la oficina trabaja en Excel**. Hasta ahora un `.xlsx` solo se
+podia leer con la extraccion por IA, que interpreta: acierta muchas veces, pero
+puede confundir un campo o no saber a que edificio se refiere una cifra.
+Leyendo las celdas, lo escrito es lo que se publica —la misma garantia que da un
+CSV— sin pedirle a nadie que convierta el archivo.
+
+`lib/xlsx-reader.ts` recorre el **directorio central** del ZIP y no las
+cabeceras locales, porque es donde el formato garantiza los tamaños: en las
+locales pueden venir a cero cuando el archivo se escribio en streaming, que es
+justo como lo hace Excel en algunas versiones.
+
+Se admiten las dos formas que llegan de verdad:
+
+- **Plantilla de clave y valor**, la misma que los CSV de `plantillas/`. Ahora
+  se puede rellenar en Excel y subir sin exportar a CSV.
+- **Tabla de avance**, con una columna de edificio y otra de porcentaje, que es
+  como la mantiene la oficina. Solo se aceptan las filas inequivocas: nombre de
+  edificio reconocible y numero entre 0 y 100.
+
+La cabecera **no se busca solo en la primera fila**: los informes suelen llevar
+encima un titulo o un membrete, asi que se recorre hasta encontrar una fila con
+alguna cabecera esperada.
+
+Una diferencia sutil que costo detectar: **Excel no emite las celdas vacias**,
+mientras que en un CSV la celda vacia si llega como cadena vacia. Sin
+igualarlo, una plantilla a medio rellenar se comportaba distinto en cada
+formato —en CSV "no toco este dato", en Excel un aviso de valor ausente—, asi
+que `rowsToRecords` rellena con cadena vacia toda columna de la cabecera.
+
+`extractStructuredUpdates` pasa a ser asincrona por la descompresion; sus
+llamadores y varias pruebas se actualizaron en consecuencia.
+
 ## Los planes de Project se leen en XML (14/08/2026)
 
 Los `.mpp` son un formato binario cerrado. Se comprobaron las alternativas antes

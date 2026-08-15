@@ -1,0 +1,125 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import vm from "node:vm";
+import ts from "typescript";
+import * as liveData from "../lib/live-data.ts";
+import * as projectXml from "../lib/project-xml.ts";
+import * as xlsxReader from "../lib/xlsx-reader.ts";
+
+// Las hojas de prueba se generan con scripts/generar-fixtures-xlsx.py y tienen
+// la forma de las reales: un título de la oficina encima, la cabecera más
+// abajo, celdas vacías y una fila que no nombra ningún edificio.
+async function leerFixture(nombre) {
+  const buffer = await readFile(new URL(`./fixtures/${nombre}`, import.meta.url));
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+}
+
+async function loadIngestion() {
+  const source = await readFile(new URL("../lib/ingestion.ts", import.meta.url), "utf8");
+  const output = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      esModuleInterop: true,
+    },
+  }).outputText;
+  const compiledModule = { exports: {} };
+  const require = (specifier) => {
+    if (specifier === "./live-data") return liveData;
+    if (specifier === "./project-xml") return projectXml;
+    if (specifier === "./xlsx-reader") return xlsxReader;
+    throw new Error(`Import inesperado: ${specifier}`);
+  };
+  vm.runInNewContext(output, {
+    module: compiledModule,
+    exports: compiledModule.exports,
+    require,
+    console,
+    JSON,
+    Map,
+    Set,
+    Number,
+    Object,
+    Array,
+    TextDecoder,
+    Promise,
+  });
+  return compiledModule.exports;
+}
+
+const defaults = {
+  area: "obra",
+  cutoff: "2026-07-31",
+  sourceCurrency: "DOP",
+  sourceName: "avance.xlsx",
+  knownBuildingTokens: new Set(["14", "3", "7"]),
+};
+
+test("abre un .xlsx y devuelve sus celdas", async () => {
+  const filas = await xlsxReader.readXlsxRows(await leerFixture("plantilla-avance.xlsx"));
+  assert.ok(filas.length >= 4, "debe leer todas las filas con contenido");
+  // Las cadenas van en una tabla compartida aparte dentro del archivo: si no se
+  // resolviera, aquí aparecerían números en vez de texto.
+  assert.equal(filas[2].A, "clave");
+  assert.equal(filas[3].A, "buildings.TH-14.progress");
+  assert.equal(filas[3].B, "62.5");
+});
+
+test("encuentra la cabecera aunque haya un título encima", async () => {
+  const filas = await xlsxReader.readXlsxRows(await leerFixture("plantilla-avance.xlsx"));
+  const { headerRow, records } = xlsxReader.rowsToRecords(filas, ["clave"]);
+  assert.equal(headerRow, 2, "la cabecera está en la tercera fila, tras el membrete");
+  assert.equal(records.length, 3);
+  assert.equal(records[0].clave, "buildings.TH-14.progress");
+});
+
+test("una plantilla en Excel publica lo mismo que en CSV", async () => {
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("plantilla-avance.xlsx"),
+    "xlsx",
+    defaults,
+  );
+  assert.equal(resultado.warnings.length, 0, resultado.warnings.join(" · "));
+  // Tres filas, pero la de TH-03 tiene el valor vacío: no se toca.
+  assert.equal(resultado.updates.length, 2);
+  const claves = resultado.updates.map((update) => update.key);
+  assert.deepEqual([...claves].sort(), ["buildings.TH-07.progress", "buildings.TH-14.progress"]);
+  assert.equal(resultado.updates.find((u) => u.key === "buildings.TH-14.progress").value, 62.5);
+});
+
+test("lee una tabla de obra corriente, sin claves técnicas", async () => {
+  // El caso que ahorra el trabajo de convertir: la hoja que ya mantiene la
+  // oficina, con una columna de edificio y otra de porcentaje.
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("tabla-obra.xlsx"),
+    "xlsx",
+    defaults,
+  );
+  assert.equal(resultado.updates.length, 2, "TH-14 y TH-03; la zona común queda fuera");
+  const th14 = resultado.updates.find((update) => update.key === "buildings.TH-14.progress");
+  assert.equal(th14.value, 62.5);
+  assert.match(resultado.summary, /2 edificios actualizados/);
+  assert.ok(resultado.warnings.some((aviso) => /no nombran un edificio/.test(aviso)));
+});
+
+test("un archivo que no es una hoja de cálculo se rechaza con una indicación", async () => {
+  const ingestion = await loadIngestion();
+  const basura = new TextEncoder().encode("esto no es un xlsx").buffer;
+  const resultado = await ingestion.extractStructuredUpdates(basura, "xlsx", defaults);
+  assert.equal(resultado.updates.length, 0);
+  assert.ok(resultado.warnings.length > 0);
+  assert.match(resultado.warnings[0], /\.xlsx/);
+});
+
+test("un edificio que no existe no entra desde una tabla", async () => {
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("tabla-obra.xlsx"),
+    "xlsx",
+    { ...defaults, knownBuildingTokens: new Set(["14"]) },
+  );
+  assert.equal(resultado.updates.length, 1, "sólo TH-14, porque TH-03 no está en la lista");
+});

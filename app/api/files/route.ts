@@ -894,7 +894,7 @@ export async function POST(request: Request) {
   let extractionGeneration = "";
   let extractionCommitted = false;
   try {
-    const deterministicExtraction = extractStructuredUpdates(bytes, extension, {
+    const deterministicExtraction = await extractStructuredUpdates(bytes, extension, {
       area: classification.area,
       cutoff: effectiveCutoff,
       sourceCurrency: sourceCurrency === "USD" ? "USD" : "DOP",
