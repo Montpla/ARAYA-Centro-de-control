@@ -772,6 +772,12 @@ test("tablet and mobile mode provides navigation, camera, notifications, biometr
   assert.match(dashboard, /showDeviceNotification/);
   assert.match(dashboard, /CLEAR_PRIVATE_CACHE/);
   assert.match(dashboard, /CACHE_APP_SHELL/);
+  // El botón de instalar como aplicación aparece también en la cabecera de
+  // escritorio, no sólo en el menú móvil: en un ordenador ese menú no está a
+  // mano y el icono del navegador pasaba desapercibido.
+  assert.match(dashboard, /canInstall && \(/);
+  assert.match(dashboard, /Instalar app/);
+  assert.match(dashboard, /canInstall=\{Boolean\(installPrompt\)\}/);
   assert.match(dashboard, /Modo sin conexión · solo lectura/);
   assert.match(dashboard, /href="#control-room-priority"/);
   assert.match(dashboard, /<Overview onNavigate=\{navigate\}/);

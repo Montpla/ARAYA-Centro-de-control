@@ -1705,6 +1705,8 @@ function Header({
   unreadNotifications,
   onOpenDeviceCenter,
   onOpenGuide,
+  canInstall,
+  onInstall,
 }: {
   view: View;
   onAsk: () => void;
@@ -1721,6 +1723,8 @@ function Header({
   unreadNotifications: number;
   onOpenDeviceCenter: () => void;
   onOpenGuide: () => void;
+  canInstall: boolean;
+  onInstall: () => void;
 }) {
   const label = navItems.find((item) => item.id === view)?.label;
   return (
@@ -1736,6 +1740,15 @@ function Header({
         <button className="button secondary" type="button" onClick={onOpenGuide}>
           Guías de uso
         </button>
+        {canInstall && (
+          // Sólo aparece cuando el navegador confirma que la aplicación se
+          // puede instalar (Chrome/Edge, aún no instalada). En escritorio el
+          // menú móvil no está a mano, así que sin este botón el icono de
+          // instalar sólo vivía en la barra del navegador y pasaba desapercibido.
+          <button className="button secondary" type="button" onClick={onInstall}>
+            Instalar app
+          </button>
+        )}
         {!project.demo && (
           <div className="currency-control" title={exchangeRateNote(currency)}>
             <span>Moneda</span>
@@ -9406,6 +9419,8 @@ export function DashboardClient({
           unreadNotifications={unreadNotifications}
           onOpenDeviceCenter={() => setDeviceCenterOpen(true)}
           onOpenGuide={() => setGuidesOpen(true)}
+          canInstall={Boolean(installPrompt)}
+          onInstall={() => void installApp()}
         />
         <div className="global-search">
           <span>⌕</span>
