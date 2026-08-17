@@ -3,6 +3,12 @@ import { buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml } from
 import { readXlsxRows, readZipEntries, rowsToRecords } from "./xlsx-reader";
 import { readOfficeTables } from "./ooxml-tables";
 import { findBuildingProgress, readPdfText } from "./pdf-text";
+import {
+  PHASE_WEIGHTS,
+  buildingProgressFromPhases,
+  type PhaseId,
+  type PhaseProgress,
+} from "./progress-model";
 
 export type DocumentAnalysis = {
   documentType: string;
@@ -364,6 +370,142 @@ function extractSheetProgress(
   };
 }
 
+function normalizarCabecera(valor: string) {
+  return valor
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * A qué fase del panel pertenece una columna de disciplina de la cubicación.
+ *
+ * El informe mensual mide por oficio (infraestructura, superestructura,
+ * albañilería, instalaciones, y un puñado de oficios de acabado); el panel
+ * trabaja con cinco fases. Este es el único sitio donde se traduce un oficio a
+ * su fase, y devuelve null para lo que no es una disciplina de obra, de modo
+ * que una columna de fecha o de estado no se confunde con avance.
+ *
+ * El orden importa: "infraestructura" contiene "estructura", así que la obra
+ * común se comprueba antes que la superestructura.
+ */
+function faseDeDisciplina(cabecera: string): PhaseId | null {
+  const c = normalizarCabecera(cabecera);
+  if (!c) return null;
+  if (/(infraest|cimentac|fundac|platea|obra comun|\bcomun\b)/.test(c)) return "comun";
+  if (/(superestr|estructura|encofrad|hormigon)/.test(c)) return "superestructura";
+  if (/(albanil|mamposter)/.test(c)) return "albanileria";
+  if (/(instalac|instal\b)/.test(c)) return "instalaciones";
+  if (/(acabado|pintura|revest|ceramic|herrer|carpint|ventana|vidrio|aluminio|sanitar|misc|estucad|zocalo|\bpiso|plafon|mampara|panel solar|texturiz|remate)/.test(c)) {
+    return "acabados";
+  }
+  return null;
+}
+
+/**
+ * Lee una tabla de avance por edificio y por oficio (la matriz de la cubicación
+ * mensual): una fila por edificio y una columna por disciplina.
+ *
+ * Es el formato del Informe Ejecutivo y de la cubicación que la obra emite cada
+ * mes, y hasta ahora no se leía solo porque no tiene una única columna de
+ * "avance", sino una por oficio. Aquí se traduce cada oficio a su fase, los
+ * oficios de acabado se promedian en una sola cifra de acabados, y de las cinco
+ * fases sale el avance del edificio con los mismos pesos que usa el panel
+ * (lib/progress-model.ts). Así el mismo informe que ya se sube cada mes
+ * actualiza las cifras y colores de todos los edificios sin tocar nada a mano.
+ */
+function extractMatrixProgress(
+  filas: Array<Record<string, string>>,
+  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string; knownBuildingTokens?: Set<string> },
+): StructuredExtraction | null {
+  // La cabecera es la primera fila con una columna de edificio y al menos dos
+  // columnas que son disciplinas reconocibles. Exigir dos evita que una tabla
+  // de fechas ("Edificio | Fin plan | Estado") se tome por una de avance.
+  let cabeceraIndice = -1;
+  let columnaEdificio = "";
+  let disciplinas: Array<{ columna: string; fase: PhaseId }> = [];
+  for (let indice = 0; indice < Math.min(filas.length, 15); indice += 1) {
+    // Las filas vienen indexadas por columna ("A", "B"…), no por posición: se
+    // guarda la clave de cada columna, no un número.
+    const celdas = Object.entries(filas[indice]);
+    const edificio = celdas.find(([, valor]) => CABECERAS_EDIFICIO.includes(normalizarCabecera(valor)));
+    if (!edificio) continue;
+    const cols: Array<{ columna: string; fase: PhaseId }> = [];
+    for (const [columna, valor] of celdas) {
+      if (columna === edificio[0]) continue;
+      const fase = faseDeDisciplina(valor);
+      if (fase) cols.push({ columna, fase });
+    }
+    if (cols.length >= 2) {
+      cabeceraIndice = indice;
+      columnaEdificio = edificio[0];
+      disciplinas = cols;
+      break;
+    }
+  }
+  if (cabeceraIndice < 0) return null;
+
+  const updates: LiveDataUpdate[] = [];
+  const warnings: string[] = [];
+  let descartadas = 0;
+  for (const registro of filas.slice(cabeceraIndice + 1, cabeceraIndice + 1 + 250)) {
+    const etiqueta = registro[columnaEdificio] ?? "";
+    const codigo = buildingCodeFromTaskName(etiqueta) ||
+      (/^\s*(?:th[\s-]*)?(\d{1,3})\s*$/i.test(etiqueta)
+        ? `TH-${etiqueta.replace(/\D/g, "").padStart(2, "0")}`
+        : "");
+    if (!codigo) {
+      if (etiqueta.trim()) descartadas += 1;
+      continue;
+    }
+    if (defaults.knownBuildingTokens && !defaults.knownBuildingTokens.has(codigo.replace(/^TH-/i, "").replace(/^0+(?=\d)/, ""))) {
+      descartadas += 1;
+      continue;
+    }
+    // Los acabados llegan repartidos en varias columnas (pintura, revestimientos,
+    // herrería…), así que se agrupan por fase y se promedian dentro de cada una.
+    const porFase = new Map<PhaseId, number[]>();
+    for (const { columna, fase } of disciplinas) {
+      const valor = numeroDeCelda(registro[columna] ?? "");
+      if (valor === null || valor < 0 || valor > 100) continue;
+      const lista = porFase.get(fase) ?? [];
+      lista.push(valor);
+      porFase.set(fase, lista);
+    }
+    const phases: PhaseProgress[] = [];
+    for (const definicion of PHASE_WEIGHTS) {
+      const valores = porFase.get(definicion.id);
+      if (!valores || !valores.length) continue;
+      phases.push({
+        id: definicion.id,
+        name: definicion.name,
+        progress: valores.reduce((suma, valor) => suma + valor, 0) / valores.length,
+      });
+    }
+    if (!phases.length) {
+      descartadas += 1;
+      continue;
+    }
+    updates.push({
+      key: `buildings.${codigo}.progress`,
+      value: buildingProgressFromPhases(phases),
+      area: defaults.area,
+      cutoff: defaults.cutoff,
+      sourceCurrency: defaults.sourceCurrency,
+      sourceName: defaults.sourceName,
+    });
+  }
+
+  if (!updates.length) return null;
+  if (descartadas) warnings.push(`${descartadas} filas no nombran un edificio reconocible y se han dejado fuera.`);
+  return {
+    updates,
+    summary: `${updates.length} edificios actualizados desde la tabla de avance por disciplina.`,
+    warnings,
+  };
+}
+
 export async function extractStructuredUpdates(
   bytes: ArrayBuffer,
   extension: string,
@@ -537,12 +679,17 @@ export async function extractStructuredUpdates(
       }
       const tabla = extractSheetProgress(filas, defaults);
       if (tabla) return tabla;
+      // La cubicación mensual llega como matriz (un edificio por fila, un oficio
+      // por columna): el Informe Ejecutivo la trae así. Es el formato que se
+      // subía cada mes sin que actualizara nada.
+      const matriz = extractMatrixProgress(filas, defaults);
+      if (matriz) return matriz;
     }
     return {
       updates: [],
       summary: `Se leyeron ${tablas.length} tablas, pero ninguna tiene una forma reconocible.`,
       warnings: [
-        "Se esperan columnas de clave y valor, o una tabla con una columna de edificio y otra de avance.",
+        "Se esperan columnas de clave y valor, una tabla de edificio y avance, o la matriz de avance por oficio de la cubicación.",
       ],
     };
   }
@@ -585,11 +732,16 @@ export async function extractStructuredUpdates(
     const tabla = extractSheetProgress(filas, defaults);
     if (tabla) return tabla;
 
+    // Una hoja con la matriz de la cubicación (edificio por fila, oficio por
+    // columna) también se lee sola.
+    const matriz = extractMatrixProgress(filas, defaults);
+    if (matriz) return matriz;
+
     return {
       updates: [],
       summary: "No se reconoció ninguna tabla de datos en la hoja.",
       warnings: [
-        "Se esperan columnas de clave y valor, o una tabla con una columna de edificio y otra de avance.",
+        "Se esperan columnas de clave y valor, una tabla de edificio y avance, o la matriz de avance por oficio de la cubicación.",
       ],
     };
   }
