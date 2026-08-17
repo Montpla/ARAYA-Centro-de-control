@@ -5349,18 +5349,6 @@ const staffGuides = [
     viewerTitle: "Guía corporativa Bricket Control · personal de obra.pdf",
   },
   {
-    id: "carga",
-    kicker: "AL SUBIR UN ARCHIVO",
-    title: "Subí un archivo y el programa no cambió nada",
-    detail:
-      "Qué pasa al cargar un documento, las seis comprobaciones que debe " +
-      "superar para publicarse solo y cómo saber en qué fase se quedó.",
-    pages: "4 páginas",
-    url: "/data-center/guias/guia-carga-de-archivos-araya.pdf",
-    fileName: "guia-carga-de-archivos-araya.pdf",
-    viewerTitle: "Guía de carga de archivos · Centro de Control ARAYA.pdf",
-  },
-  {
     id: "formatos",
     kicker: "ANTES DE SUBIR",
     title: "Qué pasa con cada archivo",
@@ -6114,14 +6102,14 @@ function UsersAdminView({
           <button className="button" type="button" onClick={onOpenGuide}>Abrir guías</button>
         </div>
         <p>
-          Cinco documentos breves: la guía corporativa (navegación, permisos,
+          Cuatro documentos breves: la guía corporativa (navegación, permisos,
           carga documental, instalación en móvil, tablet y ordenador, cámara,
-          avisos y seguridad), la guía de carga, que explica por qué un archivo
-          recién subido no siempre cambia las cifras, la de formatos, que dice
-          de un vistazo qué hace el programa con cada tipo de archivo, la de
-          envío desde <b>Project</b>, para que el equipo de planificación deje
-          el plan llegando solo, y la de avisos, para recibir las notificaciones
-          en el móvil y el ordenador. Compártelas con cada persona al darla de alta —
+          avisos y seguridad), la de formatos, que dice de un vistazo qué hace
+          el programa con cada tipo de archivo y por qué a veces un dato no
+          entra, la de envío desde <b>Project</b>, para que el equipo de
+          planificación deje el plan llegando solo, y la de avisos, para recibir
+          las notificaciones en el móvil y el ordenador. Compártelas con cada
+          persona al darla de alta —
           el enlace y el código QR de dentro llevan directo a esta misma
           aplicación.
         </p>

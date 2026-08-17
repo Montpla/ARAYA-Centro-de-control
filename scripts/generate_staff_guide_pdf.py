@@ -488,7 +488,7 @@ def page_core(c: canvas.Canvas) -> None:
         c,
         "02 | Seguimiento visual",
         "La obra, del conjunto al detalle",
-        "Las métricas y fichas se actualizan con cada revisión validada. El plano y la Curva S son controles operativos, no imágenes estáticas.",
+        "Las métricas y fichas se actualizan solas con cada dato nuevo, de cualquier área. El plano y la Curva S son controles operativos, no imágenes estáticas.",
     )
 
     left = MARGIN_X
