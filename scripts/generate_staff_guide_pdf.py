@@ -896,11 +896,11 @@ def page_desktop_support(c: canvas.Canvas) -> None:
     draw_bullets(
         c,
         [
-            "Abre el enlace oficial.",
-            "Pulsa el icono Instalar de la barra de direcciones o abre el menú del navegador.",
-            "Selecciona Instalar Bricket Control y confirma.",
-            "Fija el icono en la barra de tareas si lo usas a diario.",
-            "También puedes seguir trabajando directamente en el navegador.",
+            "Abre el Centro de Control en Chrome o Edge.",
+            "Pulsa «Instalar app» en la barra superior, o el icono Instalar de la barra de direcciones.",
+            "Confirma «Instalar Bricket Control».",
+            "Queda con su icono propio y se abre en su ventana, como un programa más.",
+            "En Safari (Mac): menú Archivo → Añadir al Dock.",
         ],
         MARGIN_X + 15,
         563,
