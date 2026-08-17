@@ -127,7 +127,8 @@ function numeroDeCodigo(codigo: string) {
 }
 
 export type ProjectXmlExtraction = {
-  updates: Array<{ key: string; value: number }>;
+  // El avance es numérico; la fecha de fin del proyecto es texto (DD/MM/YYYY).
+  updates: Array<{ key: string; value: number | string }>;
   warnings: string[];
   summary: string;
   taskCount: number;
@@ -174,6 +175,9 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
   // y que, hasta ahora, estaba escrito a mano en el panel.
   let cronoSuma = 0;
   let cronoPeso = 0;
+  // Fecha de fin del proyecto: la más tardía de todas las tareas. Las fechas ISM
+  // ("2027-06-07T17:00:00") se comparan como texto igual que en el tiempo.
+  let finMax = "";
 
   for (const tarea of tareas) {
     const nivel = tarea.outlineLevel ?? 0;
@@ -184,6 +188,8 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
     const heredado = [...porNivel.entries()].sort((a, b) => a[0] - b[0]).pop()?.[1];
     const edificio = propio || heredado || "";
     if (edificio) porNivel.set(nivel, edificio);
+
+    if (tarea.finish && tarea.finish > finMax) finMax = tarea.finish;
 
     // Sólo las hojas con avance cuentan: los resúmenes agregan a sus hijas y
     // sumarlos contaría la misma obra dos veces.
@@ -225,6 +231,16 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
     updates.push({
       key: "projectSnapshot.scheduleProgress",
       value: Math.round((cronoSuma / cronoPeso) * 100) / 100,
+    });
+  }
+
+  // Fin del proyecto: la fecha más tardía del plan, en el formato del panel
+  // (DD/MM/YYYY). Así el KPI "Previsión final" también sale del plan.
+  const finIso = finMax.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (finIso) {
+    updates.push({
+      key: "projectSnapshot.forecastFinish",
+      value: `${finIso[3]}/${finIso[2]}/${finIso[1]}`,
     });
   }
 

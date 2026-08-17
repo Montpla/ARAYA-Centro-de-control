@@ -151,3 +151,30 @@ export function activeBuildingsProgress(buildings: readonly { progress: number }
   const suma = activos.reduce((total, building) => total + building.progress, 0);
   return Math.round((suma / activos.length) * 100) / 100;
 }
+
+/** Media de una lista de números, ignorando los nulos. null si no hay ninguno. */
+export function averageNumeric(values: readonly (number | null | undefined)[]): number | null {
+  const validos = values.filter((valor): valor is number => typeof valor === "number" && Number.isFinite(valor));
+  if (!validos.length) return null;
+  return Math.round((validos.reduce((total, valor) => total + valor, 0) / validos.length) * 100) / 100;
+}
+
+/**
+ * La más tardía de una lista de fechas "DD/MM/YYYY". El proyecto termina cuando
+ * termina su último edificio, así que la fecha de fin del conjunto es el máximo
+ * de las fechas de fin de los edificios. Devuelve "" si no hay ninguna válida.
+ */
+export function latestSpanishDate(dates: readonly string[]): string {
+  let mejor = "";
+  let mejorClave = "";
+  for (const fecha of dates) {
+    const match = fecha.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) continue;
+    const clave = `${match[3]}${match[2]}${match[1]}`;
+    if (clave > mejorClave) {
+      mejorClave = clave;
+      mejor = fecha;
+    }
+  }
+  return mejor;
+}

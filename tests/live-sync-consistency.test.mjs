@@ -115,6 +115,17 @@ test("overallProgress and plannedProgress always come from the same monthlyPlan 
     /activeBuildingsProgress\(buildings\)/,
     "el avance de edificios en marcha del cliente sale de los edificios",
   );
+  // El % de urbanismo se deriva de sus áreas (servidor y cliente), no a mano.
+  assert.match(
+    spatialLiveData,
+    /averageNumeric\(urbanismAreas\.map\(\(area\) => area\.progress\)\)/,
+    "el urbanismo del servidor sale de la media de sus áreas",
+  );
+  assert.match(
+    dashboard,
+    /averageNumeric\(urbanismAreas\.map\(\(area\) => area\.progress\)\)/,
+    "el urbanismo del cliente sale de la media de sus áreas",
+  );
 });
 
 // Guarda contra la misma clase de bug en un sitio distinto: app/data-center/

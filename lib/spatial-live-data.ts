@@ -10,7 +10,11 @@ import {
   compactLiveEntities,
   materializeLiveRoot,
 } from "./live-data";
-import { activeBuildingsProgress, projectProgressFromBuildings } from "./progress-model";
+import {
+  activeBuildingsProgress,
+  averageNumeric,
+  projectProgressFromBuildings,
+} from "./progress-model";
 import { unitOverallProgress } from "./unit-progress";
 
 export function materializeSpatialLiveData(values: LiveDataMap) {
@@ -65,6 +69,11 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
   // Ritmo de los edificios ya en marcha, aparte del global (que reparte entre
   // los 26). Se recalcula solo con cada cambio de edificio.
   const activeProgress = activeBuildingsProgress(buildings) ?? overallProgress;
+  // Urbanismo: media viva de sus áreas, no un número a mano. La fecha de fin,
+  // el desvío y la línea base salen del plan (lib/project-xml) y viven ya en
+  // snapshot vía las claves projectSnapshot.*, así que no se recalculan aquí.
+  const urbanismProgress = averageNumeric(urbanismAreas.map((area) => area.progress)) ?? snapshot.urbanismProgress;
+  const urbanismPlanned = averageNumeric(urbanismAreas.map((area) => area.planned)) ?? snapshot.urbanismPlanned;
 
   return {
     buildings,
@@ -74,6 +83,8 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
       ...snapshot,
       overallProgress,
       activeBuildingsProgress: activeProgress,
+      urbanismProgress,
+      urbanismPlanned,
       plannedProgress,
       apartmentAverageProgress,
       deviationPoints,
