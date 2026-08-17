@@ -4593,14 +4593,14 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
         <section className="financial-detail-stack work-flow-stack">
           <article className="panel">
             <div className="panel-heading">
-              <div><span className="section-kicker">FASE I · CORTE 30/06/2026</span><h3>Flujo de obra real y reprogramado</h3></div>
+              <div><span className="section-kicker">FASE I · CORTE 31/07/2026</span><h3>Flujo de obra real y reprogramado</h3></div>
               <a className="button secondary" href="/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx">Abrir Excel</a>
             </div>
             <div className="budget-summary-grid compact work-flow-summary">
               <span><small>Alcance total</small><strong>{rd(reprogrammedFlowAudit.reprogrammedTotalDop)}</strong></span>
-              <span><small>Real · dic-25 a jun-26</small><strong>{rd(reprogrammedFlowAudit.actualPeriodDop)}</strong></span>
+              <span><small>Real · dic-25 a jul-26</small><strong>{rd(reprogrammedFlowAudit.actualPeriodDop)}</strong></span>
               <span><small>Real acumulado al corte</small><strong>{rd(reprogrammedFlowAudit.actualToCutoffDop)}</strong></span>
-              <span><small>Por ejecutar · jul-26 a jul-27</small><strong>{rd(reprogrammedFlowAudit.remainingForecastDop)}</strong></span>
+              <span><small>Por ejecutar · ago-26 a jul-27</small><strong>{rd(reprogrammedFlowAudit.remainingForecastDop)}</strong></span>
             </div>
             <div className="callout">
               <strong>Alcance separado del flujo de caja global</strong>
@@ -4651,7 +4651,7 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
             </div>
             <div className="chart-legend work-flow-legend">
               <span><i className="work-flow-original" />Presupuesto original</span>
-              <span><i className="work-flow-current" />Real hasta junio · reprogramado desde julio</span>
+              <span><i className="work-flow-current" />Real hasta julio · reprogramado desde agosto</span>
             </div>
             <div className="callout warn">
               <strong>Agosto y septiembre concentran la recuperación</strong>
@@ -4661,7 +4661,7 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
 
           <article className="panel">
             <div className="panel-heading">
-              <div><span className="section-kicker">REAL VS. PRESUPUESTO · DIC-25 A JUN-26</span><h3>Lectura por ámbito</h3></div>
+              <div><span className="section-kicker">REAL VS. PRESUPUESTO · DIC-25 A JUL-26</span><h3>Lectura por ámbito</h3></div>
               <span className="data-note">Variación positiva = remanente · negativa = sobregiro</span>
             </div>
             <div className="financial-detail-scroll">
@@ -4680,7 +4680,7 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
                 ))}
               </div>
             </div>
-            <p className="quality-note">El real de junio de este flujo es {rd(reprogrammedFlowAudit.juneScopedActualDop)}. Finanzas registra {rd(reprogrammedFlowAudit.juneFullFinanceActualDop)} para el proyecto completo; la diferencia de {rd(reprogrammedFlowAudit.juneScopeDifferenceDop)} responde al alcance excluido y no se presenta como error contable.</p>
+            <p className="quality-note">El real de julio de este flujo es {rd(reprogrammedFlowAudit.julyScopedActualDop)}, solo de Urbanismo y Edificios de la Fase I. No incluye terreno, diseño, gerencia, indirectos, inspección, permisos ni gastos financieros, así que no es el flujo de caja completo del proyecto.</p>
           </article>
 
           <article className="panel physical-progress-lock">
