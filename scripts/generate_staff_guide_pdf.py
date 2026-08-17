@@ -676,16 +676,16 @@ def page_workflow(c: canvas.Canvas) -> None:
         c,
         "04 | Incorporación de información",
         "Del archivo al dato vivo",
-        "El original se guarda primero. Los hechos explícitos de alta confianza se publican automáticamente; cualquier duda queda pendiente de revisión.",
+        "El original se guarda primero. Todo lo que el programa lee o interpreta se publica automáticamente, sin revisión; el contrato de datos protege la integridad.",
     )
 
     rounded_rect(c, MARGIN_X, 463, PAGE_W - 2 * MARGIN_X, 196, white, LINE, 13)
     steps = [
         ("Cargar", "Archivo o Hacer foto. El original queda guardado y trazable."),
         ("Identificar", "El sistema detecta área, tipo documental, periodo, moneda y origen."),
-        ("Extraer", "Lee hechos explícitos y los contrasta con el valor vigente."),
-        ("Publicar o revisar", "La alta confianza se publica; las dudas esperan decisión humana."),
-        ("Sincronizar", "La revisión actualiza cifras, gráficos, planos y avisos en menos de 5 s."),
+        ("Extraer", "Lee o interpreta los datos y los contrasta con el valor vigente."),
+        ("Publicar", "Todo lo que tiene evidencia entra solo, sin revisión ni espera."),
+        ("Sincronizar", "El dato nuevo actualiza cifras, gráficos, planos y avisos en menos de 5 s."),
     ]
     step_w = (PAGE_W - 2 * MARGIN_X - 26) / 2
     for index, (title, body) in enumerate(steps):

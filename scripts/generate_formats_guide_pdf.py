@@ -126,9 +126,9 @@ def cover(c: canvas.Canvas) -> None:
 
     draw_wrapped(
         c,
-        "Cuando subes un archivo al Centro de Control puede pasar una de tres "
-        "cosas. Esta guía dice cuál, para cada formato, y qué hacer con los "
-        "dos que no se pueden leer.",
+        "Cuando subes un archivo al Centro de Control, casi todo actualiza el "
+        "panel solo, sin revisión: lo que se lee tal cual y lo que hay que "
+        "interpretar (fotos, escaneos). Sólo dos formatos no se pueden leer.",
         MARGIN_X,
         PAGE_H - 312,
         CONTENT_W * 0.66,
@@ -144,8 +144,8 @@ def cover(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X + 22, box_y + 104, "LA REGLA CORTA")
     draw_wrapped(
         c,
-        "Casi todo se lee solo. Sólo dos formatos no se pueden leer: .mpp y "
-        ".dwg.",
+        "Subes el archivo y el panel se actualiza solo. Sólo dos formatos no se "
+        "pueden leer: .mpp y .dwg.",
         MARGIN_X + 22,
         box_y + 82,
         CONTENT_W - 44,
@@ -156,8 +156,8 @@ def cover(c: canvas.Canvas) -> None:
     )
     draw_wrapped(
         c,
-        "Y para el .mpp, que es el que más veces ha dejado un corte del mes "
-        "sin publicar, hay dos salidas. Están en la página 3.",
+        "Ya no hay revisión de por medio: lo que el programa lee o interpreta "
+        "entra automáticamente. Y para el .mpp hay dos salidas, en la página 3.",
         MARGIN_X + 22,
         box_y + 40,
         CONTENT_W - 44,
@@ -198,15 +198,16 @@ def page_resultados(c: canvas.Canvas) -> None:
         ),
         (
             "Se interpreta",
-            "PASA POR REVISIÓN",
+            "ACTUALIZA EL PANEL",
             NAVY,
             BLUE_PALE,
             [".png", ".jpg", "PDF escaneado"],
-            "Una fotografía de un parte de obra, o un PDF que en realidad es "
-            "la imagen de un papel, no contienen texto que leer. Se "
-            "interpretan, y por eso lo extraído queda propuesto para que un "
-            "administrador lo apruebe antes de publicarse.",
-            128,
+            "Una fotografía de un parte de obra, o un PDF que es la imagen de "
+            "un papel, no traen texto que leer: se interpretan. Antes lo "
+            "extraído esperaba a que alguien lo aprobara; ahora entra solo, "
+            "igual que lo demás. El programa comprueba que cada cifra encaje "
+            "en su sitio antes de colocarla.",
+            134,
         ),
         (
             "Sólo se guarda",
