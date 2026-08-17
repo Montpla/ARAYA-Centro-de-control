@@ -5339,6 +5339,18 @@ const staffGuides = [
     fileName: "guia-formatos-araya.pdf",
     viewerTitle: "Guía de formatos · Centro de Control ARAYA.pdf",
   },
+  {
+    id: "envio-project",
+    kicker: "SÓLO PLANIFICACIÓN",
+    title: "El plan de Project se envía solo",
+    detail:
+      "Para el equipo que edita el plan en Microsoft Project: cómo dejar que " +
+      "el avance llegue solo al Centro de Control cada vez que se guarda.",
+    pages: "4 páginas",
+    url: "/data-center/guias/guia-envio-project-araya.pdf",
+    fileName: "guia-envio-project-araya.pdf",
+    viewerTitle: "Envío automático desde Microsoft Project · Centro de Control ARAYA.pdf",
+  },
 ] as const;
 
 function GuidesPanel({
@@ -6057,14 +6069,15 @@ function UsersAdminView({
           <button className="button" type="button" onClick={onOpenGuide}>Abrir guías</button>
         </div>
         <p>
-          Tres documentos breves: la guía corporativa (navegación, permisos,
+          Cuatro documentos breves: la guía corporativa (navegación, permisos,
           carga documental, instalación en móvil, tablet y ordenador, cámara,
           avisos y seguridad), la guía de carga, que explica por qué un archivo
-          recién subido no siempre cambia las cifras, y la de formatos, que
-          dice de un vistazo qué hace el programa con cada tipo de archivo y
-          qué salidas tiene un <b>.mpp</b>. Compártelas con cada persona al
-          darla de alta — el enlace y el código QR de dentro llevan directo a
-          esta misma aplicación.
+          recién subido no siempre cambia las cifras, la de formatos, que dice
+          de un vistazo qué hace el programa con cada tipo de archivo, y la de
+          envío desde <b>Project</b>, para que el equipo de planificación deje
+          el plan llegando solo. Compártelas con cada persona al darla de alta —
+          el enlace y el código QR de dentro llevan directo a esta misma
+          aplicación.
         </p>
       </section>
 

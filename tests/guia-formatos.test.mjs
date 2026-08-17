@@ -33,9 +33,10 @@ test("aparece en los cuatro accesos con una sola entrada", () => {
 });
 
 test("el texto del panel cuenta las guías que hay", () => {
-  // Decía «dos documentos breves» con tres guías en la lista: el tipo de
-  // desajuste que hace dudar de todo lo demás que dice la pantalla.
-  assert.match(cliente, /Tres documentos breves/);
+  // El conteo del texto debe seguir a la lista de guías: decía «dos» con tres
+  // en la lista, el tipo de desajuste que hace dudar de todo lo demás.
+  assert.match(cliente, /Cuatro documentos breves/);
+  assert.doesNotMatch(cliente, /Tres documentos breves/);
   assert.doesNotMatch(cliente, /Dos documentos breves/);
 });
 
