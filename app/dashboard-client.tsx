@@ -16,7 +16,11 @@ import {
   unitDisciplines as sharedUnitDisciplines,
   unitOverallProgress as sharedUnitOverallProgress,
 } from "../lib/unit-progress";
-import { activeBuildingsProgress, projectProgressFromBuildings } from "../lib/progress-model";
+import {
+  activeBuildingsProgress,
+  averageNumeric,
+  projectProgressFromBuildings,
+} from "../lib/progress-model";
 import { computedView } from "../lib/computed-view";
 import {
   STAT_CARD_FRESHNESS_KEYS,
@@ -1331,6 +1335,12 @@ function synchronizeSpatialSummary() {
   // Ritmo de los edificios ya en marcha, al lado del global. Se recalcula solo.
   projectSnapshot.activeBuildingsProgress =
     activeBuildingsProgress(buildings) ?? projectSnapshot.overallProgress;
+  // Urbanismo: media viva de sus áreas, no a mano. Espejo del servidor. La
+  // fecha de fin, el desvío y la línea base salen del plan (projectSnapshot.*).
+  projectSnapshot.urbanismProgress =
+    averageNumeric(urbanismAreas.map((area) => area.progress)) ?? projectSnapshot.urbanismProgress;
+  projectSnapshot.urbanismPlanned =
+    averageNumeric(urbanismAreas.map((area) => area.planned)) ?? projectSnapshot.urbanismPlanned;
   let cutoffIndex = -1;
   for (let index = 0; index < monthlyPlan.length; index += 1) {
     if (monthlyPlan[index].actual !== null) cutoffIndex = index;
