@@ -1,6 +1,58 @@
-const SHELL_CACHE = "bricket-control-shell-v7";
-const PRIVATE_CACHE = "bricket-control-private-v7";
+const SHELL_CACHE = "bricket-control-shell-v8";
+const PRIVATE_CACHE = "bricket-control-private-v8";
 const CACHE_PREFIX = "bricket-control-";
+
+// Página que se muestra cuando una navegación no llega a la red. La anterior
+// era un callejón sin salida: texto pelado, sin estilo, y —lo peor— no hacía
+// nada cuando volvía internet, así que dejaba al usuario mirando una pantalla
+// muerta hasta que se le ocurría recargar a mano. Ésta se recupera sola.
+//
+// - Escucha el evento `online` del navegador y recarga en cuanto se dispara.
+// - Además sondea la red cada pocos segundos, porque ese evento no siempre
+//   salta tras un corte. El sondeo usa una URL con parámetro cambiante que el
+//   propio service worker deja pasar a la red (no la sirve de caché), así que
+//   comprueba la conexión de verdad y no una copia guardada.
+// - Y deja un botón de reintento para quien no quiera esperar.
+const OFFLINE_PAGE = `<!doctype html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bricket Control</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: #0f2033; color: #f5f1ea; padding: 24px;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  main { max-width: 26rem; text-align: center; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: #f0592a;
+    display: inline-block; margin-bottom: 20px; animation: pulso 1.6s ease-in-out infinite; }
+  @keyframes pulso { 0%,100% { opacity: 1 } 50% { opacity: .25 } }
+  @media (prefers-reduced-motion: reduce) { .dot { animation: none } }
+  h1 { font-size: 1.5rem; margin: 0 0 12px; letter-spacing: -.02em; }
+  p { margin: 0 0 8px; color: #c9c2b6; line-height: 1.55; }
+  .estado { margin-top: 18px; font-size: .85rem; color: #8b8578; }
+  button { margin-top: 24px; padding: 12px 24px; border: 0; border-radius: 10px;
+    background: #f0592a; color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; }
+  button:focus-visible { outline: 2px solid #f5f1ea; outline-offset: 3px; }
+</style></head>
+<body><main>
+  <span class="dot" aria-hidden="true"></span>
+  <h1>Sin conexión</h1>
+  <p>El Centro de Control no está roto: es tu conexión la que se ha caído. En cuanto vuelva, esta pantalla se actualizará sola.</p>
+  <p class="estado" id="estado">Esperando a que vuelva internet…</p>
+  <button type="button" onclick="location.reload()">Reintentar ahora</button>
+</main>
+<script>
+  var estado = document.getElementById("estado");
+  function volver() { location.reload(); }
+  addEventListener("online", volver);
+  function sondear() {
+    fetch("/?_conn=" + Date.now(), { method: "HEAD", cache: "no-store" })
+      .then(function () { estado.textContent = "Conexión recuperada, cargando…"; volver(); })
+      .catch(function () {});
+  }
+  setInterval(sondear, 4000);
+</script>
+</body></html>`;
 const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/bricket-mark.png",
@@ -128,10 +180,9 @@ self.addEventListener("fetch", (event) => {
   if (event.request.mode === "navigate") {
     event.respondWith(
       fetch(event.request)
-        .catch(() => new Response(
-            "<!doctype html><html lang=\"es\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>Bricket Control</title><body><main><h1>Bricket Control</h1><p>Conéctate para verificar tu identidad y consultar los datos actuales.</p></main></body></html>",
-            { headers: { "Content-Type": "text/html; charset=utf-8" } }
-          ))
+        .catch(() => new Response(OFFLINE_PAGE, {
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        }))
     );
     return;
   }
