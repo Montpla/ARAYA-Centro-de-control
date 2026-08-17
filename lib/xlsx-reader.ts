@@ -119,23 +119,7 @@ export type SheetRow = Record<string, string>;
  * celda, y quien llama decide qué significan. Las fórmulas se leen por su
  * resultado calculado, que es lo que Excel guarda junto a ellas.
  */
-export async function readXlsxRows(bytes: ArrayBuffer, maxRows = 5_000) {
-  const entries = await readZipEntries(bytes, (name) =>
-    name === "xl/sharedStrings.xml" || /^xl\/worksheets\/sheet1\.xml$/.test(name));
-
-  const sharedEntry = entries.find((entry) => entry.name === "xl/sharedStrings.xml");
-  const sheetEntry = entries.find((entry) => entry.name.startsWith("xl/worksheets/"));
-  if (!sheetEntry) throw new Error("El .xlsx no contiene ninguna hoja legible.");
-
-  const shared: string[] = [];
-  if (sharedEntry) {
-    const sharedXml = new TextDecoder().decode(sharedEntry.data);
-    for (const match of sharedXml.matchAll(/<si>([\s\S]*?)<\/si>/g)) {
-      shared.push(textOfSharedString(match[1]));
-    }
-  }
-
-  const sheetXml = new TextDecoder().decode(sheetEntry.data);
+function parseSheet(sheetXml: string, shared: string[], maxRows: number): SheetRow[] {
   const filas = new Map<number, SheetRow>();
   for (const match of sheetXml.matchAll(/<c\s([^>]*)>([\s\S]*?)<\/c>|<c\s([^>]*)\/>/g)) {
     const attrs = match[1] ?? match[3] ?? "";
@@ -163,6 +147,45 @@ export async function readXlsxRows(bytes: ArrayBuffer, maxRows = 5_000) {
   return [...filas.entries()]
     .sort(([izquierda], [derecha]) => izquierda - derecha)
     .map(([, fila]) => fila);
+}
+
+/**
+ * Devuelve TODAS las hojas del libro, cada una como sus filas columna → texto.
+ *
+ * Los cortes de finanzas suelen traer el resumen que interesa en la segunda o
+ * tercera hoja, no en la primera (que a menudo es el detalle por categoría).
+ * Leer sólo la primera dejaba fuera justo la tabla que actualiza el panel, así
+ * que aquí se leen todas y quien llama decide en cuál está lo que busca.
+ */
+export async function readXlsxSheets(bytes: ArrayBuffer, maxRows = 5_000): Promise<SheetRow[][]> {
+  const entries = await readZipEntries(bytes, (name) =>
+    name === "xl/sharedStrings.xml" || /^xl\/worksheets\/sheet\d+\.xml$/.test(name));
+
+  const sharedEntry = entries.find((entry) => entry.name === "xl/sharedStrings.xml");
+  const sheetEntries = entries
+    .filter((entry) => /^xl\/worksheets\/sheet\d+\.xml$/.test(entry.name))
+    .sort((izquierda, derecha) => {
+      const numero = (nombre: string) => Number(nombre.match(/sheet(\d+)\.xml$/)?.[1] ?? 0);
+      return numero(izquierda.name) - numero(derecha.name);
+    });
+  if (!sheetEntries.length) throw new Error("El .xlsx no contiene ninguna hoja legible.");
+
+  const shared: string[] = [];
+  if (sharedEntry) {
+    const sharedXml = new TextDecoder().decode(sharedEntry.data);
+    for (const match of sharedXml.matchAll(/<si>([\s\S]*?)<\/si>/g)) {
+      shared.push(textOfSharedString(match[1]));
+    }
+  }
+
+  return sheetEntries.map((entry) =>
+    parseSheet(new TextDecoder().decode(entry.data), shared, maxRows));
+}
+
+/** Las filas de la primera hoja del libro (compatibilidad con quien lee una sola). */
+export async function readXlsxRows(bytes: ArrayBuffer, maxRows = 5_000) {
+  const hojas = await readXlsxSheets(bytes, maxRows);
+  return hojas[0] ?? [];
 }
 
 /**

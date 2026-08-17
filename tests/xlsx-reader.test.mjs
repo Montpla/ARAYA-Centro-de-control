@@ -136,6 +136,28 @@ test("lee una tabla de obra corriente, sin claves técnicas", async () => {
   assert.ok(resultado.warnings.some((aviso) => /no nombran un edificio/.test(aviso)));
 });
 
+test("readXlsxSheets devuelve todas las hojas del libro, no solo la primera", async () => {
+  const hojas = await xlsxReader.readXlsxSheets(await leerFixture("flujo-con-cubicacion.xlsx"));
+  assert.equal(hojas.length, 2, "el libro tiene dos hojas");
+  assert.equal(hojas[0][0].A, "Categoría", "la primera es el detalle por categoría");
+  assert.equal(hojas[1][0].A, "Edificio", "la segunda es la matriz de cubicación");
+});
+
+test("la matriz de cubicación se lee aunque esté en la segunda hoja", async () => {
+  // El flujo de finanzas trae el detalle delante y el dato que importa detrás.
+  // Antes se leía sólo la primera hoja y ese dato se perdía.
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("flujo-con-cubicacion.xlsx"),
+    "xlsx",
+    { ...defaults, knownBuildingTokens: new Set(["3", "11"]) },
+  );
+  const porClave = new Map(resultado.updates.map((u) => [u.key, u.value]));
+  assert.equal(porClave.get("buildings.TH-03.progress"), 60.3);
+  assert.equal(porClave.get("buildings.TH-11.progress"), 28.1);
+  assert.match(resultado.summary, /por disciplina/);
+});
+
 test("un archivo que no es una hoja de cálculo se rechaza con una indicación", async () => {
   const ingestion = await loadIngestion();
   const basura = new TextEncoder().encode("esto no es un xlsx").buffer;

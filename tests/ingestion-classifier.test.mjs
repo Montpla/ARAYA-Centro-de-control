@@ -17,7 +17,7 @@ const sustitutos = {
   "./live-data": "const isLiveDataKey = () => true;",
   "./ooxml-tables": "const readOfficeTables = async () => [];",
   "./xlsx-reader": [
-    "const readXlsxRows = async () => [];",
+    "const readXlsxSheets = async () => [];",
     "const readZipEntries = async () => [];",
     "const rowsToRecords = () => ({ headerRow: -1, records: [] });",
   ].join("\n"),
