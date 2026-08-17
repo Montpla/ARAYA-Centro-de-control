@@ -506,6 +506,111 @@ function extractMatrixProgress(
   };
 }
 
+// La línea temporal del flujo reprogramado, en el mismo orden que
+// reprogrammedFlowMonths (app/reprogrammed-flow-data.ts). El flujo se actualiza
+// por índice de esa lista, así que este orden es el contrato: cada etiqueta de
+// mes del Excel se traduce a su posición aquí. Es una línea fija del proyecto.
+const FLOW_MONTH_ORDER = [
+  "dic-25", "ene-26", "feb-26", "mar-26", "abr-26", "may-26", "jun-26", "jul-26",
+  "ago-26", "sep-26", "oct-26", "nov-26", "dic-26", "ene-27", "feb-27", "mar-27",
+  "abr-27", "may-27", "jun-27", "jul-27",
+];
+
+/** "Dic-25", "Jul-26"… → "dic-25", "jul-26"; devuelve "" si no es un mes. */
+function mesDeFlujo(valor: string): string {
+  const limpio = normalizarCabecera(valor).replace(/\s+/g, "");
+  return FLOW_MONTH_ORDER.includes(limpio) ? limpio : "";
+}
+
+/** Importe con separadores de miles y coma o punto decimal → número. */
+function importeDeCelda(valor: string): number | null {
+  const limpio = valor.replace(/[^\d,.\-]/g, "");
+  if (!limpio) return null;
+  // Se quita el separador de miles y se deja el punto decimal.
+  const normalizado = limpio.includes(",") && limpio.lastIndexOf(",") > limpio.lastIndexOf(".")
+    ? limpio.replace(/\./g, "").replace(",", ".")
+    : limpio.replace(/,/g, "");
+  const numero = Number(normalizado);
+  return Number.isFinite(numero) ? numero : null;
+}
+
+/**
+ * Lee la tabla de flujo mensual del Excel de finanzas (hoja "Comparación
+ * Mensual") y actualiza el flujo reprogramado del panel mes a mes.
+ *
+ * Es la parte que cambia de verdad cada mes: cuando un mes cierra, su importe
+ * real entra. Se reconoce por una columna de mes y columnas de "real" de
+ * Urbanismo, Edificios y Total; cada fila se traduce a su posición en la línea
+ * temporal del flujo (FLOW_MONTH_ORDER) y se publican los importes de ese mes.
+ * No toca los totales por ámbito ni la auditoría, que se revisan aparte.
+ */
+function extractReprogrammedFlowUpdates(
+  hojas: Array<Array<Record<string, string>>>,
+  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string },
+): StructuredExtraction | null {
+  for (const filas of hojas) {
+    let cabeceraIndice = -1;
+    let colMes = "";
+    let colTotalReal = "";
+    let colUrbReal = "";
+    let colEdiReal = "";
+    let colTotalPresup = "";
+    for (let indice = 0; indice < Math.min(filas.length, 15); indice += 1) {
+      const celdas = Object.entries(filas[indice]);
+      const mes = celdas.find(([, v]) => normalizarCabecera(v) === "mes");
+      if (!mes) continue;
+      const busca = (pred: (c: string) => boolean) => celdas.find(([, v]) => pred(normalizarCabecera(v)))?.[0] ?? "";
+      colTotalReal = busca((c) => c.includes("total") && c.includes("real"));
+      colUrbReal = busca((c) => c.includes("urb") && c.includes("real"));
+      colEdiReal = busca((c) => c.includes("edi") && c.includes("real"));
+      colTotalPresup = busca((c) => c.includes("total") && (c.includes("presup") || c.includes("presupuest")));
+      if (colTotalReal && colUrbReal && colEdiReal) {
+        cabeceraIndice = indice;
+        colMes = mes[0];
+        break;
+      }
+    }
+    if (cabeceraIndice < 0) continue;
+
+    const updates: LiveDataUpdate[] = [];
+    let meses = 0;
+    for (const registro of filas.slice(cabeceraIndice + 1, cabeceraIndice + 1 + 30)) {
+      const mes = mesDeFlujo(registro[colMes] ?? "");
+      if (!mes) continue;
+      const indice = FLOW_MONTH_ORDER.indexOf(mes);
+      const totalReal = importeDeCelda(registro[colTotalReal] ?? "");
+      const urbReal = importeDeCelda(registro[colUrbReal] ?? "");
+      const ediReal = importeDeCelda(registro[colEdiReal] ?? "");
+      // Un mes sin su real total no se toca: mejor no mover nada que publicar a medias.
+      if (totalReal === null || urbReal === null || ediReal === null) continue;
+      const totalPresup = colTotalPresup ? importeDeCelda(registro[colTotalPresup] ?? "") : null;
+      const base = {
+        area: defaults.area,
+        cutoff: defaults.cutoff,
+        sourceCurrency: defaults.sourceCurrency,
+        sourceName: defaults.sourceName,
+      };
+      updates.push({ key: `reprogrammedFlowMonths.${indice}.status`, value: "actual", ...base });
+      updates.push({ key: `reprogrammedFlowMonths.${indice}.currentDop`, value: totalReal, ...base });
+      updates.push({ key: `reprogrammedFlowMonths.${indice}.urbanismDop`, value: urbReal, ...base });
+      updates.push({ key: `reprogrammedFlowMonths.${indice}.buildingsDop`, value: ediReal, ...base });
+      if (totalPresup !== null) {
+        updates.push({ key: `reprogrammedFlowMonths.${indice}.originalDop`, value: totalPresup, ...base });
+        updates.push({ key: `reprogrammedFlowMonths.${indice}.varianceDop`, value: Math.round((totalPresup - totalReal) * 100) / 100, ...base });
+      }
+      meses += 1;
+    }
+
+    if (!meses) return null;
+    return {
+      updates,
+      summary: `${meses} meses del flujo reprogramado actualizados desde el Excel de finanzas.`,
+      warnings: [],
+    };
+  }
+  return null;
+}
+
 export async function extractStructuredUpdates(
   bytes: ArrayBuffer,
   extension: string,
@@ -743,11 +848,17 @@ export async function extractStructuredUpdates(
       if (matriz) return matriz;
     }
 
+    // El Excel de finanzas: su flujo mensual actualiza el flujo reprogramado del
+    // panel. Se prueba sobre el libro entero porque la tabla suele ir en una
+    // hoja posterior a los detalles.
+    const flujo = extractReprogrammedFlowUpdates(hojas, defaults);
+    if (flujo) return flujo;
+
     return {
       updates: [],
       summary: "No se reconoció ninguna tabla de datos en la hoja.",
       warnings: [
-        "Se esperan columnas de clave y valor, una tabla de edificio y avance, o la matriz de avance por oficio de la cubicación.",
+        "Se esperan columnas de clave y valor, una tabla de edificio y avance, la matriz de avance por oficio, o el flujo mensual de finanzas.",
       ],
     };
   }
