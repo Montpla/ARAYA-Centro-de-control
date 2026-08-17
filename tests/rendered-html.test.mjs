@@ -821,13 +821,22 @@ test("tablet and mobile mode provides navigation, camera, notifications, biometr
   assert.match(routeError, /Reintentar/);
   assert.match(manifest, /"display": "standalone"/);
   assert.match(manifest, /"short_name": "Bricket Control"/);
-  assert.match(serviceWorker, /bricket-control-shell-v7/);
+  assert.match(serviceWorker, /bricket-control-shell-v8/);
   assert.match(serviceWorker, /CACHE_APP_SHELL/);
   assert.match(serviceWorker, /CLEAR_PRIVATE_CACHE/);
   assert.match(serviceWorker, /event\.request\.mode === "navigate"/);
   assert.match(serviceWorker, /url\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(serviceWorker, /isPrivateDocument[\s\S]*event\.respondWith\(fetch\(event\.request\)\)[\s\S]*return/);
   assert.match(serviceWorker, /notificationclick/);
+  // La pantalla sin conexión se recupera sola: escucha el evento `online`,
+  // sondea la red y ofrece reintentar. Antes era un callejón sin salida que
+  // dejaba clavado al usuario aunque volviera internet.
+  assert.match(serviceWorker, /addEventListener\("online", volver\)/);
+  assert.match(serviceWorker, /setInterval\(sondear, 4000\)/);
+  assert.match(serviceWorker, /Reintentar ahora/);
+  assert.match(serviceWorker, /Sin conexión/);
+  // Y ya no arrastra el texto muerto de la versión vieja.
+  assert.doesNotMatch(serviceWorker, /Conéctate para verificar tu identidad y consultar los datos actuales/);
 });
 
 test("July supplier, procurement, budget and IFC sources are audited and connected", async () => {
