@@ -10,7 +10,7 @@ import {
   compactLiveEntities,
   materializeLiveRoot,
 } from "./live-data";
-import { projectProgressFromBuildings } from "./progress-model";
+import { activeBuildingsProgress, projectProgressFromBuildings } from "./progress-model";
 import { unitOverallProgress } from "./unit-progress";
 
 export function materializeSpatialLiveData(values: LiveDataMap) {
@@ -62,6 +62,9 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
   const overallProgress = cutoffEntry?.actual ?? overallFromBuildings ?? snapshot.overallProgress;
   const plannedProgress = cutoffEntry?.planned ?? snapshot.plannedProgress;
   const deviationPoints = Math.round((overallProgress - plannedProgress) * 100) / 100;
+  // Ritmo de los edificios ya en marcha, aparte del global (que reparte entre
+  // los 26). Se recalcula solo con cada cambio de edificio.
+  const activeProgress = activeBuildingsProgress(buildings) ?? overallProgress;
 
   return {
     buildings,
@@ -70,6 +73,7 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
     projectSnapshot: {
       ...snapshot,
       overallProgress,
+      activeBuildingsProgress: activeProgress,
       plannedProgress,
       apartmentAverageProgress,
       deviationPoints,

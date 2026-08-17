@@ -103,6 +103,18 @@ test("overallProgress and plannedProgress always come from the same monthlyPlan 
     /projectProgressFromBuildings\(buildings\)/,
     "el global del cliente debe salir del promedio de edificios",
   );
+  // El avance de "edificios en marcha" también se deriva en vivo (servidor y
+  // cliente), no es un número aparte que se congele.
+  assert.match(
+    spatialLiveData,
+    /activeBuildingsProgress\(buildings\)/,
+    "el avance de edificios en marcha del servidor sale de los edificios",
+  );
+  assert.match(
+    dashboard,
+    /activeBuildingsProgress\(buildings\)/,
+    "el avance de edificios en marcha del cliente sale de los edificios",
+  );
 });
 
 // Guarda contra la misma clase de bug en un sitio distinto: app/data-center/
