@@ -104,9 +104,23 @@ test("promedia las tareas de un mismo edificio", () => {
 
 test("deja fuera las tareas que no nombran ningún edificio y lo dice", () => {
   const resultado = extractProjectXmlUpdates(planDeObra, edificiosReales);
-  assert.equal(resultado.updates.length, 2, "sólo TH-14 y TH-03");
+  const edificios = resultado.updates.filter((u) => u.key.startsWith("buildings."));
+  assert.equal(edificios.length, 2, "sólo TH-14 y TH-03");
   assert.ok(resultado.warnings.some((aviso) => /no cuelgan de ningún edificio/.test(aviso)));
   assert.match(resultado.summary, /2 edificios actualizados/);
+});
+
+test("el avance del cronograma sale del propio plan, no de un número a mano", () => {
+  // Media de TODAS las hojas ponderada por duración, tengan edificio o no: la
+  // estructura de TH-14 (60%, 494 h de PT01/09) pesa mucho más que el resto.
+  // Lo importante es que salga un valor del plan y que no se congele en 17.
+  const resultado = extractProjectXmlUpdates(planDeObra, edificiosReales);
+  const crono = resultado.updates.find((u) => u.key === "projectSnapshot.scheduleProgress");
+  assert.ok(crono, "el plan debe publicar el % de cronograma");
+  assert.ok(crono.value > 0 && crono.value <= 100, "es un porcentaje válido");
+  // Con estas cinco tareas (60, 40, 85, 100 en hojas), el cronograma no puede
+  // ser 0 ni el 17 congelado del baseline.
+  assert.notEqual(crono.value, 17);
 });
 
 test("un edificio que no existe no se da de alta desde una tarea", () => {

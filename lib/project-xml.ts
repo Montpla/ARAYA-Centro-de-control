@@ -168,6 +168,12 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
   const acumulado = new Map<string, { suma: number; peso: number }>();
   let leaves = 0;
   let sinEdificio = 0;
+  // Avance del cronograma completo: media de TODAS las hojas del plan ponderada
+  // por duración (no solo las que cuelgan de un edificio; también urbanismo,
+  // zonas comunes, etc.). Es el "% de cronograma" que Project muestra en la raíz
+  // y que, hasta ahora, estaba escrito a mano en el panel.
+  let cronoSuma = 0;
+  let cronoPeso = 0;
 
   for (const tarea of tareas) {
     const nivel = tarea.outlineLevel ?? 0;
@@ -183,14 +189,17 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
     // sumarlos contaría la misma obra dos veces.
     if (tarea.summary || tarea.percentComplete === null) continue;
     leaves += 1;
-    if (!edificio || (conocidos && !conocidos.has(numeroDeCodigo(edificio)))) {
-      sinEdificio += 1;
-      continue;
-    }
     // Peso por duración; una hoja sin duración cuenta como una unidad, para no
     // desaparecer del promedio de un edificio que sólo tenga tareas así.
     const peso = tarea.durationHours > 0 ? tarea.durationHours : 1;
     const valor = Math.max(0, Math.min(100, tarea.percentComplete));
+    // El cronograma global suma todas las hojas, tengan edificio o no.
+    cronoSuma += valor * peso;
+    cronoPeso += peso;
+    if (!edificio || (conocidos && !conocidos.has(numeroDeCodigo(edificio)))) {
+      sinEdificio += 1;
+      continue;
+    }
     const previo = acumulado.get(edificio) ?? { suma: 0, peso: 0 };
     previo.suma += valor * peso;
     previo.peso += peso;
@@ -205,8 +214,22 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
     }))
     .sort((izquierda, derecha) => izquierda.key.localeCompare(derecha.key));
 
+  // Nº de edificios actualizados, antes de añadir el dato de cronograma: el
+  // aviso y el resumen cuentan edificios, no el % global del plan.
+  const edificioUpdates = updates.length;
+
+  // El avance del cronograma sale del propio plan, no de un número a mano: se
+  // publica junto a los edificios para que el KPI "Cronograma MPP" se actualice
+  // solo con cada plan que se suba.
+  if (cronoPeso > 0) {
+    updates.push({
+      key: "projectSnapshot.scheduleProgress",
+      value: Math.round((cronoSuma / cronoPeso) * 100) / 100,
+    });
+  }
+
   const warnings: string[] = [];
-  if (!updates.length) {
+  if (!edificioUpdates) {
     warnings.push(
       `Se leyeron ${tareas.length} tareas, pero ninguna cuelga de un edificio reconocible (se esperan nombres tipo "TH-14" o "Edificio 14").`,
     );
@@ -218,8 +241,8 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
     updates,
     taskCount: tareas.length,
     warnings,
-    summary: updates.length
-      ? `${updates.length} edificios actualizados desde ${tareas.length} tareas del plan de Project, ponderadas por duración.`
+    summary: edificioUpdates
+      ? `${edificioUpdates} edificios actualizados desde ${tareas.length} tareas del plan de Project, ponderadas por duración.`
       : `Plan de Project leído (${tareas.length} tareas), sin avances aplicables.`,
   };
 }
