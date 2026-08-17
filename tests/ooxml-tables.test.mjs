@@ -7,6 +7,7 @@ import * as liveData from "../lib/live-data.ts";
 import * as projectXml from "../lib/project-xml.ts";
 import * as xlsxReader from "../lib/xlsx-reader.ts";
 import * as pdfText from "../lib/pdf-text.ts";
+import * as progressModel from "../lib/progress-model.ts";
 
 async function compilar(ruta, requerir) {
   const source = await readFile(new URL(ruta, import.meta.url), "utf8");
@@ -49,6 +50,7 @@ async function cargarIngestion() {
     if (especificador === "./xlsx-reader") return xlsxReader;
     if (especificador === "./ooxml-tables") return ooxml;
     if (especificador === "./pdf-text") return pdfText;
+    if (especificador === "./progress-model") return progressModel;
     throw new Error(`Import inesperado: ${especificador}`);
   });
 }
@@ -107,6 +109,31 @@ test("una presentación de comité también entra por su tabla", async () => {
   );
   assert.equal(resultado.updates.length, 2);
   assert.match(resultado.summary, /2 edificios actualizados/);
+});
+
+test("la matriz de cubicación del Informe Ejecutivo actualiza cada edificio por oficio", async () => {
+  // El informe mensual trae el avance en una matriz (un edificio por fila, un
+  // oficio por columna). Antes se subía y no movía nada porque no tiene una
+  // única columna de "avance". Ahora cada oficio se traduce a su fase y de las
+  // cinco fases sale el avance del edificio, con los pesos del panel.
+  const ingestion = await cargarIngestion();
+  const cubicacion = {
+    ...defaults,
+    sourceName: "informe-ejecutivo.pptx",
+    knownBuildingTokens: new Set(["1", "3", "11"]),
+  };
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("informe-cubicacion.pptx"),
+    "pptx",
+    cubicacion,
+  );
+  const porClave = new Map(resultado.updates.map((u) => [u.key, u.value]));
+  // La fila TOTAL (sin números) se descarta; sólo entran los tres edificios.
+  assert.equal(resultado.updates.length, 3);
+  assert.equal(porClave.get("buildings.TH-03.progress"), 60.3);
+  assert.equal(porClave.get("buildings.TH-01.progress"), 50.4);
+  assert.equal(porClave.get("buildings.TH-11.progress"), 28.1);
+  assert.match(resultado.summary, /por disciplina/);
 });
 
 test("un documento sin tablas lo dice en vez de callarse", async () => {

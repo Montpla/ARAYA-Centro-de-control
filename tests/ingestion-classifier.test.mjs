@@ -30,6 +30,10 @@ const sustitutos = {
     'const readPdfText = async () => ({ text: "", streams: 0, scanned: false });',
     "const findBuildingProgress = () => [];",
   ].join("\n"),
+  "./progress-model": [
+    "const PHASE_WEIGHTS = [];",
+    "const buildingProgressFromPhases = () => 0;",
+  ].join("\n"),
 };
 
 const executableSource = source.replace(
