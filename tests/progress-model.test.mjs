@@ -34,15 +34,15 @@ test("el apartamento nunca va por delante de su edificio", () => {
 });
 
 test("las disciplinas del apartamento son la medición real, no una cascada", () => {
-  // TH-03 tiene instalaciones (29,4%) empezadas y acabados (21,6%) también, a la
-  // vez: el plan mide fases que se solapan. Una cascada las habría puesto a 0
-  // hasta acabar la anterior. Que ambas sean >0 prueba que es dato real.
+  // TH-03 tiene instalaciones (34,7%) empezadas y acabados (32,3%) también, a la
+  // vez: la Cubicación Nº8 mide oficios que se solapan. Una cascada las habría
+  // puesto a 0 hasta acabar la anterior. Que ambas sean >0 prueba que es dato real.
   const th03 = buildings.find((b) => b.shortName === "3");
   const inst = th03.units[0].disciplines.find((d) => d.id === "instalaciones");
   const acab = th03.units[0].disciplines.find((d) => d.id === "acabados");
   assert.ok(inst.progress > 0 && acab.progress > 0, "instalaciones y acabados solapadas");
-  assert.equal(inst.progress, 29.4);
-  assert.equal(acab.progress, 21.6);
+  assert.equal(inst.progress, 34.7);
+  assert.equal(acab.progress, 32.3);
 });
 
 test("la media ponderada de las disciplinas de un apartamento es su avance", () => {

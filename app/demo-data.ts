@@ -121,28 +121,33 @@ export type DataSource = {
   downloadUrl?: string;
 };
 
-// Avance real de cada fase de cada edificio, leído del plan de obra de Project
-// (Araya 26 edificios · CORTE_30072026). Para cada tarea del plan se toma su
-// porcentaje, se atribuye al edificio del que cuelga y a su fase —obra común,
-// superestructura, albañilería, instalaciones, acabados— según el capítulo, y se
-// promedia dentro de cada fase ponderando por duración. A diferencia del modelo
-// anterior, estas cinco cifras no se derivan de un total: son la medición del
-// plan, y de ellas sale el porcentaje del edificio (lib/progress-model.ts).
+// Avance real de cada fase de cada edificio. Para los edificios 1 a 12 —los
+// únicos con acabados en marcha— las cifras salen de la Cubicación Nº8 del
+// Informe Ejecutivo de julio (corte 31/07/2026), que mide el avance físico
+// ejecutado por oficio: obra común e infraestructura, superestructura,
+// albañilería e instalaciones entran directas; los acabados son la media de las
+// cinco disciplinas de terminación del informe (pintura, revestimientos,
+// herrería, carpintería y misceláneos), que en su mayoría siguen a 0%. Los
+// edificios 13 a 26, aún sin acabados, conservan la medición del plan de obra de
+// Project (Araya 26 edificios · CORTE_30072026), atribuida por capítulo y
+// promediada por duración. En ambos casos son la medición real, no una cifra
+// derivada de un total: de ellas sale el porcentaje del edificio
+// (lib/progress-model.ts), y su media reproduce el ~22% global del proyecto.
 //
 // Columnas: [código, obra común, superestructura, albañilería, instalaciones, acabados].
 const buildingPhaseRows: Array<[string, number, number, number, number, number]> = [
-  ["3", 100, 100, 100, 29.4, 21.6],
-  ["2", 100, 100, 100, 29.4, 13.5],
-  ["4", 100, 100, 100, 29.4, 4.1],
-  ["6", 100, 100, 100, 29.4, 10.8],
-  ["1", 100, 100, 100, 29.4, 10.1],
-  ["5", 100, 100, 100, 29.4, 10.8],
-  ["9", 100, 100, 100, 0, 0],
-  ["8", 100, 90, 83, 0, 0],
-  ["7", 100, 90.5, 70.8, 0, 0],
-  ["12", 100, 90.5, 52.8, 0, 0],
-  ["11", 100, 90.5, 43.4, 0, 0],
-  ["10", 100, 90.5, 43.4, 0, 0],
+  ["3", 100, 100, 96.7, 34.7, 32.3],
+  ["2", 100, 100, 96.7, 34.7, 21.7],
+  ["4", 100, 100, 80, 34.7, 12.7],
+  ["6", 100, 100, 80, 34.7, 14.8],
+  ["1", 100, 100, 96.7, 34.7, 13.3],
+  ["5", 100, 100, 80, 34.7, 13.1],
+  ["9", 100, 100, 47, 33.1, 12.2],
+  ["8", 100, 100, 47, 33.1, 9.6],
+  ["7", 100, 100, 34.2, 33.1, 7.5],
+  ["12", 100, 100, 17.4, 25.4, 5.2],
+  ["11", 100, 100, 17.4, 25.4, 0.5],
+  ["10", 100, 100, 17.4, 22.8, 5.2],
   ["15", 73.9, 90.5, 0, 0, 0],
   ["14", 73.9, 90.5, 0, 0, 0],
   ["13", 73.9, 90.5, 0, 0, 0],
