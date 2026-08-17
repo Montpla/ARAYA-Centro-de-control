@@ -217,12 +217,18 @@ test("un plan de Project en XML actualiza los edificios que nombra", async () =>
     ...defaults,
     knownBuildingTokens: new Set(["14"]),
   });
-  assert.equal(extraccion.updates.length, 1);
-  assert.equal(extraccion.updates[0].key, "buildings.TH-14.progress");
-  assert.equal(extraccion.updates[0].value, 60);
+  // Además del edificio, el plan publica el % de cronograma del propio plan.
+  const edificios = extraccion.updates.filter((u) => u.key.startsWith("buildings."));
+  assert.equal(edificios.length, 1);
+  assert.equal(edificios[0].key, "buildings.TH-14.progress");
+  assert.equal(edificios[0].value, 60);
+  assert.ok(
+    extraccion.updates.some((u) => u.key === "projectSnapshot.scheduleProgress"),
+    "el plan también actualiza el % de cronograma",
+  );
 
   const resolveSpatialIdentityUpdates = await loadResolver();
-  const [resuelta] = resolveSpatialIdentityUpdates(extraccion.updates, {});
+  const [resuelta] = resolveSpatialIdentityUpdates(edificios, {});
   assert.equal(resuelta.key, "buildings.13.progress", "TH-14 vive en la posición 13");
 
   const resultado = liveData.materializeLiveRoot("buildings", demoData.buildings, {
