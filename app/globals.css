@@ -12230,6 +12230,13 @@ button.financial-detail-row:focus-visible {
   font-size: 9px;
 }
 
+.device-capability-hint {
+  margin: 8px 0 0 49px;
+  font-size: 11px;
+  color: #6f716f;
+  line-height: 1.4;
+}
+
 .notification-section {
   margin-top: 22px;
 }

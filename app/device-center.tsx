@@ -206,6 +206,7 @@ export function DeviceCenter({
   onOpenNotification,
   onEnableNotifications,
   onTestNotification,
+  onTestServerPush,
   onEnableBiometric,
   onDisableBiometric,
   onLockNow,
@@ -227,6 +228,7 @@ export function DeviceCenter({
   onOpenNotification: (item: DeviceNotificationItem) => void;
   onEnableNotifications: () => void;
   onTestNotification: () => void;
+  onTestServerPush: () => void;
   onEnableBiometric: () => void;
   onDisableBiometric: () => void;
   onLockNow: () => void;
@@ -289,9 +291,17 @@ export function DeviceCenter({
               <button className="button primary" type="button" onClick={onEnableNotifications}>Activar notificaciones</button>
             )}
             {notificationPermission === "granted" && (
-              <button className="button secondary" type="button" onClick={onTestNotification}>Enviar aviso de prueba</button>
+              <>
+                <button className="button secondary" type="button" onClick={onTestNotification}>Aviso local</button>
+                <button className="button primary" type="button" onClick={onTestServerPush}>Probar aviso del servidor</button>
+              </>
             )}
           </div>
+          {notificationPermission === "granted" && (
+            <p className="device-capability-hint">
+              El «aviso local» sólo prueba este navegador. El «aviso del servidor» es la prueba de verdad: envía un push como los reales y te dice si llega o por qué no.
+            </p>
+          )}
         </section>
 
         <section className="device-capability-card">
