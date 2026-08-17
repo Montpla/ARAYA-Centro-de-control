@@ -1,0 +1,64 @@
+name: Resumen semanal de obra
+
+# Envía solo, una vez por semana, el resumen de avance a los correos dados de
+# alta en el Centro de Control. No hace nada en el repositorio: sólo llama a un
+# endpoint del Worker que ya publicado hace todo el trabajo (compone el resumen,
+# lee los correos y los envía). Aquí sólo vive el reloj.
+#
+# Requiere dos secretos del repositorio (Settings → Secrets → Actions):
+#   SUMMARY_ENDPOINT  — https://araya-centro-control.grupobricket.workers.dev/api/weekly-summary
+#   SUMMARY_SECRET    — el mismo valor que la variable SUMMARY_SECRET del Worker,
+#                       para que el endpoint sepa que la llamada es de confianza.
+#
+# El envío del correo en sí lo hace el Worker con Resend; su clave (RESEND_API_KEY)
+# y el remitente (SUMMARY_FROM) se configuran como variables del Worker, no aquí.
+
+on:
+  schedule:
+    # Lunes a las 12:00 UTC = 8:00 de la mañana en RD (UTC-4).
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Probar sin enviar ni guardar (compone y devuelve el resumen)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: weekly-summary
+  cancel-in-progress: false
+
+jobs:
+  enviar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Llamar al endpoint del resumen
+        env:
+          SUMMARY_ENDPOINT: ${{ secrets.SUMMARY_ENDPOINT }}
+          SUMMARY_SECRET: ${{ secrets.SUMMARY_SECRET }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUMMARY_ENDPOINT:-}" ] || [ -z "${SUMMARY_SECRET:-}" ]; then
+            echo "✖ Faltan los secretos SUMMARY_ENDPOINT y/o SUMMARY_SECRET."
+            echo "  Configúralos en Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          URL="$SUMMARY_ENDPOINT"
+          if [ "${DRY_RUN:-false}" = "true" ]; then
+            URL="$URL?dryRun=1"
+            echo "▶ Prueba (dry-run): se compone pero no se envía."
+          else
+            echo "▶ Envío del resumen semanal."
+          fi
+          CODE=$(curl -sS -o /tmp/resp.json -w "%{http_code}" -X POST "$URL" \
+            -H "x-summary-secret: $SUMMARY_SECRET")
+          echo "Respuesta ($CODE):"
+          cat /tmp/resp.json
+          echo
+          if [ "$CODE" != "200" ]; then
+            echo "✖ El endpoint devolvió $CODE."
+            exit 1
+          fi
+          echo "✔ Resumen procesado."
