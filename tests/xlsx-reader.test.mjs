@@ -158,6 +158,27 @@ test("la matriz de cubicación se lee aunque esté en la segunda hoja", async ()
   assert.match(resultado.summary, /por disciplina/);
 });
 
+test("el Excel de finanzas actualiza el flujo reprogramado mes a mes", async () => {
+  // El flujo mensual (hoja Comparación Mensual) es la parte que cambia cada mes.
+  // Se lee y se traduce cada mes a su posición en la línea temporal del flujo.
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("flujo-finanzas.xlsx"),
+    "xlsx",
+    { ...defaults, area: "finanzas", knownBuildingTokens: new Set([]) },
+  );
+  const porClave = new Map(resultado.updates.map((u) => [u.key, u.value]));
+  // jul-26 es el índice 7 de la línea temporal.
+  assert.equal(porClave.get("reprogrammedFlowMonths.7.currentDop"), 31735296.71);
+  assert.equal(porClave.get("reprogrammedFlowMonths.7.urbanismDop"), 8125258.55);
+  assert.equal(porClave.get("reprogrammedFlowMonths.7.buildingsDop"), 23610038.16);
+  // dic-25 es el índice 0.
+  assert.equal(porClave.get("reprogrammedFlowMonths.0.currentDop"), 16398543.68);
+  assert.match(resultado.summary, /flujo reprogramado/);
+  // La fila TOTAL no es un mes: no genera clave.
+  assert.ok(![...porClave.keys()].some((k) => k.includes("NaN")));
+});
+
 test("un archivo que no es una hoja de cálculo se rechaza con una indicación", async () => {
   const ingestion = await loadIngestion();
   const basura = new TextEncoder().encode("esto no es un xlsx").buffer;
