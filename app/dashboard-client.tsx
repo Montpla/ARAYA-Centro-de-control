@@ -5364,6 +5364,18 @@ const staffGuides = [
     fileName: "guia-envio-project-araya.pdf",
     viewerTitle: "Envío automático desde Microsoft Project · Centro de Control ARAYA.pdf",
   },
+  {
+    id: "avisos",
+    kicker: "AVISOS AL MÓVIL",
+    title: "Recibir las notificaciones en el móvil y el ordenador",
+    detail:
+      "Los dos gestos para que los avisos lleguen solos —dar permiso una vez " +
+      "y, en iPhone, instalar la app— y dónde funciona cada aparato.",
+    pages: "3 páginas",
+    url: "/data-center/guias/guia-avisos-araya.pdf",
+    fileName: "guia-avisos-araya.pdf",
+    viewerTitle: "Avisos en el móvil y el ordenador · Centro de Control ARAYA.pdf",
+  },
 ] as const;
 
 function GuidesPanel({
@@ -6082,13 +6094,14 @@ function UsersAdminView({
           <button className="button" type="button" onClick={onOpenGuide}>Abrir guías</button>
         </div>
         <p>
-          Cuatro documentos breves: la guía corporativa (navegación, permisos,
+          Cinco documentos breves: la guía corporativa (navegación, permisos,
           carga documental, instalación en móvil, tablet y ordenador, cámara,
           avisos y seguridad), la guía de carga, que explica por qué un archivo
           recién subido no siempre cambia las cifras, la de formatos, que dice
-          de un vistazo qué hace el programa con cada tipo de archivo, y la de
+          de un vistazo qué hace el programa con cada tipo de archivo, la de
           envío desde <b>Project</b>, para que el equipo de planificación deje
-          el plan llegando solo. Compártelas con cada persona al darla de alta —
+          el plan llegando solo, y la de avisos, para recibir las notificaciones
+          en el móvil y el ordenador. Compártelas con cada persona al darla de alta —
           el enlace y el código QR de dentro llevan directo a esta misma
           aplicación.
         </p>
