@@ -1,6 +1,6 @@
 import { LiveDataUpdate, LiveDataValue, isLiveDataKey } from "./live-data";
 import { buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml } from "./project-xml";
-import { readXlsxRows, readZipEntries, rowsToRecords } from "./xlsx-reader";
+import { readXlsxSheets, readZipEntries, rowsToRecords } from "./xlsx-reader";
 import { readOfficeTables } from "./ooxml-tables";
 import { findBuildingProgress, readPdfText } from "./pdf-text";
 import {
@@ -700,9 +700,9 @@ export async function extractStructuredUpdates(
   // publica. Se admiten dos formas, porque son las dos que llegan de verdad:
   // la plantilla de clave y valor, y la tabla de avance con sus cabeceras.
   if (extension === "xlsx") {
-    let filas;
+    let hojas;
     try {
-      filas = await readXlsxRows(bytes);
+      hojas = await readXlsxSheets(bytes);
     } catch {
       return {
         updates: [],
@@ -711,31 +711,37 @@ export async function extractStructuredUpdates(
       };
     }
 
-    const porClave = rowsToRecords(filas, ["clave", "key", "campo"]);
-    if (porClave.records.length) {
-      const warnings: string[] = [];
-      const updates: LiveDataUpdate[] = [];
-      for (const registro of porClave.records.slice(0, 250)) {
-        const normalizado = normalizeUpdate(registro, defaults);
-        if (normalizado.warning) warnings.push(normalizado.warning);
-        if (normalizado.update) updates.push(normalizado.update);
+    // Se recorren todas las hojas del libro: el dato que actualiza el panel no
+    // siempre está en la primera (un flujo de finanzas suele traer el detalle
+    // por categoría delante y el resumen o la matriz detrás). Se devuelve la
+    // primera hoja que aporte datos, por orden de fiabilidad dentro de cada una.
+    for (const filas of hojas) {
+      const porClave = rowsToRecords(filas, ["clave", "key", "campo"]);
+      if (porClave.records.length) {
+        const warnings: string[] = [];
+        const updates: LiveDataUpdate[] = [];
+        for (const registro of porClave.records.slice(0, 250)) {
+          const normalizado = normalizeUpdate(registro, defaults);
+          if (normalizado.warning) warnings.push(normalizado.warning);
+          if (normalizado.update) updates.push(normalizado.update);
+        }
+        if (updates.length) {
+          return {
+            updates,
+            summary: `${updates.length} datos leídos directamente de la hoja de cálculo.`,
+            warnings,
+          };
+        }
       }
-      return {
-        updates,
-        summary: updates.length
-          ? `${updates.length} datos leídos directamente de la hoja de cálculo.`
-          : "La hoja tiene columnas de clave y valor, pero ninguna fila rellenada.",
-        warnings,
-      };
+
+      const tabla = extractSheetProgress(filas, defaults);
+      if (tabla) return tabla;
+
+      // Una hoja con la matriz de la cubicación (edificio por fila, oficio por
+      // columna) también se lee sola.
+      const matriz = extractMatrixProgress(filas, defaults);
+      if (matriz) return matriz;
     }
-
-    const tabla = extractSheetProgress(filas, defaults);
-    if (tabla) return tabla;
-
-    // Una hoja con la matriz de la cubicación (edificio por fila, oficio por
-    // columna) también se lee sola.
-    const matriz = extractMatrixProgress(filas, defaults);
-    if (matriz) return matriz;
 
     return {
       updates: [],
