@@ -244,9 +244,15 @@ const planCurveMonths = [
   "feb", "mar", "abr", "may", "jun", "jul", "ago",
 ];
 
+// El punto de julio (26,61%) es el Plan Operativo que declara el Informe
+// Ejecutivo del corte, la misma cifra contra la que el informe mide la brecha
+// (-3,9 pp) y la eficiencia del 85%. El resto de la curva conserva la forma de
+// la línea base de Project mientras no llegue la reprogramación mensual
+// completa; sólo el mes del corte —que es el que se compara con el ejecutado—
+// se ancla al informe.
 const planCurvePlanned = [
   0, 0.52, 1.21, 2.07, 2.76, 3.7, 4.11, 4.48, 4.97, 6.72, 11.07, 16.67, 23.29,
-  31.41, 40.78, 52.44, 62.97, 74.74, 80.9, 83.02, 87.9, 92.75, 95.32, 97.31,
+  26.61, 40.78, 52.44, 62.97, 74.74, 80.9, 83.02, 87.9, 92.75, 95.32, 97.31,
   98.75, 99.56, 100,
 ];
 
@@ -754,9 +760,9 @@ export const projectSnapshot = {
   // son el punto de partida y se mantienen alineados con ese corte.
   overallProgress: overallProgressNow,
   apartmentAverageProgress: 18.8,
-  plannedProgress: 31.41,
+  plannedProgress: 26.61,
   scheduleProgress: 17,
-  deviationPoints: Math.round((overallProgressNow - 31.41) * 100) / 100,
+  deviationPoints: Math.round((overallProgressNow - 26.61) * 100) / 100,
   forecastFinish: "07/06/2027",
   baselineFinish: "31/05/2027",
   deviationDays: 7,
