@@ -8993,6 +8993,23 @@ export function DashboardClient({
     );
   }
 
+  async function testServerPush() {
+    setNotice("Enviando aviso de prueba desde el servidor…");
+    try {
+      // Asegura que este dispositivo esté suscrito antes de probar.
+      await registerPushSubscription();
+      const response = await fetch("/api/push/test", {
+        method: "POST",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
+      const payload = await response.json() as { message?: string };
+      setNotice(payload.message ?? (response.ok ? "Aviso enviado." : "No se pudo enviar el aviso del servidor."));
+    } catch {
+      setNotice("No se pudo contactar con el servidor para la prueba de avisos.");
+    }
+  }
+
   async function enableBiometricUnlock() {
     setBiometricBusy(true);
     setBiometricError("");
@@ -9686,6 +9703,7 @@ export function DashboardClient({
             onOpenNotification={openDeviceNotification}
             onEnableNotifications={() => void enableDeviceNotifications()}
             onTestNotification={() => void testDeviceNotification()}
+            onTestServerPush={() => void testServerPush()}
             onEnableBiometric={() => void enableBiometricUnlock()}
             onDisableBiometric={disableBiometricUnlock}
             onLockNow={lockDeviceNow}
