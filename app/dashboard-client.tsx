@@ -16,7 +16,7 @@ import {
   unitDisciplines as sharedUnitDisciplines,
   unitOverallProgress as sharedUnitOverallProgress,
 } from "../lib/unit-progress";
-import { projectProgressFromBuildings } from "../lib/progress-model";
+import { activeBuildingsProgress, projectProgressFromBuildings } from "../lib/progress-model";
 import { computedView } from "../lib/computed-view";
 import {
   STAT_CARD_FRESHNESS_KEYS,
@@ -1328,6 +1328,9 @@ function synchronizeSpatialSummary() {
   // Real", y de esa misma fila se lee el "Plan operativo" (KPI), para no
   // comparar el avance de julio contra el plan congelado de junio.
   const overallFromBuildings = projectProgressFromBuildings(buildings);
+  // Ritmo de los edificios ya en marcha, al lado del global. Se recalcula solo.
+  projectSnapshot.activeBuildingsProgress =
+    activeBuildingsProgress(buildings) ?? projectSnapshot.overallProgress;
   let cutoffIndex = -1;
   for (let index = 0; index < monthlyPlan.length; index += 1) {
     if (monthlyPlan[index].actual !== null) cutoffIndex = index;
@@ -3176,6 +3179,11 @@ function Overview({
           <ProgressRing value={projectSnapshot.overallProgress} />
         </article>
         <div className="stat-grid">
+          <StatCard
+            eyebrow="Edificios en marcha"
+            value={`${number.format(projectSnapshot.activeBuildingsProgress)}%`}
+            detail={`Ritmo real de los ${buildings.filter((building) => building.progress > 0).length} edificios con obra empezada`}
+          />
           <StatCard eyebrow="Plan operativo" value={`${number.format(projectSnapshot.plannedProgress)}%`} detail={`${number.format(projectSnapshot.deviationPoints)} pp de brecha física`} tone="warn" />
           <StatCard eyebrow="Cronograma MPP" value={`${number.format(projectSnapshot.scheduleProgress)}%`} detail="Indicador diferenciado del avance físico" tone="warn" />
           <StatCard eyebrow="Alcance residencial" value={`${buildings.length} edificios`} detail={`${buildings.reduce((total, building) => total + building.units.length, 0)} apartamentos en el modelo vivo`} />

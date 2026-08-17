@@ -1,4 +1,5 @@
 import {
+  activeBuildingsProgress,
   buildingProgressFromPhases,
   currentPhaseName,
   phasesFromValues,
@@ -237,6 +238,11 @@ export const buildings: Building[] = buildingPhaseRows.map(([code, ...valores]) 
 // ~22% que el propio Project muestra en la raíz.
 export const overallProgressNow =
   Math.round((buildings.reduce((suma, edificio) => suma + edificio.progress, 0) / buildings.length) * 100) / 100;
+
+// Avance medio de los edificios ya en marcha (con obra empezada). Acompaña al
+// global sin sustituirlo: el global mide el proyecto entero; éste, el ritmo de
+// lo que se está construyendo. Se recalcula solo con cada cambio de edificio.
+export const activeBuildingsProgressNow = activeBuildingsProgress(buildings) ?? overallProgressNow;
 
 const planCurveMonths = [
   "jun 25", "jul", "ago", "sep", "oct", "nov", "dic", "ene 26", "feb", "mar",
@@ -759,6 +765,7 @@ export const projectSnapshot = {
   // ciclo en vivo desde el último "Ejecutado Real" de la Curva S; estos valores
   // son el punto de partida y se mantienen alineados con ese corte.
   overallProgress: overallProgressNow,
+  activeBuildingsProgress: activeBuildingsProgressNow,
   apartmentAverageProgress: 18.8,
   plannedProgress: 26.61,
   scheduleProgress: 17,

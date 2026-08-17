@@ -136,3 +136,18 @@ export function projectProgressFromBuildings(buildings: readonly { progress: num
   const suma = buildings.reduce((total, building) => total + building.progress, 0);
   return Math.round((suma / buildings.length) * 100) / 100;
 }
+
+/**
+ * Avance medio de los edificios que ya están en marcha (con obra empezada).
+ *
+ * El avance global reparte entre los 26 edificios, y los que aún no han
+ * arrancado lo tiran hacia abajo. Este número mira solo a los que tienen obra
+ * en curso, para ver el ritmo real de lo que se está construyendo sin ocultar
+ * el número honesto del proyecto entero. Devuelve null si ninguno ha empezado.
+ */
+export function activeBuildingsProgress(buildings: readonly { progress: number }[]): number | null {
+  const activos = buildings.filter((building) => building.progress > 0);
+  if (!activos.length) return null;
+  const suma = activos.reduce((total, building) => total + building.progress, 0);
+  return Math.round((suma / activos.length) * 100) / 100;
+}
