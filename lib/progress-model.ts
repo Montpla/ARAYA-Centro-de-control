@@ -120,3 +120,19 @@ export function currentPhaseName(phases: readonly PhaseProgress[]): string {
   const ultima = [...phases].reverse().find((fase) => fase.progress >= 100);
   return ultima ? ultima.name : PHASE_WEIGHTS[0].name;
 }
+
+/**
+ * Avance físico global del proyecto: la media del avance real de los edificios.
+ *
+ * Es la cifra grande del panel y el último punto "Ejecutado Real" de la Curva S.
+ * Al salir de los mismos edificios que pinta el plano, el número grande, la
+ * curva y los colores cuentan siempre la misma historia y se mueven a la vez:
+ * cuando una cubicación cambia un edificio, el global cambia con él, sin
+ * depender de que además se toque otra cifra aparte. Devuelve null si no hay
+ * edificios, para que quien llame conserve el valor que tuviera.
+ */
+export function projectProgressFromBuildings(buildings: readonly { progress: number }[]): number | null {
+  if (!buildings.length) return null;
+  const suma = buildings.reduce((total, building) => total + building.progress, 0);
+  return Math.round((suma / buildings.length) * 100) / 100;
+}

@@ -10,6 +10,7 @@ import {
   compactLiveEntities,
   materializeLiveRoot,
 } from "./live-data";
+import { projectProgressFromBuildings } from "./progress-model";
 import { unitOverallProgress } from "./unit-progress";
 
 export function materializeSpatialLiveData(values: LiveDataMap) {
@@ -39,23 +40,33 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
   const apartmentAverageProgress = allUnits.length
     ? allUnits.reduce((sum, unit) => sum + unitOverallProgress(unit, constructionDisciplines), 0) / allUnits.length
     : snapshot.apartmentAverageProgress;
-  // El "Plan operativo" (KPI) y el "Ejecutado Real" deben leerse siempre del
-  // mismo mes de monthlyPlan: comparar el ejecutado de julio contra el plan
-  // congelado de junio (u otro mes anterior) produce dos cifras que parecen
-  // contradecirse sin serlo. Se toma el último registro con actual no nulo y
-  // se leen planned/actual de esa misma fila, así avanzan siempre juntos.
-  let cutoffEntry: (typeof monthlyPlan)[number] | null = null;
-  for (const entry of monthlyPlan) {
-    if (entry.actual !== null) cutoffEntry = entry;
+  // El avance físico global y el último punto "Ejecutado Real" de la Curva S
+  // salen del avance real de los edificios, para que se muevan A LA VEZ que
+  // ellos: cuando una cubicación cambia los edificios/apartamentos, el número
+  // grande y la curva cambian con ellos, sin depender de que además se toque
+  // otra cifra aparte. El "Plan operativo" (KPI) se sigue leyendo del mismo mes
+  // de monthlyPlan que el ejecutado, para no comparar el avance de julio contra
+  // el plan congelado de junio.
+  const overallFromBuildings = projectProgressFromBuildings(buildings);
+  let cutoffIndex = -1;
+  for (let index = 0; index < monthlyPlan.length; index += 1) {
+    if (monthlyPlan[index].actual !== null) cutoffIndex = index;
   }
-  const overallProgress = cutoffEntry?.actual ?? snapshot.overallProgress;
+  // El mes del corte adopta el promedio vivo de los edificios como "Ejecutado
+  // Real", así el plano y la curva muestran exactamente lo mismo.
+  const coupledMonthlyPlan = overallFromBuildings === null || cutoffIndex < 0
+    ? monthlyPlan
+    : monthlyPlan.map((entry, index) =>
+      index === cutoffIndex ? { ...entry, actual: overallFromBuildings } : entry);
+  const cutoffEntry = cutoffIndex >= 0 ? coupledMonthlyPlan[cutoffIndex] : null;
+  const overallProgress = cutoffEntry?.actual ?? overallFromBuildings ?? snapshot.overallProgress;
   const plannedProgress = cutoffEntry?.planned ?? snapshot.plannedProgress;
   const deviationPoints = Math.round((overallProgress - plannedProgress) * 100) / 100;
 
   return {
     buildings,
     urbanismAreas,
-    monthlyPlan,
+    monthlyPlan: coupledMonthlyPlan,
     projectSnapshot: {
       ...snapshot,
       overallProgress,

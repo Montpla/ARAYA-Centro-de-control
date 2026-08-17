@@ -82,13 +82,26 @@ test("overallProgress and plannedProgress always come from the same monthlyPlan 
   // Cliente: app/dashboard-client.tsx (synchronizeSpatialSummary)
   assert.match(
     dashboard,
-    /cutoffActual = entry\.actual;\s*\n\s*cutoffPlanned = entry\.planned;/,
+    /cutoffActual = cutoffIndex >= 0 \? monthlyPlan\[cutoffIndex\]\.actual[\s\S]{0,80}cutoffPlanned = cutoffIndex >= 0 \? monthlyPlan\[cutoffIndex\]\.planned/,
     "overallProgress y plannedProgress deben leerse de la misma entrada de monthlyPlan en el espejo cliente",
   );
   assert.match(
     dashboard,
     /projectSnapshot\.overallProgress = cutoffActual;\s*\n\s*projectSnapshot\.plannedProgress = cutoffPlanned;/,
     "la reasignación cliente debe fijar overallProgress y plannedProgress juntos, en el mismo bloque",
+  );
+  // El avance global se ancla al promedio vivo de los edificios (servidor y
+  // cliente), para que la Curva S y el número grande se muevan a la vez que el
+  // plano cuando cambia una cubicación.
+  assert.match(
+    spatialLiveData,
+    /projectProgressFromBuildings\(buildings\)/,
+    "el global del servidor debe salir del promedio de edificios",
+  );
+  assert.match(
+    dashboard,
+    /projectProgressFromBuildings\(buildings\)/,
+    "el global del cliente debe salir del promedio de edificios",
   );
 });
 
