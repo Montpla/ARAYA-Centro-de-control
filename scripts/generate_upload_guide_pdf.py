@@ -93,9 +93,9 @@ def cover(c: canvas.Canvas) -> None:
     draw_wrapped(
         c,
         "No está roto. El Centro de Control solo cambia una cifra cuando "
-        "puede demostrar de dónde sale. Esta guía explica cuándo se publica "
-        "sola, cuándo espera revisión y qué puedes hacer tú para que entre a "
-        "la primera.",
+        "puede demostrar de dónde sale. Ya no hay revisión de por medio: se "
+        "publica solo. Esta guía explica por qué a veces un dato no entra y "
+        "qué puedes hacer para que entre a la primera.",
         MARGIN_X,
         PAGE_H - 348,
         CONTENT_W * 0.66,
@@ -269,8 +269,8 @@ def page_reglas(c: canvas.Canvas) -> None:
     y = draw_section_title(
         c,
         "LAS SEIS COMPROBACIONES",
-        "Por qué a veces espera",
-        "El programa publica solo si se cumplen las seis. Si falla una, guarda el archivo y pide revisión.",
+        "Por qué a veces no entra un dato",
+        "El programa publica solo, sin revisión, si se cumplen las seis. Si falla una, guarda el archivo y deja ese dato fuera; los demás entran igual.",
     )
 
     cards = [
