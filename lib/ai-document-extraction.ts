@@ -242,20 +242,22 @@ export function canAutomaticallyPublishExtraction(input: {
   updateCount: number;
 }) {
   if (!Number.isInteger(input.updateCount) || input.updateCount <= 0) return false;
-  if (!Number.isFinite(input.confidence) || input.confidence < 0.5 || input.confidence > 1) return false;
+  if (!Number.isFinite(input.confidence) || input.confidence <= 0 || input.confidence > 1) return false;
 
   // CSV/JSON estructurados ya pasan por el parser determinista y el contrato vivo.
   if (input.model === "deterministic") return true;
 
-  // Cada archivo que llega aquí ya pasó por evidencia obligatoria y por el
-  // contrato vivo (validateModelOutput descarta antes cualquier valor sin
-  // evidencia o con clave no compatible). Las advertencias que sobreviven son
-  // en su mayoría informativas (qué se descartó), no motivo para bloquear el
-  // resto del lote — el personal es de confianza y los archivos declarados
-  // fiables, así que un umbral moderado por dato basta para publicar solo.
+  // Por decisión del propietario, el Centro de Control publica TODO de forma
+  // automática y sin revisión: interpreta cada archivo y adapta sus cifras al
+  // panel sin paso manual. La única red que se conserva no es una revisión sino
+  // la integridad del dato: cada valor que llega aquí ya pasó por evidencia
+  // obligatoria y por el contrato vivo (validateModelOutput descarta antes
+  // cualquier valor sin evidencia o con clave no compatible), y el contrato se
+  // vuelve a validar al publicar. Basta con que el dato tenga confianza
+  // positiva —que el modelo lo afirme— para que entre solo.
   return input.updateConfidences.length === input.updateCount
     && input.updateConfidences.every((confidence) =>
-      Number.isFinite(confidence) && confidence >= 0.5 && confidence <= 1);
+      Number.isFinite(confidence) && confidence > 0 && confidence <= 1);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
