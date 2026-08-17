@@ -162,6 +162,13 @@
       "when": 1786702500001,
       "tag": "0022_upload_agent_tokens",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1786702500002,
+      "tag": "0023_weekly_summary_snapshots",
+      "breakpoints": true
     }
   ]
 }

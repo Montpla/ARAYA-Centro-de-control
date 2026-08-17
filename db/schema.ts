@@ -581,3 +581,27 @@ export const tvDeviceTokens = sqliteTable(
     uniqueIndex("tv_device_tokens_token_hash_idx").on(table.tokenHash),
   ],
 );
+
+/**
+ * Instantánea semanal del avance para el resumen automático.
+ *
+ * Cada envío del resumen guarda aquí una foto —avance global, avance por
+ * edificio y documentos subidos—, y el envío siguiente compara contra la última
+ * para contar la variación de la semana ("TH-07 subió 4 puntos"). Sin esta foto
+ * no habría con qué comparar: el modelo vivo sólo sabe cómo están las cosas
+ * ahora, no cómo estaban el lunes pasado.
+ */
+export const weeklySummarySnapshots = sqliteTable(
+  "weekly_summary_snapshots",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    overallProgress: real("overall_progress").notNull().default(0),
+    // JSON { "TH-14": 30.6, ... } con el avance de cada edificio en la foto.
+    buildingsJson: text("buildings_json").notNull().default("{}"),
+    documentsCount: integer("documents_count").notNull().default(0),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("weekly_summary_snapshots_created_at_idx").on(table.createdAt),
+  ],
+);
