@@ -129,8 +129,10 @@ test("normalized source data contains 26 buildings and 156 apartments", async ()
   assert.match(source, /masterPlanBuildingCount: 77/);
   assert.match(source, /buildingsPendingIntegration: 51/);
   assert.match(source, /urbanismProgress: 18\.28/);
-  assert.match(source, /overallProgress: 18\.23/);
-  assert.match(source, /plannedProgress: 21\.24/);
+  // El corte de julio: el avance global se calcula del modelo vivo
+  // (overallProgressNow) y el plan operativo se lee del mes del corte (31,41).
+  assert.match(source, /overallProgress: overallProgressNow/);
+  assert.match(source, /plannedProgress: 31\.41/);
   assert.match(source, /currency: "DOP"/);
   assert.match(source, /002 - IMPLANTACIÓN GENERAL\.dwg/);
   assert.match(source, /\/data-center\/002-implantacion-general\.dwg/);
@@ -588,8 +590,14 @@ test("S-curve matches the supplied executive reference without changing its data
   assert.match(styles, /\.legend\.actual\s*\{[^}]*background: #ddb45b/s);
   assert.match(styles, /\.s-curve\.is-fullscreen\s*\{[^}]*position: fixed/s);
   assert.match(styles, /\.s-curve-fullscreen-button/);
-  assert.match(data, /\{ month: "jun", planned: 23\.29, actual: 18\.23 \}/);
-  assert.match(data, /\{ month: "ago", planned: 100, actual: null \}/);
+  // La Curva S ya no se escribe como objetos a mano: el ejecutado real hasta el
+  // corte anterior está fijo y el punto del mes en curso se calcula del modelo
+  // vivo, así que el mes del corte nunca vuelve a quedar vacío como pasó con
+  // julio. Se comprueba que el histórico sigue ahí, que julio se rellena solo y
+  // que el plan llega al 100.
+  assert.match(data, /const planCurveActualsToDate = \[/);
+  assert.match(data, /18\.23,\n\s*overallProgressNow,/);
+  assert.match(data, /99\.56, 100,/);
 });
 
 test("operational intelligence adds complete apartment cards, role focus, processing and history", async () => {
@@ -876,7 +884,7 @@ test("reprogrammed Phase I flow remains separate from physical progress and glob
     readFile("historical/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx"),
   ]);
   assert.match(data, /source-reprogrammed-flow-phase-1/);
-  assert.match(data, /overallProgress: 18\.23/);
+  assert.match(data, /overallProgress: overallProgressNow/);
   assert.match(flowData, /formulaCount: 1_137/);
   assert.match(flowData, /reprogrammedTotalDop: 751_309_284\.940335/);
   assert.match(flowData, /actualPeriodDop: 123_172_225\.09/);

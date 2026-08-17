@@ -1,46 +1,45 @@
 /**
  * Cómo se calcula el avance de un edificio y de un apartamento.
  *
- * Hasta ahora había tres cifras que no se hablaban entre sí: el porcentaje del
- * edificio venía escrito a mano, el del apartamento era la media simple de sus
- * cuatro disciplinas, y las disciplinas se rellenaban sólo con la
- * superestructura. El resultado era que un edificio al 40,6% mostraba sus seis
- * apartamentos al 100%, y nadie podía decir cuál de los dos números era el
- * bueno.
+ * Durante un tiempo hubo tres cifras que no se hablaban entre sí: el porcentaje
+ * del edificio venía escrito a mano, el del apartamento era la media simple de
+ * sus cuatro disciplinas, y las disciplinas se rellenaban sólo con la
+ * superestructura. Un edificio al 40,6% mostraba sus seis apartamentos al 100%.
  *
- * Aquí se fija una sola regla y todo lo demás se deriva de ella.
+ * El primer arreglo fue derivar todo del porcentaje del edificio en cascada
+ * —repartir ese número entre las fases por orden de ejecución—. Coherente, pero
+ * las fases salían inventadas: suponían que la obra va en fila (primero toda la
+ * estructura, luego toda la albañilería), cuando en realidad se solapan.
  *
- * **El porcentaje del edificio manda.** Es el que sale de la cubicación de la
- * oficina y el que se ha venido publicando; el detalle por apartamento del
- * modelo era un relleno —sólo llevaba estructura, y ni siquiera de forma
- * coherente: TH-03 y TH-04 tenían los dos la estructura al 100% y el edificio
- * al 40,6% y al 25,0%, lo que sólo se explica por disciplinas que el modelo no
- * guardaba. Así que se deriva hacia abajo, no hacia arriba: del edificio salen
- * sus fases, y de las fases sale cada apartamento. Cuando llegue medición real
- * por apartamento se invierte el sentido y esta misma tabla de pesos sirve.
+ * Ahora hay **medición real por fase**, sacada del plan de obra de Project
+ * (corte 30/07/2026): para cada edificio, el avance de cada una de sus cinco
+ * fases. Así que se invierte el sentido, que es lo que este módulo siempre
+ * anticipó: **de las fases reales sale el edificio**, no al revés. La misma
+ * tabla de pesos que antes repartía ahora agrega.
  *
- * **Las fases van en el orden en que se construye** y pesan distinto: una
- * estructura terminada no es media obra, y unos acabados pendientes no son un
- * detalle. Repartir a partes iguales —que es lo que se hacía— daba a los
- * acabados el mismo valor que a la platea.
+ * **Las fases pesan distinto**, según la parte de horas que ocupa cada oficio
+ * en el plan: los acabados son la mitad de la obra y la obra común una fracción
+ * pequeña. Repartir a partes iguales daba a los acabados el mismo valor que a
+ * la platea.
  */
 
 /**
- * Reparto del valor de un edificio entre sus fases, en orden de ejecución.
+ * Peso de cada fase en el avance de un edificio, en orden de ejecución.
  *
- * **Éste es el único sitio donde se tocan estos números.** Son un reparto de
- * obra residencial al uso; cuando la oficina fije los suyos por cubicación, se
- * cambian aquí y todo el panel se recalcula solo. Deben sumar 100.
+ * **Éste es el único sitio donde se tocan estos números.** Salen de la parte de
+ * duración que ocupa cada oficio en el plan de obra; si la oficina fija los
+ * suyos por cubicación, se cambian aquí y todo el panel se recalcula solo.
+ * Deben sumar 100.
  */
 export const PHASE_WEIGHTS = [
   // Platea, escaleras, cubierta y fachada: obra del edificio que no pertenece
   // a ningún apartamento. Sin esta fase, un edificio con la cimentación en
-  // marcha marcaría 0% — que es justo lo que el 5,9% de TH-11 representa.
-  { id: "comun", name: "Obra común", weight: 16, shared: true },
-  { id: "superestructura", name: "Superestructura", weight: 26, shared: false },
-  { id: "albanileria", name: "Albañilería", weight: 15, shared: false },
-  { id: "instalaciones", name: "Instalaciones", weight: 21, shared: false },
-  { id: "acabados", name: "Acabados", weight: 22, shared: false },
+  // marcha marcaría 0% en los apartamentos aunque haya obra hecha.
+  { id: "comun", name: "Obra común", weight: 8, shared: true },
+  { id: "superestructura", name: "Superestructura", weight: 15, shared: false },
+  { id: "albanileria", name: "Albañilería", weight: 19, shared: false },
+  { id: "instalaciones", name: "Instalaciones", weight: 6, shared: false },
+  { id: "acabados", name: "Acabados", weight: 52, shared: false },
 ] as const;
 
 export type PhaseId = (typeof PHASE_WEIGHTS)[number]["id"];
@@ -53,58 +52,48 @@ if (TOTAL !== 100) {
   throw new Error(`Los pesos de PHASE_WEIGHTS suman ${TOTAL} y deben sumar 100.`);
 }
 
-/** Peso de las fases que sí pertenecen al apartamento. */
+/** Peso de las fases que sí pertenecen al apartamento (todas menos la común). */
 export const UNIT_PHASE_WEIGHT = PHASE_WEIGHTS
   .filter((fase) => !fase.shared)
   .reduce((suma, fase) => suma + fase.weight, 0);
 
 export type PhaseProgress = { id: PhaseId; name: string; progress: number };
 
-/**
- * Reparte el avance de un edificio entre sus fases.
- *
- * Se llenan en orden de ejecución porque así se construye: no hay acabados
- * antes de que exista la estructura. Un edificio al 40,6% tiene la obra común
- * terminada y la estructura empezada, no un 40,6% repartido por igual entre
- * cinco fases que aún no han empezado.
- */
-export function phasesFromBuildingProgress(overall: number): PhaseProgress[] {
-  let restante = Math.max(0, Math.min(100, overall));
-  return PHASE_WEIGHTS.map((fase) => {
-    const consumido = Math.min(restante, fase.weight);
-    restante -= consumido;
-    return {
-      id: fase.id,
-      name: fase.name,
-      // Redondeo a una décima: más precisión que ésa sería inventada, porque
-      // el número de partida viene con una sola.
-      progress: Math.round((consumido / fase.weight) * 1000) / 10,
-    };
-  });
+/** Empareja un vector de avances con las fases por orden. */
+export function phasesFromValues(values: readonly number[]): PhaseProgress[] {
+  return PHASE_WEIGHTS.map((fase, indice) => ({
+    id: fase.id,
+    name: fase.name,
+    progress: Math.max(0, Math.min(100, values[indice] ?? 0)),
+  }));
 }
 
 /**
- * Avance de un apartamento a partir del de su edificio.
+ * Avance de un edificio como media de sus fases ponderada por peso.
  *
- * Es la parte del edificio que corresponde a los apartamentos, sin la obra
- * común. Los seis apartamentos de un edificio pesan igual entre sí —son el
- * mismo plano repetido en tres plantas— así que todos comparten valor.
+ * Es la operación inversa del reparto anterior: en vez de trocear un número, se
+ * agregan las medidas reales. Con los pesos sacados del plan, la media de todos
+ * los edificios reproduce el porcentaje global que el propio Project muestra en
+ * la raíz —la señal de que la agregación es fiel—.
  */
-export function unitProgressFromBuildingProgress(overall: number): number {
-  const fases = phasesFromBuildingProgress(overall).filter((fase) => fase.id !== "comun");
-  const aportado = fases.reduce((suma, fase) => {
-    const peso = PHASE_WEIGHTS.find((item) => item.id === fase.id)?.weight ?? 0;
-    return suma + (fase.progress / 100) * peso;
-  }, 0);
-  return Math.round((aportado / UNIT_PHASE_WEIGHT) * 1000) / 10;
+export function buildingProgressFromPhases(phases: readonly PhaseProgress[]): number {
+  let suma = 0;
+  let peso = 0;
+  for (const fase of phases) {
+    const definicion = PHASE_WEIGHTS.find((item) => item.id === fase.id);
+    if (!definicion) continue;
+    suma += fase.progress * definicion.weight;
+    peso += definicion.weight;
+  }
+  return peso > 0 ? Math.round((suma / peso) * 10) / 10 : 0;
 }
 
 /**
  * Media ponderada de las disciplinas de un apartamento.
  *
- * Sustituye a la media simple anterior, que daba a los acabados el mismo peso
- * que a la superestructura y hacía que un apartamento con sólo la estructura
- * hecha figurara mucho más avanzado de lo que estaba.
+ * Sólo entran las fases que pertenecen al apartamento (no la obra común), y
+ * cada una con su peso: unos acabados pendientes pesan más que una estructura
+ * pendiente. Sustituye a la media simple, que trataba a las cuatro igual.
  */
 export function weightedUnitProgress(
   disciplines: readonly { id: string; progress: number | null }[],
@@ -124,11 +113,10 @@ export function weightedUnitProgress(
   return Math.round((total / peso) * 100) / 100;
 }
 
-/** Fase en la que está trabajando ahora mismo un apartamento. */
-export function currentPhaseName(overall: number): string {
-  const fases = phasesFromBuildingProgress(overall);
-  const enCurso = fases.find((fase) => fase.progress > 0 && fase.progress < 100);
+/** Fase en la que está trabajando ahora mismo un edificio. */
+export function currentPhaseName(phases: readonly PhaseProgress[]): string {
+  const enCurso = phases.find((fase) => fase.progress > 0 && fase.progress < 100);
   if (enCurso) return enCurso.name;
-  const ultima = [...fases].reverse().find((fase) => fase.progress >= 100);
+  const ultima = [...phases].reverse().find((fase) => fase.progress >= 100);
   return ultima ? ultima.name : PHASE_WEIGHTS[0].name;
 }
