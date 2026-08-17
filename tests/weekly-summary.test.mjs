@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
-import { composeWeeklySummary } from "../lib/weekly-summary.ts";
-import { validRecipients } from "../lib/email-resend.ts";
+import { composeWeeklyNotificationBody, composeWeeklySummary, isoWeekKey } from "../lib/weekly-summary.ts";
 
 // El resumen semanal es lo primero que ve el dueño el lunes por la mañana, así
 // que lo que importa es que cuente bien la VARIACIÓN de la semana —no un total
@@ -81,11 +80,22 @@ test("el HTML es un correo válido y sin marcadores sin sustituir", () => {
   assert.doesNotMatch(r.html, /undefined|NaN/);
 });
 
-test("los destinatarios se limpian: sin repetidos, sin correos inválidos", () => {
-  const limpios = validRecipients([
-    "Uno@Araya.com", "uno@araya.com", "  dos@araya.com ", "no-es-correo", "",
-  ]);
-  assert.deepEqual(limpios, ["uno@araya.com", "dos@araya.com"]);
+test("el aviso al móvil cabe en una o dos frases con lo esencial", () => {
+  const body = composeWeeklyNotificationBody(base);
+  assert.match(body, /22,1% \(\+3,9 esta semana\)/);
+  assert.match(body, /Lo que más subió: TH-03, TH-07/);
+  assert.match(body, /4 documentos nuevos/);
+  assert.ok(body.length < 200, "un aviso no puede ser un ladrillo");
+});
+
+test("la clave de semana ISO agrupa de lunes a domingo", () => {
+  // Lunes y domingo de la misma semana comparten clave; el lunes siguiente no.
+  const lunes = new Date("2026-08-17T09:00:00Z");
+  const domingo = new Date("2026-08-23T23:00:00Z");
+  const lunesSiguiente = new Date("2026-08-24T09:00:00Z");
+  assert.equal(isoWeekKey(lunes), isoWeekKey(domingo));
+  assert.notEqual(isoWeekKey(lunes), isoWeekKey(lunesSiguiente));
+  assert.match(isoWeekKey(lunes), /^\d{4}-W\d{2}$/);
 });
 
 // --- La migración crea la tabla que la comparación semanal necesita ---------

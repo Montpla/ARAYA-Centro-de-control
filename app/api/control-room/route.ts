@@ -1,5 +1,6 @@
 import { and, desc, eq, isNull, notInArray, or, sql } from "drizzle-orm";
 import { controlRoomAlertCandidates, scheduleBusinessAlerts } from "../../../lib/business-alerts";
+import { scheduleWeeklySummary } from "../../../lib/weekly-summary-emit";
 import { conditionalJson } from "../../../lib/conditional-json";
 import {
   cxpAging,
@@ -378,6 +379,10 @@ export async function GET(request: Request) {
   // Avisos de negocio derivados del estado recién calculado (desviación
   // física sobre umbral, acciones vencidas); idempotentes, en segundo plano.
   scheduleBusinessAlerts(controlRoomAlertCandidates(payload));
+  // Resumen semanal de obra: una vez por semana, como aviso al móvil, sin
+  // correo ni servicios externos. La comprobación de "¿toca ya?" es barata y
+  // sólo el primer sondeo de la semana hace el trabajo.
+  scheduleWeeklySummary();
   return conditionalJson(request, payload);
 }
 

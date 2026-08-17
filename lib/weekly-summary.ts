@@ -32,6 +32,36 @@ export type ComposedSummary = {
   html: string;
 };
 
+const MESES = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/** "del 11 al 17 de agosto de 2026", cubriendo los últimos siete días. */
+export function weekLabel(now: Date): string {
+  const inicio = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+  const mismoMes = inicio.getUTCMonth() === now.getUTCMonth();
+  const d1 = inicio.getUTCDate();
+  const d2 = now.getUTCDate();
+  const m1 = MESES[inicio.getUTCMonth()];
+  const m2 = MESES[now.getUTCMonth()];
+  const anio = now.getUTCFullYear();
+  return mismoMes
+    ? `del ${d1} al ${d2} de ${m2} de ${anio}`
+    : `del ${d1} de ${m1} al ${d2} de ${m2} de ${anio}`;
+}
+
+/** Clave de semana ISO ("2026-W34"), estable de lunes a domingo. */
+export function isoWeekKey(now: Date): string {
+  const date = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  // El jueves de esta semana decide el año ISO.
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
 /**
  * Umbral por debajo del cual una variación se considera "sin cambio". Medio
  * punto: por debajo de eso es ruido de redondeo del plan, no obra de la semana,
@@ -176,4 +206,35 @@ export function composeWeeklySummary(input: WeeklySummaryInput): ComposedSummary
   const subject = `ARAYA · Resumen de la semana — ${num(input.overallNow)}%${asuntoVariacion}`;
 
   return { subject, text, html };
+}
+
+/**
+ * Cuerpo corto para el aviso al móvil: una o dos frases que caben en una
+ * notificación, con lo esencial de la semana. El detalle completo lo tiene el
+ * texto largo; esto es lo que se lee de un vistazo en el teléfono.
+ */
+export function composeWeeklyNotificationBody(input: WeeklySummaryInput): string {
+  const { subieron } = clasificar(input.buildings);
+  const esPrimero = input.overallPrev === null;
+  const deltaGlobal = esPrimero ? 0 : input.overallNow - (input.overallPrev ?? 0);
+
+  const partes: string[] = [];
+  if (esPrimero) {
+    partes.push(`El proyecto va al ${num(input.overallNow)}%.`);
+  } else if (Math.abs(deltaGlobal) <= CAMBIO_MINIMO) {
+    partes.push(`El proyecto sigue al ${num(input.overallNow)}%, sin cambios esta semana.`);
+  } else {
+    partes.push(`El proyecto va al ${num(input.overallNow)}% (${signo(deltaGlobal)} esta semana).`);
+  }
+
+  if (subieron.length) {
+    const nombres = subieron.slice(0, 3).map(({ row }) => etiqueta(row)).join(", ");
+    partes.push(`Lo que más subió: ${nombres}.`);
+  }
+  if (input.documentsThisWeek > 0) {
+    partes.push(
+      `${input.documentsThisWeek} ${input.documentsThisWeek === 1 ? "documento nuevo" : "documentos nuevos"}.`,
+    );
+  }
+  return partes.join(" ");
 }
