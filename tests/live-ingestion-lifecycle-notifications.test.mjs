@@ -133,7 +133,7 @@ test("multiformat ingestion falls back to AI and gates automatic publication", (
     /JSON\.parse\(candidate\.value_json\)/,
     /text: \{[\s\S]*?format: \{[\s\S]*?type: ["']json_schema["'][\s\S]*?strict: true/,
     /safety_identifier: SAFETY_IDENTIFIER/,
-    /input\.updateConfidences\.every\(\(confidence\) =>[\s\S]*?confidence >= 0\.5/,
+    /input\.updateConfidences\.every\(\(confidence\) =>[\s\S]*?confidence > 0/,
   ], "AI extraction");
 });
 

@@ -114,7 +114,7 @@ test("image extraction uses a data URL and rejects keys outside the live contrac
   assert.match(requestBody.input[0].content[2].image_url, /^data:image\/png;base64,/);
 });
 
-test("automatic AI publication requires every proposal to clear a moderate confidence floor, but informational warnings alone do not block it", () => {
+test("todo lo que trae evidencia y confianza positiva se publica solo, sin revisión", () => {
   assert.equal(extraction.canAutomaticallyPublishExtraction({
     model: "deterministic",
     confidence: 1,
@@ -123,13 +123,16 @@ test("automatic AI publication requires every proposal to clear a moderate confi
     updateCount: 1,
   }), true, "deterministic CSV/JSON remains eligible after its contract validation");
 
+  // Por decisión del propietario ya no hay umbral de revisión: un dato con
+  // evidencia y confianza positiva entra solo, aunque sea baja. La integridad la
+  // garantiza el contrato vivo, no una revisión manual.
   assert.equal(extraction.canAutomaticallyPublishExtraction({
     model: "gpt-5.6-terra",
     confidence: 0.55,
     updateConfidences: [0.99, 0.35],
     warnings: [],
     updateCount: 2,
-  }), false, "a high global average cannot hide one proposal below the confidence floor");
+  }), true, "una confianza baja pero positiva ya no bloquea: se publica y el contrato protege la integridad");
 
   assert.equal(extraction.canAutomaticallyPublishExtraction({
     model: "gpt-5.6-terra",
@@ -139,13 +142,15 @@ test("automatic AI publication requires every proposal to clear a moderate confi
     updateCount: 1,
   }), true, "an informational warning about discarded/unrelated content does not block the accepted proposals");
 
+  // Confianza cero o negativa (el modelo no afirma nada) sí queda fuera: no hay
+  // dato que publicar.
   assert.equal(extraction.canAutomaticallyPublishExtraction({
     model: "gpt-5.6-terra",
-    confidence: 0.55,
-    updateConfidences: [0.55, 0.6],
+    confidence: 0,
+    updateConfidences: [0],
     warnings: [],
-    updateCount: 2,
-  }), true, "moderate confidence at or above the floor is enough, it no longer requires 0.8+");
+    updateCount: 1,
+  }), false, "sin confianza no hay afirmación que publicar");
 });
 
 test("uploaded files use purpose user_data and are deleted after a Responses API error", async () => {
