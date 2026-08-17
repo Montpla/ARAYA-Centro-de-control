@@ -1,7 +1,9 @@
 import {
+  buildingProgressFromPhases,
   currentPhaseName,
-  phasesFromBuildingProgress,
-  unitProgressFromBuildingProgress,
+  phasesFromValues,
+  weightedUnitProgress,
+  type PhaseProgress,
 } from "../lib/progress-model.ts";
 
 export type UnitStatus = "terminada" | "en_curso" | "bloqueada" | "pendiente";
@@ -119,52 +121,74 @@ export type DataSource = {
   downloadUrl?: string;
 };
 
-// Avance de cada edificio según el corte del plan de obra del 30/07/2026
-// (Araya 26 edificios · CORTE_30072026). Se lee del XML de Microsoft Project y
-// se agrega ponderando cada tarea por su duración, atribuida al edificio del que
-// cuelga en la jerarquía del plan; así la media global reproduce el 22% que el
-// propio Project muestra en la raíz. Columnas: [código, avance %, desvío días,
-// fin previsto].
-const buildingRows: Array<[string, number, number, string]> = [
-  ["3", 54.8, 58, "12/11/2026"],
-  ["2", 46.4, 62, "26/11/2026"],
-  ["4", 42.1, 21, "26/11/2026"],
-  ["6", 45.9, 41, "26/11/2026"],
-  ["1", 47.8, 51, "26/11/2026"],
-  ["5", 45.9, 30, "26/11/2026"],
-  ["9", 38.0, 9, "26/11/2026"],
-  ["8", 32.6, 0, "26/11/2026"],
-  ["7", 30.6, -11, "26/11/2026"],
-  ["12", 27.1, -13, "03/12/2026"],
-  ["11", 25.2, 20, "18/01/2027"],
-  ["10", 25.2, 4, "18/01/2027"],
-  ["15", 14.3, 14, "10/02/2027"],
-  ["14", 14.3, 14, "19/02/2027"],
-  ["13", 14.3, 14, "02/03/2027"],
-  ["18", 0, 13, "10/03/2027"],
-  ["17", 0, 11, "19/03/2027"],
-  ["16", 0, 13, "30/03/2027"],
-  ["71", 0, 12, "07/04/2027"],
-  ["70", 0, 10, "16/04/2027"],
-  ["73", 0, 12, "27/04/2027"],
-  ["72", 0, 9, "05/05/2027"],
-  ["75", 0, 9, "14/05/2027"],
-  ["74", 0, 10, "24/05/2027"],
-  ["77", 0, 7, "01/06/2027"],
-  ["76", 0, 7, "07/06/2027"],
+// Avance real de cada fase de cada edificio, leído del plan de obra de Project
+// (Araya 26 edificios · CORTE_30072026). Para cada tarea del plan se toma su
+// porcentaje, se atribuye al edificio del que cuelga y a su fase —obra común,
+// superestructura, albañilería, instalaciones, acabados— según el capítulo, y se
+// promedia dentro de cada fase ponderando por duración. A diferencia del modelo
+// anterior, estas cinco cifras no se derivan de un total: son la medición del
+// plan, y de ellas sale el porcentaje del edificio (lib/progress-model.ts).
+//
+// Columnas: [código, obra común, superestructura, albañilería, instalaciones, acabados].
+const buildingPhaseRows: Array<[string, number, number, number, number, number]> = [
+  ["3", 100, 100, 100, 29.4, 21.6],
+  ["2", 100, 100, 100, 29.4, 13.5],
+  ["4", 100, 100, 100, 29.4, 4.1],
+  ["6", 100, 100, 100, 29.4, 10.8],
+  ["1", 100, 100, 100, 29.4, 10.1],
+  ["5", 100, 100, 100, 29.4, 10.8],
+  ["9", 100, 100, 100, 0, 0],
+  ["8", 100, 90, 83, 0, 0],
+  ["7", 100, 90.5, 70.8, 0, 0],
+  ["12", 100, 90.5, 52.8, 0, 0],
+  ["11", 100, 90.5, 43.4, 0, 0],
+  ["10", 100, 90.5, 43.4, 0, 0],
+  ["15", 73.9, 90.5, 0, 0, 0],
+  ["14", 73.9, 90.5, 0, 0, 0],
+  ["13", 73.9, 90.5, 0, 0, 0],
+  ["18", 0, 0, 0, 0, 0],
+  ["17", 0, 0, 0, 0, 0],
+  ["16", 0, 0, 0, 0, 0],
+  ["71", 0, 0, 0, 0, 0],
+  ["70", 0, 0, 0, 0, 0],
+  ["73", 0, 0, 0, 0, 0],
+  ["72", 0, 0, 0, 0, 0],
+  ["75", 0, 0, 0, 0, 0],
+  ["74", 0, 0, 0, 0, 0],
+  ["77", 73.9, 0, 0, 0, 0],
+  ["76", 73.9, 0, 0, 0, 0],
+];
+
+// Desvío de días y fin previsto por edificio, en el mismo orden.
+const buildingScheduleRows: Array<[string, number, string]> = [
+  ["3", 58, "12/11/2026"], ["2", 62, "26/11/2026"], ["4", 21, "26/11/2026"],
+  ["6", 41, "26/11/2026"], ["1", 51, "26/11/2026"], ["5", 30, "26/11/2026"],
+  ["9", 9, "26/11/2026"], ["8", 0, "26/11/2026"], ["7", -11, "26/11/2026"],
+  ["12", -13, "03/12/2026"], ["11", 20, "18/01/2027"], ["10", 4, "18/01/2027"],
+  ["15", 14, "10/02/2027"], ["14", 14, "19/02/2027"], ["13", 14, "02/03/2027"],
+  ["18", 13, "10/03/2027"], ["17", 11, "19/03/2027"], ["16", 13, "30/03/2027"],
+  ["71", 12, "07/04/2027"], ["70", 10, "16/04/2027"], ["73", 12, "27/04/2027"],
+  ["72", 9, "05/05/2027"], ["75", 9, "14/05/2027"], ["74", 10, "24/05/2027"],
+  ["77", 7, "01/06/2027"], ["76", 7, "07/06/2027"],
 ];
 
 const apartmentCodes = ["101", "102", "201", "202", "301", "302"];
 
-// El avance de cada apartamento y de cada disciplina se deriva del porcentaje
-// real del edificio (el de la cubicación), en cascada por fases de obra. Así
-// las tres cifras dejan de contradecirse: el edificio ya no puede ir al 40,6%
-// con sus apartamentos al 100%. La regla vive en lib/progress-model.ts, un solo
-// sitio donde cambiar los pesos el día que la oficina fije los suyos.
-function makeUnits(building: string, buildingProgress: number): Unit[] {
-  const unitProgress = unitProgressFromBuildingProgress(buildingProgress);
-  const fases = phasesFromBuildingProgress(buildingProgress);
-  const faseDe = (id: string) => fases.find((fase) => fase.id === id)?.progress ?? 0;
+// Las cuatro disciplinas del apartamento son las fases reales del edificio menos
+// la obra común, que es del edificio y no de ningún apartamento. Los seis
+// apartamentos comparten valor: el plan mide a nivel de edificio, no de
+// apartamento, y son el mismo plano repetido en tres plantas. El porcentaje del
+// apartamento sale de esas cuatro disciplinas ponderadas (lib/progress-model.ts).
+function makeUnits(building: string, phases: PhaseProgress[]): Unit[] {
+  const disciplines: UnitDiscipline[] = phases
+    .filter((fase) => fase.id !== "comun")
+    .map((fase) => ({
+      id: fase.id as UnitDiscipline["id"],
+      name: fase.name,
+      progress: fase.progress,
+      status: "integrado",
+    }));
+  const unitProgress = weightedUnitProgress(disciplines);
   const estado: Unit["status"] =
     unitProgress >= 100 ? "terminada" : unitProgress > 0 ? "en_curso" : "pendiente";
   return apartmentCodes.map((apartment) => ({
@@ -173,63 +197,69 @@ function makeUnits(building: string, buildingProgress: number): Unit[] {
     floor: Number(apartment[0]),
     progress: unitProgress,
     status: estado,
-    phase: currentPhaseName(buildingProgress),
+    phase: currentPhaseName(phases),
     deviationDays: 0,
     responsible: "Pendiente de asignar",
     lastUpdated: "30/07/2026",
     source: "Plan de obra Project · corte 30/07/2026",
-    disciplines: [
-      { id: "superestructura", name: "Superestructura", progress: faseDe("superestructura"), status: "integrado" },
-      { id: "albanileria", name: "Albañilería", progress: faseDe("albanileria"), status: "integrado" },
-      { id: "instalaciones", name: "Instalaciones", progress: faseDe("instalaciones"), status: "integrado" },
-      { id: "acabados", name: "Acabados", progress: faseDe("acabados"), status: "integrado" },
-    ],
+    disciplines: disciplines.map((discipline) => ({ ...discipline })),
     issues: [],
   }));
 }
 
-export const buildings: Building[] = buildingRows.map(
-  ([code, progress, deviationDays, forecastFinish]) => ({
+const buildingSchedule = new Map(
+  buildingScheduleRows.map(([code, deviationDays, forecastFinish]) => [code, { deviationDays, forecastFinish }]),
+);
+
+export const buildings: Building[] = buildingPhaseRows.map(([code, ...valores]) => {
+  const phases = phasesFromValues(valores);
+  const schedule = buildingSchedule.get(code) ?? { deviationDays: 0, forecastFinish: "" };
+  return {
     id: `edificio-${code}`,
     name: `Edificio ${code}`,
     shortName: code,
-    progress,
+    progress: buildingProgressFromPhases(phases),
     planProgress: null,
-    deviationDays,
-    forecastFinish,
-    units: makeUnits(code, progress),
-  }),
-);
+    deviationDays: schedule.deviationDays,
+    forecastFinish: schedule.forecastFinish,
+    units: makeUnits(code, phases),
+  };
+});
 
-export const monthlyPlan = [
-  { month: "jun 25", planned: 0, actual: 0 },
-  { month: "jul", planned: 0.52, actual: 0.31 },
-  { month: "ago", planned: 1.21, actual: 0.94 },
-  { month: "sep", planned: 2.07, actual: 1.88 },
-  { month: "oct", planned: 2.76, actual: 2.51 },
-  { month: "nov", planned: 3.7, actual: 3.45 },
-  { month: "dic", planned: 4.11, actual: 3.83 },
-  { month: "ene 26", planned: 4.48, actual: 4.47 },
-  { month: "feb", planned: 4.97, actual: 6.05 },
-  { month: "mar", planned: 6.72, actual: 8.96 },
-  { month: "abr", planned: 11.07, actual: 11.59 },
-  { month: "may", planned: 16.67, actual: 16 },
-  { month: "jun", planned: 23.29, actual: 18.23 },
-  { month: "jul", planned: 31.41, actual: null },
-  { month: "ago", planned: 40.78, actual: null },
-  { month: "sep", planned: 52.44, actual: null },
-  { month: "oct", planned: 62.97, actual: null },
-  { month: "nov", planned: 74.74, actual: null },
-  { month: "dic", planned: 80.9, actual: null },
-  { month: "ene 27", planned: 83.02, actual: null },
-  { month: "feb", planned: 87.9, actual: null },
-  { month: "mar", planned: 92.75, actual: null },
-  { month: "abr", planned: 95.32, actual: null },
-  { month: "may", planned: 97.31, actual: null },
-  { month: "jun", planned: 98.75, actual: null },
-  { month: "jul", planned: 99.56, actual: null },
-  { month: "ago", planned: 100, actual: null },
+// Avance global del proyecto ahora mismo: media del avance real de los 26
+// edificios. Sale de la misma fuente que la implantación (el plan de obra), así
+// que la Curva S y los colores del plano cuentan la misma historia. Reproduce el
+// ~22% que el propio Project muestra en la raíz.
+export const overallProgressNow =
+  Math.round((buildings.reduce((suma, edificio) => suma + edificio.progress, 0) / buildings.length) * 100) / 100;
+
+const planCurveMonths = [
+  "jun 25", "jul", "ago", "sep", "oct", "nov", "dic", "ene 26", "feb", "mar",
+  "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic", "ene 27",
+  "feb", "mar", "abr", "may", "jun", "jul", "ago",
 ];
+
+const planCurvePlanned = [
+  0, 0.52, 1.21, 2.07, 2.76, 3.7, 4.11, 4.48, 4.97, 6.72, 11.07, 16.67, 23.29,
+  31.41, 40.78, 52.44, 62.97, 74.74, 80.9, 83.02, 87.9, 92.75, 95.32, 97.31,
+  98.75, 99.56, 100,
+];
+
+// Ejecutado real medido, mes a mes, hasta el corte anterior (jun 2025 → jun
+// 2026). El punto del mes en curso NO se escribe a mano: se calcula del modelo
+// vivo (overallProgressNow) y se añade al final. Por eso el mes del corte nunca
+// vuelve a quedar vacío como pasó con julio — cada corte nuevo lo rellena solo.
+// Al cerrar un mes, se congela aquí su valor y el cálculo pasa al siguiente.
+const planCurveActualsToDate = [
+  0, 0.31, 0.94, 1.88, 2.51, 3.45, 3.83, 4.47, 6.05, 8.96, 11.59, 16, 18.23,
+  overallProgressNow,
+];
+
+export const monthlyPlan = planCurveMonths.map((month, indice) => ({
+  month,
+  planned: planCurvePlanned[indice],
+  actual: indice < planCurveActualsToDate.length ? planCurveActualsToDate[indice] : null,
+}));
 
 export const workPackages: WorkPackage[] = [
   { name: "Infraestructura", progress: 55, finish: "07/10/2026", baselineFinish: "10/08/2026", deviationDays: 58, critical: false },
@@ -712,13 +742,16 @@ export const dataSources: DataSource[] = [
 
 export const projectSnapshot = {
   project: "ARAYA",
-  declaredCutoff: "30/06/2026",
+  declaredCutoff: "30/07/2026",
   lastUpdated: "30/07/2026 12:17",
-  overallProgress: 18.23,
-  apartmentAverageProgress: 18.23,
-  plannedProgress: 21.24,
+  // Avance físico global del corte de julio. En producción lo recalcula el
+  // ciclo en vivo desde el último "Ejecutado Real" de la Curva S; estos valores
+  // son el punto de partida y se mantienen alineados con ese corte.
+  overallProgress: overallProgressNow,
+  apartmentAverageProgress: 18.8,
+  plannedProgress: 31.41,
   scheduleProgress: 17,
-  deviationPoints: -3.0,
+  deviationPoints: Math.round((overallProgressNow - 31.41) * 100) / 100,
   forecastFinish: "07/06/2027",
   baselineFinish: "31/05/2027",
   deviationDays: 7,
