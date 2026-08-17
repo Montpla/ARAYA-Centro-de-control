@@ -9,7 +9,6 @@ import test from "node:test";
 
 const cliente = await readFile(new URL("../app/dashboard-client.tsx", import.meta.url), "utf8");
 const generador = await readFile(new URL("../scripts/generate_formats_guide_pdf.py", import.meta.url), "utf8");
-const generadorCarga = await readFile(new URL("../scripts/generate_upload_guide_pdf.py", import.meta.url), "utf8");
 const pdf = await readFile(new URL("../historical/data-center/guias/guia-formatos-araya.pdf", import.meta.url));
 
 test("la guía está publicada donde el Centro de datos la sirve", () => {
@@ -33,24 +32,22 @@ test("aparece en los cuatro accesos con una sola entrada", () => {
 });
 
 test("el texto del panel cuenta las guías que hay", () => {
-  // El conteo del texto debe seguir a la lista de guías: decía «dos» con tres
-  // en la lista, el tipo de desajuste que hace dudar de todo lo demás.
-  assert.match(cliente, /Cinco documentos breves/);
-  assert.doesNotMatch(cliente, /Cuatro documentos breves/);
+  // El conteo del texto debe seguir a la lista de guías. Se consolidó la de
+  // carga dentro de ésta, así que ahora son cuatro.
+  assert.match(cliente, /Cuatro documentos breves/);
+  assert.doesNotMatch(cliente, /Cinco documentos breves/);
   assert.doesNotMatch(cliente, /Tres documentos breves/);
 });
 
-test("las dos guías no se contradicen sobre el ZIP", () => {
-  // La de carga listaba el ZIP entre los que «sólo se archivan» mucho después
-  // de que los comprimidos empezaran a abrirse. Dos guías que dicen cosas
-  // distintas son peores que una sola.
-  const soloArchivan = generadorCarga.slice(
-    generadorCarga.indexOf('"SOLO SE ARCHIVAN"'),
-    generadorCarga.indexOf('"SOLO SE ARCHIVAN"') + 400,
+test("la guía de carga ya no está registrada por separado", () => {
+  // Se consolidó en la de formatos: su troubleshooting vive en la página de
+  // detalles. Que no quede una entrada huérfana apuntando a un PDF retirado.
+  const lista = cliente.slice(
+    cliente.indexOf("const staffGuides = ["),
+    cliente.indexOf("function GuidesPanel"),
   );
-  assert.doesNotMatch(soloArchivan, /ZIP/);
-  assert.match(soloArchivan, /Planos DWG/);
-  assert.match(soloArchivan, /Cronogramas MPP/);
+  assert.doesNotMatch(lista, /guia-carga-de-archivos-araya\.pdf/);
+  assert.doesNotMatch(lista, /id: "carga"/);
 });
 
 test("sólo el mpp y el dwg figuran como ilegibles", () => {
