@@ -16,6 +16,7 @@ import {
   unitDisciplines as sharedUnitDisciplines,
   unitOverallProgress as sharedUnitOverallProgress,
 } from "../lib/unit-progress";
+import { projectProgressFromBuildings } from "../lib/progress-model";
 import { computedView } from "../lib/computed-view";
 import {
   STAT_CARD_FRESHNESS_KEYS,
@@ -1315,28 +1316,29 @@ function synchronizeSpatialSummary() {
   juneReport = liveJuneReportFinance(juneReport, antonelyDetailTotals, antonelyBalanceLines, financialProjection);
   payablesReconciliation = livePayablesReconciliation(payablesReconciliation, antonelyDetailTotals.payablesTotalDop);
   // Espejo del cálculo del servidor (lib/spatial-live-data.ts): el avance
-  // físico por apartamento se conserva como métrica de apoyo, pero ya no
-  // manda sobre el avance físico global — el equipo de obra lleva su
-  // control real en el Excel maestro (Curva S), así que overallProgress
-  // sigue el último "Ejecutado Real" que ese Excel declare en monthlyPlan.
+  // físico global y el último "Ejecutado Real" de la Curva S salen del avance
+  // real de los edificios, para que se muevan A LA VEZ que ellos. El avance por
+  // apartamento se conserva como métrica de apoyo.
   const allUnits = buildings.flatMap((building) => building.units);
   if (allUnits.length) {
     projectSnapshot.apartmentAverageProgress =
       allUnits.reduce((sum, unit) => sum + unitOverallProgress(unit), 0) / allUnits.length;
   }
-  // El "Plan operativo" (KPI) y el "Ejecutado Real" deben leerse siempre del
-  // mismo mes de monthlyPlan: comparar el ejecutado de julio contra el plan
-  // congelado de junio produce dos cifras que parecen contradecirse sin
-  // serlo. Se toma el último registro con actual no nulo y se leen
-  // planned/actual de esa misma fila, así avanzan siempre juntos.
-  let cutoffActual: number | null = null;
-  let cutoffPlanned: number | null = null;
-  for (const entry of monthlyPlan) {
-    if (entry.actual !== null) {
-      cutoffActual = entry.actual;
-      cutoffPlanned = entry.planned;
-    }
+  // El mes del corte adopta el promedio vivo de los edificios como "Ejecutado
+  // Real", y de esa misma fila se lee el "Plan operativo" (KPI), para no
+  // comparar el avance de julio contra el plan congelado de junio.
+  const overallFromBuildings = projectProgressFromBuildings(buildings);
+  let cutoffIndex = -1;
+  for (let index = 0; index < monthlyPlan.length; index += 1) {
+    if (monthlyPlan[index].actual !== null) cutoffIndex = index;
   }
+  if (overallFromBuildings !== null && cutoffIndex >= 0) {
+    // Se ancla el punto del corte al promedio vivo, así el plano y la curva
+    // muestran exactamente lo mismo.
+    monthlyPlan[cutoffIndex] = { ...monthlyPlan[cutoffIndex], actual: overallFromBuildings };
+  }
+  const cutoffActual = cutoffIndex >= 0 ? monthlyPlan[cutoffIndex].actual : null;
+  const cutoffPlanned = cutoffIndex >= 0 ? monthlyPlan[cutoffIndex].planned : null;
   if (cutoffActual !== null && cutoffPlanned !== null) {
     projectSnapshot.overallProgress = cutoffActual;
     projectSnapshot.plannedProgress = cutoffPlanned;
