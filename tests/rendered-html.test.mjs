@@ -130,9 +130,10 @@ test("normalized source data contains 26 buildings and 156 apartments", async ()
   assert.match(source, /buildingsPendingIntegration: 51/);
   assert.match(source, /urbanismProgress: 18\.28/);
   // El corte de julio: el avance global se calcula del modelo vivo
-  // (overallProgressNow) y el plan operativo se lee del mes del corte (31,41).
+  // (overallProgressNow) y el plan operativo se lee del mes del corte (26,61,
+  // el Plan Operativo que declara el Informe Ejecutivo del corte).
   assert.match(source, /overallProgress: overallProgressNow/);
-  assert.match(source, /plannedProgress: 31\.41/);
+  assert.match(source, /plannedProgress: 26\.61/);
   assert.match(source, /currency: "DOP"/);
   assert.match(source, /002 - IMPLANTACIÓN GENERAL\.dwg/);
   assert.match(source, /\/data-center\/002-implantacion-general\.dwg/);
