@@ -5349,12 +5349,24 @@ const staffGuides = [
     viewerTitle: "Guía corporativa Bricket Control · personal de obra.pdf",
   },
   {
+    id: "actualizacion-mensual",
+    kicker: "CADA MES",
+    title: "Actualización del mes: los tres archivos",
+    detail:
+      "Qué tres archivos se suben cada mes (informe de obra, Excel de flujo y " +
+      "plan de Project), qué actualiza cada uno y cómo comprobar que ha entrado.",
+    pages: "3 páginas",
+    url: "/data-center/guias/guia-actualizacion-mensual-araya.pdf",
+    fileName: "guia-actualizacion-mensual-araya.pdf",
+    viewerTitle: "Actualización mensual · Centro de Control ARAYA.pdf",
+  },
+  {
     id: "formatos",
     kicker: "ANTES DE SUBIR",
     title: "Qué pasa con cada archivo",
     detail:
-      "Qué formatos actualizan el panel solos, cuáles pasan por revisión y " +
-      "las dos salidas del .mpp de Microsoft Project.",
+      "Qué hace el programa con cada formato, por qué a veces un dato no entra " +
+      "y las dos salidas del .mpp de Microsoft Project.",
     pages: "4 páginas",
     url: "/data-center/guias/guia-formatos-araya.pdf",
     fileName: "guia-formatos-araya.pdf",
@@ -6102,14 +6114,15 @@ function UsersAdminView({
           <button className="button" type="button" onClick={onOpenGuide}>Abrir guías</button>
         </div>
         <p>
-          Cuatro documentos breves: la guía corporativa (navegación, permisos,
+          Cinco documentos breves: la guía corporativa (navegación, permisos,
           carga documental, instalación en móvil, tablet y ordenador, cámara,
-          avisos y seguridad), la de formatos, que dice de un vistazo qué hace
-          el programa con cada tipo de archivo y por qué a veces un dato no
-          entra, la de envío desde <b>Project</b>, para que el equipo de
-          planificación deje el plan llegando solo, y la de avisos, para recibir
-          las notificaciones en el móvil y el ordenador. Compártelas con cada
-          persona al darla de alta —
+          avisos y seguridad), la de actualización mensual, con los tres
+          archivos que ponen al día el panel cada mes, la de formatos, que dice
+          de un vistazo qué hace el programa con cada tipo de archivo y por qué a
+          veces un dato no entra, la de envío desde <b>Project</b>, para que el
+          equipo de planificación deje el plan llegando solo, y la de avisos,
+          para recibir las notificaciones en el móvil y el ordenador.
+          Compártelas con cada persona al darla de alta —
           el enlace y el código QR de dentro llevan directo a esta misma
           aplicación.
         </p>

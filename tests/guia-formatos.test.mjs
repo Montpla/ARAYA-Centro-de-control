@@ -32,10 +32,10 @@ test("aparece en los cuatro accesos con una sola entrada", () => {
 });
 
 test("el texto del panel cuenta las guías que hay", () => {
-  // El conteo del texto debe seguir a la lista de guías. Se consolidó la de
-  // carga dentro de ésta, así que ahora son cuatro.
-  assert.match(cliente, /Cuatro documentos breves/);
-  assert.doesNotMatch(cliente, /Cinco documentos breves/);
+  // El conteo del texto debe seguir a la lista de guías: cuatro tras retirar la
+  // de carga, cinco al añadir la de actualización mensual.
+  assert.match(cliente, /Cinco documentos breves/);
+  assert.doesNotMatch(cliente, /Cuatro documentos breves/);
   assert.doesNotMatch(cliente, /Tres documentos breves/);
 });
 
