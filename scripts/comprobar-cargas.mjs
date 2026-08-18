@@ -33,7 +33,14 @@ if (!sessionMatch) {
 }
 const Cookie = `araya_session=${sessionMatch[1]}`;
 
-const filesResponse = await fetch(`${PRODUCTION_URL}/api/files`, { headers: { Cookie } });
+// includeDeleted=1 a propósito: un archivo subido y borrado después no aparece
+// en el listado normal, y "lo subí y no está" es justo una de las cosas que hay
+// que poder responder. El límite se sube al máximo para que la ventana no
+// dependa de la paginación.
+const filesResponse = await fetch(
+  `${PRODUCTION_URL}/api/files?includeDeleted=1&limit=200`,
+  { headers: { Cookie } },
+);
 if (!filesResponse.ok) {
   console.error(`✖ /api/files devolvió ${filesResponse.status}.`);
   process.exit(1);
@@ -50,10 +57,21 @@ if (!recientes.length) {
   console.log("No hay cargas en ese periodo.");
 }
 
+// Referencia para distinguir "no se subió" de "se subió fuera de la ventana":
+// sin esto, un archivo con la hora corrida parece no existir.
+const ultimos = [...files]
+  .sort((izquierda, derecha) => Date.parse(derecha.createdAt) - Date.parse(izquierda.createdAt))
+  .slice(0, 6);
+console.log("\nÚltimos 6 archivos del registro, sea cual sea su fecha:");
+for (const file of ultimos) {
+  const estado = file.deletedAt ? "ELIMINADO" : file.publicationRevision ? "publicado" : "sin publicar";
+  console.log(`   ${file.createdAt} · ${file.originalName} · ${estado}`);
+}
+
 const problemas = [];
 for (const file of recientes) {
   const publicado = Boolean(file.publicationRevision);
-  const marca = publicado ? "OK " : "REVISAR";
+  const marca = file.deletedAt ? "BORRADO" : publicado ? "OK " : "REVISAR";
   console.log(`\n[${marca}] ${file.originalName}`);
   console.log(`   subido      : ${file.createdAt} por ${file.uploaderName}`);
   console.log(`   área        : ${file.areaLabel} · tipo ${file.documentType} · corte ${file.declaredCutoff || "sin declarar"}`);
@@ -63,7 +81,8 @@ for (const file of recientes) {
   console.log(`   extracción  : ${file.extractionSummary || "(sin resumen)"}`);
   console.log(`   publicado   : ${publicado ? `revisión ${file.publicationRevision} el ${file.publishedAt}` : "NO"}`);
   console.log(`   revisión    : ${file.reviewStatus}${file.requiresReview ? " · REQUIERE REVISIÓN" : ""}`);
-  if (!publicado || file.requiresReview) problemas.push(file.originalName);
+  if (file.deletedAt) console.log(`   eliminado   : ${file.deletedAt} por ${file.deletedByName} · ${file.deleteReason || "sin motivo"}`);
+  if (!file.deletedAt && (!publicado || file.requiresReview)) problemas.push(file.originalName);
 }
 
 const liveResponse = await fetch(`${PRODUCTION_URL}/api/live-data`, { headers: { Cookie } });
