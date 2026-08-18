@@ -80,6 +80,12 @@ for (const file of recientes) {
     console.log(`    evidencia  : ${candidato.evidence || "(sin evidencia)"}`);
     console.log(`    estado     : ${candidato.status}`);
     console.log(`    forma      : ${forma(valor)}`);
+    // DETALLE=1 vuelca el contenido para poder modelar la sección en su sitio.
+    // Es el repositorio privado del proyecto y se pide expresamente; aun así se
+    // recorta, porque un log no es un almacén de datos.
+    if (process.env.DETALLE === "1") {
+      console.log(`    contenido  : ${JSON.stringify(valor).slice(0, 1200)}`);
+    }
   }
 }
 
