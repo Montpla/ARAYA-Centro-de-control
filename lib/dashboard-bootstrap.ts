@@ -40,7 +40,9 @@ function demoData(financeAccess: boolean) {
 
   return {
     buildings: demo.buildings,
+    cubicacionCaratula: financeAccess ? demo.cubicacionCaratula : [],
     cubicaciones: financeAccess ? demo.cubicaciones : [],
+    projectCertifications: demo.projectCertifications,
     customMetrics: financeAccess ? demo.customMetrics : [],
     dataSources: visibleSources,
     monthlyPlan: demo.monthlyPlan,

@@ -425,6 +425,29 @@ export const customMetrics: CustomMetric[] = [
   { id: "metric-cubicacion", name: "Cubicaciones acumuladas", value: "67.342.153,57", target: "71.731.477,87", trend: "down", unit: "DOP", owner: "Finanzas · Excel" },
 ];
 
+// Certificaciones del proyecto.
+//
+// Llegó como "propuesta de sección nueva" del PDF de indicadores LEED y no tenía
+// dónde vivir. Es información de proyecto con entidad propia —una certificación
+// no es un avance ni una cifra financiera—, así que se le da su sección en vez
+// de dejarla como bloque genérico. El dato es el que consta en el documento: no
+// se le añade fecha ni nivel que el texto no dé.
+export const projectCertifications = [
+  { name: "LEED Gold", quantity: 3, cutoff: "", source: "Indicador nuevo LEED" },
+] as const;
+
+// Carátula de la cubicación mensual.
+//
+// La carátula de cada cubicación declara su monto y una relación de obra
+// ejecutada (presupuesto, ejecutado del periodo y acumulados). De la Cubicación
+// Nº8 la lectura recuperó el monto; los cuatro totales de la relación venían en
+// el documento pero no llegaron estructurados, así que NO se inventan: cuando un
+// lector de la carátula los extraiga, se añadirán aquí. El monto sí es real y ya
+// tiene su sitio, junto a la serie de cubicaciones.
+export const cubicacionCaratula = [
+  { label: "Cubicación Nº8", montoDop: 33639335.5863896, cutoff: "2026-07-31" },
+] as const;
+
 export const cubicaciones = [
   { period: "Diciembre", measured: 30338215.998886, accounting: 35003006.87 },
   { period: "Enero", measured: 3283239.8226520014, accounting: 2355501 },

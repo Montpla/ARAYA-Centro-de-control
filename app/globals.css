@@ -13073,3 +13073,14 @@ button.financial-detail-row:focus-visible {
   margin: 0.35rem 0 0;
   padding-left: 1.1rem;
 }
+
+/* Certificaciones del proyecto y carátula de cubicación, secciones modeladas. */
+.certifications-block { margin-top: 1rem; }
+.certifications-block .compact-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1.6fr auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.4rem 0;
+  border-top: 1px solid var(--line, rgba(148, 163, 184, 0.25));
+}
