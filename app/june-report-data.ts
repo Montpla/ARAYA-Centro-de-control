@@ -232,6 +232,38 @@ export const safetyFindings = [
   "El reporte de la semana 2 no fue incluido en la fuente.",
 ] as const;
 
+// Seguimiento de cada hallazgo: quién lo cierra, para cuándo y con qué prueba.
+//
+// Es el único dato del área que no puede salir de ningún documento. El informe
+// de obra dice qué se encontró —y eso ya se lee solo—, pero no dice quién se
+// hace cargo ni cuándo queda cerrado: eso lo pone la obra desde el propio
+// panel. El estado inicial no está inventado: sale del apartado "seguimiento a
+// acciones" del informe de junio, que da por cerrada la entrega de EPP y deja
+// en proceso la retirada de escombros.
+export const safetyFindingTracking = [
+  {
+    finding: "Personal sin EPP",
+    responsible: "",
+    status: "Cerrado",
+    dueDate: "",
+    evidence: "Se suministraron los EPP a todo el personal (semana 4).",
+  },
+  {
+    finding: "Escombros acumulados",
+    responsible: "",
+    status: "En proceso",
+    dueDate: "",
+    evidence: "Pendiente designar contratista para la retirada.",
+  },
+  {
+    finding: "Metal incrustado",
+    responsible: "",
+    status: "Abierto",
+    dueDate: "",
+    evidence: "",
+  },
+] as const;
+
 export const permits = [
   { entity: "Ayuntamiento de Higüey", reference: "No objeción", status: "Aprobado", date: "15/01/2024" },
   { entity: "Distrito Verón", reference: "No objeción", status: "Aprobado", date: "19/02/2024" },

@@ -59,6 +59,7 @@ export const LIVE_DATA_ROOTS = [
   "reprogrammedFlowMonths",
   "reprogrammedFlowQualityIssues",
   "reprogrammedFlowScopes",
+  "safetyFindingTracking",
   "safetyFindings",
   "safetyMetrics",
   "salesLocations",

@@ -12989,3 +12989,70 @@ button.financial-detail-row:focus-visible {
     text-align: center;
   }
 }
+
+/* Seguimiento de hallazgos de seguridad: quién cierra cada uno y con qué prueba. */
+.safety-tracker-summary {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: var(--muted, #6b7280);
+}
+
+.safety-tracker-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.safety-tracker-list > li {
+  border: 1px solid var(--line, rgba(148, 163, 184, 0.35));
+  border-left: 3px solid var(--muted, #94a3b8);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.safety-tracker-list > li[data-estado="En proceso"] { border-left-color: #d97706; }
+.safety-tracker-list > li[data-estado="Cerrado"] { border-left-color: #15803d; }
+
+.safety-tracker-finding {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.safety-tracker-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem;
+}
+
+.safety-tracker-fields label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+}
+
+.safety-tracker-fields label > span { color: var(--muted, #6b7280); }
+
+.safety-tracker-fields input,
+.safety-tracker-fields select {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line, rgba(148, 163, 184, 0.5));
+  border-radius: 0.375rem;
+  font: inherit;
+  font-size: 0.8rem;
+  background: transparent;
+  color: inherit;
+}
+
+.safety-tracker-evidence { grid-column: 1 / -1; }
+
+.safety-tracker-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
+}

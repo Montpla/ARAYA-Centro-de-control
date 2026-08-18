@@ -68,6 +68,7 @@ let juneReport = {} as DashboardBootstrapData["june"]["juneReport"];
 let managementActions: DashboardBootstrapData["june"]["managementActions"] = [];
 let payablesReconciliation: DashboardBootstrapData["june"]["payablesReconciliation"] = [];
 let permits: DashboardBootstrapData["june"]["permits"] = [];
+let safetyFindingTracking: DashboardBootstrapData["june"]["safetyFindingTracking"] = [];
 let safetyFindings: DashboardBootstrapData["june"]["safetyFindings"] = [];
 let safetyMetrics: DashboardBootstrapData["june"]["safetyMetrics"] = [];
 let salesLocations: DashboardBootstrapData["june"]["salesLocations"] = [];
@@ -209,6 +210,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     managementActions,
     payablesReconciliation,
     permits,
+    safetyFindingTracking,
     safetyFindings,
     safetyMetrics,
     salesLocations,
@@ -326,6 +328,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     reprogrammedFlowMonths,
     reprogrammedFlowQualityIssues,
     reprogrammedFlowScopes,
+    safetyFindingTracking,
     safetyFindings,
     safetyMetrics,
     salesLocations,
@@ -996,7 +999,7 @@ const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
     description: "Cada indicador y trámite queda preparado para abrir su evidencia, responsable, fecha y siguiente paso.",
     sourceIds: ["source-june-works", "source-june-consolidated", "source-june-pdf", "source-ifc-analysis"],
     modules: [
-      { id: "safety", label: "Seguridad y salud", detail: "Indicadores, hallazgos y brechas semanales.", status: "partial", sourceIds: ["source-june-works"], pendingFields: ["Evidencia", "Responsable", "Cierre del hallazgo"] },
+      { id: "safety", label: "Seguridad y salud", detail: "Indicadores y hallazgos del informe, con responsable, fecha objetivo y evidencia de cierre.", status: "live", sourceIds: ["source-june-works"] },
       { id: "permits", label: "Permisos", detail: "Matriz de entidades, referencias y estados.", status: "live", sourceIds: ["source-june-consolidated"] },
       { id: "inspections", label: "Inspecciones", detail: "Estructura preparada para actas y no conformidades.", status: "ready", sourceIds: [], pendingFields: ["Acta", "Inspector", "Resultado", "Acción correctiva"] },
       { id: "financing-control", label: "Gestiones financieras", detail: "Procesos y decisiones pendientes de financiación.", status: "partial", sourceIds: ["source-june-consolidated"], targetView: "metricas" },
@@ -3894,7 +3897,7 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
           <section className="report-grid">
             <article className="panel">
               <div className="panel-heading"><div><span className="section-kicker">HALLAZGOS</span><h3>Observaciones del corte</h3></div></div>
-              <ul className="quality-list control-list">{safetyFindings.map((item) => <li key={item}>{item}</li>)}</ul>
+              <SafetyFindingsTracker />
             </article>
             <article className="panel">
               <div className="panel-heading"><div><span className="section-kicker">SEGUIMIENTO</span><h3>Lectura operativa</h3></div><span className="source-status observada">Observada</span></div>
@@ -5635,6 +5638,139 @@ function UploadAgentsCard({ users }: { users: Array<{ email: string; displayName
         </ul>
       )}
     </section>
+  );
+}
+
+// Seguimiento de los hallazgos de seguridad.
+//
+// Los hallazgos se leen solos del informe de obra, pero el informe no dice
+// quién se hace cargo de cada uno, para cuándo, ni con qué prueba queda
+// cerrado. Ése era el único hueco que quedaba en el área, y no por falta de
+// lector: ese dato no existe en ningún documento, lo pone la obra. Aquí se
+// escribe, y se publica por el mismo camino que un archivo, con su corte y su
+// entrada en el histórico.
+//
+// La lista de hallazgos manda: el seguimiento se cruza por el texto del
+// hallazgo, así que cuando el informe del mes trae otros distintos, los nuevos
+// aparecen sin asignar y no se arrastra el seguimiento de los que ya no se
+// reportan.
+const ESTADOS_HALLAZGO = ["Abierto", "En proceso", "Cerrado"] as const;
+
+function SafetyFindingsTracker() {
+  // El tipo se ensancha a propósito: el hallazgo es texto libre que viene del
+  // informe del mes, no un valor de un catálogo cerrado.
+  const guardado = new Map<string, { responsible: string; status: string; dueDate: string; evidence: string }>(
+    safetyFindingTracking.map((fila) => [fila.finding, fila]),
+  );
+  const inicial = safetyFindings.map((finding) => {
+    const previo = guardado.get(finding);
+    return {
+      finding,
+      responsible: previo?.responsible ?? "",
+      status: previo?.status ?? "Abierto",
+      dueDate: previo?.dueDate ?? "",
+      evidence: previo?.evidence ?? "",
+    };
+  });
+
+  const [filas, setFilas] = useState(inicial);
+  const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState("");
+  const [error, setError] = useState("");
+
+  function editar(finding: string, campo: "responsible" | "status" | "dueDate" | "evidence", valor: string) {
+    setFilas((previas) => previas.map((fila) => fila.finding === finding ? { ...fila, [campo]: valor } : fila));
+    setMensaje("");
+  }
+
+  async function guardar() {
+    if (guardando) return;
+    setGuardando(true);
+    setMensaje("");
+    setError("");
+    try {
+      const response = await fetch("/api/safety-findings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ tracking: filas }),
+      });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "No se pudo guardar el seguimiento.");
+        return;
+      }
+      setMensaje("Seguimiento guardado. Queda registrado en el histórico.");
+    } catch {
+      setError("No se pudo contactar con el servidor.");
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  const cerrados = filas.filter((fila) => fila.status === "Cerrado").length;
+
+  if (!filas.length) {
+    return <p className="empty-note">Sin hallazgos en el corte publicado.</p>;
+  }
+
+  return (
+    <div className="safety-tracker">
+      <p className="safety-tracker-summary">
+        <strong>{cerrados} de {filas.length}</strong> cerrados.
+      </p>
+      <ul className="safety-tracker-list">
+        {filas.map((fila) => (
+          <li key={fila.finding} data-estado={fila.status}>
+            <span className="safety-tracker-finding">{fila.finding}</span>
+            <div className="safety-tracker-fields">
+              <label>
+                <span>Responsable</span>
+                <input
+                  type="text"
+                  value={fila.responsible}
+                  placeholder="Quién se hace cargo"
+                  onChange={(event) => editar(fila.finding, "responsible", event.target.value)}
+                />
+              </label>
+              <label>
+                <span>Estado</span>
+                <select
+                  value={fila.status}
+                  onChange={(event) => editar(fila.finding, "status", event.target.value)}
+                >
+                  {ESTADOS_HALLAZGO.map((estado) => <option key={estado} value={estado}>{estado}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Fecha objetivo</span>
+                <input
+                  type="date"
+                  value={fila.dueDate}
+                  onChange={(event) => editar(fila.finding, "dueDate", event.target.value)}
+                />
+              </label>
+              <label className="safety-tracker-evidence">
+                <span>Evidencia</span>
+                <input
+                  type="text"
+                  value={fila.evidence}
+                  placeholder="Qué se hizo y cómo se comprueba"
+                  onChange={(event) => editar(fila.finding, "evidence", event.target.value)}
+                />
+              </label>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="safety-tracker-actions">
+        <button className="button" type="button" onClick={() => void guardar()} disabled={guardando}>
+          {guardando ? "Guardando…" : "Guardar seguimiento"}
+        </button>
+        {mensaje && <small className="ok-note">{mensaje}</small>}
+        {error && <small className="error-note">{error}</small>}
+      </div>
+    </div>
   );
 }
 
