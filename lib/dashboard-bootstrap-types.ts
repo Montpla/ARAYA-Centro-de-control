@@ -46,6 +46,8 @@ export type DashboardBootstrapData = {
     | "safetyFindingTracking"
     | "safetyFindings"
     | "safetyMetrics"
+    | "collectionTargets"
+    | "commercialPartners"
     | "salesLocations"
     | "salesModels"
     | "structuralDelay"
