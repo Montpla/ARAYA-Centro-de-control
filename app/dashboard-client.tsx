@@ -1568,7 +1568,7 @@ const visualPlanCoordinates: Record<string, { x: number; y: number }> = {
 
 const urbanismMapPoints: Record<string, { x: number; y: number; short: string }> = {
   "urban-general": { x: 50.5, y: 69.5, short: "URB" },
-  "urban-roads": { x: 87.0, y: 39.0, short: "VIAL" },
+  "urban-roads": { x: 49.0, y: 40.0, short: "VIAL" },
   "urban-parking": { x: 70.0, y: 82.0, short: "P" },
   "urban-landscape": { x: 23.0, y: 89.0, short: "PAISAJISMO" },
   "urban-facilities": { x: 50.5, y: 58.5, short: "EQ" },
@@ -1577,7 +1577,7 @@ const urbanismMapPoints: Record<string, { x: number; y: number; short: string }>
 
 const visualUrbanismMapPoints: Record<string, { x: number; y: number; short: string }> = {
   "urban-general": { x: 50.2, y: 71.4, short: "URB" },
-  "urban-roads": { x: 91.0, y: 35.0, short: "VIAL" },
+  "urban-roads": { x: 50.0, y: 37.0, short: "VIAL" },
   "urban-parking": { x: 65.3, y: 61.4, short: "P" },
   "urban-landscape": { x: 48.0, y: 46.3, short: "PAISAJISMO" },
   "urban-facilities": { x: 49.2, y: 58.7, short: "EQ" },
