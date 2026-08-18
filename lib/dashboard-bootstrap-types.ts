@@ -63,6 +63,7 @@ export type DashboardBootstrapData = {
   procurement: Widen<Pick<
     ProcurementModule,
     | "ifcComplianceGroups"
+    | "ifcComplianceTracking"
     | "juneDeviationSummary"
     | "monthlyDeviationLines"
     | "procurementAudit"

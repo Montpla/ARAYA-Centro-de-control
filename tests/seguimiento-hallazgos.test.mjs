@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import * as juneReport from "../app/june-report-data.ts";
+import * as procurement from "../app/procurement-data.ts";
 import * as liveData from "../lib/live-data.ts";
 
 // Seguimiento de hallazgos: el único dato del área que no sale de un documento.
@@ -57,4 +58,39 @@ test("el seguimiento no se puede escribir desde el endpoint general de datos", a
   assert.match(ruta, /requireApiUser\(\)/);
   const claves = [...ruta.matchAll(/key: "([^"]+)"/g)].map((coincidencia) => coincidencia[1]);
   assert.deepEqual(claves, ["safetyFindingTracking"]);
+});
+
+// Seguimiento de las obligaciones del préstamo con IFC.
+
+test("el seguimiento de obligaciones es un dato vivo y financiero", () => {
+  assert.ok(liveData.LIVE_DATA_ROOTS.includes("ifcComplianceTracking"));
+  // El bloque IFC sólo se sirve con acceso a finanzas: su seguimiento tiene
+  // que estar protegido igual, o sería una puerta lateral a ese contenido.
+  assert.equal(liveData.isFinancialLiveKey("ifcComplianceTracking"), true);
+});
+
+test("las obligaciones no imponen catálogo de estados en el dato base", () => {
+  // Al revés que los hallazgos: aquí el dato base va sin estado a propósito,
+  // porque dar por abierta o incumplida una obligación del contrato sería
+  // afirmar algo que no consta. Con el campo vacío el contrato no fija
+  // catálogo y la lista válida la impone el servidor; si alguien rellenara
+  // estos estados, el desplegable dejaría de poder usar los demás.
+  const estados = new Set(procurement.ifcComplianceTracking.map((fila) => fila.status));
+  assert.deepEqual([...estados], [""]);
+});
+
+test("cada obligación trae los campos que la pantalla escribe", () => {
+  assert.ok(procurement.ifcComplianceTracking.length > 0, "el contrato necesita al menos una fila de referencia");
+  for (const fila of procurement.ifcComplianceTracking) {
+    for (const campo of ["commitment", "responsible", "status", "dueDate", "evidence"]) {
+      assert.equal(typeof fila[campo], "string", campo);
+    }
+  }
+});
+
+test("el endpoint de obligaciones exige finanzas y sólo escribe su clave", async () => {
+  const ruta = await readFile("app/api/ifc-compliance/route.ts", "utf8");
+  assert.match(ruta, /requireApiUser\(\{ finance: true \}\)/);
+  const claves = [...ruta.matchAll(/key: "([^"]+)"/g)].map((coincidencia) => coincidencia[1]);
+  assert.deepEqual(claves, ["ifcComplianceTracking"]);
 });
