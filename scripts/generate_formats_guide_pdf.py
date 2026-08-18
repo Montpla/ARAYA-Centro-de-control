@@ -193,7 +193,10 @@ def page_resultados(c: canvas.Canvas) -> None:
             "Las cifras se sacan del archivo directamente, celda a celda o "
             "fila a fila. No interviene ninguna interpretación: lo que llega "
             "al panel es lo que estaba escrito. De Word y PowerPoint se leen "
-            "las tablas; del PDF, el texto; del ZIP, lo que lleve dentro.",
+            "las tablas, y del informe de obra tambien los indicadores de "
+            "seguridad y los hallazgos de campo, que no van en tabla; del "
+            "PDF, el texto, incluida la matriz de obligaciones del prestamo "
+            "IFC; del ZIP, lo que lleve dentro.",
             152,
         ),
         (

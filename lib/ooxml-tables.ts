@@ -106,3 +106,43 @@ export async function readOfficeTables(bytes: ArrayBuffer, extension: string) {
     return registro;
   }));
 }
+
+/**
+ * Cuadros de texto de una diapositiva, agrupados por forma.
+ *
+ * Complementa a las tablas para un caso concreto y muy real: las láminas de
+ * indicadores del informe de obra (seguridad, hallazgos) no llevan tabla
+ * ninguna. Cada dato es un cuadro suelto —el número en uno, su etiqueta en el
+ * siguiente, el matiz en el tercero—, así que leyendo sólo tablas ese informe
+ * entraba "sin datos aplicables" y el área se quedaba congelada mes tras mes.
+ *
+ * Se agrupa por `<p:sp>` (la forma) en vez de volcar el texto entero de la
+ * lámina, porque la agrupación **es** la estructura: sin ella no hay manera de
+ * saber qué etiqueta acompaña a qué número. Dentro de cada forma se devuelve un
+ * texto por párrafo `<a:p>`, que es como se listan los hallazgos.
+ */
+export function extractPptxShapes(slideXml: string) {
+  const formas: string[][] = [];
+  for (const forma of slideXml.matchAll(/<p:sp>([\s\S]*?)<\/p:sp>/g)) {
+    const parrafos: string[] = [];
+    for (const parrafo of forma[1].matchAll(/<a:p>([\s\S]*?)<\/a:p>/g)) {
+      const texto = textoPlano(parrafo[1]);
+      if (texto) parrafos.push(texto);
+    }
+    if (parrafos.length) formas.push(parrafos);
+  }
+  return formas;
+}
+
+/** Formas de texto de cada diapositiva de un .pptx, en orden de lámina. */
+export async function readPptxSlideShapes(bytes: ArrayBuffer) {
+  const entradas = await readZipEntries(bytes, (name) => /^ppt\/slides\/slide\d+\.xml$/.test(name));
+  if (!entradas.length) return [];
+
+  const ordenadas = [...entradas].sort((izquierda, derecha) => {
+    const numero = (nombre: string) => Number(nombre.match(/(\d+)\.xml$/)?.[1] ?? 0);
+    return numero(izquierda.name) - numero(derecha.name);
+  });
+
+  return ordenadas.map((entrada) => extractPptxShapes(new TextDecoder().decode(entrada.data)));
+}

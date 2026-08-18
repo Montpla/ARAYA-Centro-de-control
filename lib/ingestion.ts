@@ -1,7 +1,7 @@
 import { LiveDataUpdate, LiveDataValue, isLiveDataKey } from "./live-data";
 import { buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml } from "./project-xml";
 import { readXlsxSheets, readZipEntries, rowsToRecords } from "./xlsx-reader";
-import { readOfficeTables } from "./ooxml-tables";
+import { readOfficeTables, readPptxSlideShapes } from "./ooxml-tables";
 import { findBuildingProgress, readPdfText } from "./pdf-text";
 import {
   PHASE_WEIGHTS,
@@ -611,6 +611,199 @@ function extractReprogrammedFlowUpdates(
   return null;
 }
 
+// Indicadores y hallazgos de seguridad del informe de obra.
+//
+// Esta lámina nunca actualizó nada, y no por falta de datos: de un PowerPoint
+// sólo se leían las tablas, y aquí no hay ninguna. Cada indicador son tres
+// cuadros de texto seguidos —el número, su etiqueta y el matiz—, que es una
+// estructura tan buena como una fila de tabla en cuanto se lee agrupada por
+// forma. El resultado es que Seguridad y Salud se quedaba congelada mes tras
+// mes mientras el informe traía el dato delante.
+//
+// Se emiten las listas completas (no índice a índice) para que un mes con
+// menos hallazgos que el anterior no arrastre los que ya no aplican.
+function esNumeroDeIndicador(texto: string) {
+  return /^\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*%?$/.test(texto.trim());
+}
+
+function esEtiquetaDeIndicador(texto: string) {
+  const limpio = texto.trim();
+  if (limpio.length < 4 || limpio.length > 70) return false;
+  if (esNumeroDeIndicador(limpio)) return false;
+  // El pie de página lleva el nombre del fideicomiso y va justo antes del
+  // número de diapositiva: sin esto, ese número se colaría como indicador.
+  return !/fideicomiso|punta cana/i.test(limpio);
+}
+
+export function extractSafetyUpdates(laminas: string[][][]): LiveDataUpdate[] {
+  const updates: LiveDataUpdate[] = [];
+
+  for (const formas of laminas) {
+    const textoLamina = formas.map((forma) => forma.join(" ")).join(" ");
+
+    if (/segurid/i.test(textoLamina) && /salud/i.test(textoLamina)) {
+      const metricas: Array<{ label: string; value: string; detail: string }> = [];
+      for (let indice = 0; indice < formas.length && metricas.length < 12; indice += 1) {
+        const valor = formas[indice];
+        const etiqueta = formas[indice + 1];
+        if (valor?.length !== 1 || !esNumeroDeIndicador(valor[0])) continue;
+        if (etiqueta?.length !== 1 || !esEtiquetaDeIndicador(etiqueta[0])) continue;
+        const posibleDetalle = formas[indice + 2];
+        const detalle = posibleDetalle?.length === 1 &&
+          !esNumeroDeIndicador(posibleDetalle[0]) &&
+          posibleDetalle[0].length <= 80
+          ? posibleDetalle[0].trim()
+          : "";
+        metricas.push({ label: etiqueta[0].trim(), value: valor[0].trim(), detail: detalle });
+        indice += detalle ? 2 : 1;
+      }
+      // Tres indicadores es el mínimo para descartar una coincidencia suelta:
+      // la lámina real trae cinco o más.
+      if (metricas.length >= 3) {
+        updates.push({ key: "safetyMetrics", value: metricas });
+      }
+    }
+
+    for (let indice = 0; indice < formas.length; indice += 1) {
+      if (!/actos\s+y\s+condiciones\s+inseguras/i.test(formas[indice].join(" "))) continue;
+      const lista = formas[indice + 1];
+      if (!lista || lista.length < 2) continue;
+      updates.push({
+        key: "safetyFindings",
+        value: lista.map((linea) => linea.trim()).filter(Boolean).slice(0, 20),
+      });
+      break;
+    }
+  }
+
+  return updates;
+}
+
+// Compromisos del contrato de préstamo con IFC.
+//
+// La matriz de obligaciones estaba escrita a mano en el código: el informe de
+// análisis se podía abrir desde el panel, pero cambiarlo no cambiaba nada de lo
+// que se veía. Ahora se lee del propio informe.
+//
+// El PDF titula sus secciones dibujando cada letra por separado ("C o m p r o
+// m i s o s"), que es cómo coloca los glifos, y dentro de cada una lista los
+// compromisos como "Nombre: qué obliga a hacer". Ambas cosas son reconocibles
+// sin interpretar nada.
+const IFC_SECCIONES_IGNORADAS = /^(?:introducci|resumen|conclusi)/i;
+
+function esProsa(texto: string) {
+  const legibles = texto.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ,.;:%()¿?¡!'"-]/g)?.length ?? 0;
+  return texto.length > 0 && legibles / texto.length > 0.92;
+}
+
+// Sólo conectores que rara vez terminan una palabra española. "a", "la", "el" y
+// "en" quedan fuera a propósito: partían "Favorecida" en "Favorecid a" y
+// "Escuela" en "Escue la".
+const IFC_CONECTORES = ["del", "de", "las", "los", "por", "para", "con", "y"];
+
+/**
+ * Rehace las palabras de un título dibujado letra a letra.
+ *
+ * El PDF coloca cada glifo por separado y el hueco entre palabras es del mismo
+ * carácter que el hueco entre letras, así que al recuperar el texto la
+ * separación se pierde: "RequisitosdeInformación". Las mayúsculas marcan dónde
+ * empieza cada palabra salvo en los conectores, que van en minúscula y quedan
+ * pegados a la anterior; por eso se separan aparte.
+ */
+function rehacerTitulo(letras: string[]) {
+  const junto = letras.join("");
+  const trozos = junto.split(/(?=[A-ZÁÉÍÓÚÑ])/).filter(Boolean);
+  const palabras: string[] = [];
+  for (const trozo of trozos) {
+    const conector = IFC_CONECTORES.find((candidato) =>
+      trozo.length > candidato.length + 3 && trozo.toLowerCase().endsWith(candidato));
+    if (conector) {
+      palabras.push(trozo.slice(0, trozo.length - conector.length), conector);
+    } else {
+      palabras.push(trozo);
+    }
+  }
+  return palabras.join(" ").replace(/\s+/g, " ").trim();
+}
+
+// Palabras que sí siguen legítimamente a una "A" suelta, para no pegarlas.
+const IFC_TRAS_A_SUELTA = /^(?:partir|trav[eé]s|pesar|fin|favor|cambio|cargo|medida|nivel|efectos|corto|largo|mediano|continuaci[oó]n|prop[oó]sito)$/i;
+
+/**
+ * Une la primera letra cuando el PDF la separa por ajuste de espaciado.
+ *
+ * El documento dibuja "T ransacciones" y "A viso": la primera letra va en su
+ * propia orden de dibujo para afinar el hueco, y al recuperar el texto queda
+ * suelta. Sólo se corrige al principio de un compromiso, y no cuando la letra
+ * es una "A" que de verdad funciona como preposición.
+ */
+function unirLetraSuelta(texto: string) {
+  return texto.replace(/^([A-ZÁÉÍÓÚÑ]) ([a-záéíóúñ]{2,})/, (completo, letra: string, resto: string) =>
+    letra === "A" && IFC_TRAS_A_SUELTA.test(resto) ? completo : `${letra}${resto}`);
+}
+
+export function extractIfcCommitments(texto: string): LiveDataUpdate[] {
+  const plano = texto.replace(/\s+/g, " ");
+  if (!/IFC/.test(plano)) return [];
+
+  // Un título es una tirada larga de piezas de una sola letra. Se busca por
+  // piezas y no por caracteres: buscando por caracteres, la tirada se comía la
+  // primera letra del párrafo siguiente ("Compromisos Afirmativos E" dejaba
+  // "xistencia" fuera del primer compromiso).
+  const piezas = plano.split(" ");
+  const secciones: Array<{ title: string; desde: number; hasta: number }> = [];
+  let indice = 0;
+  while (indice < piezas.length) {
+    if ([...piezas[indice]].length !== 1 || !/\p{L}/u.test(piezas[indice])) {
+      indice += 1;
+      continue;
+    }
+    let fin = indice;
+    while (fin < piezas.length && [...piezas[fin]].length === 1 && /\p{L}/u.test(piezas[fin])) fin += 1;
+    if (fin - indice >= 6) {
+      secciones.push({ title: rehacerTitulo(piezas.slice(indice, fin)), desde: fin, hasta: piezas.length });
+    }
+    indice = fin;
+  }
+  if (secciones.length < 2) return [];
+  secciones.forEach((seccion, posicion) => {
+    const siguiente = secciones[posicion + 1];
+    if (siguiente) seccion.hasta = siguiente.desde - [...siguiente.title.replace(/ /g, "")].length;
+  });
+
+  const grupos: Array<{ title: string; items: string[] }> = [];
+  for (const seccion of secciones) {
+    if (IFC_SECCIONES_IGNORADAS.test(seccion.title)) continue;
+    const cuerpo = piezas.slice(seccion.desde, seccion.hasta).join(" ").trim();
+    if (!cuerpo) continue;
+
+    // Forma preferida: "Nombre del compromiso: qué obliga a hacer."
+    const etiquetados = [...cuerpo.matchAll(/([A-ZÁÉÍÓÚÑ][^:.]{2,70}):\s*([^:]*?\.)(?=\s+[A-ZÁÉÍÓÚÑ]|\s*$)/g)]
+      .map((item) => `${unirLetraSuelta(item[1].trim())}: ${item[2].trim()}`);
+    const items = (etiquetados.length >= 2
+      ? etiquetados
+      : (cuerpo.match(/[^.]+\./g) ?? []).map((frase) => unirLetraSuelta(frase.trim())))
+      .filter((item) => item.length >= 20 && item.length <= 300 && esProsa(item))
+      .slice(0, 15);
+
+    if (items.length) grupos.push({ title: seccion.title, items });
+  }
+
+  // Con un solo grupo no hay matriz que valga: casi seguro se ha reconocido
+  // algo que no era un título.
+  if (grupos.length < 2) return [];
+  return [{ key: "ifcComplianceGroups", value: grupos.slice(0, 10) }];
+}
+
+function resumenDeSeguridad(updates: LiveDataUpdate[]) {
+  const partes: string[] = [];
+  const metricas = updates.find((update) => update.key === "safetyMetrics");
+  const hallazgos = updates.find((update) => update.key === "safetyFindings");
+  if (Array.isArray(metricas?.value)) partes.push(`${metricas.value.length} indicadores de seguridad`);
+  if (Array.isArray(hallazgos?.value)) partes.push(`${hallazgos.value.length} hallazgos de campo`);
+  return `${partes.join(" y ")} leídos del informe de obra.`;
+}
+
 export async function extractStructuredUpdates(
   bytes: ArrayBuffer,
   extension: string,
@@ -652,8 +845,17 @@ export async function extractStructuredUpdates(
       };
     }
 
+    const compromisos = extractIfcCommitments(lectura.text);
     const filas = findBuildingProgress(lectura.text, defaults.knownBuildingTokens);
     if (!filas.length) {
+      if (compromisos.length) {
+        const grupos = compromisos[0].value;
+        return {
+          updates: compromisos,
+          summary: `Matriz de obligaciones IFC actualizada (${Array.isArray(grupos) ? grupos.length : 0} bloques).`,
+          warnings: [],
+        };
+      }
       return {
         updates: [],
         summary: lectura.text
@@ -664,14 +866,17 @@ export async function extractStructuredUpdates(
     }
 
     return {
-      updates: filas.map((fila) => ({
-        key: `buildings.${fila.code}.progress`,
-        value: fila.value,
-        area: defaults.area,
-        cutoff: defaults.cutoff,
-        sourceCurrency: defaults.sourceCurrency,
-        sourceName: defaults.sourceName,
-      })),
+      updates: [
+        ...filas.map((fila) => ({
+          key: `buildings.${fila.code}.progress`,
+          value: fila.value,
+          area: defaults.area,
+          cutoff: defaults.cutoff,
+          sourceCurrency: defaults.sourceCurrency,
+          sourceName: defaults.sourceName,
+        })),
+        ...compromisos,
+      ],
       summary: `${filas.length} edificios actualizados desde el texto del PDF.`,
       warnings: [],
     };
@@ -747,17 +952,38 @@ export async function extractStructuredUpdates(
   // corrido de un informe sigue necesitando interpretación, porque "el edificio
   // 14 va por el 60%" no es un dato estructurado por bien que se lea.
   if (extension === "docx" || extension === "pptx") {
+    // Los indicadores de seguridad viven en cuadros de texto, no en tablas, así
+    // que se leen aparte y se suman a lo que encuentren las tablas: un mismo
+    // informe trae la cubicación en tabla y la seguridad en cuadros, y antes
+    // sólo podía aplicarse una de las dos cosas.
+    let seguridad: LiveDataUpdate[] = [];
+    if (extension === "pptx") {
+      try {
+        seguridad = extractSafetyUpdates(await readPptxSlideShapes(bytes));
+      } catch {
+        // Sin formas legibles se sigue con las tablas.
+      }
+    }
     let tablas;
     try {
       tablas = await readOfficeTables(bytes, extension);
     } catch {
       return {
-        updates: [],
-        summary: "El documento no se pudo abrir.",
+        updates: seguridad,
+        summary: seguridad.length
+          ? "No se pudieron leer las tablas, pero sí los indicadores de seguridad."
+          : "El documento no se pudo abrir.",
         warnings: [`Comprueba que el archivo es un .${extension} moderno y no una versión antigua.`],
       };
     }
     if (!tablas.length) {
+      if (seguridad.length) {
+        return {
+          updates: seguridad,
+          summary: resumenDeSeguridad(seguridad),
+          warnings: [],
+        };
+      }
       return {
         updates: [],
         summary: "El documento no contiene ninguna tabla.",
@@ -776,8 +1002,9 @@ export async function extractStructuredUpdates(
         }
         if (updates.length) {
           return {
-            updates,
-            summary: `${updates.length} datos leídos de una tabla del documento.`,
+            updates: [...updates, ...seguridad],
+            summary: `${updates.length} datos leídos de una tabla del documento` +
+              (seguridad.length ? `, más ${resumenDeSeguridad(seguridad)}` : "") + ".",
             warnings,
           };
         }
@@ -789,6 +1016,13 @@ export async function extractStructuredUpdates(
       // subía cada mes sin que actualizara nada.
       const matriz = extractMatrixProgress(filas, defaults);
       if (matriz) return matriz;
+    }
+    if (seguridad.length) {
+      return {
+        updates: seguridad,
+        summary: resumenDeSeguridad(seguridad),
+        warnings: [],
+      };
     }
     return {
       updates: [],
