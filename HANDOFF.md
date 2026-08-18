@@ -1,6 +1,6 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 13/08/2026
+Actualizado: 18/08/2026
 Zona horaria del usuario: Europe/Madrid
 Idioma de trabajo: español
 
@@ -14,7 +14,16 @@ corrige algo que el resto del documento da por hecho y ya no es así).
 
 El usuario trabaja de forma iterativa: normalmente entrega archivos, capturas o
 indicaciones visuales y espera que el dashboard se actualice, se compruebe y se
-publique en el mismo enlace.
+publique en el mismo enlace. Es una persona no técnica y trabaja en español:
+conviene explicar el porqué de las cosas sin jerga, y decir con claridad cuándo
+algo no se puede hacer o no ha funcionado.
+
+Además del aviso de plataforma que viene a continuación, leer la sección
+fechada más reciente (18/08/2026) antes de tocar la ingesta, el contrato de
+datos o las notificaciones: recoge varias trampas silenciosas —datos que se
+extraen bien y aun así no se publican, PDF que se leen como basura sin que nada
+avise, claves que se borran solas en el siguiente despliegue— que ya costaron
+un fallo real cada una.
 
 ## Aviso importante: plataforma de despliegue vigente (leer antes que nada)
 
@@ -2536,6 +2545,174 @@ edificio** (`buildings.TH-14.progress`), no por posición.
   `scripts/generar-fixtures-xlsx.py`, regenerar sin tocar los casos no produce
   ningún cambio. Los ficheros de ZIP y PDF se generan también desde ese script,
   en vez de existir como binarios sin origen.
+
+## Notificaciones, automatización de las áreas que faltaban y seguimiento manual (18/08/2026)
+
+Sesión larga. Se cerraron dos problemas que llevaban meses envenenando todo lo
+demás (los avisos y los despliegues) y se automatizaron las dos únicas áreas que
+seguían en explotación parcial. **Las trampas que se detallan aquí son lo más
+importante de esta sección: cada una costó un fallo real y todas son silenciosas.**
+
+### Las notificaciones nunca habían funcionado: dos causas encadenadas
+
+1. Las claves VAPID no estaban en producción, o la pública y la privada no eran
+   del mismo par (el servicio push responde 401/403 y no entrega nada).
+2. **`wrangler deploy` conserva los secretos del Worker pero borra las variables
+   de texto plano puestas a mano en el panel de Cloudflare**, porque
+   `wrangler.deploy.jsonc` no declara ningún bloque `vars`. Guardar una sola de
+   las tres claves como texto normal hacía que el push funcionara hasta el
+   siguiente despliegue y se apagara solo, sin error en ninguna parte.
+
+**Las tres claves (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`) van
+como Secret.** Si alguien vuelve a ponerlas como texto plano, los avisos se
+apagarán en el siguiente despliegue.
+
+Guardas añadidas:
+
+- `scripts/deploy.mjs` consulta `/api/push/config` con la sesión ya autenticada
+  de la verificación y **falla el despliegue** si falta alguna clave. Antes esto
+  se publicaba en verde con los avisos muertos.
+- `POST /api/push/test` recibe el `endpoint` de la suscripción del navegador y
+  responde **sobre ese dispositivo**. Antes enviaba a todas las suscripciones del
+  usuario y decía "Enviado a 1 de 1" aunque ese 1 fuera el móvil: probando desde
+  el ordenador parecía correcto y allí no llegaba nada.
+
+### El despliegue llevaba tiempo bloqueado y nadie lo sabía
+
+Un error de tipos en `lib/project-xml.ts` frenaba el paso de *Typecheck*, así que
+**ningún cambio llegaba a producción**. La causa de fondo: `npm run test`
+compilaba y ejecutaba las pruebas pero no ejecutaba `tsc`, de modo que un fallo
+de tipos pasaba las pruebas locales y sólo aparecía al desplegar. Ahora `test`
+empieza por `npm run typecheck` y comprueba exactamente lo mismo que el
+despliegue.
+
+### Trampa: un dato sin `area` no se publica y nada lo dice
+
+`app/api/files/route.ts` exige `update.area === resolvedArea` para publicar
+automáticamente. Los lectores nuevos no marcaban el área, así que la lectura
+funcionaba, los datos se extraían bien **y el panel no se movía**, quedando a la
+espera de una revisión manual que nadie sabía que existía.
+
+**Todo lector nuevo debe marcar `area`, `cutoff`, `sourceCurrency` y
+`sourceName`** (tipo `ExtractionDefaults` en `lib/ingestion.ts`). Las pruebas de
+los lectores comprueban la procedencia, no sólo el contenido.
+
+### Seguridad y Salud: de un PowerPoint sólo se leían las tablas
+
+Los indicadores de seguridad no son una tabla: son cuadros de texto sueltos —el
+número en uno, su etiqueta en el siguiente, el matiz en el tercero—, más la lista
+de hallazgos. El informe de obra entraba como "sin datos aplicables" y el área
+llevaba meses congelada.
+
+- `readPptxSlideShapes` / `extractPptxShapes` (`lib/ooxml-tables.ts`) agrupan el
+  texto **por forma** (`<p:sp>`). La agrupación *es* la estructura: sin ella no
+  hay manera de saber qué etiqueta acompaña a qué número.
+- `extractSafetyUpdates` emite `safetyMetrics` y `safetyFindings` **como listas
+  completas, no índice a índice**, para que un mes con menos hallazgos no
+  arrastre los del anterior.
+- Se **suma** a lo que encuentren las tablas: un mismo informe trae la cubicación
+  en tabla y la seguridad en cuadros, y antes sólo podía aplicarse una de las dos.
+
+### Trampa: PDF con fuentes en subconjunto (`/ToUnicode`)
+
+Los informes que la empresa genera cada mes (IFC, proveedores) incrustan la
+fuente renumerando sus glifos: el código del PDF no es el del carácter.
+`Informe de análisis` se extraía como `,QIRUPHGHDQ£OLVLV` — texto real, pero
+ilegible, y **ni la lectura directa ni la IA podían hacer nada con él**, sin que
+nada lo delatara. Si alguien plantea "poner una IA mejor" para un documento que
+no se lee, comprobar antes si el problema es éste.
+
+`lib/pdf-text.ts` lee y fusiona ahora las tablas `/ToUnicode` del documento
+(descartando los códigos con traducciones contradictorias entre fuentes), en dos
+pasadas porque una tabla puede venir en un flujo posterior al texto que le
+corresponde. **Se elige por flujo la lectura más legible de las dos**, así que un
+documento que ya se leía bien no puede empeorar: el informe de junio pasó de 587
+a 1570 palabras reconocibles.
+
+### Obligaciones IFC: estaban escritas a mano en el código
+
+El informe se podía abrir desde el panel pero sustituirlo no cambiaba nada, y
+ninguna raíz viva apuntaba a ese bloque. Ahora `ifcComplianceGroups` es raíz viva
+(y financiera) y `extractIfcCommitments` la lee del informe: 6 bloques frente a
+los 4 fijos, incluidas las observaciones y recomendaciones, que se perdían.
+
+Dos detalles del documento, por si cambia el formato:
+
+- Los títulos se dibujan **letra a letra**, así que los espacios entre palabras
+  se pierden al recuperar el texto. Se detectan por piezas de una sola letra y se
+  recomponen separando los conectores. Buscarlos carácter a carácter se comía la
+  primera letra del párrafo siguiente y truncaba el primer compromiso.
+- El PDF separa la primera letra de algunas palabras para ajustar el espaciado
+  (`T ransacciones`). Se une, salvo cuando la `A` suelta es de verdad una
+  preposición.
+
+### Seguimiento manual: lo que ningún documento puede decir
+
+Los hallazgos y las obligaciones se leen solos, pero ningún informe dice quién se
+hace cargo, para cuándo ni con qué prueba queda cerrado. Dos pantallas nuevas
+sobre un editor compartido (`TrackingEditor` en `app/dashboard-client.tsx`):
+
+- **Hallazgos** (`safetyFindingTracking`, `POST /api/safety-findings`).
+- **Obligaciones IFC** (`ifcComplianceTracking`, `POST /api/ifc-compliance`).
+
+**La lista leída manda y el seguimiento se cruza por el texto del punto**, de
+modo que cuando el informe del mes trae otros distintos, los nuevos aparecen sin
+asignar y no se arrastra el seguimiento de los que ya no figuran.
+
+Sobre los permisos: `POST /api/live-data` exige administrador, y quien cierra un
+hallazgo es el jefe de obra. En vez de rebajar ese permiso general —que abriría
+la puerta a escribir cualquier dato, incluidos los financieros— cada ruta **sólo
+puede escribir su propia clave** y reconstruye cada campo en el servidor en lugar
+de guardar lo que llegue. La de IFC sí exige autorización financiera, porque ese
+bloque sólo se sirve con ella y si no sería una puerta lateral a su contenido.
+
+### Trampa: el catálogo de un campo `status` sale del dato base
+
+`lib/live-data-contract.ts` sólo admite en un campo cuyo nombre encaje en
+`ENUM_FIELD` (`status`, `state`, `phase`…) **los valores presentes en el dato
+base**. Consecuencias prácticas:
+
+- `safetyFindingTracking` tiene los tres estados en su dato base (tomados del
+  apartado "seguimiento a acciones" del informe de junio, no inventados). Si
+  alguien los recorta, guardar "Cerrado" empieza a fallar. Hay una prueba que lo
+  vigila.
+- `ifcComplianceTracking` va con el estado **vacío** a propósito: dar por abierta
+  o incumplida una obligación del contrato afirmaría algo que no consta, y además
+  un catálogo vacío no impone restricción, con lo que no hay que fabricar estados
+  falsos para que el desplegable pueda usarlos. La lista válida la impone el
+  servidor. Otra prueba vigila que siga vacío.
+
+Recordatorio general del contrato: **la ruta tiene que existir en el modelo
+autorizado**, así que un mapa con claves arbitrarias no valida; escribir la raíz
+entera sí, y las listas se validan por la forma de sus elementos, no por su
+longitud. Un dato base con lista vacía obliga a que lo escrito también lo esté.
+
+### Otros
+
+- La etiqueta **VIAL** del plano se movió al centro en los dos mapas de
+  coordenadas (`urbanismMapPoints` y `visualUrbanismMapPoints`).
+- `guia-formatos-araya.pdf` actualizada y regenerada: decía "de Word y PowerPoint
+  se leen las tablas", que ya no es completo.
+- Correo para dirección y mensaje de WhatsApp para la oficina, redactados y
+  entregados al usuario (no viven en el repositorio).
+
+### Estado al cierre
+
+Las catorce áreas operativas; ninguna marcada como parcial. 257 pruebas (se
+empezó el día con 242), todas contra documentos reales del repositorio y no
+contra ejemplos inventados. Nueve cambios publicados y desplegados en verde.
+
+### Pendiente
+
+- **IA de Anthropic como respaldo de extracción**, aparcado por decisión del
+  usuario. Hoy el respaldo es OpenAI (`gpt-5.6-terra`, `lib/ai-document-extraction.ts`).
+  Necesitaría `ANTHROPIC_API_KEY` en Cloudflare. Conviene no venderlo como
+  solución a documentos ilegibles: eso casi siempre es un problema de lectura,
+  no de interpretación.
+- **Los PDF del fideicomiso no contienen texto** (`scanned: true`): son imágenes
+  y necesitan lectura asistida, no un lector determinista.
+- Verificar con el informe de agosto que los hallazgos nuevos aparecen sin
+  asignar y no se arrastra el seguimiento de junio.
 
 ## Criterios de continuidad
 
