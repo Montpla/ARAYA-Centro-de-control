@@ -166,3 +166,54 @@ test("una lámina sin seguridad no inventa indicadores", () => {
   ]);
   assert.deepEqual(updates, []);
 });
+
+// Matriz de obligaciones del préstamo con IFC.
+//
+// Estaba escrita a mano en el código: el informe se podía abrir desde el panel,
+// pero sustituirlo no cambiaba nada de lo que se veía. La prueba va contra el
+// PDF real porque su dificultad está en el propio documento: titula las
+// secciones dibujando cada letra por separado y separa la primera letra de
+// algunas palabras para ajustar el espaciado.
+const pdfTextReal = await import("../lib/pdf-text.ts");
+
+test("el informe IFC rellena la matriz de obligaciones", async () => {
+  const bytes = await readFile("historical/data-center/julio-2026/informe-analisis-ifc-2026-07-29.pdf");
+  const lectura = await pdfTextReal.readPdfText(
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  );
+  const updates = ingestion.extractIfcCommitments(lectura.text);
+  assert.equal(updates.length, 1);
+  const grupos = updates[0].value;
+  assert.ok(grupos.length >= 5, `sólo ${grupos.length} bloques`);
+
+  const titulos = grupos.map((grupo) => grupo.title);
+  assert.ok(titulos.includes("Compromisos Afirmativos"), titulos.join(" | "));
+  // Los conectores se recomponen sin partir la palabra anterior.
+  assert.ok(titulos.includes("Requisitos de Información"), titulos.join(" | "));
+  assert.ok(titulos.includes("Cláusula de Nación Más Favorecida"), titulos.join(" | "));
+  // La introducción es contexto, no una obligación.
+  assert.ok(!titulos.some((titulo) => /introducci/i.test(titulo)), titulos.join(" | "));
+
+  const afirmativos = grupos.find((grupo) => grupo.title === "Compromisos Afirmativos");
+  // El primer compromiso perdía su primera palabra cuando el título se leía
+  // carácter a carácter en vez de por piezas.
+  assert.ok(
+    afirmativos.items.some((item) => item.startsWith("Existencia y Conducción del Negocio:")),
+    afirmativos.items[0],
+  );
+
+  const negativos = grupos.find((grupo) => grupo.title === "Compromisos Negativos");
+  // El PDF dibuja "T ransacciones" para ajustar el espaciado.
+  assert.ok(negativos.items.some((item) => item.startsWith("Transacciones de Derivados:")), negativos.items.join(" | "));
+
+  // Y nada de los datos de la fuente incrustada que van tras el texto.
+  for (const grupo of grupos) {
+    for (const item of grupo.items) {
+      assert.match(item, /^[\p{L}\p{N}][\p{L}\p{N} ,.;:%()¿?¡!'"·/-]*$/u, item);
+    }
+  }
+});
+
+test("un PDF cualquiera no genera matriz de obligaciones", () => {
+  assert.deepEqual(ingestion.extractIfcCommitments("Informe de obra de junio. El edificio TH-14 va por el 60%."), []);
+});

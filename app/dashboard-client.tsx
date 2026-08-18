@@ -310,6 +310,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     fiduciaryManagementReconciliation,
     fiduciaryStatementQualityIssues,
     fiduciaryStatementSummary,
+    ifcComplianceGroups,
     juneDataQualityIssues,
     juneReport,
     managementActions,

@@ -679,6 +679,122 @@ export function extractSafetyUpdates(laminas: string[][][]): LiveDataUpdate[] {
   return updates;
 }
 
+// Compromisos del contrato de préstamo con IFC.
+//
+// La matriz de obligaciones estaba escrita a mano en el código: el informe de
+// análisis se podía abrir desde el panel, pero cambiarlo no cambiaba nada de lo
+// que se veía. Ahora se lee del propio informe.
+//
+// El PDF titula sus secciones dibujando cada letra por separado ("C o m p r o
+// m i s o s"), que es cómo coloca los glifos, y dentro de cada una lista los
+// compromisos como "Nombre: qué obliga a hacer". Ambas cosas son reconocibles
+// sin interpretar nada.
+const IFC_SECCIONES_IGNORADAS = /^(?:introducci|resumen|conclusi)/i;
+
+function esProsa(texto: string) {
+  const legibles = texto.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 ,.;:%()¿?¡!'"-]/g)?.length ?? 0;
+  return texto.length > 0 && legibles / texto.length > 0.92;
+}
+
+// Sólo conectores que rara vez terminan una palabra española. "a", "la", "el" y
+// "en" quedan fuera a propósito: partían "Favorecida" en "Favorecid a" y
+// "Escuela" en "Escue la".
+const IFC_CONECTORES = ["del", "de", "las", "los", "por", "para", "con", "y"];
+
+/**
+ * Rehace las palabras de un título dibujado letra a letra.
+ *
+ * El PDF coloca cada glifo por separado y el hueco entre palabras es del mismo
+ * carácter que el hueco entre letras, así que al recuperar el texto la
+ * separación se pierde: "RequisitosdeInformación". Las mayúsculas marcan dónde
+ * empieza cada palabra salvo en los conectores, que van en minúscula y quedan
+ * pegados a la anterior; por eso se separan aparte.
+ */
+function rehacerTitulo(letras: string[]) {
+  const junto = letras.join("");
+  const trozos = junto.split(/(?=[A-ZÁÉÍÓÚÑ])/).filter(Boolean);
+  const palabras: string[] = [];
+  for (const trozo of trozos) {
+    const conector = IFC_CONECTORES.find((candidato) =>
+      trozo.length > candidato.length + 3 && trozo.toLowerCase().endsWith(candidato));
+    if (conector) {
+      palabras.push(trozo.slice(0, trozo.length - conector.length), conector);
+    } else {
+      palabras.push(trozo);
+    }
+  }
+  return palabras.join(" ").replace(/\s+/g, " ").trim();
+}
+
+// Palabras que sí siguen legítimamente a una "A" suelta, para no pegarlas.
+const IFC_TRAS_A_SUELTA = /^(?:partir|trav[eé]s|pesar|fin|favor|cambio|cargo|medida|nivel|efectos|corto|largo|mediano|continuaci[oó]n|prop[oó]sito)$/i;
+
+/**
+ * Une la primera letra cuando el PDF la separa por ajuste de espaciado.
+ *
+ * El documento dibuja "T ransacciones" y "A viso": la primera letra va en su
+ * propia orden de dibujo para afinar el hueco, y al recuperar el texto queda
+ * suelta. Sólo se corrige al principio de un compromiso, y no cuando la letra
+ * es una "A" que de verdad funciona como preposición.
+ */
+function unirLetraSuelta(texto: string) {
+  return texto.replace(/^([A-ZÁÉÍÓÚÑ]) ([a-záéíóúñ]{2,})/, (completo, letra: string, resto: string) =>
+    letra === "A" && IFC_TRAS_A_SUELTA.test(resto) ? completo : `${letra}${resto}`);
+}
+
+export function extractIfcCommitments(texto: string): LiveDataUpdate[] {
+  const plano = texto.replace(/\s+/g, " ");
+  if (!/IFC/.test(plano)) return [];
+
+  // Un título es una tirada larga de piezas de una sola letra. Se busca por
+  // piezas y no por caracteres: buscando por caracteres, la tirada se comía la
+  // primera letra del párrafo siguiente ("Compromisos Afirmativos E" dejaba
+  // "xistencia" fuera del primer compromiso).
+  const piezas = plano.split(" ");
+  const secciones: Array<{ title: string; desde: number; hasta: number }> = [];
+  let indice = 0;
+  while (indice < piezas.length) {
+    if ([...piezas[indice]].length !== 1 || !/\p{L}/u.test(piezas[indice])) {
+      indice += 1;
+      continue;
+    }
+    let fin = indice;
+    while (fin < piezas.length && [...piezas[fin]].length === 1 && /\p{L}/u.test(piezas[fin])) fin += 1;
+    if (fin - indice >= 6) {
+      secciones.push({ title: rehacerTitulo(piezas.slice(indice, fin)), desde: fin, hasta: piezas.length });
+    }
+    indice = fin;
+  }
+  if (secciones.length < 2) return [];
+  secciones.forEach((seccion, posicion) => {
+    const siguiente = secciones[posicion + 1];
+    if (siguiente) seccion.hasta = siguiente.desde - [...siguiente.title.replace(/ /g, "")].length;
+  });
+
+  const grupos: Array<{ title: string; items: string[] }> = [];
+  for (const seccion of secciones) {
+    if (IFC_SECCIONES_IGNORADAS.test(seccion.title)) continue;
+    const cuerpo = piezas.slice(seccion.desde, seccion.hasta).join(" ").trim();
+    if (!cuerpo) continue;
+
+    // Forma preferida: "Nombre del compromiso: qué obliga a hacer."
+    const etiquetados = [...cuerpo.matchAll(/([A-ZÁÉÍÓÚÑ][^:.]{2,70}):\s*([^:]*?\.)(?=\s+[A-ZÁÉÍÓÚÑ]|\s*$)/g)]
+      .map((item) => `${unirLetraSuelta(item[1].trim())}: ${item[2].trim()}`);
+    const items = (etiquetados.length >= 2
+      ? etiquetados
+      : (cuerpo.match(/[^.]+\./g) ?? []).map((frase) => unirLetraSuelta(frase.trim())))
+      .filter((item) => item.length >= 20 && item.length <= 300 && esProsa(item))
+      .slice(0, 15);
+
+    if (items.length) grupos.push({ title: seccion.title, items });
+  }
+
+  // Con un solo grupo no hay matriz que valga: casi seguro se ha reconocido
+  // algo que no era un título.
+  if (grupos.length < 2) return [];
+  return [{ key: "ifcComplianceGroups", value: grupos.slice(0, 10) }];
+}
+
 function resumenDeSeguridad(updates: LiveDataUpdate[]) {
   const partes: string[] = [];
   const metricas = updates.find((update) => update.key === "safetyMetrics");
@@ -729,8 +845,17 @@ export async function extractStructuredUpdates(
       };
     }
 
+    const compromisos = extractIfcCommitments(lectura.text);
     const filas = findBuildingProgress(lectura.text, defaults.knownBuildingTokens);
     if (!filas.length) {
+      if (compromisos.length) {
+        const grupos = compromisos[0].value;
+        return {
+          updates: compromisos,
+          summary: `Matriz de obligaciones IFC actualizada (${Array.isArray(grupos) ? grupos.length : 0} bloques).`,
+          warnings: [],
+        };
+      }
       return {
         updates: [],
         summary: lectura.text
@@ -741,14 +866,17 @@ export async function extractStructuredUpdates(
     }
 
     return {
-      updates: filas.map((fila) => ({
-        key: `buildings.${fila.code}.progress`,
-        value: fila.value,
-        area: defaults.area,
-        cutoff: defaults.cutoff,
-        sourceCurrency: defaults.sourceCurrency,
-        sourceName: defaults.sourceName,
-      })),
+      updates: [
+        ...filas.map((fila) => ({
+          key: `buildings.${fila.code}.progress`,
+          value: fila.value,
+          area: defaults.area,
+          cutoff: defaults.cutoff,
+          sourceCurrency: defaults.sourceCurrency,
+          sourceName: defaults.sourceName,
+        })),
+        ...compromisos,
+      ],
       summary: `${filas.length} edificios actualizados desde el texto del PDF.`,
       warnings: [],
     };
