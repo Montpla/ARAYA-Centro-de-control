@@ -270,6 +270,14 @@ function parseValue(raw: unknown): LiveDataValue {
   }
 }
 
+/** Procedencia que acompaña a cada dato leído: de dónde sale y a qué corte. */
+type ExtractionDefaults = {
+  area: string;
+  cutoff: string;
+  sourceCurrency: "DOP" | "USD";
+  sourceName: string;
+};
+
 function normalizeUpdate(
   candidate: Record<string, unknown>,
   defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string },
@@ -635,7 +643,19 @@ function esEtiquetaDeIndicador(texto: string) {
   return !/fideicomiso|punta cana/i.test(limpio);
 }
 
-export function extractSafetyUpdates(laminas: string[][][]): LiveDataUpdate[] {
+export function extractSafetyUpdates(
+  laminas: string[][][],
+  defaults: ExtractionDefaults,
+): LiveDataUpdate[] {
+  // El área y el corte tienen que ir en cada dato: la publicación automática
+  // exige que coincidan con los del documento, y un dato sin área se queda
+  // esperando revisión manual para siempre sin que nada lo explique.
+  const marca = {
+    area: defaults.area,
+    cutoff: defaults.cutoff,
+    sourceCurrency: defaults.sourceCurrency,
+    sourceName: defaults.sourceName,
+  };
   const updates: LiveDataUpdate[] = [];
 
   for (const formas of laminas) {
@@ -660,7 +680,7 @@ export function extractSafetyUpdates(laminas: string[][][]): LiveDataUpdate[] {
       // Tres indicadores es el mínimo para descartar una coincidencia suelta:
       // la lámina real trae cinco o más.
       if (metricas.length >= 3) {
-        updates.push({ key: "safetyMetrics", value: metricas });
+        updates.push({ key: "safetyMetrics", value: metricas, ...marca });
       }
     }
 
@@ -671,6 +691,7 @@ export function extractSafetyUpdates(laminas: string[][][]): LiveDataUpdate[] {
       updates.push({
         key: "safetyFindings",
         value: lista.map((linea) => linea.trim()).filter(Boolean).slice(0, 20),
+        ...marca,
       });
       break;
     }
@@ -742,7 +763,7 @@ function unirLetraSuelta(texto: string) {
     letra === "A" && IFC_TRAS_A_SUELTA.test(resto) ? completo : `${letra}${resto}`);
 }
 
-export function extractIfcCommitments(texto: string): LiveDataUpdate[] {
+export function extractIfcCommitments(texto: string, defaults: ExtractionDefaults): LiveDataUpdate[] {
   const plano = texto.replace(/\s+/g, " ");
   if (!/IFC/.test(plano)) return [];
 
@@ -792,7 +813,14 @@ export function extractIfcCommitments(texto: string): LiveDataUpdate[] {
   // Con un solo grupo no hay matriz que valga: casi seguro se ha reconocido
   // algo que no era un título.
   if (grupos.length < 2) return [];
-  return [{ key: "ifcComplianceGroups", value: grupos.slice(0, 10) }];
+  return [{
+    key: "ifcComplianceGroups",
+    value: grupos.slice(0, 10),
+    area: defaults.area,
+    cutoff: defaults.cutoff,
+    sourceCurrency: defaults.sourceCurrency,
+    sourceName: defaults.sourceName,
+  }];
 }
 
 function resumenDeSeguridad(updates: LiveDataUpdate[]) {
@@ -845,7 +873,7 @@ export async function extractStructuredUpdates(
       };
     }
 
-    const compromisos = extractIfcCommitments(lectura.text);
+    const compromisos = extractIfcCommitments(lectura.text, defaults);
     const filas = findBuildingProgress(lectura.text, defaults.knownBuildingTokens);
     if (!filas.length) {
       if (compromisos.length) {
@@ -959,7 +987,7 @@ export async function extractStructuredUpdates(
     let seguridad: LiveDataUpdate[] = [];
     if (extension === "pptx") {
       try {
-        seguridad = extractSafetyUpdates(await readPptxSlideShapes(bytes));
+        seguridad = extractSafetyUpdates(await readPptxSlideShapes(bytes), defaults);
       } catch {
         // Sin formas legibles se sigue con las tablas.
       }

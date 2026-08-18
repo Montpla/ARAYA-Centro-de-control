@@ -135,7 +135,19 @@ test("el informe de obra rellena seguridad sin intervención", async () => {
   const laminas = await readPptxSlideShapes(
     bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
   );
-  const updates = ingestion.extractSafetyUpdates(laminas);
+  const updates = ingestion.extractSafetyUpdates(laminas, {
+    area: "obra_seguridad",
+    cutoff: "30/06/2026",
+    sourceCurrency: "DOP",
+    sourceName: "informe-obra-araya-junio-2026.pptx",
+  });
+
+  // Sin área y corte, la publicación automática descarta el dato y se queda
+  // esperando una revisión manual que nadie sabe que tiene pendiente.
+  for (const update of updates) {
+    assert.equal(update.area, "obra_seguridad", update.key);
+    assert.equal(update.cutoff, "30/06/2026", update.key);
+  }
 
   const metricas = updates.find((update) => update.key === "safetyMetrics");
   assert.ok(metricas, "no se leyeron los indicadores de seguridad del informe");
@@ -163,7 +175,7 @@ test("el informe de obra rellena seguridad sin intervención", async () => {
 test("una lámina sin seguridad no inventa indicadores", () => {
   const updates = ingestion.extractSafetyUpdates([
     [["Resumen financiero"], ["1.234.567"], ["Coste acumulado"], ["Junio 2026"]],
-  ]);
+  ], { area: "finanzas", cutoff: "30/06/2026", sourceCurrency: "DOP", sourceName: "x.pptx" });
   assert.deepEqual(updates, []);
 });
 
@@ -181,7 +193,13 @@ test("el informe IFC rellena la matriz de obligaciones", async () => {
   const lectura = await pdfTextReal.readPdfText(
     bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
   );
-  const updates = ingestion.extractIfcCommitments(lectura.text);
+  const updates = ingestion.extractIfcCommitments(lectura.text, {
+    area: "finanzas",
+    cutoff: "29/07/2026",
+    sourceCurrency: "DOP",
+    sourceName: "informe-analisis-ifc-2026-07-29.pdf",
+  });
+  assert.equal(updates[0].area, "finanzas");
   assert.equal(updates.length, 1);
   const grupos = updates[0].value;
   assert.ok(grupos.length >= 5, `sólo ${grupos.length} bloques`);
@@ -215,5 +233,5 @@ test("el informe IFC rellena la matriz de obligaciones", async () => {
 });
 
 test("un PDF cualquiera no genera matriz de obligaciones", () => {
-  assert.deepEqual(ingestion.extractIfcCommitments("Informe de obra de junio. El edificio TH-14 va por el 60%."), []);
+  assert.deepEqual(ingestion.extractIfcCommitments("Informe de obra de junio. El edificio TH-14 va por el 60%.", { area: "obra", cutoff: "30/06/2026", sourceCurrency: "DOP", sourceName: "x.pdf" }), []);
 });
