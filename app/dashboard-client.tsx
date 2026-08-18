@@ -8998,10 +8998,23 @@ export function DashboardClient({
     try {
       // Asegura que este dispositivo esté suscrito antes de probar.
       await registerPushSubscription();
+      // Se manda el endpoint propio para que el servidor diga si el aviso llega
+      // A ESTE aparato. Sin esto, probar desde el ordenador teniendo el móvil
+      // suscrito respondía "enviado" aunque aquí no apareciera nada.
+      let endpoint = "";
+      try {
+        const registration = await navigator.serviceWorker?.ready;
+        const subscription = await registration?.pushManager?.getSubscription();
+        endpoint = subscription?.endpoint ?? "";
+      } catch {
+        // Sin endpoint la prueba sigue siendo válida, sólo menos concreta.
+      }
       const response = await fetch("/api/push/test", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
         cache: "no-store",
+        body: JSON.stringify({ endpoint }),
       });
       const payload = await response.json() as { message?: string };
       setNotice(payload.message ?? (response.ok ? "Aviso enviado." : "No se pudo enviar el aviso del servidor."));
