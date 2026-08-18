@@ -13056,3 +13056,20 @@ button.financial-detail-row:focus-visible {
   flex-wrap: wrap;
   margin-top: 0.75rem;
 }
+
+/* Bloques que la lectura descubre y publica sin esperar aprobación. */
+.discovered-sections {
+  border-left: 3px solid #d97706;
+}
+
+.discovered-sections .quality-list > li > small {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--muted, #6b7280);
+  font-size: 0.72rem;
+}
+
+.discovered-sections .quality-list ul {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+}

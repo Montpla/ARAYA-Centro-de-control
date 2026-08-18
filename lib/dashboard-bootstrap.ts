@@ -75,6 +75,7 @@ function juneData(financeAccess: boolean) {
     cxpAging: financeAccess ? june.cxpAging : [],
     cxpCategories: financeAccess ? june.cxpCategories : [],
     delayedUrbanismStarts: june.delayedUrbanismStarts,
+    discoveredSections: financeAccess ? june.discoveredSections : [],
     financialProjection: financeAccess ? june.financialProjection : [],
     financingProcesses: financeAccess ? june.financingProcesses : [],
     juneDataQualityIssues: financeAccess ? june.juneDataQualityIssues : [],
