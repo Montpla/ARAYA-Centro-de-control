@@ -72,6 +72,34 @@ async function smokeVerify() {
   }
   console.log("✔ Login de verificación correcto.");
 
+  // Claves de notificación (VAPID). Van como secretos del Worker, y ese
+  // matiz importa: `wrangler deploy` conserva los secretos pero se lleva por
+  // delante las variables de texto plano puestas a mano en el panel de
+  // Cloudflare. Es decir, poner una de las tres como texto normal hace que el
+  // push funcione hasta el siguiente despliegue y se apague solo, sin error
+  // en ningún sitio: el navegador concede el permiso, el servidor calla y
+  // nadie se entera durante semanas. Pasó exactamente así. Por eso se
+  // comprueba en cada publicación y se falla a la vista en vez de publicar en
+  // verde con los avisos muertos.
+  const pushConfigResponse = await fetch(`${PRODUCTION_URL}/api/push/config`, {
+    headers: { Cookie: `araya_session=${sessionMatch[1]}` },
+  });
+  if (!pushConfigResponse.ok) {
+    console.error(`✖ /api/push/config devolvió ${pushConfigResponse.status}.`);
+    process.exit(1);
+  }
+  const pushConfig = await pushConfigResponse.json();
+  if (!pushConfig.enabled || !pushConfig.publicKey) {
+    console.error(
+      "✖ Las notificaciones están apagadas en producción: falta alguna de las tres claves VAPID " +
+      "(VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT) en el Worker.\n" +
+      "  Ponlas en Cloudflare → Worker → Settings → Variables and Secrets, y las TRES como Secret (cifradas):\n" +
+      "  las variables de texto plano se borran en el siguiente despliegue y los avisos se apagan solos.",
+    );
+    process.exit(1);
+  }
+  console.log("✔ Claves de notificación presentes en producción (los avisos push pueden enviarse).");
+
   const controlRoomResponse = await fetch(`${PRODUCTION_URL}/api/control-room`, {
     headers: { Cookie: `araya_session=${sessionMatch[1]}` },
   });
