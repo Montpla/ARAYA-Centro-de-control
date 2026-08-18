@@ -1,7 +1,7 @@
 import { LiveDataUpdate, LiveDataValue, isLiveDataKey } from "./live-data";
 import { buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml } from "./project-xml";
 import { readXlsxSheets, readZipEntries, rowsToRecords } from "./xlsx-reader";
-import { readOfficeTables } from "./ooxml-tables";
+import { readOfficeTables, readPptxSlideShapes } from "./ooxml-tables";
 import { findBuildingProgress, readPdfText } from "./pdf-text";
 import {
   PHASE_WEIGHTS,
@@ -611,6 +611,83 @@ function extractReprogrammedFlowUpdates(
   return null;
 }
 
+// Indicadores y hallazgos de seguridad del informe de obra.
+//
+// Esta lámina nunca actualizó nada, y no por falta de datos: de un PowerPoint
+// sólo se leían las tablas, y aquí no hay ninguna. Cada indicador son tres
+// cuadros de texto seguidos —el número, su etiqueta y el matiz—, que es una
+// estructura tan buena como una fila de tabla en cuanto se lee agrupada por
+// forma. El resultado es que Seguridad y Salud se quedaba congelada mes tras
+// mes mientras el informe traía el dato delante.
+//
+// Se emiten las listas completas (no índice a índice) para que un mes con
+// menos hallazgos que el anterior no arrastre los que ya no aplican.
+function esNumeroDeIndicador(texto: string) {
+  return /^\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*%?$/.test(texto.trim());
+}
+
+function esEtiquetaDeIndicador(texto: string) {
+  const limpio = texto.trim();
+  if (limpio.length < 4 || limpio.length > 70) return false;
+  if (esNumeroDeIndicador(limpio)) return false;
+  // El pie de página lleva el nombre del fideicomiso y va justo antes del
+  // número de diapositiva: sin esto, ese número se colaría como indicador.
+  return !/fideicomiso|punta cana/i.test(limpio);
+}
+
+export function extractSafetyUpdates(laminas: string[][][]): LiveDataUpdate[] {
+  const updates: LiveDataUpdate[] = [];
+
+  for (const formas of laminas) {
+    const textoLamina = formas.map((forma) => forma.join(" ")).join(" ");
+
+    if (/segurid/i.test(textoLamina) && /salud/i.test(textoLamina)) {
+      const metricas: Array<{ label: string; value: string; detail: string }> = [];
+      for (let indice = 0; indice < formas.length && metricas.length < 12; indice += 1) {
+        const valor = formas[indice];
+        const etiqueta = formas[indice + 1];
+        if (valor?.length !== 1 || !esNumeroDeIndicador(valor[0])) continue;
+        if (etiqueta?.length !== 1 || !esEtiquetaDeIndicador(etiqueta[0])) continue;
+        const posibleDetalle = formas[indice + 2];
+        const detalle = posibleDetalle?.length === 1 &&
+          !esNumeroDeIndicador(posibleDetalle[0]) &&
+          posibleDetalle[0].length <= 80
+          ? posibleDetalle[0].trim()
+          : "";
+        metricas.push({ label: etiqueta[0].trim(), value: valor[0].trim(), detail: detalle });
+        indice += detalle ? 2 : 1;
+      }
+      // Tres indicadores es el mínimo para descartar una coincidencia suelta:
+      // la lámina real trae cinco o más.
+      if (metricas.length >= 3) {
+        updates.push({ key: "safetyMetrics", value: metricas });
+      }
+    }
+
+    for (let indice = 0; indice < formas.length; indice += 1) {
+      if (!/actos\s+y\s+condiciones\s+inseguras/i.test(formas[indice].join(" "))) continue;
+      const lista = formas[indice + 1];
+      if (!lista || lista.length < 2) continue;
+      updates.push({
+        key: "safetyFindings",
+        value: lista.map((linea) => linea.trim()).filter(Boolean).slice(0, 20),
+      });
+      break;
+    }
+  }
+
+  return updates;
+}
+
+function resumenDeSeguridad(updates: LiveDataUpdate[]) {
+  const partes: string[] = [];
+  const metricas = updates.find((update) => update.key === "safetyMetrics");
+  const hallazgos = updates.find((update) => update.key === "safetyFindings");
+  if (Array.isArray(metricas?.value)) partes.push(`${metricas.value.length} indicadores de seguridad`);
+  if (Array.isArray(hallazgos?.value)) partes.push(`${hallazgos.value.length} hallazgos de campo`);
+  return `${partes.join(" y ")} leídos del informe de obra.`;
+}
+
 export async function extractStructuredUpdates(
   bytes: ArrayBuffer,
   extension: string,
@@ -747,17 +824,38 @@ export async function extractStructuredUpdates(
   // corrido de un informe sigue necesitando interpretación, porque "el edificio
   // 14 va por el 60%" no es un dato estructurado por bien que se lea.
   if (extension === "docx" || extension === "pptx") {
+    // Los indicadores de seguridad viven en cuadros de texto, no en tablas, así
+    // que se leen aparte y se suman a lo que encuentren las tablas: un mismo
+    // informe trae la cubicación en tabla y la seguridad en cuadros, y antes
+    // sólo podía aplicarse una de las dos cosas.
+    let seguridad: LiveDataUpdate[] = [];
+    if (extension === "pptx") {
+      try {
+        seguridad = extractSafetyUpdates(await readPptxSlideShapes(bytes));
+      } catch {
+        // Sin formas legibles se sigue con las tablas.
+      }
+    }
     let tablas;
     try {
       tablas = await readOfficeTables(bytes, extension);
     } catch {
       return {
-        updates: [],
-        summary: "El documento no se pudo abrir.",
+        updates: seguridad,
+        summary: seguridad.length
+          ? "No se pudieron leer las tablas, pero sí los indicadores de seguridad."
+          : "El documento no se pudo abrir.",
         warnings: [`Comprueba que el archivo es un .${extension} moderno y no una versión antigua.`],
       };
     }
     if (!tablas.length) {
+      if (seguridad.length) {
+        return {
+          updates: seguridad,
+          summary: resumenDeSeguridad(seguridad),
+          warnings: [],
+        };
+      }
       return {
         updates: [],
         summary: "El documento no contiene ninguna tabla.",
@@ -776,8 +874,9 @@ export async function extractStructuredUpdates(
         }
         if (updates.length) {
           return {
-            updates,
-            summary: `${updates.length} datos leídos de una tabla del documento.`,
+            updates: [...updates, ...seguridad],
+            summary: `${updates.length} datos leídos de una tabla del documento` +
+              (seguridad.length ? `, más ${resumenDeSeguridad(seguridad)}` : "") + ".",
             warnings,
           };
         }
@@ -789,6 +888,13 @@ export async function extractStructuredUpdates(
       // subía cada mes sin que actualizara nada.
       const matriz = extractMatrixProgress(filas, defaults);
       if (matriz) return matriz;
+    }
+    if (seguridad.length) {
+      return {
+        updates: seguridad,
+        summary: resumenDeSeguridad(seguridad),
+        warnings: [],
+      };
     }
     return {
       updates: [],

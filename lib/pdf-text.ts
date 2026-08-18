@@ -46,14 +46,116 @@ const BYTES_STREAM = [0x73, 0x74, 0x72, 0x65, 0x61, 0x6d]; // "stream"
 const BYTES_ENDSTREAM = [0x65, 0x6e, 0x64, 0x73, 0x74, 0x72, 0x65, 0x61, 0x6d]; // "endstream"
 
 /**
+ * Tabla de traducción de códigos a texto (`/ToUnicode`).
+ *
+ * Muchos generadores incrustan la fuente en subconjunto y numeran sus glifos
+ * como les conviene: el código que va en el PDF no es el del carácter. Sin
+ * traducir esa tabla, "Informe de análisis" se extrae como ",QIRUPHGHDQ£OLVLV"
+ * —texto real, pero ilegible— y tanto la lectura directa como la IA reciben
+ * basura sin que nada avise. Los informes que la empresa genera cada mes son
+ * justo de ese tipo.
+ *
+ * El PDF asocia cada tabla a una fuente concreta; resolver esa asociación exige
+ * recorrer el grafo de objetos del documento. Aquí se fusionan todas las tablas
+ * del archivo, que es fiable porque son subconjuntos de las mismas fuentes y
+ * coinciden en lo que comparten: cuando dos discrepan en un código, ese código
+ * se descarta en vez de arriesgar una traducción falsa.
+ */
+function parseToUnicodeCMap(contenido: string, destino: Map<string, string>, conflictivos: Set<string>) {
+  const anota = (codigo: string, valor: string) => {
+    if (conflictivos.has(codigo)) return;
+    const previo = destino.get(codigo);
+    if (previo !== undefined && previo !== valor) {
+      destino.delete(codigo);
+      conflictivos.add(codigo);
+      return;
+    }
+    destino.set(codigo, valor);
+  };
+  const texto = (hex: string) => {
+    let salida = "";
+    for (let indice = 0; indice + 3 < hex.length + 1; indice += 4) {
+      const punto = Number.parseInt(hex.slice(indice, indice + 4), 16);
+      if (Number.isFinite(punto) && punto > 0) salida += String.fromCharCode(punto);
+    }
+    return salida;
+  };
+
+  for (const bloque of contenido.matchAll(/beginbfchar([\s\S]*?)endbfchar/g)) {
+    for (const par of bloque[1].matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) {
+      anota(par[1].toLowerCase(), texto(par[2]));
+    }
+  }
+  for (const bloque of contenido.matchAll(/beginbfrange([\s\S]*?)endbfrange/g)) {
+    for (const rango of bloque[1].matchAll(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g)) {
+      const desde = Number.parseInt(rango[1], 16);
+      const hasta = Number.parseInt(rango[2], 16);
+      const base = Number.parseInt(rango[3], 16);
+      // Un rango corrupto podría pedir millones de entradas: se acota.
+      if (!Number.isFinite(desde) || !Number.isFinite(hasta) || hasta < desde || hasta - desde > 65_535) continue;
+      const ancho = rango[1].length;
+      for (let codigo = desde; codigo <= hasta; codigo += 1) {
+        anota(codigo.toString(16).padStart(ancho, "0"), String.fromCharCode(base + codigo - desde));
+      }
+    }
+  }
+}
+
+/** Traduce los bytes de una cadena usando la tabla, probando códigos de 2 y de 1 byte. */
+function decodeWithCMap(bytes: number[], cmap: Map<string, string>) {
+  const intento = (ancho: 1 | 2) => {
+    if (ancho === 2 && bytes.length % 2 !== 0) return null;
+    let salida = "";
+    let aciertos = 0;
+    let total = 0;
+    for (let indice = 0; indice < bytes.length; indice += ancho) {
+      const codigo = ancho === 2 ? (bytes[indice] << 8) | bytes[indice + 1] : bytes[indice];
+      const traducido = cmap.get(codigo.toString(16).padStart(ancho * 2, "0"));
+      total += 1;
+      if (traducido === undefined) {
+        salida += " ";
+      } else {
+        salida += traducido;
+        aciertos += 1;
+      }
+    }
+    // Con menos de tres cuartos de los códigos reconocidos no es esta tabla:
+    // devolver el resto como espacios convertiría el texto en confeti.
+    return total > 0 && aciertos / total >= 0.75 ? salida : null;
+  };
+  return intento(2) ?? intento(1);
+}
+
+/**
+ * Cuánto se parece a prosa real. Sirve para decidir entre el texto tal cual y
+ * el traducido sin romper los PDF que hoy ya se leen bien: se queda el que
+ * puntúe más alto, así que una tabla que no aplica nunca empeora el resultado.
+ */
+function legibilidad(texto: string) {
+  if (!texto) return 0;
+  const palabras = texto.match(/\b(?:de|la|el|los|las|del|en|y|para|con|por|total|informe|proyecto|obra)\b/gi);
+  const normales = texto.match(/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9 .,;:%()-]/g);
+  return (palabras?.length ?? 0) * 10 + (normales?.length ?? 0) / Math.max(texto.length, 1) * 5;
+}
+
+/**
  * Decodifica las cadenas de un flujo de contenido.
  *
  * En PDF el texto se dibuja con los operadores `Tj` (una cadena) y `TJ` (un
  * array de cadenas y ajustes de separación). Las cadenas van entre paréntesis,
  * con escapes propios, o en hexadecimal entre `<>`. Se recogen ambas formas.
  */
-function textOfContentStream(contenido: string) {
-  const partes: string[] = [];
+function textOfContentStream(contenido: string, cmap?: Map<string, string>) {
+  const crudas: string[] = [];
+  const traducidas: string[] = [];
+
+  const registra = (bytes: number[]) => {
+    const directo = String.fromCharCode(...bytes);
+    if (directo.trim()) crudas.push(directo);
+    if (!cmap?.size) return;
+    const traducido = decodeWithCMap(bytes, cmap);
+    if (traducido?.trim()) traducidas.push(traducido);
+  };
 
   for (const match of contenido.matchAll(/\(((?:\\.|[^\\()])*)\)/g)) {
     const crudo = match[1]
@@ -61,20 +163,24 @@ function textOfContentStream(contenido: string) {
         ({ n: "\n", r: "\r", t: "\t", b: "\b", f: "\f" }[letra] ?? letra))
       .replace(/\\([0-7]{1,3})/g, (_, octal: string) => String.fromCharCode(Number.parseInt(octal, 8)))
       .replace(/\\(.)/g, "$1");
-    if (crudo.trim()) partes.push(crudo);
+    if (crudo) registra([...crudo].map((caracter) => caracter.charCodeAt(0)));
   }
 
-  for (const match of contenido.matchAll(/<([0-9A-Fa-f\s]+)>\s*Tj/g)) {
+  for (const match of contenido.matchAll(/<([0-9A-Fa-f\s]+)>\s*(?:Tj|TJ|'|")/g)) {
     const hex = match[1].replace(/\s+/g, "");
-    let texto = "";
+    const bytes: number[] = [];
     for (let index = 0; index + 1 < hex.length; index += 2) {
-      const codigo = Number.parseInt(hex.slice(index, index + 2), 16);
-      if (codigo >= 32) texto += String.fromCharCode(codigo);
+      bytes.push(Number.parseInt(hex.slice(index, index + 2), 16));
     }
-    if (texto.trim()) partes.push(texto);
+    if (bytes.length) registra(bytes);
   }
 
-  return partes.join(" ").replace(/\s+/g, " ").trim();
+  const limpia = (partes: string[]) => partes.join(" ").replace(/\s+/g, " ").trim();
+  const directo = limpia(crudas.map((parte) => [...parte].filter((caracter) => caracter.charCodeAt(0) >= 32).join("")));
+  const traducido = limpia(traducidas);
+  // Se queda la lectura más legible de las dos: si la tabla no correspondía a
+  // este flujo, el texto de siempre gana y nada empeora.
+  return legibilidad(traducido) > legibilidad(directo) ? traducido : directo;
 }
 
 export type PdfTextResult = {
@@ -92,6 +198,7 @@ export async function readPdfText(bytes: ArrayBuffer, maxChars = 200_000): Promi
   const inicios = findAll(todo, BYTES_STREAM);
   const finales = findAll(todo, BYTES_ENDSTREAM);
   const trozos: string[] = [];
+  const contenidos: string[] = [];
   let leidos = 0;
 
   for (const inicio of inicios) {
@@ -125,8 +232,22 @@ export async function readPdfText(bytes: ArrayBuffer, maxChars = 200_000): Promi
       // texto.
       continue;
     }
+    contenidos.push(contenido);
+  }
 
-    const texto = textOfContentStream(contenido);
+  // Primero las tablas de traducción y después el texto: una tabla puede venir
+  // en un flujo posterior al del texto que le corresponde, así que leer en una
+  // sola pasada dejaría sin traducir justo las primeras páginas.
+  const cmap = new Map<string, string>();
+  const conflictivos = new Set<string>();
+  for (const contenido of contenidos) {
+    if (contenido.includes("beginbfchar") || contenido.includes("beginbfrange")) {
+      parseToUnicodeCMap(contenido, cmap, conflictivos);
+    }
+  }
+
+  for (const contenido of contenidos) {
+    const texto = textOfContentStream(contenido, cmap);
     if (texto) {
       trozos.push(texto);
       leidos += 1;

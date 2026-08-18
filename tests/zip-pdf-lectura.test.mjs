@@ -147,3 +147,44 @@ test("sólo entran los edificios que existen", () => {
   const filas = pdfText.findBuildingProgress("TH-99 avance 50 %", new Set(["14"]));
   assert.equal(filas.length, 0);
 });
+
+// Fuentes en subconjunto con tabla /ToUnicode.
+//
+// Los informes que la empresa genera cada mes (IFC, proveedores) incrustan la
+// fuente renumerando sus glifos: el código que va dentro del PDF no es el del
+// carácter. Sin traducir esa tabla, "Informe de análisis" se extraía como
+// ",QIRUPHGHDQ£OLVLV" —texto de verdad, pero ilegible— y ni la lectura directa
+// ni la IA podían hacer nada con él, sin que ningún aviso lo delatara.
+test("traduce las fuentes en subconjunto de los informes mensuales", async () => {
+  const bytes = await readFile("historical/data-center/julio-2026/informe-analisis-ifc-2026-07-29.pdf");
+  const resultado = await pdfText.readPdfText(
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  );
+
+  assert.equal(resultado.scanned, false);
+  assert.match(resultado.text, /Informe de [Aa]nálisis/);
+  assert.match(resultado.text, /IFC/);
+  // Los títulos se dibujan letra a letra ("C o m p r o m i s o s"), que es
+  // cómo el PDF coloca cada glifo: se comparan sin espacios.
+  const sinEspacios = resultado.text.replace(/\s+/g, "");
+  assert.match(sinEspacios, /CompromisosAfirmativos/i);
+  assert.match(sinEspacios, /UsodeFondos/i);
+  // La firma del fallo anterior: el texto desplazado carácter a carácter.
+  assert.doesNotMatch(resultado.text, /QIRUPH/);
+});
+
+test("un PDF que ya se leía bien no empeora al traducir", async () => {
+  const bytes = await readFile("historical/data-center/junio-2026/presentacion-informe-araya-junio-2026.pdf");
+  const resultado = await pdfText.readPdfText(
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  );
+  // Se elige por flujo la lectura más legible, así que una tabla que no
+  // corresponde nunca puede dejar el documento peor de lo que estaba.
+  // Antes de traducir las tablas este documento daba 587 palabras reconocibles
+  // y ahora da 1570: el umbral protege de una regresión sin fijar la cifra
+  // exacta, que depende del documento.
+  const reconocibles = resultado.text.match(
+    /\b(?:de|la|el|los|las|del|en|y|para|con|por|total|informe|proyecto|obra)\b/gi,
+  ) ?? [];
+  assert.ok(reconocibles.length > 600, `sólo ${reconocibles.length} palabras reconocibles`);
+});
