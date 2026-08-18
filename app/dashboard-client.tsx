@@ -71,6 +71,8 @@ let permits: DashboardBootstrapData["june"]["permits"] = [];
 let safetyFindingTracking: DashboardBootstrapData["june"]["safetyFindingTracking"] = [];
 let safetyFindings: DashboardBootstrapData["june"]["safetyFindings"] = [];
 let safetyMetrics: DashboardBootstrapData["june"]["safetyMetrics"] = [];
+let collectionTargets: DashboardBootstrapData["june"]["collectionTargets"] = [];
+let commercialPartners: DashboardBootstrapData["june"]["commercialPartners"] = [];
 let salesLocations: DashboardBootstrapData["june"]["salesLocations"] = [];
 let salesModels: DashboardBootstrapData["june"]["salesModels"] = [];
 let structuralDelay: DashboardBootstrapData["june"]["structuralDelay"] = [];
@@ -214,6 +216,8 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     safetyFindingTracking,
     safetyFindings,
     safetyMetrics,
+    collectionTargets,
+    commercialPartners,
     salesLocations,
     salesModels,
     structuralDelay,
@@ -334,6 +338,8 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     safetyFindingTracking,
     safetyFindings,
     safetyMetrics,
+    collectionTargets,
+    commercialPartners,
     salesLocations,
     salesModels,
     structuralDelay,
@@ -3639,6 +3645,27 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
 
       {section === "reservas" && (
         <section className="report-grid">
+          <article className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">OBJETIVO COMERCIAL</span><h3>Metas de recaudación</h3></div>
+              <span className="data-note">{commercialPartners[0] ? `${commercialPartners[0].captured} aliados captados` : ""}</span>
+            </div>
+            <div className="rank-list">
+              {collectionTargets.map((target) => (
+                <div className="workspace-data-row rank-data-row" key={target.label}>
+                  <span><strong>{target.label}</strong><small>meta declarada</small></span>
+                  <div><i style={{ width: `${(target.targetUsd / Math.max(...collectionTargets.map((otro) => otro.targetUsd))) * 100}%` }} /></div>
+                  <strong>{`US$${(target.targetUsd / 1_000_000).toFixed(1)}M`}</strong>
+                </div>
+              ))}
+            </div>
+            {commercialPartners.map((mes) => (
+              <p className="data-note" key={mes.period}>
+                Aliados captados en {mes.period}: <strong>{mes.captured}</strong>
+                {mes.names ? ` · ${mes.names}` : " · nombres pendientes de que el informe los traiga legibles"}
+              </p>
+            ))}
+          </article>
           <article className="panel">
             <div className="panel-heading"><div><span className="section-kicker">FASE II</span><h3>Mix de producto</h3></div><span className="data-note">Junio: 18 reservas</span></div>
             <div className="rank-list">

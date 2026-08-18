@@ -30,6 +30,8 @@ export const LIVE_DATA_ROOTS = [
   "antonelyPayableVendorsAll",
   "arrearsBreakdown",
   "buildings",
+  "collectionTargets",
+  "commercialPartners",
   "constructionDisciplines",
   "costBreakdown",
   "cubicaciones",
@@ -132,6 +134,8 @@ const financialRootSet = new Set([
 ]);
 const commercialRootSet = new Set([
   "arrearsBreakdown",
+  "collectionTargets",
+  "commercialPartners",
   "salesLocations",
   "salesModels",
 ]);

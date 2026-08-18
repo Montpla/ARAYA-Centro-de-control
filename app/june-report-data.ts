@@ -56,6 +56,30 @@ export const juneReport = {
   },
 } as const;
 
+// Metas de recaudación por fase.
+//
+// Venían en el informe de ventas y el programa no tenía dónde ponerlas: las
+// dejó apartadas como "propuesta de sección nueva" y allí se quedaron, sin que
+// nadie las viera. Creando el campo, además de mostrarse, la lectura del mes
+// que viene ya sabe dónde colocarlas.
+//
+// La lámina las declara en millones con un decimal ("FASE I US$22.1M"), que es
+// la precisión que hay; no se le añade ninguna que el documento no dé.
+export const collectionTargets = [
+  { label: "Fase I", targetUsd: 22_100_000 },
+  { label: "Fase II", targetUsd: 25_200_000 },
+] as const;
+
+// Aliados comerciales captados en el mes.
+//
+// El informe dice cuántos se captaron y trae el listado, pero de ese listado
+// sólo llegó el recuento: los nombres no se recuperaron en la extracción. Se
+// guarda lo que consta —el número— y queda el campo preparado para los nombres
+// cuando la lectura los traiga, en vez de inventarlos.
+export const commercialPartners = [
+  { period: "2026-07", captured: 10, names: "" },
+] as const;
+
 export const salesModels = [
   { name: "Sunset", value: 32, june: 10 },
   { name: "Balcony Flex", value: 32, june: 6 },
