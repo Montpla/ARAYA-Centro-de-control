@@ -163,6 +163,20 @@ sobre todo el conjunto que el usuario puede ver.
 
 ## Operación técnica y publicación
 
+> **Aviso (18/08/2026).** La plataforma vigente es **Cloudflare Workers**:
+> `https://araya-centro-control.grupobricket.workers.dev`, con `npm run deploy`
+> (typecheck, build, pruebas, `wrangler deploy` y verificación real contra
+> producción). Los puntos de más abajo que hablan de Sites, del dominio
+> corporativo y de la URL `chatgpt.site` describen una vía que no se ha tocado
+> ni verificado desde el inicio del proyecto: **no asumir que sigue activa**.
+> La cadena de migraciones tampoco acaba en la `0016`; ver `HANDOFF.md`.
+
+- **Las tres claves de notificación (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
+  `VAPID_SUBJECT`) van como Secret del Worker, nunca como variable de texto.**
+  `wrangler deploy` conserva los secretos pero borra las variables de texto
+  plano puestas a mano en el panel, así que una sola de ellas mal guardada
+  apaga los avisos en el siguiente despliegue, sin error en ninguna parte. El
+  despliegue lo comprueba y falla en rojo si faltan.
 - La cadena de migraciones D1 llega hasta
   `drizzle/0016_outstanding_stark_industries.sql` y debe desplegarse junto con
   `drizzle/meta/_journal.json`. La `0016` añade índices compuestos para la
@@ -189,5 +203,7 @@ sobre todo el conjunto que el usuario puede ver.
 
 El estado técnico, las fuentes incorporadas, las decisiones de diseño y la
 última publicación se mantienen en `HANDOFF.md`. Cualquier LLM que continúe el
-trabajo debe leer primero `HANDOFF.md`, `AGENTS.md`,
-`.openai/hosting.json` y esta guía.
+trabajo debe leer primero `HANDOFF.md` —empezando por su aviso de plataforma y
+por la sección fechada más reciente, donde están las trampas que ya costaron un
+fallo—, después `AGENTS.md` si existe y esta guía. `.openai/hosting.json`
+pertenece a la vía de Sites y sólo es relevante si se decide reactivarla.
