@@ -66,7 +66,11 @@ function fallbackArrayItem(path: string) {
   // dónde deducir su forma cuando llega el primero. Esta plantilla es la que
   // permite que el contenedor crezca solo desde vacío: sin ella, el primer
   // bloque que la lectura descubriera se rechazaría por "ruta que no existe".
-  if (path === "discoveredSections.*") {
+  // Ojo con la clave: se consulta por la ruta de la LISTA, no la del elemento
+  // (para las unidades es "buildings.*.units", no "buildings.*.units.*"). Con
+  // "discoveredSections.*" nunca coincidía y el primer bloque se rechazaba por
+  // "la ruta no existe en el modelo autorizado".
+  if (path === "discoveredSections") {
     return {
       id: "",
       title: "",
