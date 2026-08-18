@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// Vacía los bloques descubiertos que ya se han modelado en su sitio propio.
+// Retira los bloques descubiertos que ya se han modelado en su sitio propio.
 //
 // Cuando una propuesta pasa de bloque genérico a sección con nombre —como las
 // certificaciones o la carátula de cubicación—, su versión de bloque
-// descubierto sobra: mostraría la misma información dos veces. Esto retira esos
-// bloques dejando el contenedor vacío, que es su estado natural cuando no hay
-// nada pendiente de encajar.
+// descubierto sobra: mostraría la misma información dos veces. Se retiran SÓLO
+// esos, por su título, y se conservan los que siguen sin sitio propio (la
+// relación de obra ejecutada no se modeló porque sus cifras no llegaron, así
+// que su bloque descubierto es lo único que la representa y debe quedarse).
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 const APLICAR = process.env.APLICAR === "1";
@@ -29,19 +30,33 @@ if (!sessionMatch) {
 }
 const Cookie = `araya_session=${sessionMatch[1]}`;
 
+// Títulos que ya tienen sección propia. Se comparan en minúsculas y por
+// fragmento, porque el título del bloque puede traer variaciones de mayúsculas.
+const YA_MODELADOS = ["certificaciones leed", "monto cubicacion", "monto cubicación"];
+
 const liveResponse = await fetch(`${PRODUCTION_URL}/api/live-data`, { headers: { Cookie } });
 const live = liveResponse.ok ? await liveResponse.json() : { values: {} };
 const actuales = Array.isArray(live.values?.discoveredSections) ? live.values.discoveredSections : [];
 
-console.log(`Bloques descubiertos actuales: ${actuales.length}`);
-for (const bloque of actuales) console.log(`  · ${bloque.title}`);
+const conservados = actuales.filter((bloque) => {
+  const titulo = String(bloque.title ?? "").toLowerCase();
+  return !YA_MODELADOS.some((fragmento) => titulo.includes(fragmento));
+});
+const retirados = actuales.length - conservados.length;
 
-if (!actuales.length) {
-  console.log("Ya está vacío, nada que hacer.");
+console.log(`Bloques descubiertos actuales: ${actuales.length}`);
+for (const bloque of actuales) {
+  const titulo = String(bloque.title ?? "").toLowerCase();
+  const modelado = YA_MODELADOS.some((fragmento) => titulo.includes(fragmento));
+  console.log(`  · ${bloque.title} ${modelado ? "→ retirar (ya modelado)" : "→ conservar (sin sitio propio aún)"}`);
+}
+
+if (!retirados) {
+  console.log("Ninguno de los bloques está ya modelado, nada que retirar.");
   process.exit(0);
 }
 if (!APLICAR) {
-  console.log("\nSimulación (APLICAR=0): se vaciaría el contenedor de bloques descubiertos.");
+  console.log(`\nSimulación (APLICAR=0): se retirarían ${retirados} y se conservarían ${conservados.length}.`);
   process.exit(0);
 }
 
@@ -49,16 +64,16 @@ const publicar = await fetch(`${PRODUCTION_URL}/api/live-data`, {
   method: "POST",
   headers: { Cookie, "Content-Type": "application/json" },
   body: JSON.stringify({
-    updates: [{ key: "discoveredSections", value: [] }],
+    updates: [{ key: "discoveredSections", value: conservados }],
     area: "direccion",
     cutoff: new Date().toISOString().slice(0, 10),
     sourceName: "Modelado de secciones",
-    message: "Bloques descubiertos retirados tras modelarlos en su sitio propio.",
+    message: `${retirados} bloque(s) descubierto(s) retirados tras modelarlos en su sitio propio.`,
   }),
 });
 const cuerpo = await publicar.json();
 if (!publicar.ok) {
-  console.error(`✖ No se pudo vaciar: ${cuerpo.error ?? publicar.status}`);
+  console.error(`✖ No se pudo actualizar: ${cuerpo.error ?? publicar.status}`);
   process.exit(1);
 }
-console.log("\n✔ Contenedor de bloques descubiertos vaciado.");
+console.log(`\n✔ ${retirados} bloque(s) retirados; ${conservados.length} conservado(s).`);
