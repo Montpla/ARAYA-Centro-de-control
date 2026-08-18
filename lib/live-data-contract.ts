@@ -19,6 +19,7 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]
 const APPENDABLE_ARRAY_PATHS = new Set([
   "buildings",
   "buildings.*.units",
+  "discoveredSections",
   "urbanismAreas",
 ]);
 const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
@@ -61,6 +62,23 @@ export function getContractRootsSnapshot(): Record<string, unknown> {
 }
 
 function fallbackArrayItem(path: string) {
+  // Los bloques descubiertos empiezan sin ningún elemento, así que no hay de
+  // dónde deducir su forma cuando llega el primero. Esta plantilla es la que
+  // permite que el contenedor crezca solo desde vacío: sin ella, el primer
+  // bloque que la lectura descubriera se rechazaría por "ruta que no existe".
+  if (path === "discoveredSections.*") {
+    return {
+      id: "",
+      title: "",
+      description: "",
+      area: "",
+      evidence: "",
+      confidence: 0,
+      sourceName: "",
+      detectedAt: "",
+      values: [{ label: "", value: "" }],
+    };
+  }
   if (path === "buildings.*.units") {
     const baselineBuildings = contractRoots.buildings;
     if (Array.isArray(baselineBuildings)) {

@@ -53,3 +53,23 @@ test("el campo de fase no impone un catálogo cerrado", () => {
     assert.ok(!Object.hasOwn(meta, "phase"), "usar 'phase' cerraría el catálogo de fases");
   }
 });
+
+// Bloques descubiertos: lo que antes esperaba aprobación y ahora entra solo.
+
+test("el contenedor de bloques descubiertos es un dato vivo protegido", () => {
+  assert.ok(liveData.LIVE_DATA_ROOTS.includes("discoveredSections"));
+  // Un bloque descubierto puede contener cualquier cosa, incluidas cifras de
+  // ventas, y no se sabe qué es hasta mirarlo: se protege como financiero para
+  // que no aparezca ante una cuenta sin ese permiso.
+  assert.equal(liveData.isFinancialLiveKey("discoveredSections"), true);
+});
+
+test("empieza vacío y admite crecer", () => {
+  // Vacío porque no hay ningún bloque descubierto sin sitio propio: los dos del
+  // informe de julio ya tienen el suyo. Si alguien lo rellenara, el panel
+  // mostraría datos duplicados.
+  assert.deepEqual(juneReport.discoveredSections, []);
+  // Y una clave con índice tiene que seguir siendo válida, o el primer bloque
+  // que descubriera la lectura se rechazaría.
+  assert.equal(liveData.isLiveDataKey("discoveredSections.0"), true);
+});

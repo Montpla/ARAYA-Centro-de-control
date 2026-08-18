@@ -37,6 +37,7 @@ export type DashboardBootstrapData = {
     | "cxpCategories"
     | "delayedUrbanismStarts"
     | "financialProjection"
+    | "discoveredSections"
     | "financingProcesses"
     | "juneDataQualityIssues"
     | "juneReport"

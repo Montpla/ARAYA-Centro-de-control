@@ -962,13 +962,79 @@ export async function POST(request: Request) {
       // las económicas no tienen id y sólo se distinguen por su nombre.
       ? resolveSpatialIdentityUpdates(extraction.updates, currentLiveData.values, getContractRootsSnapshot())
       : extraction.updates;
-    const extractedUpdates = identityResolvedUpdates.length
-      ? normalizeLiveDataUpdates({
-          updates: identityResolvedUpdates.map((update) => ({
-            ...update,
-            sourceFileId: id,
+    // Cuántos bloques descubiertos hay ya: los nuevos se añaden al final, y
+    // escribir un índice ocupado sobrescribiría el bloque de otro documento.
+    const existingDiscoveredCount = Array.isArray(currentLiveData.values.discoveredSections)
+      ? currentLiveData.values.discoveredSections.length
+      : 0;
+
+    // Un bloque que la lectura descubre y para el que no existe ningún campo ya
+    // no espera aprobación: se publica como sección descubierta, con su
+    // procedencia, su confianza y la evidencia del documento a la vista. Antes
+    // se quedaba apartado indefinidamente y nadie llegaba a verlo — el informe
+    // de ventas de julio pasó así dos bloques enteros.
+    //
+    // Sólo se crea cuando quien sube tiene autorización financiera: el
+    // contenido descubierto puede ser cualquier cosa, incluidas cifras de
+    // ventas, y no se sabe qué es hasta mirarlo. Sin esa condición, una carga
+    // de obra podría publicar contenido comercial sin querer.
+    const seccionesDescubiertas = user.financeAccess
+      ? extraction.unmappedCandidates.map((candidato, posicion) => {
+          let valores: Array<{ label: string; value: string }> = [];
+          try {
+            const contenido = JSON.parse(candidato.valueJson) as unknown;
+            if (Array.isArray(contenido)) {
+              valores = contenido.slice(0, 40).map((fila, indice) => ({
+                label: typeof fila === "object" && fila !== null && "label" in fila
+                  ? String((fila as Record<string, unknown>).label).slice(0, 120)
+                  : `Dato ${indice + 1}`,
+                value: typeof fila === "object" && fila !== null && "value" in fila
+                  ? String((fila as Record<string, unknown>).value).slice(0, 200)
+                  : String(fila).slice(0, 200),
+              }));
+            } else if (contenido && typeof contenido === "object") {
+              valores = Object.entries(contenido as Record<string, unknown>)
+                .slice(0, 40)
+                .map(([clave, valor]) => ({
+                  label: clave.slice(0, 120),
+                  value: String(valor).slice(0, 200),
+                }));
+            }
+          } catch {
+            // Sin valor estructurado queda la evidencia, que es lo que de
+            // verdad contiene el dato cuando la extracción no lo estructuró.
+          }
+          return {
+            key: `discoveredSections.${existingDiscoveredCount + posicion}`,
+            value: {
+              id: `descubierto-${id}-${posicion}`,
+              title: candidato.label.slice(0, 160),
+              description: candidato.description.slice(0, 400),
+              area: candidato.suggestedArea || resolvedArea,
+              evidence: candidato.evidence.slice(0, 600),
+              confidence: candidato.confidence,
+              sourceName: candidate.name,
+              detectedAt: new Date().toISOString(),
+              values: valores,
+            },
+            area: resolvedArea,
+            cutoff: effectiveCutoff,
+            sourceCurrency: (sourceCurrency === "USD" ? "USD" : "DOP") as "USD" | "DOP",
             sourceName: candidate.name,
-          })),
+          };
+        })
+      : [];
+
+    const extractedUpdates = identityResolvedUpdates.length || seccionesDescubiertas.length
+      ? normalizeLiveDataUpdates({
+          updates: [
+            ...identityResolvedUpdates.map((update) => ({
+              ...update,
+              sourceFileId: id,
+              sourceName: candidate.name,
+            })),
+            ...seccionesDescubiertas.map((update) => ({ ...update, sourceFileId: id })),
+          ],
           area: classification.area,
           cutoff: effectiveCutoff,
           sourceFileId: id,

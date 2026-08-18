@@ -56,6 +56,30 @@ export const juneReport = {
   },
 } as const;
 
+// Bloques que la lectura descubre y para los que no existe ningún campo.
+//
+// Antes, cuando un documento traía información que el modelo no contemplaba, se
+// apartaba como propuesta y esperaba a que alguien la mirara: quedaba fuera del
+// panel indefinidamente sin que nada lo indicara. Este contenedor existe para
+// que eso deje de pasar — el bloque entra solo, con su procedencia y su
+// confianza a la vista, y se ve desde el primer momento.
+//
+// Empieza vacío a propósito: no hay ningún bloque descubierto que no tenga ya
+// su sitio propio. Crece al ritmo de lo que traigan los documentos.
+export type DiscoveredSection = {
+  id: string;
+  title: string;
+  description: string;
+  area: string;
+  evidence: string;
+  confidence: number;
+  sourceName: string;
+  detectedAt: string;
+  values: Array<{ label: string; value: string }>;
+};
+
+export const discoveredSections: DiscoveredSection[] = [];
+
 // Metas de recaudación por fase.
 //
 // Venían en el informe de ventas y el programa no tenía dónde ponerlas: las

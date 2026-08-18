@@ -71,6 +71,7 @@ let permits: DashboardBootstrapData["june"]["permits"] = [];
 let safetyFindingTracking: DashboardBootstrapData["june"]["safetyFindingTracking"] = [];
 let safetyFindings: DashboardBootstrapData["june"]["safetyFindings"] = [];
 let safetyMetrics: DashboardBootstrapData["june"]["safetyMetrics"] = [];
+let discoveredSections: DashboardBootstrapData["june"]["discoveredSections"] = [];
 let collectionTargets: DashboardBootstrapData["june"]["collectionTargets"] = [];
 let commercialPartners: DashboardBootstrapData["june"]["commercialPartners"] = [];
 let salesLocations: DashboardBootstrapData["june"]["salesLocations"] = [];
@@ -218,6 +219,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     safetyMetrics,
     collectionTargets,
     commercialPartners,
+    discoveredSections,
     salesLocations,
     salesModels,
     structuralDelay,
@@ -340,6 +342,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     safetyMetrics,
     collectionTargets,
     commercialPartners,
+    discoveredSections,
     salesLocations,
     salesModels,
     structuralDelay,
@@ -3642,6 +3645,42 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
           </button>
         ))}
       </section>
+
+      {section === "reservas" && discoveredSections.length > 0 && (
+        <section className="panel discovered-sections">
+          <div className="panel-heading">
+            <div>
+              <span className="section-kicker">DETECTADO AUTOMÁTICAMENTE</span>
+              <h3>{discoveredSections.length} bloque{discoveredSections.length === 1 ? "" : "s"} nuevo{discoveredSections.length === 1 ? "" : "s"} en los documentos</h3>
+            </div>
+            <span className="data-note">Sin revisar por una persona</span>
+          </div>
+          <p className="data-note">
+            Información que venía en un documento y para la que no existía ningún campo. Se
+            publica tal cual la leyó el programa, con su origen a la vista, en vez de quedarse
+            esperando a que alguien la mire.
+          </p>
+          <ul className="quality-list control-list">
+            {discoveredSections.map((bloque) => (
+              <li key={bloque.id}>
+                <strong>{bloque.title}</strong>
+                {bloque.description ? <> · {bloque.description}</> : null}
+                {bloque.values.length > 0 && (
+                  <ul>
+                    {bloque.values.map((dato) => (
+                      <li key={`${bloque.id}-${dato.label}`}>{dato.label}: {dato.value}</li>
+                    ))}
+                  </ul>
+                )}
+                <small>
+                  {bloque.sourceName} · confianza {Math.round(bloque.confidence * 100)}%
+                  {bloque.evidence ? ` · ${bloque.evidence}` : ""}
+                </small>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {section === "reservas" && (
         <section className="report-grid">
