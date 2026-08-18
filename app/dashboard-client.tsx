@@ -84,6 +84,7 @@ let antonelyPayableCategories: DashboardBootstrapData["antonely"]["antonelyPayab
 let antonelyPayableVendorsAll: DashboardBootstrapData["antonely"]["antonelyPayableVendorsAll"] = [];
 
 let ifcComplianceGroups: DashboardBootstrapData["procurement"]["ifcComplianceGroups"] = [];
+let ifcComplianceTracking: DashboardBootstrapData["procurement"]["ifcComplianceTracking"] = [];
 let juneDeviationSummary = {} as DashboardBootstrapData["procurement"]["juneDeviationSummary"];
 let monthlyDeviationLines: DashboardBootstrapData["procurement"]["monthlyDeviationLines"] = [];
 let procurementAudit = {} as DashboardBootstrapData["procurement"]["procurementAudit"];
@@ -244,6 +245,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     }));
   ({
     ifcComplianceGroups,
+    ifcComplianceTracking,
     monthlyDeviationLines,
     procurementMonthlySchedule,
     procurementPackages,
@@ -313,6 +315,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     fiduciaryStatementQualityIssues,
     fiduciaryStatementSummary,
     ifcComplianceGroups,
+    ifcComplianceTracking,
     juneDataQualityIssues,
     juneReport,
     managementActions,
@@ -1003,7 +1006,7 @@ const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
       { id: "permits", label: "Permisos", detail: "Matriz de entidades, referencias y estados.", status: "live", sourceIds: ["source-june-consolidated"] },
       { id: "inspections", label: "Inspecciones", detail: "Estructura preparada para actas y no conformidades.", status: "ready", sourceIds: [], pendingFields: ["Acta", "Inspector", "Resultado", "Acción correctiva"] },
       { id: "financing-control", label: "Gestiones financieras", detail: "Procesos y decisiones pendientes de financiación.", status: "partial", sourceIds: ["source-june-consolidated"], targetView: "metricas" },
-      { id: "ifc-compliance", label: "Cumplimiento IFC", detail: "Compromisos, reportes, seguros y puntos de negociación.", status: "partial", sourceIds: ["source-ifc-analysis"], pendingFields: ["Responsable", "Evidencia", "Fecha objetivo", "Estado"] },
+      { id: "ifc-compliance", label: "Cumplimiento IFC", detail: "Compromisos leídos del informe, con responsable, fecha objetivo, estado y evidencia.", status: "live", sourceIds: ["source-ifc-analysis"] },
     ],
     connections: [{ label: "Planificación", view: "planificacion" }, { label: "Finanzas", view: "metricas" }, { label: "Centro de datos", view: "fuentes" }],
   },
@@ -3997,6 +4000,10 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
                 </article>
               ))}
             </div>
+            <div className="panel-heading ifc-tracking-heading">
+              <div><span className="section-kicker">SEGUIMIENTO</span><h3>Responsable y evidencia de cada obligación</h3></div>
+            </div>
+            <IfcComplianceTracker />
             <p className="quality-note">Esta matriz resume el informe recibido para facilitar el seguimiento. No sustituye el contrato de préstamo ni el criterio jurídico; cada obligación deberá enlazarse con responsable, evidencia y fecha de cumplimiento.</p>
           </article>
           <article className="report-grid">
@@ -5641,45 +5648,77 @@ function UploadAgentsCard({ users }: { users: Array<{ email: string; displayName
   );
 }
 
-// Seguimiento de los hallazgos de seguridad.
+// Seguimiento de lo que ningún documento puede decir.
 //
-// Los hallazgos se leen solos del informe de obra, pero el informe no dice
-// quién se hace cargo de cada uno, para cuándo, ni con qué prueba queda
-// cerrado. Ése era el único hueco que quedaba en el área, y no por falta de
-// lector: ese dato no existe en ningún documento, lo pone la obra. Aquí se
-// escribe, y se publica por el mismo camino que un archivo, con su corte y su
-// entrada en el histórico.
+// Los hallazgos de seguridad y las obligaciones del préstamo se leen solos de
+// sus informes, pero ninguno de los dos documentos dice quién se hace cargo de
+// cada punto, para cuándo, ni con qué prueba queda cerrado. Ése era el último
+// hueco de ambas áreas, y no por falta de lector: ese dato no existe en ningún
+// sitio hasta que alguien lo asume.
 //
-// La lista de hallazgos manda: el seguimiento se cruza por el texto del
-// hallazgo, así que cuando el informe del mes trae otros distintos, los nuevos
-// aparecen sin asignar y no se arrastra el seguimiento de los que ya no se
-// reportan.
-const ESTADOS_HALLAZGO = ["Abierto", "En proceso", "Cerrado"] as const;
+// La lista leída manda y el seguimiento se cruza por su texto, así que cuando
+// el informe del mes trae otros puntos, los nuevos aparecen sin asignar y no se
+// arrastra el seguimiento de los que ya no figuran.
+type TrackingRow = {
+  item: string;
+  responsible: string;
+  status: string;
+  dueDate: string;
+  evidence: string;
+};
 
-function SafetyFindingsTracker() {
-  // El tipo se ensancha a propósito: el hallazgo es texto libre que viene del
-  // informe del mes, no un valor de un catálogo cerrado.
-  const guardado = new Map<string, { responsible: string; status: string; dueDate: string; evidence: string }>(
-    safetyFindingTracking.map((fila) => [fila.finding, fila]),
-  );
-  const inicial = safetyFindings.map((finding) => {
-    const previo = guardado.get(finding);
-    return {
-      finding,
-      responsible: previo?.responsible ?? "",
-      status: previo?.status ?? "Abierto",
-      dueDate: previo?.dueDate ?? "",
-      evidence: previo?.evidence ?? "",
-    };
-  });
+type TrackingSaved = {
+  finding?: string;
+  commitment?: string;
+  responsible: string;
+  status: string;
+  dueDate: string;
+  evidence: string;
+};
 
-  const [filas, setFilas] = useState(inicial);
+function TrackingEditor({
+  items,
+  saved,
+  endpoint,
+  statuses,
+  itemLabel,
+}: {
+  items: readonly string[];
+  saved: readonly TrackingSaved[];
+  endpoint: string;
+  statuses: readonly string[];
+  itemLabel: string;
+}) {
+  // El texto del punto es la identidad. Se busca en cualquiera de los dos
+  // nombres de campo porque cada área llama al suyo como le corresponde: un
+  // hallazgo de obra y una obligación de contrato no son la misma cosa.
+  const guardado = new Map<string, TrackingRow>();
+  for (const fila of saved) {
+    const clave = fila.finding ?? fila.commitment ?? "";
+    if (clave) {
+      guardado.set(clave, {
+        item: clave,
+        responsible: fila.responsible,
+        status: fila.status,
+        dueDate: fila.dueDate,
+        evidence: fila.evidence,
+      });
+    }
+  }
+
+  const [filas, setFilas] = useState<TrackingRow[]>(() => items.map((item) => guardado.get(item) ?? {
+    item,
+    responsible: "",
+    status: statuses[0],
+    dueDate: "",
+    evidence: "",
+  }));
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
 
-  function editar(finding: string, campo: "responsible" | "status" | "dueDate" | "evidence", valor: string) {
-    setFilas((previas) => previas.map((fila) => fila.finding === finding ? { ...fila, [campo]: valor } : fila));
+  function editar(item: string, campo: keyof Omit<TrackingRow, "item">, valor: string) {
+    setFilas((previas) => previas.map((fila) => fila.item === item ? { ...fila, [campo]: valor } : fila));
     setMensaje("");
   }
 
@@ -5689,7 +5728,7 @@ function SafetyFindingsTracker() {
     setMensaje("");
     setError("");
     try {
-      const response = await fetch("/api/safety-findings", {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
@@ -5708,11 +5747,11 @@ function SafetyFindingsTracker() {
     }
   }
 
-  const cerrados = filas.filter((fila) => fila.status === "Cerrado").length;
-
   if (!filas.length) {
-    return <p className="empty-note">Sin hallazgos en el corte publicado.</p>;
+    return <p className="empty-note">Sin {itemLabel} en el corte publicado.</p>;
   }
+
+  const cerrados = filas.filter((fila) => fila.status === "Cerrado").length;
 
   return (
     <div className="safety-tracker">
@@ -5721,8 +5760,8 @@ function SafetyFindingsTracker() {
       </p>
       <ul className="safety-tracker-list">
         {filas.map((fila) => (
-          <li key={fila.finding} data-estado={fila.status}>
-            <span className="safety-tracker-finding">{fila.finding}</span>
+          <li key={fila.item} data-estado={fila.status}>
+            <span className="safety-tracker-finding">{fila.item}</span>
             <div className="safety-tracker-fields">
               <label>
                 <span>Responsable</span>
@@ -5730,16 +5769,15 @@ function SafetyFindingsTracker() {
                   type="text"
                   value={fila.responsible}
                   placeholder="Quién se hace cargo"
-                  onChange={(event) => editar(fila.finding, "responsible", event.target.value)}
+                  onChange={(event) => editar(fila.item, "responsible", event.target.value)}
                 />
               </label>
               <label>
                 <span>Estado</span>
-                <select
-                  value={fila.status}
-                  onChange={(event) => editar(fila.finding, "status", event.target.value)}
-                >
-                  {ESTADOS_HALLAZGO.map((estado) => <option key={estado} value={estado}>{estado}</option>)}
+                <select value={fila.status} onChange={(event) => editar(fila.item, "status", event.target.value)}>
+                  {statuses.map((estado) => (
+                    <option key={estado || "sin"} value={estado}>{estado || "Sin asignar"}</option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -5747,7 +5785,7 @@ function SafetyFindingsTracker() {
                 <input
                   type="date"
                   value={fila.dueDate}
-                  onChange={(event) => editar(fila.finding, "dueDate", event.target.value)}
+                  onChange={(event) => editar(fila.item, "dueDate", event.target.value)}
                 />
               </label>
               <label className="safety-tracker-evidence">
@@ -5756,7 +5794,7 @@ function SafetyFindingsTracker() {
                   type="text"
                   value={fila.evidence}
                   placeholder="Qué se hizo y cómo se comprueba"
-                  onChange={(event) => editar(fila.finding, "evidence", event.target.value)}
+                  onChange={(event) => editar(fila.item, "evidence", event.target.value)}
                 />
               </label>
             </div>
@@ -5771,6 +5809,37 @@ function SafetyFindingsTracker() {
         {error && <small className="error-note">{error}</small>}
       </div>
     </div>
+  );
+}
+
+const ESTADOS_HALLAZGO = ["Abierto", "En proceso", "Cerrado"] as const;
+// Las obligaciones admiten además "sin asignar": nadie las ha tomado todavía, y
+// darlas por abiertas afirmaría un incumplimiento que no consta.
+const ESTADOS_OBLIGACION = ["", "Abierto", "En proceso", "Cerrado"] as const;
+
+function SafetyFindingsTracker() {
+  return (
+    <TrackingEditor
+      items={safetyFindings}
+      saved={safetyFindingTracking}
+      endpoint="/api/safety-findings"
+      statuses={ESTADOS_HALLAZGO}
+      itemLabel="hallazgos"
+    />
+  );
+}
+
+function IfcComplianceTracker() {
+  // Las obligaciones llegan agrupadas por bloque; el seguimiento es por punto.
+  const obligaciones = ifcComplianceGroups.flatMap((grupo) => grupo.items);
+  return (
+    <TrackingEditor
+      items={obligaciones}
+      saved={ifcComplianceTracking}
+      endpoint="/api/ifc-compliance"
+      statuses={ESTADOS_OBLIGACION}
+      itemLabel="obligaciones"
+    />
   );
 }
 

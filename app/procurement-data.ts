@@ -556,6 +556,42 @@ export const procurementQualityIssues = [
   },
 ];
 
+// Seguimiento de cada obligación del préstamo: quién responde, para cuándo y
+// con qué prueba.
+//
+// Los compromisos se leen solos del informe de análisis; esto es lo que el
+// informe no puede decir, porque no lo sabe: es la empresa quien asigna.
+//
+// El estado va vacío a propósito y no "Abierto": nadie ha asignado nada
+// todavía, y dar por incumplida una obligación del contrato es una afirmación
+// que no corresponde inventar aquí. Además tiene un efecto técnico buscado —el
+// contrato de datos sólo admite en un campo "status" los valores presentes en
+// el dato base, así que dejarlo vacío evita tener que fabricar estados falsos
+// para que el desplegable pueda usarlos; la lista válida la impone el servidor.
+export const ifcComplianceTracking = [
+  {
+    commitment: "Política Anti-Acoso y Protección Infantil: Adoptar políticas dentro de los tres meses siguientes al contrato.",
+    responsible: "",
+    status: "",
+    dueDate: "",
+    evidence: "",
+  },
+  {
+    commitment: "Reportes Mensuales: Entrega de reportes financieros y de operaciones mensuales.",
+    responsible: "",
+    status: "",
+    dueDate: "",
+    evidence: "",
+  },
+  {
+    commitment: "Mantenimiento de Seguros: Asegurar activos y negocios contra pérdidas asegurables.",
+    responsible: "",
+    status: "",
+    dueDate: "",
+    evidence: "",
+  },
+];
+
 export const ifcComplianceGroups = [
   {
     title: "Compromisos afirmativos",

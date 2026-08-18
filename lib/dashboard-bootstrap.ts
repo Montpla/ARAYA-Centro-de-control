@@ -140,6 +140,7 @@ export function buildDashboardBootstrap(financeAccess: boolean): DashboardBootst
     procurement: financeAccess
       ? {
           ifcComplianceGroups: procurement.ifcComplianceGroups,
+          ifcComplianceTracking: procurement.ifcComplianceTracking,
           juneDeviationSummary: procurement.juneDeviationSummary,
           monthlyDeviationLines: procurement.monthlyDeviationLines,
           procurementAudit: procurement.procurementAudit,
