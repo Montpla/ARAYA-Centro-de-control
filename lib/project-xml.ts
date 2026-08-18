@@ -212,7 +212,7 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
     acumulado.set(edificio, previo);
   }
 
-  const updates = [...acumulado.entries()]
+  const updates: Array<{ key: string; value: number | string }> = [...acumulado.entries()]
     .filter(([, { peso }]) => peso > 0)
     .map(([codigo, { suma, peso }]) => ({
       key: `buildings.${codigo}.progress`,
