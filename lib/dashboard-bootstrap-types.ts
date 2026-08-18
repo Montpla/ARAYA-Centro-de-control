@@ -16,7 +16,9 @@ export type DashboardBootstrapData = {
   demo: Widen<Pick<
     DemoModule,
     | "buildings"
+    | "cubicacionCaratula"
     | "cubicaciones"
+    | "projectCertifications"
     | "customMetrics"
     | "dataSources"
     | "monthlyPlan"

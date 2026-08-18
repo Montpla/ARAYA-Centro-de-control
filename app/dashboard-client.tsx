@@ -44,6 +44,8 @@ import {
 
 let buildings: DashboardBootstrapData["demo"]["buildings"] = [];
 let cubicaciones: DashboardBootstrapData["demo"]["cubicaciones"] = [];
+let cubicacionCaratula: DashboardBootstrapData["demo"]["cubicacionCaratula"] = [];
+let projectCertifications: DashboardBootstrapData["demo"]["projectCertifications"] = [];
 let initialMetrics: DashboardBootstrapData["demo"]["customMetrics"] = [];
 let dataSources: DashboardBootstrapData["demo"]["dataSources"] = [];
 let monthlyPlan: DashboardBootstrapData["demo"]["monthlyPlan"] = [];
@@ -189,6 +191,8 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
   ({
     buildings,
     cubicaciones,
+    cubicacionCaratula,
+    projectCertifications,
     customMetrics: initialMetrics,
     dataSources,
     monthlyPlan,
@@ -310,6 +314,8 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     constructionDisciplines,
     costBreakdown,
     cubicaciones,
+    cubicacionCaratula,
+    projectCertifications,
     cxpAging,
     cxpCategories,
     dataSources,
@@ -4009,6 +4015,21 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
               </button>
             ))}
           </div>
+          {projectCertifications.length > 0 && (
+            <div className="certifications-block">
+              <div className="panel-heading subsection-heading"><div><span className="section-kicker">CERTIFICACIONES</span><h3>Certificaciones del proyecto</h3></div></div>
+              <div className="compact-list">
+                {projectCertifications.map((cert) => (
+                  <div className="compact-row" key={cert.name}>
+                    <strong>{cert.name}</strong>
+                    <span>{cert.source}</span>
+                    <b className="good-text">{cert.quantity}</b>
+                    <span>{cert.cutoff || "—"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
       )}
 
@@ -5187,6 +5208,21 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
               );
             })}
           </div>
+          {cubicacionCaratula.length > 0 && (
+            <>
+              <div className="panel-heading subsection-heading"><div><span className="section-kicker">CARÁTULA DE CUBICACIÓN</span><h3>Monto por cubicación</h3></div><span className="data-note">Origen DOP · vista {currency}</span></div>
+              <div className="simple-table finance-table">
+                <div className="table-row table-head"><span>Cubicación</span><span>Monto</span><span>Corte</span></div>
+                {cubicacionCaratula.map((caratula) => (
+                  <div className="table-row" key={caratula.label}>
+                    <strong>{caratula.label}</strong>
+                    <span>{rd(caratula.montoDop)}</span>
+                    <span>{caratula.cutoff || "—"}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
           <div className="panel-heading subsection-heading"><div><span className="section-kicker">CUBICACIONES</span><h3>Medición frente a contabilidad</h3></div><span className="data-note">Origen DOP · vista {currency}</span></div>
           <div className="simple-table finance-table">
             <div className="table-row table-head"><span>Periodo</span><span>Cubicación</span><span>Contabilidad</span><span>Diferencia</span></div>

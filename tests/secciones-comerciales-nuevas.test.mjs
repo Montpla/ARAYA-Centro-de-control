@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import * as juneReport from "../app/june-report-data.ts";
+import * as demoData from "../app/demo-data.ts";
 import * as liveData from "../lib/live-data.ts";
 
 // Metas de recaudación y aliados captados.
@@ -83,4 +84,34 @@ test("el primer bloque descubierto se acepta sobre la lista vacía", async () =>
   const contrato = await readFile("lib/live-data-contract.ts", "utf8");
   assert.match(contrato, /if \(path === "discoveredSections"\) \{/);
   assert.doesNotMatch(contrato, /path === "discoveredSections\.\*"/);
+});
+
+// Certificaciones del proyecto y carátula de cubicación: las propuestas que se
+// modelaron en su sitio propio en vez de dejarlas como bloque genérico.
+
+test("las dos secciones modeladas son datos vivos", () => {
+  assert.ok(liveData.LIVE_DATA_ROOTS.includes("projectCertifications"));
+  assert.ok(liveData.LIVE_DATA_ROOTS.includes("cubicacionCaratula"));
+});
+
+test("la carátula es financiera; las certificaciones no", () => {
+  // El monto de una cubicación es información financiera y se protege como tal.
+  assert.equal(liveData.isFinancialLiveKey("cubicacionCaratula"), true);
+  // Una certificación LEED es información de proyecto: la ve todo el equipo,
+  // como los permisos, no sólo quien tiene acceso financiero.
+  assert.equal(liveData.isFinancialLiveKey("projectCertifications"), false);
+  assert.equal(liveData.isCommercialLiveKey("projectCertifications"), false);
+});
+
+test("guardan el dato real y no inventan lo que no llegó", () => {
+  const [cert] = demoData.projectCertifications;
+  assert.equal(cert.name, "LEED Gold");
+  assert.equal(cert.quantity, 3);
+
+  const [caratula] = demoData.cubicacionCaratula;
+  assert.equal(caratula.label, "Cubicación Nº8");
+  assert.equal(caratula.montoDop, 33639335.5863896);
+  // La relación de obra ejecutada (presupuesto, ejecutado, acumulados) no llegó
+  // estructurada: no se le añaden campos con cifras que el documento no dio.
+  assert.ok(!Object.hasOwn(caratula, "presupuestoDop"));
 });
