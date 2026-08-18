@@ -36,7 +36,20 @@ const YA_MODELADOS = ["certificaciones leed", "monto cubicacion", "monto cubicac
 
 const liveResponse = await fetch(`${PRODUCTION_URL}/api/live-data`, { headers: { Cookie } });
 const live = liveResponse.ok ? await liveResponse.json() : { values: {} };
-const actuales = Array.isArray(live.values?.discoveredSections) ? live.values.discoveredSections : [];
+
+// Los datos vivos guardan cada escritura por su clave literal, así que un
+// bloque publicado como "discoveredSections.0" NO aparece bajo la clave
+// "discoveredSections". Se reconstruye el array recogiendo tanto una escritura
+// de la raíz entera como las claves con índice.
+function leerDescubiertos(values) {
+  const base = Array.isArray(values.discoveredSections) ? [...values.discoveredSections] : [];
+  for (const [clave, valor] of Object.entries(values)) {
+    const coincide = clave.match(/^discoveredSections\.(\d+)$/);
+    if (coincide) base[Number(coincide[1])] = valor;
+  }
+  return base.filter((bloque) => bloque != null);
+}
+const actuales = leerDescubiertos(live.values ?? {});
 
 const conservados = actuales.filter((bloque) => {
   const titulo = String(bloque.title ?? "").toLowerCase();
