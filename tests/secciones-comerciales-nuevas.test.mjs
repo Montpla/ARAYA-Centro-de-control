@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import * as juneReport from "../app/june-report-data.ts";
@@ -72,4 +73,14 @@ test("empieza vacío y admite crecer", () => {
   // Y una clave con índice tiene que seguir siendo válida, o el primer bloque
   // que descubriera la lectura se rechazaría.
   assert.equal(liveData.isLiveDataKey("discoveredSections.0"), true);
+});
+
+test("el primer bloque descubierto se acepta sobre la lista vacía", async () => {
+  // Guarda del fallo real: la plantilla de forma se consulta por la ruta de la
+  // lista ("discoveredSections") y no la del elemento, así que escribirla como
+  // "discoveredSections.*" hacía que el primer bloque se rechazara por "la ruta
+  // no existe en el modelo autorizado" — y sólo se veía al publicar de verdad.
+  const contrato = await readFile("lib/live-data-contract.ts", "utf8");
+  assert.match(contrato, /if \(path === "discoveredSections"\) \{/);
+  assert.doesNotMatch(contrato, /path === "discoveredSections\.\*"/);
 });
