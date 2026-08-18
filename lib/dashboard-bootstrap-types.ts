@@ -43,6 +43,7 @@ export type DashboardBootstrapData = {
     | "managementActions"
     | "payablesReconciliation"
     | "permits"
+    | "safetyFindingTracking"
     | "safetyFindings"
     | "safetyMetrics"
     | "salesLocations"

@@ -90,6 +90,7 @@ function juneData(financeAccess: boolean) {
     managementActions: june.managementActions,
     payablesReconciliation: financeAccess ? june.payablesReconciliation : [],
     permits: june.permits,
+    safetyFindingTracking: june.safetyFindingTracking,
     safetyFindings: june.safetyFindings,
     safetyMetrics: june.safetyMetrics,
     salesLocations: financeAccess ? june.salesLocations : [],
