@@ -1,0 +1,56 @@
+name: Convertir MPP a XML y leerlo
+
+# Lee los .mpp binarios que no se pueden abrir dentro del Worker: el runner sí
+# tiene Java, así que convierte el .mpp a XML de Project (MSPDI) con MPXJ y lo
+# re-ingiere por el lector de Project que ya existe. Simula por defecto.
+
+on:
+  workflow_dispatch:
+    inputs:
+      filtro:
+        description: "Texto que debe contener el nombre del .mpp (p. ej. 30-07-2026)"
+        required: false
+        default: ""
+        type: string
+      aplicar:
+        description: "Subir el XML convertido (1) o sólo convertir y validar (0)"
+        required: false
+        default: "0"
+        type: string
+
+jobs:
+  convertir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Preparar MPXJ (classpath)
+        run: |
+          set -euo pipefail
+          VER=$(curl -s "https://search.maven.org/solrsearch/select?q=g:%22net.sf.mpxj%22+AND+a:%22mpxj%22&core=gav&rows=1&wt=json" \
+            | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{const j=JSON.parse(d);process.stdout.write(j.response.docs[0].v)})')
+          echo "MPXJ $VER"
+          cat > /tmp/pom.xml <<EOF
+          <project xmlns="http://maven.apache.org/POM/4.0.0">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>araya</groupId><artifactId>mpxj-cp</artifactId><version>1</version>
+            <dependencies>
+              <dependency><groupId>net.sf.mpxj</groupId><artifactId>mpxj</artifactId><version>${VER}</version></dependency>
+            </dependencies>
+          </project>
+          EOF
+          mvn -q -f /tmp/pom.xml dependency:build-classpath -Dmdep.outputFile=/tmp/cp.txt
+          echo "MPXJ_CP=$(cat /tmp/cp.txt)" >> "$GITHUB_ENV"
+      - name: Convertir y (opcional) subir
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+          FILTRO: ${{ inputs.filtro }}
+          APLICAR: ${{ inputs.aplicar }}
+        run: node scripts/convertir-mpp.mjs
