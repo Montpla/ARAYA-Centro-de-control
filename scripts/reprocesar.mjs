@@ -14,6 +14,14 @@
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 const APLICAR = process.env.APLICAR === "1";
 const FILTRO = (process.env.FILTRO ?? "jul").toLowerCase();
+// FORMATOS restringe por extensión (p. ej. "pptx" o "pptx,docx"). Sirve para
+// reprocesar sólo los informes narrativos que leyó la IA y dejó a medias, sin
+// tocar los Excel que ya leyeron bien los lectores propios.
+const FORMATOS = (process.env.FORMATOS ?? "")
+  .toLowerCase()
+  .split(",")
+  .map((f) => f.trim())
+  .filter(Boolean);
 
 const email = process.env.DEPLOY_VERIFY_EMAIL;
 const pin = process.env.DEPLOY_VERIFY_PIN;
@@ -40,12 +48,17 @@ const { files = [] } = await filesResponse.json();
 // Se eligen los archivos cuyo nombre contiene el filtro (por defecto "jul") y
 // que no están eliminados; sólo los formatos que la ingesta procesa.
 const procesables = new Set(["pptx", "docx", "pdf", "xlsx", "xls", "csv", "xml", "zip", "json"]);
-const objetivo = files.filter((f) =>
-  !f.deletedAt &&
-  f.originalName.toLowerCase().includes(FILTRO) &&
-  procesables.has(String(f.extension).toLowerCase()));
+const permitidos = FORMATOS.length ? new Set(FORMATOS) : procesables;
+const objetivo = files.filter((f) => {
+  const ext = String(f.extension).toLowerCase();
+  return !f.deletedAt &&
+    f.originalName.toLowerCase().includes(FILTRO) &&
+    procesables.has(ext) &&
+    permitidos.has(ext);
+});
 
-console.log(`=== ${objetivo.length} archivo(s) que contienen "${FILTRO}" ===`);
+const sufijoFormato = FORMATOS.length ? ` y formato ${FORMATOS.join("/")}` : "";
+console.log(`=== ${objetivo.length} archivo(s) que contienen "${FILTRO}"${sufijoFormato} ===`);
 for (const f of objetivo) {
   console.log(`  · ${f.originalName} · área ${f.areaLabel} · subido ${f.createdAt} · rev publicada ${f.publicationRevision || "—"}`);
 }
