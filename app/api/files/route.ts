@@ -51,6 +51,7 @@ import {
 } from "../../../lib/d1-json-bulk";
 import { assertLiveDataContracts, getContractRootsSnapshot, validateLiveDataContract } from "../../../lib/live-data-contract";
 import { normalizeLiveDataUpdates, publishLiveDataUpdates } from "../../../lib/publish-live-data";
+import { publicationKeyConflict } from "../../../lib/live-data-publication-recovery";
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-upsert";
 import { nothingExtractedMessage } from "../../../lib/upload-messages";
@@ -468,6 +469,42 @@ function normalizeIngestedUpdatesResilient(
     }
     return { normalized, descartadas };
   }
+}
+
+// Norma estructural: la publicación rechaza mezclar en un mismo lote una lista
+// entera con una ruta hija suya (`collectionTargets` y `collectionTargets.0.…`)
+// o una clave repetida. Ese choque —venga del lector, de la IA de relleno o de
+// dos lectores a la vez— tumbaba todo el informe. En la ingesta automática se
+// resuelve aquí, con el MISMO detector que usa la publicación, quedándose con
+// la representación más específica: si hay una lista y una fila suya, gana la
+// fila (la del lector determinista); si hay un duplicado exacto, la primera.
+// Así el error de mezcla nunca puede llegar a publicarse. La bandeja de
+// revisión manual conserva su validación estricta —esto sólo afecta a lo
+// automático.
+function resolvePublicationKeyConflicts(
+  updates: ReturnType<typeof normalizeLiveDataUpdates>,
+): { resueltas: ReturnType<typeof normalizeLiveDataUpdates>; descartadas: number } {
+  let vigentes = updates;
+  let descartadas = 0;
+  // publicationKeyConflict devuelve un choque cada vez; se repite hasta que no
+  // quede ninguno. La guarda por longitud evita cualquier bucle infinito.
+  for (let intento = 0; intento <= updates.length; intento += 1) {
+    const conflict = publicationKeyConflict(vigentes.map((update) => update.key));
+    if (!conflict) break;
+    if (conflict.duplicate) {
+      let conservado = false;
+      vigentes = vigentes.filter((update) => {
+        if (update.key !== conflict.duplicate) return true;
+        if (conservado) return false;
+        conservado = true;
+        return true;
+      });
+    } else {
+      vigentes = vigentes.filter((update) => update.key !== conflict.ancestor);
+    }
+    descartadas += 1;
+  }
+  return { resueltas: vigentes, descartadas };
 }
 
 export async function GET(request: Request) {
@@ -1160,13 +1197,17 @@ export async function POST(request: Request) {
           },
         )
       : { normalized: [], descartadas: 0 };
-    const extractedUpdates = normalizacion.normalized;
-    if (normalizacion.descartadas > 0) {
+    // Se resuelve el choque lista/fila (y los duplicados) antes de seguir, para
+    // que nunca llegue a la publicación desde la ingesta automática.
+    const sinChoques = resolvePublicationKeyConflicts(normalizacion.normalized);
+    const extractedUpdates = sinChoques.resueltas;
+    const datosDescartados = normalizacion.descartadas + sinChoques.descartadas;
+    if (datosDescartados > 0) {
       extraction = {
         ...extraction,
         warnings: [
           ...extraction.warnings,
-          `${normalizacion.descartadas} dato(s) no encajaban en el modelo vivo y se descartaron; el resto se conservó.`,
+          `${datosDescartados} dato(s) no encajaban en el modelo vivo o duplicaban otra representación y se descartaron; el resto se conservó.`,
         ],
       };
     }

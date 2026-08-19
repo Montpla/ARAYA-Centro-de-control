@@ -190,7 +190,13 @@ test("upload quarantine, idempotent resume and automatic runtime contracts fail 
     /function normalizeIngestedUpdatesResilient\(/,
     /return \{ normalized: normalizeLiveDataUpdates\(\{ updates, \.\.\.context \}\), descartadas: 0 \}/,
     /normalized\.push\(\.\.\.normalizeLiveDataUpdates\(\{ updates: \[update\], \.\.\.context \}\)\)/,
-    /const extractedUpdates = normalizacion\.normalized/,
+    /const extractedUpdates = sinChoques\.resueltas/,
+    // Norma estructural: el choque lista/fila y los duplicados se resuelven con
+    // el mismo detector que usa la publicación, antes de publicar, quedándose
+    // con la representación más específica. Así nunca llegan a la publicación.
+    /const sinChoques = resolvePublicationKeyConflicts\(normalizacion\.normalized\)/,
+    /const conflict = publicationKeyConflict\(vigentes\.map\(\(update\) => update\.key\)\)/,
+    /vigentes = vigentes\.filter\(\(update\) => update\.key !== conflict\.ancestor\)/,
   ], "files route quarantine");
 
   expectPatterns(mutationNotificationMigration, [
