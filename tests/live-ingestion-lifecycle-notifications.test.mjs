@@ -107,7 +107,12 @@ test("multiformat ingestion falls back to AI and gates automatic publication", (
     /import \{[\s\S]*?canAutomaticallyPublishExtraction,[\s\S]*?extractDocumentWithAI,[\s\S]*?\} from ["']\.\.\/\.\.\/\.\.\/lib\/ai-document-extraction["'];/,
     /const allowedExtensions = new Set\(\[[\s\S]*?["']pdf["'][\s\S]*?["']pptx["'][\s\S]*?["']xlsx["'][\s\S]*?["']png["'][\s\S]*?\]\);/,
     /extractStructuredUpdates\(bytes, extension,/,
-    /if \(!deterministicExtraction\.updates\.length\) \{[\s\S]*?extractDocumentWithAI\(/,
+    // El lector determinista manda; la IA se ejecuta también cuando la lectura
+    // de un documento narrativo fue sólo parcial, y complementa los huecos.
+    /const lecturaParcial = deterministicExtraction\.updates\.length > 0 && documentoNarrativo;/,
+    /if \(!deterministicExtraction\.updates\.length \|\| lecturaParcial\) \{[\s\S]*?extractDocumentWithAI\(/,
+    /const cubiertas = new Set\(deterministicExtraction\.updates\.map\(\(update\) => update\.key\)\);/,
+    /\.filter\(\(\{ update \}\) => !cubiertas\.has\(update\.key\)\)/,
     /apiKey: process\.env\.OPENAI_API_KEY \?\? ["']["']/,
     /extractionMode: extraction\.model === ["']deterministic["'][\s\S]*?["']openai_responses["']/,
     /automaticPublicationRequested &&/,
