@@ -941,8 +941,19 @@ export async function POST(request: Request) {
     // plausibles pero distintas (p. ej. "physicalProgressExecuted" en vez de
     // "overallProgress"), y el contrato las rechazaba en silencio.
     const currentLiveData = await readEffectiveLiveData(true);
-    if (!deterministicExtraction.updates.length) {
-      extraction = await extractDocumentWithAI({
+    // Un informe en PowerPoint, Word o PDF es narrativo: un lector propio saca
+    // sus cifras con fiabilidad, pero un mismo documento puede traer varias
+    // áreas y ningún lector las cubre todas (el Informe Ejecutivo lleva ventas,
+    // obra, seguridad y finanzas en 37 láminas). Antes, si el lector encontraba
+    // algo, la IA no corría, y lo que el lector no cubría se quedaba sin
+    // actualizar. Ahora el lector manda y la IA COMPLETA los huecos: se ejecuta
+    // también cuando el lector sólo cubrió parte de un documento narrativo, y
+    // sólo se quedan de la IA las claves que ningún lector tocó. Un Excel o un
+    // plan de Project se leen enteros y no necesitan ese complemento.
+    const documentoNarrativo = ["pptx", "docx", "pdf"].includes(extension);
+    const lecturaParcial = deterministicExtraction.updates.length > 0 && documentoNarrativo;
+    if (!deterministicExtraction.updates.length || lecturaParcial) {
+      const iaExtraction = await extractDocumentWithAI({
         bytes,
         fileName: candidate.name,
         mimeType: candidate.type || canonicalMimeByExtension[extension] || "application/octet-stream",
@@ -955,6 +966,28 @@ export async function POST(request: Request) {
         knownAreas: uploadAreas,
         schemaReference: getContractRootsSnapshot(),
       });
+      if (!deterministicExtraction.updates.length) {
+        extraction = iaExtraction;
+      } else {
+        // El lector determinista gana: de la IA sólo entran las claves que
+        // ningún lector cubrió. Así el complemento nunca pisa un dato leído
+        // directamente, que es el que da la garantía.
+        const cubiertas = new Set(deterministicExtraction.updates.map((update) => update.key));
+        const complemento = iaExtraction.updates
+          .map((update, indice) => ({ update, confianza: iaExtraction.updateConfidences[indice] ?? iaExtraction.confidence }))
+          .filter(({ update }) => !cubiertas.has(update.key));
+        extraction = {
+          ...iaExtraction,
+          updates: [...deterministicExtraction.updates, ...complemento.map(({ update }) => update)],
+          updateConfidences: [
+            ...deterministicExtraction.updates.map(() => 1),
+            ...complemento.map(({ confianza }) => confianza),
+          ],
+          confidence: 1,
+          summary: `${deterministicExtraction.summary} La IA completó ${complemento.length} dato(s) que el lector no cubría.`,
+          warnings: [...deterministicExtraction.warnings, ...iaExtraction.warnings],
+        };
+      }
     }
     const identityResolvedUpdates = currentLiveData
       // Las colecciones de partida permiten traducir a posición el nombre de
