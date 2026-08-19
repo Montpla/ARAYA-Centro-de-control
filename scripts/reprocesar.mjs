@@ -121,6 +121,8 @@ for (const f of objetivo) {
   if (f.declaredCutoff) form.set("declaredCutoff", f.declaredCutoff);
   if (f.sourceCurrency) form.set("sourceCurrency", f.sourceCurrency);
   form.set("description", `${REEMPLAZAR ? "Re-ingesta" : "Reproceso"} con el pipeline actualizado (${new Date().toISOString().slice(0, 10)}).`);
+  // Pide el detalle del error si la publicación no se confirma (solo el texto).
+  if (process.env.DEBUG === "1") form.set("debug", "1");
 
   const subida = await fetch(`${PRODUCTION_URL}/api/files`, { method: "POST", headers: { Cookie }, body: form });
   const cuerpo = await subida.json().catch(() => ({}));
@@ -129,4 +131,5 @@ for (const f of objetivo) {
     continue;
   }
   console.log(`✔ ${f.originalName}: ${cuerpo.message ?? cuerpo.processingSummary ?? "reprocesado"}`);
+  if (cuerpo.debug) console.log(`   ↳ detalle del error: ${cuerpo.debug}`);
 }

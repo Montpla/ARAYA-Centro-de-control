@@ -704,6 +704,11 @@ export async function POST(request: Request) {
   // original— y publica una revisión nueva encima. Sin esta señal explícita, un
   // archivo idéntico ya publicado se queda como está.
   const reprocessRequested = formData.get("reprocess") === "true";
+  // Diagnóstico acotado: cuando quien sube lo pide expresamente y tiene acceso,
+  // la respuesta incluye el mensaje del error que dejó el expediente en
+  // «observado». Es sólo el texto del error (nunca cifras), para localizar qué
+  // comprobación de integridad falló sin tener el log del servidor delante.
+  const debugRequested = formData.get("debug") === "1";
   const classification = classifyUpload({
     fileName: candidate.name,
     description,
@@ -1430,6 +1435,10 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error("file extraction/publication failed", id, error);
+    // Sólo el texto del error (nombre + mensaje), acotado. Los errores de esta
+    // fase son mensajes descriptivos del contrato/publicación o del motor D1
+    // (nombres de restricción), nunca valores de negocio.
+    const debugDetail = (error instanceof Error ? `${error.name}: ${error.message}` : String(error)).slice(0, 600);
     let authoritativePointerReadSucceeded = false;
     if (!extractionCommitted && extractionGeneration) {
       try {
@@ -1507,6 +1516,7 @@ export async function POST(request: Request) {
     return Response.json({
       file: publicFileRow(currentRow, user),
       message: processingSummary,
+      ...(debugRequested && user.financeAccess ? { debug: debugDetail } : {}),
     }, { status: 201 });
   }
 }
