@@ -3633,7 +3633,8 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
         <StatCard eyebrow="Reservas activas" value={`${juneReport.sales.active}`} detail={`${juneReport.sales.reservations} históricas · ${juneReport.sales.withdrawn} desistidas`} />
         <StatCard eyebrow="Fase I" value={`${juneReport.sales.phaseOneActive}`} detail={`${juneReport.sales.phaseOneSales}% del objetivo comercial`} tone="good" />
         <StatCard eyebrow="Fase II" value={`${juneReport.sales.phaseTwoActive}`} detail={`${juneReport.sales.phaseTwoSales}% del objetivo comercial`} />
-        <StatCard eyebrow="Cartera vencida" value={formatMoney(juneReport.collections.overdueUsd, "USD", currency)} detail={`${juneReport.collections.overdue} clientes · menos de 1%`} tone="warn" />
+        <StatCard eyebrow="Cartera vencida" value={formatMoney(juneReport.collections.overdueUsd, "USD", currency)} detail={`${juneReport.collections.overdue} clientes · morosidad < ${number.format(juneReport.collections.arrearsMaxPercent)}%`} tone="warn" />
+        <StatCard eyebrow="Recaudo vs proyectado" value={`≥ ${number.format(juneReport.collections.collectedVsProjectedPercent)}%`} detail="De lo proyectado según ventas formalizadas" tone="good" />
       </section>
       <section className="report-tabs" aria-label="Secciones del informe comercial">
         {[
