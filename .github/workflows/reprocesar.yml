@@ -16,6 +16,11 @@ on:
         required: false
         default: ""
         type: string
+      reemplazar:
+        description: "Retirar el expediente previo y re-ingerir como alta nueva (1) en vez de re-publicar encima (0)"
+        required: false
+        default: "0"
+        type: string
       aplicar:
         description: "Aplicar de verdad (1) o sólo simular (0)"
         required: false
@@ -36,5 +41,6 @@ jobs:
           DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
           FILTRO: ${{ inputs.filtro }}
           FORMATOS: ${{ inputs.formatos }}
+          REEMPLAZAR: ${{ inputs.reemplazar }}
           APLICAR: ${{ inputs.aplicar }}
         run: node scripts/reprocesar.mjs
