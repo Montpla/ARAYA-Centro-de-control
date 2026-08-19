@@ -1,0 +1,34 @@
+name: Aprobar y publicar propuestas de un expediente
+
+# Publica a propósito las propuestas preparadas de un archivo desde la bandeja
+# de revisión (p. ej. avances de obra de un informe multi-área que no se
+# auto-publican). Simula por defecto; aplicar publica.
+
+on:
+  workflow_dispatch:
+    inputs:
+      filtro:
+        description: "Parte del nombre del archivo (p. ej. ejecutivo_araya_julio)"
+        required: true
+        type: string
+      aplicar:
+        description: "Aplicar de verdad (1) o sólo simular (0)"
+        required: false
+        default: "0"
+        type: string
+
+jobs:
+  aprobar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Aprobar
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+          FILTRO: ${{ inputs.filtro }}
+          APLICAR: ${{ inputs.aplicar }}
+        run: node scripts/aprobar.mjs
