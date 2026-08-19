@@ -161,7 +161,7 @@ test("upload quarantine, idempotent resume and automatic runtime contracts fail 
     // Se le pasan además las colecciones de partida para poder traducir a
     // posición el nombre de una entidad en cualquier lista, no sólo en las
     // espaciales: las económicas no tienen id y sólo se distinguen por nombre.
-    /resolveSpatialIdentityUpdates\(extraction\.updates, currentLiveData\.values, getContractRootsSnapshot\(\)\)/,
+    /resolveSpatialIdentityUpdates\(\s*extraction\.updates,\s*currentLiveData\.values,\s*getContractRootsSnapshot\(\),?\s*\)/,
     /const liveValues = currentLiveData\?\.values \?\? \{\}/,
     /automaticContractIsSafe\(normalizedUpdates, liveValues\)/,
     /individualUpdateContractIsSafe\(update, liveValues\)/,
@@ -173,6 +173,12 @@ test("upload quarantine, idempotent resume and automatic runtime contracts fail 
     /const canReprocess = reprocessRequested &&[\s\S]*?duplicate\.status !== ["']rechazado["']/,
     /reprocessing = !canResume && duplicate\.publicationRevision !== null/,
     /requestKey: reprocessing \? `auto:\$\{id\}:\$\{extractionGeneration\}` : `auto:\$\{id\}`/,
+    // Una clave que no encaja en el modelo no tumba toda la ingesta automática:
+    // se normaliza dato a dato y se descartan sólo los que fallan.
+    /function normalizeIngestedUpdatesResilient\(/,
+    /return \{ normalized: normalizeLiveDataUpdates\(\{ updates, \.\.\.context \}\), descartadas: 0 \}/,
+    /normalized\.push\(\.\.\.normalizeLiveDataUpdates\(\{ updates: \[update\], \.\.\.context \}\)\)/,
+    /const extractedUpdates = normalizacion\.normalized/,
   ], "files route quarantine");
 
   expectPatterns(mutationNotificationMigration, [
