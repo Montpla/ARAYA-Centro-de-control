@@ -1027,16 +1027,27 @@ export async function POST(request: Request) {
         // El lector determinista gana: de la IA sólo entran las claves que
         // ningún lector cubrió. Así el complemento nunca pisa un dato leído
         // directamente, que es el que da la garantía.
-        const cubiertas = new Set(deterministicExtraction.updates.map((update) => update.key));
-        // Del complemento sólo entran claves nuevas y con confianza positiva: un
-        // dato que la IA ni afirma no debe publicarse solo ni contar para la
-        // comprobación de confianza del lote, que exige que todos tengan
-        // confianza > 0. Sin este filtro, un único dato dudoso de relleno
-        // bloqueaba la publicación automática de todo el informe.
+        const clavesDeterministas = deterministicExtraction.updates.map((update) => update.key);
+        // Una clave de la IA choca con el lector no sólo si es idéntica, sino
+        // también si es antepasada o descendiente de una suya: la publicación
+        // rechaza mezclar una lista entera (p. ej. `collectionTargets`) con una
+        // ruta hija suya (`collectionTargets.0.targetUsd`), y el lector emite las
+        // hijas. Si la IA manda la lista entera, se descarta a favor de las
+        // hijas del lector.
+        const complementoChocaConLector = (aiKey: string) =>
+          clavesDeterministas.some((clave) =>
+            clave === aiKey ||
+            clave.startsWith(`${aiKey}.`) ||
+            aiKey.startsWith(`${clave}.`));
+        // Del complemento sólo entran claves nuevas (sin choque con el lector) y
+        // con confianza positiva: un dato que la IA ni afirma no debe publicarse
+        // solo ni contar para la comprobación de confianza del lote, que exige
+        // que todos tengan confianza > 0. Sin este filtro, un único dato dudoso
+        // de relleno bloqueaba la publicación automática de todo el informe.
         const complemento = iaExtraction.updates
           .map((update, indice) => ({ update, confianza: iaExtraction.updateConfidences[indice] ?? iaExtraction.confidence }))
           .filter(({ update, confianza }) =>
-            !cubiertas.has(update.key) && Number.isFinite(confianza) && confianza > 0);
+            !complementoChocaConLector(update.key) && Number.isFinite(confianza) && confianza > 0);
         extraction = {
           ...iaExtraction,
           updates: [...deterministicExtraction.updates, ...complemento.map(({ update }) => update)],

@@ -111,8 +111,13 @@ test("multiformat ingestion falls back to AI and gates automatic publication", (
     // de un documento narrativo fue sólo parcial, y complementa los huecos.
     /const lecturaParcial = deterministicExtraction\.updates\.length > 0 && documentoNarrativo;/,
     /if \(!deterministicExtraction\.updates\.length \|\| lecturaParcial\) \{[\s\S]*?extractDocumentWithAI\(/,
-    /const cubiertas = new Set\(deterministicExtraction\.updates\.map\(\(update\) => update\.key\)\);/,
-    /\.filter\(\(\{ update, confianza \}\) =>\s*!cubiertas\.has\(update\.key\) && Number\.isFinite\(confianza\) && confianza > 0\)/,
+    /const clavesDeterministas = deterministicExtraction\.updates\.map\(\(update\) => update\.key\);/,
+    // La IA no puede aportar una lista entera cuando el lector ya emite una hija
+    // suya (collectionTargets vs collectionTargets\.0\.targetUsd): choca en la
+    // publicación, así que se descarta por antepasada/descendiente, no sólo por
+    // clave idéntica.
+    /clave\.startsWith\(`\$\{aiKey\}\.`\) \|\|\s*aiKey\.startsWith\(`\$\{clave\}\.`\)/,
+    /\.filter\(\(\{ update, confianza \}\) =>\s*!complementoChocaConLector\(update\.key\) && Number\.isFinite\(confianza\) && confianza > 0\)/,
     /apiKey: process\.env\.OPENAI_API_KEY \?\? ["']["']/,
     /extractionMode: extraction\.model === ["']deterministic["'][\s\S]*?["']openai_responses["']/,
     /automaticPublicationRequested &&/,
