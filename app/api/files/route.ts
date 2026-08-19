@@ -1023,9 +1023,15 @@ export async function POST(request: Request) {
         // ningún lector cubrió. Así el complemento nunca pisa un dato leído
         // directamente, que es el que da la garantía.
         const cubiertas = new Set(deterministicExtraction.updates.map((update) => update.key));
+        // Del complemento sólo entran claves nuevas y con confianza positiva: un
+        // dato que la IA ni afirma no debe publicarse solo ni contar para la
+        // comprobación de confianza del lote, que exige que todos tengan
+        // confianza > 0. Sin este filtro, un único dato dudoso de relleno
+        // bloqueaba la publicación automática de todo el informe.
         const complemento = iaExtraction.updates
           .map((update, indice) => ({ update, confianza: iaExtraction.updateConfidences[indice] ?? iaExtraction.confidence }))
-          .filter(({ update }) => !cubiertas.has(update.key));
+          .filter(({ update, confianza }) =>
+            !cubiertas.has(update.key) && Number.isFinite(confianza) && confianza > 0);
         extraction = {
           ...iaExtraction,
           updates: [...deterministicExtraction.updates, ...complemento.map(({ update }) => update)],
@@ -1312,32 +1318,44 @@ export async function POST(request: Request) {
       confidence: extraction.confidence,
       updateConfidences: extraction.updateConfidences,
       warnings: extraction.warnings,
-      updateCount: normalizedUpdates.length,
+      // El recuento se cuenta sobre las confianzas de la extracción, no sobre lo
+      // que sobrevive a la normalización: si ésta descarta un dato que no encaja
+      // en el modelo, el lote no debe fallar la comprobación de longitud y
+      // perder también los datos buenos.
+      updateCount: extraction.updateConfidences.length,
     });
-    const canPublishAutomatically =
+    const liveValues = currentLiveData?.values ?? {};
+    // Condiciones del lote: valen para todos los datos por igual (se pidió
+    // publicar solo, el área permite publicar, hay datos y contexto vivo).
+    const batchPreconditions =
       automaticPublicationRequested &&
       canPublishInArea &&
       resolvedArea !== "sin_clasificar" &&
       extractionConfidenceIsSafe &&
       normalizedUpdates.length > 0 &&
-      Boolean(currentLiveData) &&
-      normalizedUpdates.every((update) =>
-        update.area === resolvedArea &&
-        (user.financeAccess || !isFinancialLiveKey(update.key)) &&
-        isSafeAutomaticStructuredUpdate(update),
-      );
-    const liveValues = currentLiveData?.values ?? {};
-    // El contrato se comprueba primero como lote completo (igual que siempre,
-    // cero cambio de comportamiento cuando todo encaja). Solo si el lote
-    // completo falla se revisa cada clave por separado, para que un único
-    // campo huérfano (p. ej. uno que la IA propuso pero no tiene sitio
-    // todavía) no arrastre al resto de datos que sí eran perfectamente
-    // publicables.
-    const wholeBatchSafe = canPublishAutomatically && automaticContractIsSafe(normalizedUpdates, liveValues);
+      Boolean(currentLiveData);
+    // Condiciones de cada dato: su área coincide, quien sube puede publicarlo y
+    // encaja en el contrato vivo. Antes esto se comprobaba con un `.every` que
+    // bloqueaba TODO el lote si un solo dato fallaba —justo lo que hacía que un
+    // informe con un dato dudoso de relleno no actualizara ninguna cifra. Ahora
+    // decide dato a dato: los que encajan se publican solos y el resto va a
+    // revisión.
+    const updateIsAutoPublishable = (update: ReturnType<typeof normalizeLiveDataUpdates>[number]) =>
+      update.area === resolvedArea &&
+      (user.financeAccess || !isFinancialLiveKey(update.key)) &&
+      isSafeAutomaticStructuredUpdate(update) &&
+      individualUpdateContractIsSafe(update, liveValues);
+    // Si todo el lote encaja (además, como lote atómico en el contrato), se
+    // publica entero —cero cambio de comportamiento cuando todo cuadra—. Si no,
+    // se publican los datos que individualmente son seguros y el resto queda
+    // para revisión, en vez de bloquear el informe completo.
+    const wholeBatchSafe = batchPreconditions &&
+      normalizedUpdates.every(updateIsAutoPublishable) &&
+      automaticContractIsSafe(normalizedUpdates, liveValues);
     const autoPublishable = wholeBatchSafe
       ? normalizedUpdates
-      : canPublishAutomatically
-        ? normalizedUpdates.filter((update) => individualUpdateContractIsSafe(update, liveValues))
+      : batchPreconditions
+        ? normalizedUpdates.filter(updateIsAutoPublishable)
         : [];
     if (autoPublishable.length) {
       publicationStarted = true;

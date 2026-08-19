@@ -1064,7 +1064,8 @@ test("simple uploads request automatic publication only for extracted structured
   assert.match(dashboard, /formData\.set\("autoPublish", "true"\)/);
   assert.match(filesRoute, /formData\.get\("autoPublish"\) === "true"/);
   assert.match(filesRoute, /extractStructuredUpdates\(bytes, extension/);
-  assert.match(filesRoute, /const canPublishAutomatically/);
+  assert.match(filesRoute, /const batchPreconditions =/);
+  assert.match(filesRoute, /const updateIsAutoPublishable = /);
   assert.match(filesRoute, /user\.role === "admin"/);
   assert.match(filesRoute, /resolvedArea !== "sin_clasificar"/);
   assert.match(filesRoute, /isSafeAutomaticStructuredUpdate/);
