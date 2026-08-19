@@ -437,6 +437,39 @@ function resolveExtractedProtection(input: {
   } as const;
 }
 
+// Una ingesta automática no puede caerse entera porque una sola clave no encaje
+// en el modelo. normalizeLiveDataUpdates valida el lote completo y lanza ante la
+// primera clave inválida (p. ej. un nombre de modelo comercial que el resolutor
+// no supo llevar a su posición, o un campo que ese día no existe). Eso mandaba
+// todo el expediente a revisión manual y se perdían también los 25 datos que sí
+// eran correctos. Aquí se prueba el lote y, si algo falla, se normaliza dato a
+// dato y se descartan sólo los que no encajan, conservando los buenos. Es la
+// misma tolerancia que la IA ya aplica a sus candidatos: el dato sólido del
+// lector no se pierde por culpa de uno dudoso. La bandeja de revisión sigue
+// siendo estricta —esto solo afecta a la ingesta automática, no a lo que una
+// persona envía a mano.
+function normalizeIngestedUpdatesResilient(
+  updates: Parameters<typeof normalizeLiveDataUpdates>[0]["updates"],
+  context: { area: string; cutoff: string; sourceFileId: string; sourceName: string },
+): { normalized: ReturnType<typeof normalizeLiveDataUpdates>; descartadas: number } {
+  try {
+    return { normalized: normalizeLiveDataUpdates({ updates, ...context }), descartadas: 0 };
+  } catch {
+    const normalized: ReturnType<typeof normalizeLiveDataUpdates> = [];
+    let descartadas = 0;
+    for (const update of updates) {
+      try {
+        normalized.push(...normalizeLiveDataUpdates({ updates: [update], ...context }));
+      } catch {
+        // Clave ajena al modelo o valor no admitido: se descarta este dato y se
+        // sigue con el resto, en vez de perder toda la extracción.
+        descartadas += 1;
+      }
+    }
+    return { normalized, descartadas };
+  }
+}
+
 export async function GET(request: Request) {
   const requestStartedAt = new Date().toISOString();
   const auth = await authenticatedUser();
@@ -1006,12 +1039,24 @@ export async function POST(request: Request) {
         };
       }
     }
-    const identityResolvedUpdates = currentLiveData
-      // Las colecciones de partida permiten traducir a posición el nombre de
-      // una entidad en cualquier lista del modelo, no sólo en las espaciales:
-      // las económicas no tienen id y sólo se distinguen por su nombre.
-      ? resolveSpatialIdentityUpdates(extraction.updates, currentLiveData.values, getContractRootsSnapshot())
-      : extraction.updates;
+    // Las colecciones de partida permiten traducir a posición el nombre de una
+    // entidad en cualquier lista del modelo, no sólo en las espaciales: las
+    // económicas no tienen id y sólo se distinguen por su nombre. Si la
+    // traducción tropezara con una entrada rara, se sigue con las claves tal
+    // cual en vez de tumbar toda la ingesta: la normalización posterior ya
+    // descarta dato a dato lo que no encaje.
+    let identityResolvedUpdates = extraction.updates;
+    if (currentLiveData) {
+      try {
+        identityResolvedUpdates = resolveSpatialIdentityUpdates(
+          extraction.updates,
+          currentLiveData.values,
+          getContractRootsSnapshot(),
+        );
+      } catch {
+        identityResolvedUpdates = extraction.updates;
+      }
+    }
     // Cuántos bloques descubiertos hay ya: los nuevos se añaden al final, y
     // escribir un índice ocupado sobrescribiría el bloque de otro documento.
     const existingDiscoveredCount = Array.isArray(currentLiveData.values.discoveredSections)
@@ -1075,9 +1120,9 @@ export async function POST(request: Request) {
         })
       : [];
 
-    const extractedUpdates = identityResolvedUpdates.length || seccionesDescubiertas.length
-      ? normalizeLiveDataUpdates({
-          updates: [
+    const normalizacion = identityResolvedUpdates.length || seccionesDescubiertas.length
+      ? normalizeIngestedUpdatesResilient(
+          [
             ...identityResolvedUpdates.map((update) => ({
               ...update,
               sourceFileId: id,
@@ -1085,12 +1130,24 @@ export async function POST(request: Request) {
             })),
             ...seccionesDescubiertas.map((update) => ({ ...update, sourceFileId: id })),
           ],
-          area: classification.area,
-          cutoff: effectiveCutoff,
-          sourceFileId: id,
-          sourceName: candidate.name,
-        })
-      : [];
+          {
+            area: classification.area,
+            cutoff: effectiveCutoff,
+            sourceFileId: id,
+            sourceName: candidate.name,
+          },
+        )
+      : { normalized: [], descartadas: 0 };
+    const extractedUpdates = normalizacion.normalized;
+    if (normalizacion.descartadas > 0) {
+      extraction = {
+        ...extraction,
+        warnings: [
+          ...extraction.warnings,
+          `${normalizacion.descartadas} dato(s) no encajaban en el modelo vivo y se descartaron; el resto se conservó.`,
+        ],
+      };
+    }
     const protection = resolveExtractedProtection({
       area: resolvedArea,
       documentType: resolvedDocumentType,
