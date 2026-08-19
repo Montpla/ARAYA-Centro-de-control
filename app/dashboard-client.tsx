@@ -3217,7 +3217,6 @@ function Overview({
             detail={`Ritmo real de los ${buildings.filter((building) => building.progress > 0).length} edificios con obra empezada`}
           />
           <StatCard eyebrow="Plan operativo" value={`${number.format(projectSnapshot.plannedProgress)}%`} detail={`${number.format(projectSnapshot.deviationPoints)} pp de brecha física`} tone="warn" />
-          <StatCard eyebrow="Cronograma MPP" value={`${number.format(projectSnapshot.scheduleProgress)}%`} detail="Indicador diferenciado del avance físico" tone="warn" />
           <StatCard eyebrow="Alcance residencial" value={`${buildings.length} edificios`} detail={`${buildings.reduce((total, building) => total + building.units.length, 0)} apartamentos en el modelo vivo`} />
           <StatCard eyebrow="Previsión final" value={`${projectSnapshot.deviationDays >= 0 ? "+" : ""}${projectSnapshot.deviationDays} días`} detail={`${projectSnapshot.forecastFinish} frente a ${projectSnapshot.baselineFinish}`} tone="danger" />
         </div>
@@ -5180,17 +5179,14 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
           <div className="metric-grid">
             {metrics.map((metric) => {
               // metric-cubicacion ya se mostraba en vivo (referencia). Se
-              // extiende el mismo mecanismo a metric-physical y
-              // metric-schedule para que, igual que el resto del tablero,
-              // dejen de quedarse congeladas en su valor semilla mientras el
-              // resto de la app sigue el avance real.
+              // extiende el mismo mecanismo a metric-physical para que, igual
+              // que el resto del tablero, deje de quedarse congelada en su
+              // valor semilla mientras el resto de la app sigue el avance real.
               const displayValue = metric.id === "metric-cubicacion"
                 ? rd(projectSnapshot.cubicacionesMeasured)
                 : metric.id === "metric-physical"
                   ? `${number.format(projectSnapshot.overallProgress)} ${metric.unit}`
-                  : metric.id === "metric-schedule"
-                    ? `${number.format(projectSnapshot.scheduleProgress)} ${metric.unit}`
-                    : `${metric.value} ${metric.unit}`;
+                  : `${metric.value} ${metric.unit}`;
               const displayTarget = metric.id === "metric-cubicacion"
                 ? rd(projectSnapshot.cubicacionesAccounting)
                 : metric.id === "metric-physical"
@@ -7580,7 +7576,7 @@ function SourcesView({
         </div>
         <div className="governance-grid">
           <div><strong>Avance físico</strong><p>El informe y los Excel son la fuente del {number.format(projectSnapshot.overallProgress)}% ejecutado y del KPI planificado de {number.format(projectSnapshot.plannedProgress)}%.</p></div>
-          <div><strong>Avance de cronograma</strong><p>MPP es la fuente del {number.format(projectSnapshot.scheduleProgress)}%, fechas, actividades y camino crítico.</p></div>
+          <div><strong>Cronograma</strong><p>El MPP es la fuente de las fechas, actividades y camino crítico; su avance de cronograma sólo cambia al subir un MPP nuevo.</p></div>
           {canAccessFinance && <div><strong>Control de gestión</strong><p>El Excel de junio prevalece para presupuesto, costes, CxP operativa, anticipos y caja.</p></div>}
           {canAccessFinance && <div><strong>Fideicomiso</strong><p>Los PDF emitidos por Fiduciaria Universal prevalecen para balance contable y resultados oficiales.</p></div>}
           {canAccessFinance && <div><strong>Fuente Antonely</strong><p>Amplía el detalle de CxP y proveedores; sus diferencias permanecen abiertas hasta conciliación contable.</p></div>}
