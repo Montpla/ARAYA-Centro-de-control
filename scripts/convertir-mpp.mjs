@@ -78,12 +78,35 @@ for (const f of objetivo) {
   await writeFile(rutaMpp, bytes);
 
   // MpxjConvert lee el .mpp (UniversalProjectReader) y escribe MSPDI por la
-  // extensión .xml del destino.
-  try {
-    await run("java", ["-cp", MPXJ_CP, "net.sf.mpxj.MpxjConvert", rutaMpp, rutaXml], { maxBuffer: 64 * 1024 * 1024 });
-  } catch (error) {
-    const detalle = (error.stderr || error.message || "").toString().slice(0, 800);
-    console.error(`✖ ${f.originalName}: MPXJ no pudo convertir el .mpp.\n   ${detalle}`);
+  // extensión .xml del destino. MPXJ migró el paquete de `net.sf.mpxj` a
+  // `org.mpxj` en la v13 y la clase de ejemplo ha vivido tanto en la raíz como
+  // en el subpaquete `.sample`; se prueban los nombres conocidos en orden y se
+  // usa el primero que exista, para no depender de la versión exacta resuelta.
+  const candidatasMpxj = [
+    "org.mpxj.MpxjConvert",
+    "org.mpxj.sample.MpxjConvert",
+    "net.sf.mpxj.MpxjConvert",
+    "net.sf.mpxj.sample.MpxjConvert",
+  ];
+  let convertido = false;
+  let ultimoDetalle = "";
+  for (const clase of candidatasMpxj) {
+    try {
+      await run("java", ["-cp", MPXJ_CP, clase, rutaMpp, rutaXml], { maxBuffer: 64 * 1024 * 1024 });
+      convertido = true;
+      console.log(`   (clase MPXJ: ${clase})`);
+      break;
+    } catch (error) {
+      const detalle = (error.stderr || error.message || "").toString();
+      // Si la clase no existe, se prueba la siguiente; cualquier otro error (un
+      // .mpp corrupto, por ejemplo) se reporta tal cual sin seguir probando.
+      const claseNoExiste = /ClassNotFoundException|Could not find or load main class/i.test(detalle);
+      ultimoDetalle = detalle.slice(0, 800);
+      if (!claseNoExiste) break;
+    }
+  }
+  if (!convertido) {
+    console.error(`✖ ${f.originalName}: MPXJ no pudo convertir el .mpp.\n   ${ultimoDetalle}`);
     continue;
   }
 

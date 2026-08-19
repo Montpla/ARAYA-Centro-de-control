@@ -275,6 +275,23 @@ test("el informe de ventas se lee entero sin IA", async () => {
   assert.equal(mapa["collectionTargets.Fase II.targetUsd"], 25200000);
 });
 
+// Las dos frases que el informe declara en prosa (no en tabla): el techo de
+// morosidad y el recaudo logrado frente a lo proyectado. Antes se quedaban como
+// «propuesta de sección nueva» sin llegar al panel; ahora el lector los saca del
+// texto como cualquier otro dato mensual.
+test("el lector de ventas saca la morosidad y el recaudo declarados en frase", () => {
+  const texto =
+    "Informe de ventas ARAYA. Reservas activas 228. " +
+    "La morosidad no supera el 1% de la cartera. " +
+    "Se ha logrado el recaudo de más del 92% de lo proyectado según ventas formalizadas.";
+  const updates = ingestion.extractSalesReport(texto, {
+    area: "comercial", cutoff: "30/07/2026", sourceCurrency: "USD", sourceName: "informe-ventas.pptx",
+  });
+  const mapa = Object.fromEntries(updates.map((u) => [u.key, u.value]));
+  assert.equal(mapa["juneReport.collections.arrearsMaxPercent"], 1);
+  assert.equal(mapa["juneReport.collections.collectedVsProjectedPercent"], 92);
+});
+
 test("un PowerPoint que no es de ventas no dispara el lector", () => {
   assert.deepEqual(
     ingestion.extractSalesReport("Informe de obra. Avance físico del edificio TH-14.", {

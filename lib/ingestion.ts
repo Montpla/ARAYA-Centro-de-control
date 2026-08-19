@@ -888,6 +888,12 @@ export function extractSalesReport(textoLaminas: string, defaults: ExtractionDef
   anota("juneReport.collections.overdueUsd", primerNumero(t, /Monto\s+Total\s+Vencido\s+US\$?\s*([\d.,\s]+?)\s+Estatus/i));
   const corte = t.match(/con\s+contratos\s+al\s+(\d{2}\/\d{2})\s*\/?\s*(\d{4})/i);
   if (corte) anota("juneReport.collections.cutoff", `${corte[1]}/${corte[2]}`);
+  // Dos indicadores que el informe declara con una frase, no en una tabla: el
+  // techo de morosidad ("la morosidad no supera el 1%") y el recaudo logrado
+  // frente a lo proyectado ("recaudo de más del 92% de lo proyectado"). Antes se
+  // quedaban como "propuesta de sección nueva" sin llegar al panel.
+  anota("juneReport.collections.arrearsMaxPercent", primerNumero(t, /morosidad\s+no\s+supera\s+el\s+([\d.,]+)\s*%/i));
+  anota("juneReport.collections.collectedVsProjectedPercent", primerNumero(t, /recaudo\s+(?:de\s+)?m[aá]s\s+del\s+([\d.,]+)\s*%\s+de\s+lo\s+proyectado/i));
 
   // Mix de producto: sólo el valor (reservas activas por modelo), por nombre;
   // el resolver lo traduce a posición y no toca los demás campos.

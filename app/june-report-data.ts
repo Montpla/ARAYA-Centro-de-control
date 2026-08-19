@@ -37,6 +37,11 @@ export const juneReport = {
     overdue: 24,
     overdueUsd: 136840.39,
     cutoff: "06/07/2026",
+    // Dos indicadores que el informe declara como frase ("la morosidad no supera
+    // el 1%", "se ha logrado el recaudo de más del 92% de lo proyectado"). El
+    // lector de ventas los saca del texto cada mes; aquí quedan como línea base.
+    arrearsMaxPercent: 1,
+    collectedVsProjectedPercent: 92,
   },
   finance: {
     budgetDop: 3591280577.17,
