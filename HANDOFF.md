@@ -2714,6 +2714,98 @@ contra ejemplos inventados. Nueve cambios publicados y desplegados en verde.
 - Verificar con el informe de agosto que los hallazgos nuevos aparecen sin
   asignar y no se arrastra el seguimiento de junio.
 
+## Lector propio de ventas, reproceso y publicación robusta (19/08/2026)
+
+Contexto: el informe de ventas de julio se subió el 18/08, pero su **lector
+propio** (`extractSalesReport`, PR #68) llegó el 19/08. Un archivo ya subido no
+se re-analiza solo, así que se quedó con lo que sacó la IA aquel día —le
+faltaban el mix por modelo y las metas de cobranza— y sus gráficas no se
+movían. Arreglarlo destapó tres problemas de fondo que hoy quedan resueltos y
+desplegados (60+ pruebas en verde).
+
+### 1. Reproceso de archivos ya subidos (`scripts/reprocesar.mjs`, workflow `reprocesar.yml`)
+
+- Vuelve a pasar por la ingesta actual los archivos ya subidos, para que recojan
+  las mejoras de un lector. Simula por defecto; `aplicar=1` publica.
+- La subida deduplica por hash: un archivo idéntico **ya publicado** se
+  short-circuitaba con «ya estaba registrado» sin re-analizarse. Se añadió la
+  señal `reprocess=true` en `app/api/files/route.ts`: reclama el expediente ya
+  publicado, lo re-analiza y publica una revisión nueva encima, con clave
+  idempotente propia (`auto:${id}:${generación}`) para no chocar con el cierre
+  anterior. Las subidas normales no cambian.
+- `formatos` acota por extensión (p. ej. `pptx`) para tocar sólo los informes
+  narrativos y no los Excel, que ya leen bien los lectores deterministas.
+- **Modo reemplazo** (`reemplazar=1`): retira el expediente previo y re-sube el
+  original como alta nueva (camino de publicación de siempre). Útil cuando hay
+  que re-ingerir de cero. Deja el archivo antiguo retirado (recuperable).
+
+### 2. La ingesta automática no puede caerse entera por un dato
+
+- `normalizeLiveDataUpdates` valida el lote completo y **lanza** ante la primera
+  clave que no encaja en el modelo. Un único dato malo (uno que la IA propuso de
+  más, o un nombre que el resolutor no supo colocar) mandaba TODO el expediente
+  a «observado» y se perdían también los datos buenos.
+- `normalizeIngestedUpdatesResilient` en la ruta prueba el lote y, si falla,
+  normaliza dato a dato y descarta sólo los que no encajan. La resolución de
+  identidad también cae con red. **Sólo afecta a la ingesta automática**: la
+  bandeja de revisión manual sigue siendo estricta.
+
+### 3. Publicación automática dato a dato (no todo-o-nada)
+
+- El acceso a publicar automáticamente era un `.every(...)`: un solo dato no
+  publicable bloqueaba el informe entero. Ahora las condiciones de **lote**
+  (área, contexto vivo, confianza) se separan de las de **cada dato** (área,
+  permiso financiero, contrato). Lo que encaja se publica solo; el resto va a
+  revisión. Si todo el lote encaja, se publica entero como siempre.
+- El complemento de la IA sólo aporta claves nuevas con confianza positiva, y el
+  recuento de confianza se cuenta sobre la extracción, no sobre lo que sobrevive
+  a la normalización.
+
+### 4. La causa concreta del informe de ventas (parent vs child)
+
+- La publicación **prohíbe mezclar una lista entera con una ruta hija suya** en
+  el mismo lote: `La publicación no puede mezclar collectionTargets con su ruta
+  hija collectionTargets.0.targetUsd`. La IA de relleno mandaba la lista entera
+  `collectionTargets` y el lector determinista sus filas
+  (`collectionTargets.0.targetUsd`), así que el lote no se podía publicar.
+- El filtro del complemento ahora descarta una clave de la IA no sólo si es
+  idéntica a una del lector, sino también si es **antepasada o descendiente**
+  suya (`complementoChocaConLector`). Gana el lector.
+- Confirmado en producción: el informe de ventas de julio publicó **25 datos en
+  la revisión 49**, con el mix por modelo y las metas de cobranza incluidos.
+
+### Herramientas de operación y diagnóstico (workflows, sólo con `DEPLOY_VERIFY`)
+
+- `reprocesar.yml` — reprocesa/re-ingiere (`filtro`, `formatos`, `reemplazar`,
+  `aplicar`, `debug`).
+- `diagnostico-reproceso.yml` — muestra el estado de un archivo (revisión,
+  resumen, **nombres** de clave; nunca valores).
+- `restaurar.yml` / `recuperar-ventas.yml` — restauran expedientes retirados y
+  recomputan los datos vivos (deshacen un reemplazo que no publicó).
+- `debug=1` en la subida devuelve **el texto del error** de publicación (nunca
+  cifras) para localizar qué comprobación de integridad falla sin el log del
+  servidor. Gateado a acceso financiero y sólo bajo petición.
+
+### Pendiente deliberado
+
+- **Informe Ejecutivo de julio:** tiene 22 avances de obra preparados en la
+  bandeja de revisión (edificios, `projectSnapshot`, disciplinas, seguridad,
+  urbanismo). NO se publican solos porque su área es «sin clasificar» y, sobre
+  todo, **pisan datos que ya vienen del plan de Project / Excel oficiales**.
+  Publicarlos es una decisión de la oficina, no una automatización: aprobarlos
+  desde la bandeja sobreescribiría cifras más precisas del plan.
+
+### Aprendizaje para el próximo LLM
+
+- Al mejorar un lector, los archivos subidos antes hay que **reprocesarlos**;
+  no se re-analizan solos.
+- Si una publicación automática deja el expediente en «observado», subir con
+  `debug=1` da el mensaje exacto del error. La familia de errores de esta fase
+  es de contrato/publicación (mensajes descriptivos) o D1 (nombres de
+  restricción), nunca valores.
+- Nunca imprimir valores de negocio en los logs de Actions: sólo nombres de
+  clave, estados y metadatos.
+
 ## Criterios de continuidad
 
 - Mostrar únicamente datos aportados o derivados de las fuentes.
