@@ -26,6 +26,11 @@ on:
         required: false
         default: "0"
         type: string
+      debug:
+        description: "Mostrar el detalle del error si la publicación no se confirma (1)"
+        required: false
+        default: "0"
+        type: string
 
 jobs:
   reprocesar:
@@ -43,4 +48,5 @@ jobs:
           FORMATOS: ${{ inputs.formatos }}
           REEMPLAZAR: ${{ inputs.reemplazar }}
           APLICAR: ${{ inputs.aplicar }}
+          DEBUG: ${{ inputs.debug }}
         run: node scripts/reprocesar.mjs
