@@ -389,7 +389,7 @@ export const timeline: TimelineEvent[] = [
     time: "14:39",
     type: "hito",
     title: "Cronograma MPP guardado",
-    detail: "El archivo del cronograma proyecta el final del proyecto para el 07/06/2027.",
+    detail: "El archivo registra 22,37% de avance del cronograma (corte 30/07) y proyecta el final para el 07/06/2027.",
     building: "Proyecto",
     author: "Microsoft Project",
   },
@@ -419,6 +419,7 @@ export const suppliers: Supplier[] = [];
 
 export const customMetrics: CustomMetric[] = [
   { id: "metric-physical", name: "Avance físico acumulado", value: "18,23", target: "21,24", trend: "down", unit: "%", owner: "Producción · Excel" },
+  { id: "metric-schedule", name: "Avance del cronograma", value: "22,37", target: "21,24", trend: "up", unit: "%", owner: "Planificación · MPP" },
   { id: "metric-urban", name: "Urbanismo ejecutado", value: "18,28", target: "16,18", trend: "up", unit: "%", owner: "Producción · Excel" },
   { id: "metric-housing", name: "Apartamento ejecutado", value: "18,21", target: "23,55", trend: "down", unit: "%", owner: "Producción · Excel" },
   { id: "metric-cubicacion", name: "Cubicaciones acumuladas", value: "67.342.153,57", target: "71.731.477,87", trend: "down", unit: "DOP", owner: "Finanzas · Excel" },
@@ -479,7 +480,7 @@ export const dataSources: DataSource[] = [
     records: "2.228 tareas · 26 edificios · 156 apartamentos",
     notes: [
       "El archivo no tiene fecha de estado interna; el corte se toma del nombre del archivo.",
-      "El avance del cronograma (MPP) y el avance físico (Excel) son indicadores distintos: el del MPP sólo cambia al subir un MPP nuevo.",
+      "El 22,37% del MPP y el 18,23% del Excel son indicadores distintos y requieren conciliación; el del MPP se recalcula con cada plan que se sube.",
     ],
     downloadUrl: "/data-center/junio-2026/cronograma-maestro-araya-30-06-2026.mpp",
   },
@@ -790,7 +791,7 @@ export const projectSnapshot = {
   activeBuildingsProgress: activeBuildingsProgressNow,
   apartmentAverageProgress: 18.8,
   plannedProgress: 26.61,
-  scheduleProgress: 17,
+  scheduleProgress: 22.37,
   deviationPoints: Math.round((overallProgressNow - 26.61) * 100) / 100,
   forecastFinish: "07/06/2027",
   baselineFinish: "31/05/2027",

@@ -251,13 +251,12 @@ export function liveDataAuthorityMatrix<T extends { id: string; decision: string
       };
     }
     if (item.id === "schedule-progress") {
-      // El avance del cronograma se mantiene como concepto, sin estampar el
-      // porcentaje: sólo cambia al subir un MPP nuevo y confundía con el
-      // avance físico. Se conservan las fechas y el camino crítico.
-      void scheduleProgress;
+      // El avance del cronograma se estampa en vivo desde el plan de Project
+      // (projectSnapshot.scheduleProgress): se recalcula solo con cada MPP que
+      // se sube y es un concepto distinto del avance físico.
       return {
         ...item,
-        decision: `El avance del cronograma (MPP) no sustituye al ${percentEs.format(overallProgress)}% físico: miden conceptos diferentes y el del MPP sólo cambia al subir un MPP nuevo.`,
+        decision: `El ${percentEs.format(scheduleProgress)}% del MPP no sustituye el ${percentEs.format(overallProgress)}% físico: miden conceptos diferentes y el del MPP se recalcula con cada plan que se sube.`,
       };
     }
     if (item.id === "management-payables") {

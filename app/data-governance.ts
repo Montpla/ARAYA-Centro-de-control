@@ -133,7 +133,7 @@ export const dataAuthorityMatrix = [
     primarySourceId: "source-mpp",
     supportSourceIds: ["source-june-works"],
     status: "separado",
-    decision: "El avance del cronograma (MPP) no sustituye al avance físico: miden conceptos diferentes.",
+    decision: "El 22,37% del MPP (corte 30/07) no sustituye el 18,23% físico: miden conceptos diferentes.",
   },
   // Estas dos entradas citan el avance físico y de cronograma dentro del
   // texto de "decision" (no en un campo numérico aparte), así que el valor
