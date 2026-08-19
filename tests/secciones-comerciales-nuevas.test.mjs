@@ -115,3 +115,12 @@ test("guardan el dato real y no inventan lo que no llegó", () => {
   // estructurada: no se le añaden campos con cifras que el documento no dio.
   assert.ok(!Object.hasOwn(caratula, "presupuestoDop"));
 });
+
+// El lector de ventas emite las metas y el mix por nombre; el contrato exige
+// que esos nombres se traduzcan a una posición real de la lista.
+test("las claves por nombre del informe de ventas apuntan a entidades reales", () => {
+  const modelos = new Set(juneReport.salesModels.map((m) => m.name.toLowerCase()));
+  assert.ok(modelos.has("sunset") && modelos.has("garden"), "faltan modelos que el lector nombra");
+  const fases = new Set(juneReport.collectionTargets.map((t) => t.label.toLowerCase()));
+  assert.ok(fases.has("fase i") && fases.has("fase ii"), "faltan las fases que el lector nombra");
+});
