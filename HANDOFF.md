@@ -18,12 +18,41 @@ publique en el mismo enlace. Es una persona no técnica y trabaja en español:
 conviene explicar el porqué de las cosas sin jerga, y decir con claridad cuándo
 algo no se puede hacer o no ha funcionado.
 
-Además del aviso de plataforma que viene a continuación, leer la sección
-fechada más reciente (18/08/2026) antes de tocar la ingesta, el contrato de
-datos o las notificaciones: recoge varias trampas silenciosas —datos que se
-extraen bien y aun así no se publican, PDF que se leen como basura sin que nada
-avise, claves que se borran solas en el siguiente despliegue— que ya costaron
-un fallo real cada una.
+Además del aviso de plataforma que viene a continuación, leer las **Normas de
+publicación de datos** (justo debajo) y la sección fechada más reciente
+(19/08/2026) antes de tocar la ingesta, el contrato de datos o las
+notificaciones: recogen varias trampas silenciosas —datos que se extraen bien y
+aun así no se publican, un solo dato dudoso que bloquea el informe entero, una
+lista mezclada con sus filas que impide publicar, PDF que se leen como basura
+sin que nada avise, claves que se borran solas en el siguiente despliegue— que
+ya costaron un fallo real cada una.
+
+### Normas de publicación de datos (invariantes — no romper)
+
+Estas reglas existen porque cada una costó un fallo de «los datos no se
+actualizan». Están sostenidas por código y por pruebas; al tocar la ingesta o
+añadir un lector, respétalas:
+
+1. **La ingesta automática nunca es todo-o-nada.** Un solo dato que no encaje
+   no puede tumbar el informe entero. La normalización cae con red dato a dato
+   (`normalizeIngestedUpdatesResilient`) y la publicación automática decide dato
+   a dato (`batchPreconditions` + `updateIsAutoPublishable`). La bandeja de
+   revisión manual sí es estricta; no la relajes.
+2. **No mezclar una lista entera con una fila suya en el mismo lote.** La
+   publicación lo rechaza (`publicationKeyConflict`). La ingesta lo resuelve
+   antes de publicar quedándose con la fila (`resolvePublicationKeyConflicts`).
+   Un lector debe emitir **o** la lista entera **o** sus filas por ruta hija,
+   nunca ambas; y la IA de relleno no aporta una lista si el lector ya da sus
+   filas (`complementoChocaConLector`).
+3. **Un lector propio debe marcar siempre `area` y `cutoff`** en cada dato, o la
+   publicación automática lo descarta en silencio.
+4. **Al mejorar un lector, reprocesa los archivos ya subidos** (workflow
+   *Reprocesar*, `reprocess`/`reemplazar`): no se re-analizan solos.
+5. **Si algo queda en «observado», súbelo con `debug=1`** para ver el error
+   exacto. Nunca imprimas valores de negocio en los logs: sólo nombres de clave,
+   estados y metadatos.
+
+La sección fechada del 19/08/2026 explica cada una con su historia.
 
 ## Aviso importante: plataforma de despliegue vigente (leer antes que nada)
 
