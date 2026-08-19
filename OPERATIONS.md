@@ -161,6 +161,24 @@ sobre todo el conjunto que el usuario puede ver.
   “forzar” una cifra: hay que revisar el expediente o aportar un formato más
   explícito.
 
+## Reprocesar y recuperar un informe (workflows en Actions)
+
+Cuando se mejora un lector, los archivos subidos **antes** no se re-analizan
+solos. Desde la pestaña **Actions** (requieren los secretos `DEPLOY_VERIFY`):
+
+- **Reprocesar archivos con el pipeline actual** — re-analiza un archivo ya
+  subido con la ingesta de hoy. Campos: `filtro` (parte del nombre), `formatos`
+  (p. ej. `pptx`), `reemplazar` (0 = re-publica encima; 1 = retira el previo y
+  re-sube como alta nueva), `aplicar` (0 = simula, 1 = publica), `debug` (1 =
+  muestra el texto del error si la publicación no se confirma).
+- **Diagnóstico del reproceso de julio** — muestra en qué estado quedó un
+  archivo (revisión, resumen y **nombres** de clave; nunca valores).
+- **Restaurar / Recuperar** — devuelven al panel un expediente retirado por un
+  reemplazo que no llegó a publicar.
+
+Regla: **simular siempre antes de aplicar**, y **nunca** imprimir cifras en los
+logs; sólo nombres de clave, estados y metadatos.
+
 ## Operación técnica y publicación
 
 > **Aviso (18/08/2026).** La plataforma vigente es **Cloudflare Workers**:
