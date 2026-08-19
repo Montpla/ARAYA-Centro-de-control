@@ -235,3 +235,51 @@ test("el informe IFC rellena la matriz de obligaciones", async () => {
 test("un PDF cualquiera no genera matriz de obligaciones", () => {
   assert.deepEqual(ingestion.extractIfcCommitments("Informe de obra de junio. El edificio TH-14 va por el 60%.", { area: "obra", cutoff: "30/06/2026", sourceCurrency: "DOP", sourceName: "x.pdf" }), []);
 });
+
+// Informe de ventas: el PowerPoint de prosa que la IA leía a medias.
+//
+// La IA extraía cobranza y contratos pero se dejaba el mix de producto y las
+// reservas por fase, así que esos gráficos no se movían. El lector determinista
+// los saca de las frases fijas del informe. La prueba va contra el informe de
+// junio del repositorio, que es el mismo formato mensual que el de julio.
+test("el informe de ventas se lee entero sin IA", async () => {
+  const bytes = await readFile("historical/data-center/junio-2026/informe-ventas-araya-junio-2026.pptx");
+  const laminas = await readPptxSlideShapes(
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+  );
+  const texto = laminas.map((formas) => formas.map((forma) => forma.join(" ")).join(" ")).join(" ");
+  const updates = ingestion.extractSalesReport(texto, {
+    area: "comercial", cutoff: "30/06/2026", sourceCurrency: "USD", sourceName: "informe-ventas.pptx",
+  });
+  const mapa = Object.fromEntries(updates.map((u) => [u.key, u.value]));
+
+  // Reservas y fases.
+  assert.equal(mapa["juneReport.sales.reservations"], 279);
+  assert.equal(mapa["juneReport.sales.active"], 228);
+  assert.equal(mapa["juneReport.sales.phaseOneActive"], 136);
+  assert.equal(mapa["juneReport.sales.withdrawn"], 51);
+  // Pipeline de contratos.
+  assert.equal(mapa["juneReport.contracts.reviewed"], 198);
+  assert.equal(mapa["juneReport.contracts.awaitingDocuments"], 24);
+  // Cobranza, que es lo que ya salía bien pero ahora sin depender de la IA.
+  assert.equal(mapa["juneReport.collections.contracts"], 172);
+  assert.equal(mapa["juneReport.collections.current"], 106);
+  assert.equal(mapa["juneReport.collections.overdueUsd"], 148281.58);
+  assert.equal(mapa["juneReport.collections.cutoff"], "06/07/2026");
+  // Mix de producto: justo lo que la IA se dejaba. Va por nombre; el resolver
+  // lo lleva a su posición.
+  assert.equal(mapa["salesModels.Sunset.value"], 32);
+  assert.equal(mapa["salesModels.Garden.value"], 28);
+  // Metas de recaudación.
+  assert.equal(mapa["collectionTargets.Fase I.targetUsd"], 22100000);
+  assert.equal(mapa["collectionTargets.Fase II.targetUsd"], 25200000);
+});
+
+test("un PowerPoint que no es de ventas no dispara el lector", () => {
+  assert.deepEqual(
+    ingestion.extractSalesReport("Informe de obra. Avance físico del edificio TH-14.", {
+      area: "obra", cutoff: "30/06/2026", sourceCurrency: "DOP", sourceName: "x.pptx",
+    }),
+    [],
+  );
+});

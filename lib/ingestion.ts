@@ -823,6 +823,94 @@ export function extractIfcCommitments(texto: string, defaults: ExtractionDefault
   }];
 }
 
+// Informe de ventas mensual.
+//
+// Es un PowerPoint de prosa —"de los 172 clientes, 106 al día, 42 pendientes y
+// 24 vencidos"—, no una tabla ni cuadros de indicadores, así que la IA leía los
+// titulares (cobranza, contratos) pero se dejaba el detalle (mix de producto,
+// reservas por fase) y esos gráficos no se movían. El informe llega con las
+// mismas frases cada mes, y sobre esas frases fijas se puede leer de forma
+// determinista: entonces la IA ya no hace falta para ventas y todo se actualiza.
+function numeroVentas(texto: string | undefined): number | null {
+  if (!texto) return null;
+  // Quita espacios dentro del número ("64,810 .00") y separadores de millar.
+  const limpio = texto.replace(/\s+/g, "").replace(/,/g, "");
+  const valor = Number.parseFloat(limpio);
+  return Number.isFinite(valor) ? valor : null;
+}
+
+function primerNumero(texto: string, patron: RegExp): number | null {
+  return numeroVentas(texto.match(patron)?.[1]);
+}
+
+export function extractSalesReport(textoLaminas: string, defaults: ExtractionDefaults): LiveDataUpdate[] {
+  const t = textoLaminas.replace(/\s+/g, " ");
+  // Guarda: sólo actúa sobre el informe de ventas, no sobre cualquier PPTX.
+  if (!/informe de ventas/i.test(t) && !/estatus de cobranza/i.test(t)) return [];
+
+  const marca = {
+    area: defaults.area,
+    cutoff: defaults.cutoff,
+    sourceCurrency: defaults.sourceCurrency,
+    sourceName: defaults.sourceName,
+  };
+  const updates: LiveDataUpdate[] = [];
+  const anota = (key: string, valor: number | string | null) => {
+    if (valor !== null && valor !== "") updates.push({ key, value: valor, ...marca });
+  };
+
+  // Reservas y fases.
+  anota("juneReport.sales.reservations", primerNumero(t, /(\d+)\s+Reservadas/i));
+  anota("juneReport.sales.averageMonthly", primerNumero(t, /Reservadas\s+([\d.,]+)\s+por\s+Mes/i));
+  const activas = t.match(/(\d+)\s+Activas\s+([\d.,]+)\s+por\s+Mes/i);
+  anota("juneReport.sales.active", numeroVentas(activas?.[1]));
+  anota("juneReport.sales.activeAverageMonthly", numeroVentas(activas?.[2]));
+  const faseUno = t.match(/(\d+)\s+Activas\s*-\s*(\d+)%\s+Fase\s+I\b/i);
+  anota("juneReport.sales.phaseOneActive", numeroVentas(faseUno?.[1]));
+  anota("juneReport.sales.phaseOneSales", numeroVentas(faseUno?.[2]));
+  anota("juneReport.sales.phaseTwoActive", primerNumero(t, /(\d+)\s+Activas\s*-\s*\d+%\s+Fase\s+II/i));
+  anota("juneReport.sales.withdrawn", primerNumero(t, /(\d+)\s+Desistidas\s*[–-]/i));
+
+  // Depuración y vinculación (pipeline de contratos).
+  anota("juneReport.contracts.reviewed", primerNumero(t, /(\d+)\s+Unidades\s+Depuradas/i));
+  anota("juneReport.contracts.pendingReview", primerNumero(t, /(\d+)\s+Unidades\s+por\s+Depurar/i));
+  anota("juneReport.contracts.linked", primerNumero(t, /(\d+)\s+unidades\s+vinculadas/i));
+  anota("juneReport.contracts.linking", primerNumero(t, /(\d+)\s+en\s+proceso\s+de\s+vinculaci/i));
+  anota("juneReport.contracts.signing", primerNumero(t, /(\d+)\s+en\s+proceso\s+de\s+firma/i));
+  anota("juneReport.contracts.inReview", primerNumero(t, /(\d+)\s+cliente[s]?\s+en\s+proceso\s+de\s+depuraci/i));
+  anota("juneReport.contracts.awaitingDocuments", primerNumero(t, /(\d+)\s+clientes\s+a\s+la\s+espera\s+de\s+documentos/i));
+
+  // Cobranza.
+  anota("juneReport.collections.contracts", primerNumero(t, /De\s+los\s+(\d+)\s+clientes\s+con\s+contratos/i));
+  anota("juneReport.collections.current", primerNumero(t, /(\d+)\s+clientes\s+al\s+d[ií]a/i));
+  anota("juneReport.collections.installmentsPending", primerNumero(t, /(\d+)\s+clientes\s+con\s+cuotas\s+pendientes/i));
+  anota("juneReport.collections.overdue", primerNumero(t, /(\d+)\s+clientes\s+con\s+cuotas\s+vencidas/i));
+  anota("juneReport.collections.overdueUsd", primerNumero(t, /Monto\s+Total\s+Vencido\s+US\$?\s*([\d.,\s]+?)\s+Estatus/i));
+  const corte = t.match(/con\s+contratos\s+al\s+(\d{2}\/\d{2})\s*\/?\s*(\d{4})/i);
+  if (corte) anota("juneReport.collections.cutoff", `${corte[1]}/${corte[2]}`);
+
+  // Mix de producto: sólo el valor (reservas activas por modelo), por nombre;
+  // el resolver lo traduce a posición y no toca los demás campos.
+  const mix = t.match(/\((\d+)\s+Garden,\s*(\d+)\s+Sunset\s+y\s+(\d+)\s+Balcony/i);
+  if (mix) {
+    anota("salesModels.Garden.value", numeroVentas(mix[1]));
+    anota("salesModels.Sunset.value", numeroVentas(mix[2]));
+    anota("salesModels.Balcony Flex.value", numeroVentas(mix[3]));
+  }
+
+  // Metas de recaudación por fase (la sección que ya se modeló).
+  const metaUno = t.match(/FASE\s+I\s+US\s*\$?\s*(\d+)\s*\.?\s*(\d+)?\s*M/i);
+  const metaDos = t.match(/FASE\s+II\s+US\s*\$?\s*(\d+)\s*\.?\s*(\d+)?\s*M/i);
+  const millones = (m: RegExpMatchArray | null) =>
+    m ? Math.round((Number(m[1]) + (m[2] ? Number(`0.${m[2]}`) : 0)) * 1_000_000) : null;
+  if (metaUno || metaDos) {
+    anota("collectionTargets.Fase I.targetUsd", millones(metaUno));
+    anota("collectionTargets.Fase II.targetUsd", millones(metaDos));
+  }
+
+  return updates;
+}
+
 function resumenDeSeguridad(updates: LiveDataUpdate[]) {
   const partes: string[] = [];
   const metricas = updates.find((update) => update.key === "safetyMetrics");
@@ -985,30 +1073,37 @@ export async function extractStructuredUpdates(
     // informe trae la cubicación en tabla y la seguridad en cuadros, y antes
     // sólo podía aplicarse una de las dos cosas.
     let seguridad: LiveDataUpdate[] = [];
+    let ventas: LiveDataUpdate[] = [];
     if (extension === "pptx") {
       try {
-        seguridad = extractSafetyUpdates(await readPptxSlideShapes(bytes), defaults);
+        const laminas = await readPptxSlideShapes(bytes);
+        seguridad = extractSafetyUpdates(laminas, defaults);
+        // El informe de ventas es prosa: se lee del texto de todas las láminas
+        // con patrones anclados a sus frases fijas.
+        const texto = laminas.map((formas) => formas.map((forma) => forma.join(" ")).join(" ")).join(" ");
+        ventas = extractSalesReport(texto, defaults);
       } catch {
         // Sin formas legibles se sigue con las tablas.
       }
     }
+    const noTabulares = [...seguridad, ...ventas];
     let tablas;
     try {
       tablas = await readOfficeTables(bytes, extension);
     } catch {
       return {
-        updates: seguridad,
-        summary: seguridad.length
-          ? "No se pudieron leer las tablas, pero sí los indicadores de seguridad."
+        updates: noTabulares,
+        summary: noTabulares.length
+          ? "No se pudieron leer las tablas, pero sí el texto (seguridad o ventas)."
           : "El documento no se pudo abrir.",
         warnings: [`Comprueba que el archivo es un .${extension} moderno y no una versión antigua.`],
       };
     }
     if (!tablas.length) {
-      if (seguridad.length) {
+      if (noTabulares.length) {
         return {
-          updates: seguridad,
-          summary: resumenDeSeguridad(seguridad),
+          updates: noTabulares,
+          summary: resumenDeSeguridad(noTabulares),
           warnings: [],
         };
       }
@@ -1030,9 +1125,9 @@ export async function extractStructuredUpdates(
         }
         if (updates.length) {
           return {
-            updates: [...updates, ...seguridad],
+            updates: [...updates, ...noTabulares],
             summary: `${updates.length} datos leídos de una tabla del documento` +
-              (seguridad.length ? `, más ${resumenDeSeguridad(seguridad)}` : "") + ".",
+              (noTabulares.length ? `, más ${resumenDeSeguridad(noTabulares)}` : "") + ".",
             warnings,
           };
         }
@@ -1045,10 +1140,10 @@ export async function extractStructuredUpdates(
       const matriz = extractMatrixProgress(filas, defaults);
       if (matriz) return matriz;
     }
-    if (seguridad.length) {
+    if (noTabulares.length) {
       return {
-        updates: seguridad,
-        summary: resumenDeSeguridad(seguridad),
+        updates: noTabulares,
+        summary: resumenDeSeguridad(noTabulares),
         warnings: [],
       };
     }
