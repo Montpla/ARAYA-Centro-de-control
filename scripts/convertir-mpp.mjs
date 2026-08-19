@@ -127,6 +127,21 @@ for (const f of objetivo) {
     continue;
   }
   if (!APLICAR) {
+    // Vista previa sin publicar: se pasa el XML por el mismo lector de Project
+    // que usa el panel y se muestra el avance de cronograma, cuántos edificios
+    // traen avance y la fecha de fin. Son indicadores de PROGRESO (porcentaje y
+    // fecha), no cifras de dinero, así que su valor sí se imprime; sirve para
+    // decidir si conviene publicar este plan antes de tocar el panel.
+    try {
+      const { extractProjectXmlUpdates } = await import("../lib/project-xml.ts");
+      const previo = extractProjectXmlUpdates(xml);
+      const crono = previo.updates.find((u) => u.key === "projectSnapshot.scheduleProgress");
+      const fin = previo.updates.find((u) => u.key === "projectSnapshot.forecastFinish");
+      const edificios = previo.updates.filter((u) => /^buildings\..+\.progress$/.test(u.key));
+      console.log(`   Vista previa (sin publicar): avance de cronograma ${crono ? `${crono.value}%` : "(sin dato)"} · ${edificios.length} edificio(s) con avance · fin ${fin ? fin.value : "(sin dato)"}`);
+    } catch (error) {
+      console.log(`   (No se pudo previsualizar el avance: ${String(error?.message ?? error).slice(0, 160)})`);
+    }
     console.log("   Simulación (APLICAR=0): no se sube; sólo se valida la conversión.");
     continue;
   }
