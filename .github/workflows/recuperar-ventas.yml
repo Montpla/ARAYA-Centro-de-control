@@ -1,0 +1,34 @@
+name: Recuperar el expediente de ventas
+
+# Deshace un reemplazo que no llegó a publicar: retira la copia fallida y
+# restaura el original con revisión. Simula por defecto; aplicar toca el panel.
+
+on:
+  workflow_dispatch:
+    inputs:
+      filtro:
+        description: "Parte del nombre del archivo"
+        required: false
+        default: "ventas araya jul"
+        type: string
+      aplicar:
+        description: "Aplicar de verdad (1) o sólo simular (0)"
+        required: false
+        default: "0"
+        type: string
+
+jobs:
+  recuperar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Recuperar
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+          FILTRO: ${{ inputs.filtro }}
+          APLICAR: ${{ inputs.aplicar }}
+        run: node scripts/recuperar-ventas.mjs
