@@ -23,6 +23,14 @@ const FORMATOS = (process.env.FORMATOS ?? "")
   .map((f) => f.trim())
   .filter(Boolean);
 
+// REEMPLAZAR retira primero el expediente ya publicado y vuelve a subir el
+// original como una carga nueva. Es la vía para los informes que hay que
+// re-ingerir de cero: la subida nueva entra por el camino de publicación de
+// siempre (sin revisión previa que reconciliar), en vez de re-publicar encima
+// del expediente anterior. Deja el archivo antiguo marcado como retirado
+// (recuperable), y la nueva copia trae las cifras del pipeline actual.
+const REEMPLAZAR = process.env.REEMPLAZAR === "1";
+
 const email = process.env.DEPLOY_VERIFY_EMAIL;
 const pin = process.env.DEPLOY_VERIFY_PIN;
 if (!email || !pin) {
@@ -67,7 +75,8 @@ if (!objetivo.length) {
   process.exit(0);
 }
 if (!APLICAR) {
-  console.log(`\nSimulación (APLICAR=0): se volverían a subir ${objetivo.length} archivo(s) por la ingesta real.`);
+  const modo = REEMPLAZAR ? "se retirarían y re-ingerirían" : "se volverían a subir";
+  console.log(`\nSimulación (APLICAR=0): ${modo} ${objetivo.length} archivo(s) por la ingesta real.`);
   process.exit(0);
 }
 
@@ -78,17 +87,40 @@ for (const f of objetivo) {
     continue;
   }
   const bytes = await descarga.arrayBuffer();
+
+  // En modo reemplazo se retira primero el expediente ya publicado. Así la
+  // deduplicación por hash no lo encuentra y la nueva carga entra como un alta
+  // limpia, por el camino de publicación de siempre.
+  if (REEMPLAZAR) {
+    const retiro = await fetch(`${PRODUCTION_URL}/api/files/lifecycle`, {
+      method: "POST",
+      headers: { Cookie, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fileId: f.id,
+        action: "delete",
+        reason: `Sustituido por una re-ingesta con el pipeline actualizado (${new Date().toISOString().slice(0, 10)}).`,
+      }),
+    });
+    if (!retiro.ok) {
+      const detalle = await retiro.json().catch(() => ({}));
+      console.error(`✖ ${f.originalName}: no se pudo retirar el expediente previo (${retiro.status} · ${detalle.error ?? ""}).`);
+      continue;
+    }
+    console.log(`  · ${f.originalName}: expediente previo retirado; se re-ingiere como alta nueva.`);
+  }
+
   const form = new FormData();
   form.set("file", new File([bytes], f.originalName, { type: f.mimeType || "application/octet-stream" }));
   form.set("autoPublish", "true");
-  // Señal explícita para que un expediente ya publicado se vuelva a pasar por la
-  // ingesta actual en vez de quedarse como estaba (misma fila, revisión nueva).
-  form.set("reprocess", "true");
+  // Sin reemplazo se pide reproceso: un expediente ya publicado se vuelve a
+  // pasar por la ingesta actual (misma fila, revisión nueva). Con reemplazo NO
+  // se pide, porque el anterior ya está retirado y ésta es un alta limpia.
+  if (!REEMPLAZAR) form.set("reprocess", "true");
   // Se conserva la clasificación original para que entre por la misma área.
   if (f.area) form.set("area", f.area);
   if (f.declaredCutoff) form.set("declaredCutoff", f.declaredCutoff);
   if (f.sourceCurrency) form.set("sourceCurrency", f.sourceCurrency);
-  form.set("description", `Reproceso con el pipeline actualizado (${new Date().toISOString().slice(0, 10)}).`);
+  form.set("description", `${REEMPLAZAR ? "Re-ingesta" : "Reproceso"} con el pipeline actualizado (${new Date().toISOString().slice(0, 10)}).`);
 
   const subida = await fetch(`${PRODUCTION_URL}/api/files`, { method: "POST", headers: { Cookie }, body: form });
   const cuerpo = await subida.json().catch(() => ({}));
