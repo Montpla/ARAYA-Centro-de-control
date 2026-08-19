@@ -1,0 +1,34 @@
+name: Reprocesar archivos con el pipeline actual
+
+# Vuelve a pasar por la ingesta los archivos ya subidos, para que recojan las
+# mejoras de los lectores. Simula por defecto; aplicar publica en el panel.
+
+on:
+  workflow_dispatch:
+    inputs:
+      filtro:
+        description: "Texto que debe contener el nombre del archivo (p. ej. jul)"
+        required: false
+        default: "jul"
+        type: string
+      aplicar:
+        description: "Aplicar de verdad (1) o sólo simular (0)"
+        required: false
+        default: "0"
+        type: string
+
+jobs:
+  reprocesar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Reprocesar
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+          FILTRO: ${{ inputs.filtro }}
+          APLICAR: ${{ inputs.aplicar }}
+        run: node scripts/reprocesar.mjs
