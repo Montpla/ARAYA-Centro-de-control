@@ -166,6 +166,13 @@ test("upload quarantine, idempotent resume and automatic runtime contracts fail 
     /automaticContractIsSafe\(normalizedUpdates, liveValues\)/,
     /individualUpdateContractIsSafe\(update, liveValues\)/,
     /!\[["']__proto__["'], ["']constructor["'], ["']prototype["']\]\.includes\(key\)/,
+    // Reproceso pedido a propósito: un expediente ya publicado vuelve a pasar
+    // por la ingesta actual (misma fila, revisión nueva) con una clave
+    // idempotente propia para no chocar con el cierre `auto:${id}` anterior.
+    /const reprocessRequested = formData\.get\(["']reprocess["']\) === ["']true["']/,
+    /const canReprocess = reprocessRequested &&[\s\S]*?duplicate\.status !== ["']rechazado["']/,
+    /reprocessing = !canResume && duplicate\.publicationRevision !== null/,
+    /requestKey: reprocessing \? `auto:\$\{id\}:\$\{extractionGeneration\}` : `auto:\$\{id\}`/,
   ], "files route quarantine");
 
   expectPatterns(mutationNotificationMigration, [

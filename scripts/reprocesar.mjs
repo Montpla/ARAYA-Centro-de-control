@@ -81,6 +81,9 @@ for (const f of objetivo) {
   const form = new FormData();
   form.set("file", new File([bytes], f.originalName, { type: f.mimeType || "application/octet-stream" }));
   form.set("autoPublish", "true");
+  // Señal explícita para que un expediente ya publicado se vuelva a pasar por la
+  // ingesta actual en vez de quedarse como estaba (misma fila, revisión nueva).
+  form.set("reprocess", "true");
   // Se conserva la clasificación original para que entre por la misma área.
   if (f.area) form.set("area", f.area);
   if (f.declaredCutoff) form.set("declaredCutoff", f.declaredCutoff);
