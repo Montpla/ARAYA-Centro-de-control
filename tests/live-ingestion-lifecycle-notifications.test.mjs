@@ -112,7 +112,7 @@ test("multiformat ingestion falls back to AI and gates automatic publication", (
     /const lecturaParcial = deterministicExtraction\.updates\.length > 0 && documentoNarrativo;/,
     /if \(!deterministicExtraction\.updates\.length \|\| lecturaParcial\) \{[\s\S]*?extractDocumentWithAI\(/,
     /const cubiertas = new Set\(deterministicExtraction\.updates\.map\(\(update\) => update\.key\)\);/,
-    /\.filter\(\(\{ update \}\) => !cubiertas\.has\(update\.key\)\)/,
+    /\.filter\(\(\{ update, confianza \}\) =>\s*!cubiertas\.has\(update\.key\) && Number\.isFinite\(confianza\) && confianza > 0\)/,
     /apiKey: process\.env\.OPENAI_API_KEY \?\? ["']["']/,
     /extractionMode: extraction\.model === ["']deterministic["'][\s\S]*?["']openai_responses["']/,
     /automaticPublicationRequested &&/,
@@ -122,6 +122,13 @@ test("multiformat ingestion falls back to AI and gates automatic publication", (
     /resolvedArea !== ["']sin_clasificar["']/,
     /user\.financeAccess \|\| !isFinancialLiveKey\(update\.key\)/,
     /isSafeAutomaticStructuredUpdate\(update\)/,
+    // El recuento de confianza se cuenta sobre la extracción, no sobre lo que
+    // sobrevive a la normalización, y la publicación automática decide dato a
+    // dato: un dato dudoso no bloquea el informe entero.
+    /updateCount: extraction\.updateConfidences\.length/,
+    /const batchPreconditions =/,
+    /const updateIsAutoPublishable = /,
+    /normalizedUpdates\.filter\(updateIsAutoPublishable\)/,
     /publishLiveDataUpdates\(/,
     /reviewClosure: \{[\s\S]*?mode: ["']insert["'][\s\S]*?completedAction: ["']aprobado_automatico["']/,
   ], "files route");
