@@ -664,6 +664,13 @@ export async function POST(request: Request) {
   });
   const declaredCutoff = String(formData.get("declaredCutoff") ?? "").trim().slice(0, 40);
   const automaticPublicationRequested = formData.get("autoPublish") === "true";
+  // Un reproceso es una repetición pedida a propósito: vuelve a pasar por la
+  // ingesta actual un expediente que ya se archivó (y quizá ya se publicó), para
+  // que recoja las mejoras de un lector cuando el archivo se subió antes de que
+  // ese lector existiera. No crea otra copia —reusa la misma fila y el mismo
+  // original— y publica una revisión nueva encima. Sin esta señal explícita, un
+  // archivo idéntico ya publicado se queda como está.
+  const reprocessRequested = formData.get("reprocess") === "true";
   const classification = classifyUpload({
     fileName: candidate.name,
     description,
@@ -698,6 +705,7 @@ export async function POST(request: Request) {
     .where(and(eq(uploadedFiles.sha256, sha256), eq(uploadedFiles.deletedAt, "")))
     .limit(1);
   let resumedRow: typeof uploadedFiles.$inferSelect | null = null;
+  let reprocessing = false;
   if (duplicate) {
     const provisionalOwnedByUser = duplicate.documentType === PROVISIONAL_DOCUMENT_TYPE &&
       duplicate.uploaderEmail.trim().toLowerCase() === user.email.trim().toLowerCase();
@@ -708,13 +716,22 @@ export async function POST(request: Request) {
       (duplicate.reviewStatus === "pendiente_extraccion" || duplicate.reviewStatus === "cambios_solicitados") &&
       duplicate.status !== "integrado" &&
       duplicate.status !== "rechazado";
-    if (!canResume) {
+    // El reproceso reclama incluso un expediente ya publicado, siempre que quien
+    // lo pide tenga el acceso que ese contenido exige. Un archivo rechazado no
+    // se reabre por esta vía: esa decisión es deliberada y se respeta.
+    const canReprocess = reprocessRequested &&
+      duplicate.status !== "rechazado" &&
+      (user.financeAccess || !fileRequiresFinanceAccess(duplicate));
+    if (!canResume && !canReprocess) {
       return Response.json({
         duplicate: true,
         message: "Este mismo archivo ya estaba registrado; se mantiene una sola copia.",
         file: publicFileRow(duplicate, user),
       });
     }
+    // Sólo es «reproceso» cuando el expediente ya había publicado una revisión;
+    // reanudar uno que nunca llegó a publicar sigue el camino de siempre.
+    reprocessing = !canResume && duplicate.publicationRevision !== null;
     const leaseStartedAt = Date.parse(duplicate.updatedAt);
     const leaseIsActive = duplicate.processingStage === "extraccion_en_curso" &&
       Number.isFinite(leaseStartedAt) &&
@@ -1281,7 +1298,11 @@ export async function POST(request: Request) {
             mode: "insert" as const,
             fileId: id,
             proposalGeneration: extractionGeneration,
-            requestKey: `auto:${id}`,
+            // Un reproceso publica una revisión más sobre un expediente que ya
+            // tenía un cierre `auto:${id}`. La clave idempotente lleva la
+            // generación para no chocar con ese cierre anterior; una primera
+            // publicación conserva la clave estable de siempre.
+            requestKey: reprocessing ? `auto:${id}:${extractionGeneration}` : `auto:${id}`,
             completedAction: "aprobado_automatico",
             note: "Publicación automática de hechos explícitos con alta confianza, validados por el contrato vivo y los permisos del usuario.",
             proposalCount: autoPublishable.length,
