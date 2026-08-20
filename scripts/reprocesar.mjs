@@ -11,6 +11,11 @@
 //
 // Simula por defecto; hay que pedir APLICAR=1 porque publica en el panel.
 
+import { execFileSync } from "node:child_process";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 const APLICAR = process.env.APLICAR === "1";
 const FILTRO = (process.env.FILTRO ?? "jul").toLowerCase();
@@ -79,7 +84,7 @@ if (!objetivo.length) {
 if (!APLICAR) {
   const modo = REEMPLAZAR ? "se retirarían y re-ingerirían" : "se volverían a subir";
   console.log(`\nSimulación (APLICAR=0): ${modo} ${objetivo.length} archivo(s) por la ingesta real.`);
-  process.exit(0);
+  if (process.env.DEBUG !== "1") process.exit(0);
 }
 
 for (const f of objetivo) {
@@ -89,6 +94,20 @@ for (const f of objetivo) {
     continue;
   }
   const bytes = await descarga.arrayBuffer();
+
+  if (process.env.DEBUG === "1" && String(f.extension).toLowerCase() === "xlsx") {
+    const directory = await mkdtemp(join(tmpdir(), "araya-xlsx-"));
+    const path = join(directory, "diagnostico.xlsx");
+    try {
+      await writeFile(path, new Uint8Array(bytes));
+      console.log(`   ↳ estructura XLSX relevante de ${f.originalName}:`);
+      execFileSync("python3", ["scripts/diagnosticar-xlsx.py", path], { stdio: "inherit" });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+
+  if (!APLICAR) continue;
 
   // En modo reemplazo se retira primero el expediente ya publicado. Así la
   // deduplicación por hash no lo encuentra y la nueva carga entra como un alta
