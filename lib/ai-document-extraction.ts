@@ -10,7 +10,7 @@ type KnownArea = { id: string; label: string };
 
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 const EXTRACTION_MODEL = "gpt-5.6-terra";
-const PROMPT_VERSION = "araya-live-data-extraction-2026-08-11-v1";
+const PROMPT_VERSION = "araya-live-data-extraction-2026-08-20-cubicaciones-v2";
 const SAFETY_IDENTIFIER = "araya_document_ingestion_service";
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -142,6 +142,8 @@ ESPACIAL, EDIFICIOS, APARTAMENTOS Y URBANISMO
 - No adivines coordenadas, geometrías, posiciones, índices de arrays, relaciones entre edificios y apartamentos, estados ni porcentajes a partir del color o la proximidad visual.
 - No reemplaces una raíz espacial completa con una lista parcial. Solo emite buildings, urbanismAreas o urbanismReportAreas como raíz completa si la fuente contiene el inventario completo y compatible.
 - Para una actualización parcial, usa una ruta hija únicamente cuando el propio documento aporte una clave o índice inequívoco compatible con el contrato vivo; en caso contrario, crea un warning.
+- En cubicaciones, certificaciones y relaciones de obra ejecutada distingue siempre el alcance del documento del avance global del proyecto. Si la carátula o el título dice "Edificios 76 y 77", "TH-76 / TH-77" o equivalente, un porcentaje de avance de esa cubicación pertenece a esos edificios: usa buildings.TH-76.progress y buildings.TH-77.progress cuando el mismo porcentaje se declare explícitamente para ambos. No lo publiques como projectSnapshot.overallProgress salvo que la fuente diga de forma inequívoca que es el avance físico total de todo ARAYA.
+- Si una tabla trae una fila por edificio, emite una actualización por cada fila. Si trae disciplinas por columnas, además del progreso del edificio conserva cada fase reconocible en su ruta hija; no reduzcas toda la tabla a un único candidato genérico llamado "RELACIÓN DE OBRA EJECUTADA".
 
 CURVA S Y PLANIFICACIÓN
 - monthlyPlan es una serie ordenada de registros con month, planned y actual; planned es plan y actual es ejecutado real.

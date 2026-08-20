@@ -14,6 +14,7 @@
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 const APLICAR = process.env.APLICAR === "1";
 const FILTRO = (process.env.FILTRO ?? "jul").toLowerCase();
+const FILE_ID = String(process.env.FILE_ID ?? "").trim();
 // FORMATOS restringe por extensión (p. ej. "pptx" o "pptx,docx"). Sirve para
 // reprocesar sólo los informes narrativos que leyó la IA y dejó a medias, sin
 // tocar los Excel que ya leyeron bien los lectores propios.
@@ -60,6 +61,7 @@ const permitidos = FORMATOS.length ? new Set(FORMATOS) : procesables;
 const objetivo = files.filter((f) => {
   const ext = String(f.extension).toLowerCase();
   return !f.deletedAt &&
+    (!FILE_ID || f.id === FILE_ID) &&
     f.originalName.toLowerCase().includes(FILTRO) &&
     procesables.has(ext) &&
     permitidos.has(ext);

@@ -106,6 +106,43 @@ construir(SALIDA / "tabla-obra.xlsx", [
     ["Zona comun", 10, "No es un edificio"],
 ])
 
+# La estructura que hizo visible el fallo de la Cubicacion Nº8: una caratula
+# larga, cabeceras abreviadas y solo dos edificios. Antes el lector buscaba en
+# 15 filas y exigia los nombres exactos "Edificio" / "% Avance", por lo que
+# TH-76 y TH-77 no producian ninguna actualizacion.
+construir(SALIDA / "cubicacion-76-77.xlsx", [
+    ["CUBICACION Nº8 - ARAYA", ""],
+    ["RELACION DE OBRA EJECUTADA", ""],
+    ["Contratista", "Constructora"],
+    ["Proyecto", "ARAYA"],
+    ["Alcance", "Edificios 76 y 77"],
+    ["Periodo", "Julio 2026"],
+    ["Contrato", "Fase II"],
+    ["Cubicacion", "8"],
+    ["Fecha inicial", "01/07/2026"],
+    ["Fecha final", "31/07/2026"],
+    ["Moneda", "DOP"],
+    ["Presupuesto", 1000000],
+    ["Anterior", 100000],
+    ["Este periodo", 50000],
+    ["Acumulado", 150000],
+    ["Retencion", 5000],
+    ["Neto", 45000],
+    ["Observaciones", "Avance medido en obra"],
+    ["EDIF.", "Avance fisico acumulado"],
+    ["TH-76", 8.25],
+    ["TH-77", 6.5],
+])
+
+# Algunas caratulas declaran un unico avance para todo el alcance contractual
+# en vez de repetir una fila por edificio. El valor 0,1845 es como Excel guarda
+# internamente una celda mostrada como 18,45 %.
+construir(SALIDA / "cubicacion-alcance-76-77.xlsx", [
+    ["CUBICACION Nº8 - EDIFICIOS 76 Y 77", ""],
+    ["RELACION DE OBRA EJECUTADA", ""],
+    ["% Avance fisico ejecutado", 0.1845],
+])
+
 
 # --- Word y PowerPoint -------------------------------------------------------
 # Comparten envoltorio con Excel (ZIP con XML), asi que sus tablas se leen con

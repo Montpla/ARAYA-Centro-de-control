@@ -16,6 +16,11 @@ on:
         required: false
         default: ""
         type: string
+      file_id:
+        description: "ID exacto del expediente; si se indica, evita tocar copias con el mismo nombre"
+        required: false
+        default: ""
+        type: string
       reemplazar:
         description: "Retirar el expediente previo y re-ingerir como alta nueva (1) en vez de re-publicar encima (0)"
         required: false
@@ -46,6 +51,7 @@ jobs:
           DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
           FILTRO: ${{ inputs.filtro }}
           FORMATOS: ${{ inputs.formatos }}
+          FILE_ID: ${{ inputs.file_id }}
           REEMPLAZAR: ${{ inputs.reemplazar }}
           APLICAR: ${{ inputs.aplicar }}
           DEBUG: ${{ inputs.debug }}

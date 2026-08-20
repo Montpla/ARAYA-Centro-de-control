@@ -25,6 +25,13 @@ type StructuredExtraction = {
   updates: LiveDataUpdate[];
   summary: string;
   warnings: string[];
+  /**
+   * Edificios que el propio documento declara como alcance de un avance.
+   * La ruta de carga usa esta lista como comprobacion de completitud: una
+   * cubicacion no puede quedar como "sincronizada" si nombra TH-76/TH-77 pero
+   * no genero ningun dato vivo para ellos.
+   */
+  expectedBuildingCodes?: string[];
 };
 
 export type ArchiveAiDocument = {
@@ -354,11 +361,55 @@ function normalizeUpdate(
 // Cabeceras con las que la obra rotula sus tablas de avance. No se intenta
 // adivinar más allá de esta lista: una columna que no esté aquí se ignora, que
 // es preferible a interpretar como avance una columna de otra cosa.
-const CABECERAS_EDIFICIO = ["edificio", "edificios", "torre", "bloque", "codigo", "código"];
+const CABECERAS_EDIFICIO = [
+  "edificio", "edificios", "edif", "edif.", "ed.", "torre", "bloque", "codigo", "código", "th",
+];
 const CABECERAS_AVANCE = [
   "% avance", "avance", "avance (%)", "% ejecutado", "ejecutado", "avance real",
-  "% real", "progreso", "% completado",
+  "% real", "progreso", "% completado", "% de avance", "porcentaje de avance",
+  "avance fisico", "avance físico", "avance fisico acumulado", "avance físico acumulado",
+  "avance fisico ejecutado", "avance físico ejecutado", "avance acumulado", "% avance acumulado",
 ];
+
+function esCabeceraEdificio(valor: string) {
+  const cabecera = normalizarCabecera(valor).replace(/\s+/g, " ");
+  return CABECERAS_EDIFICIO.some((candidate) => normalizarCabecera(candidate) === cabecera) ||
+    /^(?:n[º°o.]?\s*)?(?:edif(?:icio)?s?|ed\.?|torres?|bloques?|th)\.?$/.test(cabecera);
+}
+
+function esCabeceraAvance(valor: string) {
+  const cabecera = normalizarCabecera(valor).replace(/\s+/g, " ");
+  return CABECERAS_AVANCE.some((candidate) => normalizarCabecera(candidate) === cabecera) ||
+    /^(?:%\s*)?(?:porcentaje\s+(?:de\s+)?)?(?:avance|progreso|ejecutado|completado)(?:\s+(?:fisico|real|de obra|ejecutado|acumulado))*\s*(?:\(%\)|%)?$/.test(cabecera);
+}
+
+function buildingCodesFromText(
+  text: string,
+  knownBuildingTokens?: Set<string>,
+) {
+  const codes = new Set<string>();
+  const add = (raw: string) => {
+    const token = raw.replace(/^0+(?=\d)/, "");
+    if (!token || (knownBuildingTokens && !knownBuildingTokens.has(token))) return;
+    codes.add(`TH-${token.padStart(2, "0")}`);
+  };
+  const normalized = normalizarCabecera(text);
+  const pattern = /\b(?:th|edificios?|edif\.?|ed\.?|torres?|bloques?)\s*(?:n[º°o.]?\s*)?[-#:]?\s*(\d{1,3})(?:\s*(?:y|e|&|\/|-)\s*(?:th\s*[-#:]?\s*)?(\d{1,3}))?/g;
+  for (const match of normalized.matchAll(pattern)) {
+    add(match[1]);
+    if (match[2]) add(match[2]);
+  }
+  return [...codes];
+}
+
+function detectedBuildingProgressScope(
+  filas: Array<Record<string, string>>,
+  knownBuildingTokens?: Set<string>,
+) {
+  const text = filas.flatMap((row) => Object.values(row)).join(" ");
+  if (!/\b(?:avance|progreso|ejecutado|completado|cubicacion)\b/.test(normalizarCabecera(text))) return [];
+  return buildingCodesFromText(text, knownBuildingTokens);
+}
 
 function numeroDeCelda(valor: string) {
   const limpio = valor.replace(/%/g, "").trim().replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
@@ -379,18 +430,29 @@ function extractSheetProgress(
   filas: Array<Record<string, string>>,
   defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string; knownBuildingTokens?: Set<string> },
 ): StructuredExtraction | null {
-  const { records } = rowsToRecords(filas, [...CABECERAS_EDIFICIO, ...CABECERAS_AVANCE]);
-  if (!records.length) return null;
-
-  const columnas = Object.keys(records[0] ?? {});
-  const columnaEdificio = columnas.find((columna) => CABECERAS_EDIFICIO.includes(columna));
-  const columnaAvance = columnas.find((columna) => CABECERAS_AVANCE.includes(columna));
-  if (!columnaEdificio || !columnaAvance) return null;
+  // Una cubicacion real puede llevar una caratula extensa. Se buscan hasta 100
+  // filas con contenido y se conservan las letras de columna del XML; asi
+  // funcionan tambien "EDIF." y "Avance fisico acumulado", que antes no
+  // coincidían con la lista exacta y dejaban el libro sin datos.
+  let headerIndex = -1;
+  let columnaEdificio = "";
+  let columnaAvance = "";
+  for (let index = 0; index < Math.min(filas.length, 100); index += 1) {
+    const cells = Object.entries(filas[index]);
+    const building = cells.find(([, value]) => esCabeceraEdificio(value));
+    const progress = cells.find(([, value]) => esCabeceraAvance(value));
+    if (!building || !progress || building[0] === progress[0]) continue;
+    headerIndex = index;
+    columnaEdificio = building[0];
+    columnaAvance = progress[0];
+    break;
+  }
+  if (headerIndex < 0) return null;
 
   const updates: LiveDataUpdate[] = [];
   const warnings: string[] = [];
   let descartadas = 0;
-  for (const registro of records.slice(0, 250)) {
+  for (const registro of filas.slice(headerIndex + 1, headerIndex + 1 + 250)) {
     const etiqueta = registro[columnaEdificio] ?? "";
     const codigo = buildingCodeFromTaskName(etiqueta) ||
       (/^\s*(?:th[\s-]*)?(\d{1,3})\s*$/i.test(etiqueta)
@@ -408,7 +470,7 @@ function extractSheetProgress(
     updates.push({
       key: `buildings.${codigo}.progress`,
       value: valor,
-      area: defaults.area,
+      area: "obra",
       cutoff: defaults.cutoff,
       sourceCurrency: defaults.sourceCurrency,
       sourceName: defaults.sourceName,
@@ -421,6 +483,7 @@ function extractSheetProgress(
     updates,
     summary: `${updates.length} edificios actualizados desde la tabla de la hoja de cálculo.`,
     warnings,
+    expectedBuildingCodes: updates.map((update) => update.key.split(".")[1]),
   };
 }
 
@@ -479,11 +542,11 @@ function extractMatrixProgress(
   let cabeceraIndice = -1;
   let columnaEdificio = "";
   let disciplinas: Array<{ columna: string; fase: PhaseId }> = [];
-  for (let indice = 0; indice < Math.min(filas.length, 15); indice += 1) {
+  for (let indice = 0; indice < Math.min(filas.length, 100); indice += 1) {
     // Las filas vienen indexadas por columna ("A", "B"…), no por posición: se
     // guarda la clave de cada columna, no un número.
     const celdas = Object.entries(filas[indice]);
-    const edificio = celdas.find(([, valor]) => CABECERAS_EDIFICIO.includes(normalizarCabecera(valor)));
+    const edificio = celdas.find(([, valor]) => esCabeceraEdificio(valor));
     if (!edificio) continue;
     const cols: Array<{ columna: string; fase: PhaseId }> = [];
     for (const [columna, valor] of celdas) {
@@ -541,22 +604,107 @@ function extractMatrixProgress(
       descartadas += 1;
       continue;
     }
-    updates.push({
-      key: `buildings.${codigo}.progress`,
-      value: buildingProgressFromPhases(phases),
-      area: defaults.area,
+    const baseUpdate = {
+      area: "obra",
       cutoff: defaults.cutoff,
       sourceCurrency: defaults.sourceCurrency,
       sourceName: defaults.sourceName,
+    } as const;
+    updates.push({
+      key: `buildings.${codigo}.progress`,
+      value: buildingProgressFromPhases(phases),
+      ...baseUpdate,
     });
+    // No se sustituye el array completo: cada fase se publica por su posicion
+    // estable. Asi una cubicacion parcial conserva las fases que no midio y el
+    // detalle del edificio puede colorearse con la disciplina realmente leida.
+    for (const phase of phases) {
+      const phaseIndex = PHASE_WEIGHTS.findIndex((definition) => definition.id === phase.id);
+      if (phaseIndex < 0) continue;
+      updates.push({
+        key: `buildings.${codigo}.phases.${phaseIndex}.progress`,
+        value: phase.progress,
+        ...baseUpdate,
+      });
+    }
   }
 
   if (!updates.length) return null;
   if (descartadas) warnings.push(`${descartadas} filas no nombran un edificio reconocible y se han dejado fuera.`);
+  const buildingCodes = [...new Set(
+    updates.map((update) => update.key.match(/^buildings\.([^.]+)\./)?.[1]).filter(Boolean) as string[],
+  )];
   return {
     updates,
-    summary: `${updates.length} edificios actualizados desde la tabla de avance por disciplina.`,
+    summary: `${buildingCodes.length} edificios y sus fases actualizados desde la tabla de avance por disciplina.`,
     warnings,
+    expectedBuildingCodes: buildingCodes,
+  };
+}
+
+/**
+ * Lee una cifra de avance que pertenece al alcance completo de una
+ * cubicacion, por ejemplo "Edificios 76 y 77" + "Avance fisico ejecutado
+ * 4,25 %". Solo se usa cuando no existe una tabla individual por edificio y la
+ * etiqueta del porcentaje es inequivoca; una cantidad o un total economico no
+ * puede entrar por esta via.
+ */
+function extractScopedBuildingProgress(
+  filas: Array<Record<string, string>>,
+  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string; knownBuildingTokens?: Set<string> },
+): StructuredExtraction | null {
+  const codes = detectedBuildingProgressScope(filas, defaults.knownBuildingTokens);
+  if (!codes.length) return null;
+
+  let progress: number | null = null;
+  for (let rowIndex = 0; rowIndex < filas.length && progress === null; rowIndex += 1) {
+    const values = Object.values(filas[rowIndex]);
+    for (let cellIndex = 0; cellIndex < values.length; cellIndex += 1) {
+      const label = values[cellIndex];
+      const normalized = normalizarCabecera(label);
+      if (!/\bavance\s+(?:fisico|real|de obra|ejecutado|acumulado)|\bporcentaje\s+de\s+avance|%\s*avance/.test(normalized)) {
+        continue;
+      }
+
+      const inline = label.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
+      if (inline) {
+        progress = numeroDeCelda(inline[1]);
+        break;
+      }
+
+      const candidates = [
+        ...values.slice(cellIndex + 1),
+        ...Object.values(filas[rowIndex + 1] ?? {}),
+      ];
+      for (const candidate of candidates) {
+        const parsed = numeroDeCelda(candidate);
+        if (parsed === null || parsed < 0) continue;
+        // Si la etiqueta declara porcentaje, Excel guarda con frecuencia 22%
+        // como 0,22. Fuera de una etiqueta porcentual no se aplica esta regla.
+        const value = parsed > 0 && parsed <= 1 && /%|porcentaje/.test(normalized)
+          ? parsed * 100
+          : parsed;
+        if (value <= 100) {
+          progress = Math.round(value * 100) / 100;
+          break;
+        }
+      }
+    }
+  }
+  if (progress === null || progress < 0 || progress > 100) return null;
+
+  return {
+    updates: codes.map((code) => ({
+      key: `buildings.${code}.progress`,
+      value: progress,
+      area: "obra",
+      cutoff: defaults.cutoff,
+      sourceCurrency: defaults.sourceCurrency,
+      sourceName: defaults.sourceName,
+    })),
+    summary: `${codes.length} edificios actualizados desde el avance fisico explicito de la cubicacion.`,
+    warnings: [],
+    expectedBuildingCodes: codes,
   };
 }
 
@@ -1255,11 +1403,15 @@ export async function extractStructuredUpdates(
       };
     }
 
-    // Se recorren todas las hojas del libro: el dato que actualiza el panel no
-    // siempre está en la primera (un flujo de finanzas suele traer el detalle
-    // por categoría delante y el resumen o la matriz detrás). Se devuelve la
-    // primera hoja que aporte datos, por orden de fiabilidad dentro de cada una.
+    // Se recorren TODAS las hojas y se unen sus datos. Una cubicación real
+    // separa carátula, relación ejecutada y avance por edificios; devolver la
+    // primera coincidencia dejaba sin leer justo las hojas posteriores.
+    const results: StructuredExtraction[] = [];
+    const expectedBuildingCodes = new Set<string>();
     for (const filas of hojas) {
+      for (const code of detectedBuildingProgressScope(filas, defaults.knownBuildingTokens)) {
+        expectedBuildingCodes.add(code);
+      }
       const porClave = rowsToRecords(filas, ["clave", "key", "campo"]);
       if (porClave.records.length) {
         const warnings: string[] = [];
@@ -1270,28 +1422,61 @@ export async function extractStructuredUpdates(
           if (normalizado.update) updates.push(normalizado.update);
         }
         if (updates.length) {
-          return {
+          results.push({
             updates,
             summary: `${updates.length} datos leídos directamente de la hoja de cálculo.`,
             warnings,
-          };
+          });
+          continue;
         }
       }
 
       const tabla = extractSheetProgress(filas, defaults);
-      if (tabla) return tabla;
+      if (tabla) {
+        results.push(tabla);
+        for (const code of tabla.expectedBuildingCodes ?? []) expectedBuildingCodes.add(code);
+        continue;
+      }
 
       // Una hoja con la matriz de la cubicación (edificio por fila, oficio por
       // columna) también se lee sola.
       const matriz = extractMatrixProgress(filas, defaults);
-      if (matriz) return matriz;
+      if (matriz) {
+        results.push(matriz);
+        for (const code of matriz.expectedBuildingCodes ?? []) expectedBuildingCodes.add(code);
+        continue;
+      }
+
+      const scoped = extractScopedBuildingProgress(filas, defaults);
+      if (scoped) {
+        results.push(scoped);
+        for (const code of scoped.expectedBuildingCodes ?? []) expectedBuildingCodes.add(code);
+      }
     }
 
     // El Excel de finanzas: su flujo mensual actualiza el flujo reprogramado del
     // panel. Se prueba sobre el libro entero porque la tabla suele ir en una
     // hoja posterior a los detalles.
     const flujo = extractReprogrammedFlowUpdates(hojas, defaults);
-    if (flujo) return flujo;
+    if (flujo) results.push(flujo);
+
+    if (results.length) {
+      // La primera lectura fiable de una clave manda; las hojas de resumen
+      // suelen repetir el mismo dato que el detalle y no deben publicarlo dos
+      // veces ni convertir el orden de hojas en una fuente de contradicciones.
+      const byKey = new Map<string, LiveDataUpdate>();
+      for (const result of results) {
+        for (const update of result.updates) {
+          if (!byKey.has(update.key)) byKey.set(update.key, update);
+        }
+      }
+      return {
+        updates: [...byKey.values()],
+        summary: results.map((result) => result.summary).filter(Boolean).join(" "),
+        warnings: [...new Set(results.flatMap((result) => result.warnings))],
+        expectedBuildingCodes: [...expectedBuildingCodes],
+      };
+    }
 
     return {
       updates: [],
@@ -1299,6 +1484,7 @@ export async function extractStructuredUpdates(
       warnings: [
         "Se esperan columnas de clave y valor, una tabla de edificio y avance, la matriz de avance por oficio, o el flujo mensual de finanzas.",
       ],
+      expectedBuildingCodes: [...expectedBuildingCodes],
     };
   }
 

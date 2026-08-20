@@ -155,7 +155,49 @@ test("la matriz de cubicación se lee aunque esté en la segunda hoja", async ()
   const porClave = new Map(resultado.updates.map((u) => [u.key, u.value]));
   assert.equal(porClave.get("buildings.TH-03.progress"), 60.3);
   assert.equal(porClave.get("buildings.TH-11.progress"), 28.1);
+  assert.equal(porClave.get("buildings.TH-03.phases.0.progress"), 100);
+  assert.equal(
+    resultado.updates.find((update) => update.key === "buildings.TH-03.progress").area,
+    "obra",
+  );
   assert.match(resultado.summary, /por disciplina/);
+});
+
+test("la cubicación de TH-76 y TH-77 admite carátula larga y cabeceras reales", async () => {
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("cubicacion-76-77.xlsx"),
+    "xlsx",
+    {
+      ...defaults,
+      area: "finanzas",
+      sourceName: "Cubicacion 8 Araya Jul.xlsx",
+      knownBuildingTokens: new Set(["76", "77"]),
+    },
+  );
+  const porClave = new Map(resultado.updates.map((update) => [update.key, update]));
+  assert.equal(porClave.get("buildings.TH-76.progress").value, 8.25);
+  assert.equal(porClave.get("buildings.TH-77.progress").value, 6.5);
+  assert.equal(porClave.get("buildings.TH-76.progress").area, "obra");
+  assert.deepEqual([...resultado.expectedBuildingCodes].sort(), ["TH-76", "TH-77"]);
+});
+
+test("un avance único y explícito del alcance actualiza TH-76 y TH-77", async () => {
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("cubicacion-alcance-76-77.xlsx"),
+    "xlsx",
+    {
+      ...defaults,
+      area: "finanzas",
+      sourceName: "Cubicacion 8 Araya Jul.xlsx",
+      knownBuildingTokens: new Set(["76", "77"]),
+    },
+  );
+  const porClave = new Map(resultado.updates.map((update) => [update.key, update.value]));
+  assert.equal(porClave.get("buildings.TH-76.progress"), 18.45);
+  assert.equal(porClave.get("buildings.TH-77.progress"), 18.45);
+  assert.match(resultado.summary, /2 edificios actualizados/);
 });
 
 test("el Excel de finanzas actualiza el flujo reprogramado mes a mes", async () => {
