@@ -701,6 +701,7 @@ function extractCubicacionCoverProgress(
   let totalBudget = 0;
   let totalAccumulated = 0;
   let measuredRows = 0;
+  let declaredOverall: number | null = null;
   const baseUpdate = {
     area: "obra",
     cutoff: defaults.cutoff,
@@ -712,16 +713,32 @@ function extractCubicacionCoverProgress(
     const label = row[buildingColumn] ?? "";
     const normalizedLabel = normalizarCabecera(label);
     const code = buildingCodeFromTaskName(label);
-    const isUrbanism = /^urbanismo\b/.test(normalizedLabel);
-    if (!code && !isUrbanism) continue;
-    if (code && defaults.knownBuildingTokens && !defaults.knownBuildingTokens.has(
-      code.replace(/^TH-/i, "").replace(/^0+(?=\d)/, ""),
-    )) continue;
-
     const rawProgress = numeroDeCelda(row[progressColumn] ?? "");
     if (rawProgress === null || rawProgress < 0) continue;
     const progress = rawProgress <= 1 ? rawProgress * 100 : rawProgress;
     if (progress > 100) continue;
+    const budget = budgetColumn ? numeroDeCelda(row[budgetColumn] ?? "") : null;
+    const accumulated = numeroDeCelda(row[accumulatedColumn] ?? "");
+    const hasAmounts = budget !== null && accumulated !== null && budget > 0 && accumulated >= 0;
+
+    // En algunos libros la celda de URBANISMO es una formula externa cuyo
+    // texto cacheado no llega al lector, pero siempre es la primera fila
+    // economica del resumen, antes del primer edificio. Esa posicion estable
+    // permite conservarla sin confundir un subtotal posterior con Urbanismo.
+    const isUrbanism = /^urbanismo\b/.test(normalizedLabel) ||
+      (!buildingCodes.length && !code && hasAmounts);
+    if (!code && !isUrbanism) {
+      // La fila TOTAL viene inmediatamente despues del ultimo edificio y deja
+      // vacio Capitulo. Su porcentaje declarado incluye Urbanismo y evita que
+      // una formula de texto ausente lo saque del ponderado.
+      if (buildingCodes.length >= 2 && !label.trim() && hasAmounts && declaredOverall === null) {
+        declaredOverall = progress;
+      }
+      continue;
+    }
+    if (code && defaults.knownBuildingTokens && !defaults.knownBuildingTokens.has(
+      code.replace(/^TH-/i, "").replace(/^0+(?=\d)/, ""),
+    )) continue;
 
     if (code) {
       updates.push({ key: `buildings.${code}.progress`, value: progress, ...baseUpdate });
@@ -730,9 +747,7 @@ function extractCubicacionCoverProgress(
       updates.push({ key: "urbanismAreas.0.progress", value: progress, ...baseUpdate });
     }
 
-    const budget = budgetColumn ? numeroDeCelda(row[budgetColumn] ?? "") : null;
-    const accumulated = numeroDeCelda(row[accumulatedColumn] ?? "");
-    if (budget !== null && accumulated !== null && budget > 0 && accumulated >= 0) {
+    if (hasAmounts) {
       totalBudget += budget;
       totalAccumulated += accumulated;
       measuredRows += 1;
@@ -743,10 +758,12 @@ function extractCubicacionCoverProgress(
   // El total fisico es el acumulado ponderado por el presupuesto de cada
   // capitulo (urbanismo + edificios), la misma formula de la fila TOTAL del
   // libro. Nunca se promedian porcentajes simples entre edificios.
-  if (measuredRows > 0 && totalBudget > 0) {
+  const overallProgress = declaredOverall ??
+    (measuredRows > 0 && totalBudget > 0 ? (totalAccumulated / totalBudget) * 100 : null);
+  if (overallProgress !== null) {
     updates.push({
       key: "projectSnapshot.overallProgress",
-      value: Math.round((totalAccumulated / totalBudget) * 10_000) / 100,
+      value: Math.round(overallProgress * 100) / 100,
       ...baseUpdate,
     });
   }

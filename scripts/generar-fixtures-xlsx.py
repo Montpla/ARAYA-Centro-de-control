@@ -151,9 +151,10 @@ construir(SALIDA / "cubicacion-caratula-acumulado.xlsx", [
     ["CUBICACION Nro. 8", "", "", "", "", "", "", "", ""],
     ["RELACION DE OBRA EJECUTADA", "", "", "", "", "", "", "", ""],
     ["Nº", "Capitulo", "Monto RD$.", "En el periodo", "%", "Anterior Acumulado", "%", "Actual Acumulado", "%"],
-    [1, "URBANISMO", 100, 5, 0.05, 20, 0.20, 25, 0.25],
+    [1, "", 100, 5, 0.05, 20, 0.20, 25, 0.25],
     [2, "EDIFICIO 76", 100, 6, 0.06, 2, 0.02, 8, 0.08],
     [3, "EDIFICIO 77", 100, 9, 0.09, 0, 0, 9, 0.09],
+    ["", "", 300, "", "", "", "", 42, 0.14],
 ])
 
 
