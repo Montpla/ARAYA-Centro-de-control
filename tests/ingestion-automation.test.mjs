@@ -26,7 +26,9 @@ test("MPP y DWG tienen conversión programada, idempotente y enlazada al origina
   assert.match(mppWorkflow, /cron: "\*\/15 \* \* \* \*"/);
   assert.match(mppScript, /derivedFromFileId/);
   assert.match(mppScript, /mpp_to_xml/);
-  assert.match(dwgWorkflow, /libredwg-tools librsvg2-bin/);
+  assert.match(dwgWorkflow, /libredwg\/libredwg\/releases\/download\/0\.14/i);
+  assert.match(dwgWorkflow, /62ebb73b984f865960f20ed26619ea5f8789d5e3fd088fa40a2598384da81275/);
+  assert.match(dwgWorkflow, /actions\/cache@v5/);
   assert.match(dwgScript, /dwg2SVG/);
   assert.match(dwgScript, /dwg_to_png/);
   assert.match(dwgScript, /derivedFromFileId/);

@@ -27,11 +27,32 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
+      - name: Restaurar LibreDWG oficial
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/araya-libredwg-0.14
+          key: libredwg-0.14-${{ runner.os }}-${{ runner.arch }}
       - name: Instalar conversores DWG y SVG
         run: |
+          set -euo pipefail
+          PREFIX="$HOME/.cache/araya-libredwg-0.14"
           sudo apt-get update
-          sudo apt-get install -y libredwg-tools librsvg2-bin
-          dwg2SVG --version
+          sudo apt-get install -y librsvg2-bin xz-utils
+          if [ ! -x "$PREFIX/bin/dwg2SVG" ]; then
+            sudo apt-get install -y build-essential libtool pkg-config libpcre2-dev libxml2-dev
+            curl -fsSL \
+              https://github.com/LibreDWG/libredwg/releases/download/0.14/libredwg-0.14.tar.xz \
+              -o /tmp/libredwg-0.14.tar.xz
+            echo "62ebb73b984f865960f20ed26619ea5f8789d5e3fd088fa40a2598384da81275  /tmp/libredwg-0.14.tar.xz" \
+              | sha256sum -c -
+            tar -xJf /tmp/libredwg-0.14.tar.xz -C /tmp
+            cd /tmp/libredwg-0.14
+            ./configure --prefix="$PREFIX" --disable-bindings --disable-docs --disable-shared
+            make -j2
+            make install
+          fi
+          echo "$PREFIX/bin" >> "$GITHUB_PATH"
+          "$PREFIX/bin/dwg2SVG" --version
           rsvg-convert --version
       - name: Convertir y reingresar vistas
         env:
