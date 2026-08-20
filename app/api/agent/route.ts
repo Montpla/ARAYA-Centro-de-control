@@ -515,7 +515,7 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
         reviewedBy: row.reviewedByName || "Pendiente",
         publicationRevision: row.publicationRevision,
       })),
-      rule: "Recepción, identificación, extracción y contraste no cambian el dashboard por sí solos. Si el resultado tiene alta confianza, encaja en un campo ya conocido del contrato vivo y coincide con el área y los permisos de quien sube el archivo (incluida Finanzas), se publica solo, sin esperar aprobación de nadie. Lo que no cumple esas condiciones queda en la bandeja de validación hasta una decisión humana.",
+      rule: "Cada formato admitido usa lector directo, conversión o Agente de Ingesta. Todo hecho con evidencia, confianza positiva, contrato válido y permiso de área se publica automáticamente; un concepto nuevo crea una sección visual. Si una comprobación objetiva falla, el original conserva el diagnóstico sin forzar una cifra.",
     };
   }
   return {
@@ -583,7 +583,7 @@ async function fallbackAnswer(question: string, currency: CurrencyCode, canAcces
   const usdValue = (value: number) => formatMoney(value, "USD", currency);
 
   if (normalized.includes("archivo") || normalized.includes("adjunt") || normalized.includes("subir") || normalized.includes("cargar")) {
-    return `Puedes adjuntar el archivo en este chat o usar “+ Cargar archivo” desde cualquier pestaña. El sistema conserva el original, detecta duplicados e identifica proyecto, área, tipo, periodo y moneda. Después abre un expediente para extracción, contraste y validación. Si los datos extraídos tienen alta confianza y encajan en un campo ya conocido de tu área, se publican solos, sin esperar aprobación de nadie; lo que no cumple esas condiciones queda como propuesta pendiente de revisión manual. En ambos casos, la revisión viva se sincroniza en todas las pantallas en menos de cinco segundos.${source}`;
+    return `Puedes adjuntar el archivo en este chat o usar “+ Cargar archivo” desde cualquier pestaña. El sistema conserva el original, detecta duplicados e identifica proyecto, área, tipo, periodo y moneda. Después el Agente de Ingesta consulta el esquema y las plantillas aprendidas, contrasta cifras y entidades y publica automáticamente cada hecho con evidencia y contrato válido; un concepto nuevo crea su propia sección visual. Si una comprobación objetiva no cuadra, conserva el original y deja el diagnóstico exacto, sin inventar. La revisión viva se sincroniza en todas las pantallas en menos de cinco segundos.${source}`;
   }
 
   if (normalized.includes("calidad") || normalized.includes("fuente") || normalized.includes("inconsisten")) {

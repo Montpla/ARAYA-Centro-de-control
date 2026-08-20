@@ -3110,3 +3110,43 @@ del despliegue actual de Cloudflare Workers.
 - Verificación: TypeScript y build Vinext verdes, ESLint sin errores, suite
   completa **306/306**, despliegue final `32417070935`, reproceso exacto
   `32417350117` y comprobación efectiva `32417455902`, todos correctos.
+
+## Agente de ingesta adaptativa — implementado localmente (20/08/2026)
+
+- Rama de trabajo: `codex/agente-ingesta-araya`, basada en `github/main`
+  `35943b6`. Todavía no se ha publicado esta rama ni aplicado la migración en
+  producción.
+- Migración nueva `drizzle/0025_yellow_bullseye.sql`: crea
+  `document_templates` (memoria por familia de archivo) e
+  `ingestion_agent_runs` (modelo, prompt, trayectoria de herramientas,
+  validación, tokens y resultado). Aplicar el journal completo antes del Worker.
+- `lib/ingestion-agent.ts` genera una firma estable que ignora mes/año/número,
+  guarda el mapeo de claves que realmente se publicó, recomienda KPI/barras/
+  línea/tabla/lista y ejecuta una conciliación independiente de porcentajes,
+  duplicados y rutas solapadas.
+- `lib/ai-document-extraction.ts` ya no es una sola llamada: para documentos
+  asistidos ejecuta hasta cuatro iteraciones y doce herramientas. Herramientas:
+  inspeccionar esquema, leer valor actual, buscar plantilla, validar candidatos,
+  conciliar numerador/denominador y recomendar visualización. La respuesta final
+  sigue siendo JSON Schema estricto; el archivo temporal se elimina igual que
+  antes. Prompt `araya-ingestion-agent-2026-08-20-v1`.
+- `app/api/files/route.ts` abre una ejecución auditable por carga, recupera hasta
+  cinco plantillas compatibles, pasa sus pistas al agente, normaliza identidades,
+  concilia y publica por el mismo batch atómico existente. Al publicar, memoriza
+  únicamente las claves y visualizaciones correctas, nunca valores del próximo
+  documento ni razonamiento privado. La baja/restauración continúa recalculando
+  desde `live_data_history`, también para secciones dinámicas.
+- Las secciones descubiertas ahora almacenan `visualization`, `unit` y `series`.
+  Centro de datos y Ventas las muestran como indicador, barras, línea, tabla o
+  lista; las filas antiguas sin esos campos caen a lista y siguen abriendo.
+- ARAYA Asistente usa el prompt `araya-asistente-v11-agente-ingesta`: explica
+  la lectura de todos los formatos admitidos, consulta el expediente antes de
+  afirmar una publicación y deja de presentar CSV/JSON como vía exclusiva.
+- `CURRENT_INGESTION_VERSION` sube a `2026-08-20.7`, de modo que el reproceso
+  programado puede aplicar esta mejora a expedientes anteriores.
+- Evaluación: `tests/fixtures/ingestion-agent-eval-cases.json` contiene 24 casos
+  ARAYA reales, incluida Cubicación 8; `tests/ingestion-agent.test.mjs` cubre
+  memoria, visualización, conciliación y dataset; la prueba del extractor cubre
+  además la trayectoria de herramienta y su límite. Al cerrar este bloque:
+  TypeScript verde, suite completa **313/313**, ESLint 0 errores (20 avisos
+  históricos) y build Vinext verde.

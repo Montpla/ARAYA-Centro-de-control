@@ -57,7 +57,7 @@ test("legacy formats return a warning without calling OpenAI", async () => {
   assert.deepEqual(result.updates, []);
   assert.match(result.warnings[0], /no admite \.dwg/i);
   assert.equal(result.model, "gpt-5.6-terra");
-  assert.match(result.promptVersion, /^araya-live-data-extraction-/);
+  assert.match(result.promptVersion, /^araya-ingestion-agent-/);
 });
 
 test("image extraction uses a data URL and rejects keys outside the live contract", async () => {
@@ -190,4 +190,77 @@ test("uploaded files use purpose user_data and are deleted after a Responses API
       "DELETE:https://api.openai.com/v1/files/file-temporary-123",
     ],
   );
+});
+
+test("the ingestion agent executes a bounded tool loop and returns an auditable trajectory", async () => {
+  const requestBodies = [];
+  let responseCalls = 0;
+  globalThis.fetch = async (url, init) => {
+    assert.equal(url, "https://api.openai.com/v1/responses");
+    const body = JSON.parse(init.body);
+    requestBodies.push(body);
+    responseCalls += 1;
+    if (responseCalls === 1) {
+      return new Response(JSON.stringify({
+        model: "gpt-5.6-terra",
+        output: [{
+          type: "function_call",
+          call_id: "call-template-1",
+          name: "find_document_template",
+          arguments: JSON.stringify({ query: "cubicacion" }),
+          status: "completed",
+        }],
+        usage: { input_tokens: 100, output_tokens: 20 },
+      }), { status: 200 });
+    }
+    const output = {
+      updates: [{
+        key: "projectSnapshot.overallProgress",
+        value_json: "22.71",
+        area: "obra",
+        cutoff: "2026-07-31",
+        source_currency: "DOP",
+        confidence: 0.99,
+        evidence: "Carátula, fila TOTAL, 22,71%",
+      }],
+      summary: "Avance contrastado tras consultar la plantilla.",
+      warnings: [],
+      confidence: 0.99,
+      unmapped_candidates: [],
+    };
+    return new Response(JSON.stringify({
+      model: "gpt-5.6-terra",
+      output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(output) }] }],
+      usage: { input_tokens: 140, output_tokens: 60 },
+    }), { status: 200 });
+  };
+
+  const result = await extraction.extractDocumentWithAI({
+    ...input("png"),
+    templateHints: [{
+      id: "tpl-cubicacion",
+      fingerprint: "abc",
+      namePattern: "cubicacion-{n}-araya-{mes}",
+      extension: "xlsx",
+      area: "obra",
+      documentType: "avance_obra",
+      mappingJson: JSON.stringify([{ key: "projectSnapshot.overallProgress", area: "obra" }]),
+      visualizationJson: "[]",
+      promptVersion: "v1",
+      successCount: 3,
+      confidence: 1,
+    }],
+  });
+
+  assert.equal(responseCalls, 2);
+  assert.equal(requestBodies[0].tool_choice, "required");
+  assert.equal(requestBodies[1].tool_choice, "auto");
+  assert.ok(requestBodies[1].input.some((item) =>
+    item.type === "function_call_output" && item.call_id === "call-template-1"));
+  assert.equal(result.agentIterations, 2);
+  assert.deepEqual(result.agentTrace.map((item) => item.name), ["find_document_template"]);
+  assert.equal(result.agentTrace[0].ok, true);
+  assert.equal(result.inputTokens, 240);
+  assert.equal(result.outputTokens, 80);
+  assert.equal(result.updates[0].value, 22.71);
 });

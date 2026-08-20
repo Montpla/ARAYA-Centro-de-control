@@ -253,7 +253,7 @@ test("agent is source-grounded, guarded and evaluated", async () => {
   assert.match(route, /materializeLiveRoot/);
   assert.match(dashboard, /ARAYA Asistente/);
   assert.doesNotMatch(dashboard, /ARAYA Copilot/);
-  assert.match(prompt, /araya-asistente-v10-publicacion-abierta/);
+  assert.match(prompt, /araya-asistente-v11-agente-ingesta/);
   assert.match(prompt, /Eres ARAYA Asistente/);
   assert.match(prompt, /No inventes cifras/);
   assert.match(prompt, /Consulta siempre las herramientas/);
@@ -798,7 +798,7 @@ test("points three to eight add a live operational control room without autonomo
   assert.match(migration, /CREATE TABLE `control_action_activity`/);
   assert.match(migration, /CREATE TABLE `report_snapshots`/);
   assert.match(migration, /ALTER TABLE `uploaded_files` ADD `review_status`/);
-  assert.match(prompt, /araya-asistente-v10-publicacion-abierta/);
+  assert.match(prompt, /araya-asistente-v11-agente-ingesta/);
   assert.match(prompt, /no crearlas, cerrarlas ni reasignarlas/);
   assert.match(styles, /\.control-room-shell/);
   assert.match(styles, /\.control-actions-layout/);

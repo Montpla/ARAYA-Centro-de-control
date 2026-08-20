@@ -2624,6 +2624,85 @@ function StatCard({
   );
 }
 
+function DynamicDiscoveredSection({
+  block,
+}: {
+  block: DashboardBootstrapData["june"]["discoveredSections"][number];
+}) {
+  // Las filas antiguas, publicadas antes de que existiera la visualización
+  // dinámica, siguen siendo válidas y caen de forma segura a una lista.
+  const visualization = block.visualization ?? "list";
+  const series = Array.isArray(block.series)
+    ? block.series.filter((item) => Number.isFinite(item.value)).slice(0, 40)
+    : [];
+  const unit = block.unit ?? "";
+  const printable = (value: number) => `${number.format(value)}${unit === "%" ? "%" : unit ? ` ${unit}` : ""}`;
+
+  if (visualization === "kpi" && series[0]) {
+    return (
+      <div className="dynamic-section-kpi">
+        <span>{series[0].label}</span>
+        <strong>{printable(series[0].value)}</strong>
+      </div>
+    );
+  }
+  if (visualization === "bars" && series.length > 1) {
+    const max = Math.max(1, ...series.map((item) => Math.abs(item.value)));
+    return (
+      <div className="dynamic-section-bars" role="img" aria-label={`Comparativa ${block.title}`}>
+        {series.map((item) => (
+          <div className="dynamic-section-bar" key={`${block.id}-${item.label}`}>
+            <span>{item.label}</span>
+            <i><b style={{ width: `${Math.max(2, Math.abs(item.value) / max * 100)}%` }} /></i>
+            <strong>{printable(item.value)}</strong>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (visualization === "line" && series.length > 1) {
+    const width = 720;
+    const height = 190;
+    const min = Math.min(...series.map((item) => item.value));
+    const max = Math.max(...series.map((item) => item.value));
+    const range = Math.max(1, max - min);
+    const points = series.map((item, index) => ({
+      ...item,
+      x: 24 + index * (width - 48) / (series.length - 1),
+      y: height - 34 - (item.value - min) / range * (height - 64),
+    }));
+    return (
+      <div className="dynamic-section-line">
+        <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Evolución ${block.title}`}>
+          <polyline points={points.map((item) => `${item.x},${item.y}`).join(" ")} />
+          {points.map((item) => <circle key={`${block.id}-${item.label}`} cx={item.x} cy={item.y} r="5" />)}
+        </svg>
+        <div>{points.map((item) => <span key={`${block.id}-axis-${item.label}`}>{item.label}<b>{printable(item.value)}</b></span>)}</div>
+      </div>
+    );
+  }
+  if (visualization === "table" && block.values.length) {
+    return (
+      <div className="dynamic-section-table" role="table">
+        {block.values.map((value) => (
+          <div role="row" key={`${block.id}-${value.label}`}>
+            <span role="cell">{value.label}</span><strong role="cell">{value.value}</strong>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return block.values.length > 0 ? (
+    <div className="workspace-data-list">
+      {block.values.map((value) => (
+        <div className="workspace-data-row" key={`${block.id}-${value.label}`}>
+          <span>{value.label}</span><strong>{value.value}</strong>
+        </div>
+      ))}
+    </div>
+  ) : null;
+}
+
 function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const width = 1180;
@@ -3666,13 +3745,7 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
               <li key={bloque.id}>
                 <strong>{bloque.title}</strong>
                 {bloque.description ? <> · {bloque.description}</> : null}
-                {bloque.values.length > 0 && (
-                  <ul>
-                    {bloque.values.map((dato) => (
-                      <li key={`${bloque.id}-${dato.label}`}>{dato.label}: {dato.value}</li>
-                    ))}
-                  </ul>
-                )}
+                <DynamicDiscoveredSection block={bloque} />
                 <small>
                   {bloque.sourceName} · confianza {Math.round(bloque.confidence * 100)}%
                   {bloque.evidence ? ` · ${bloque.evidence}` : ""}
@@ -7555,15 +7628,7 @@ function SourcesView({
                 <div className="workspace-detail-body">
                   {block.description && <p>{block.description}</p>}
                   {block.evidence && <p className="quality-note"><strong>Evidencia:</strong> {block.evidence}</p>}
-                  {block.values.length > 0 && (
-                    <div className="workspace-data-list">
-                      {block.values.map((value) => (
-                        <div className="workspace-data-row" key={`${block.id}-${value.label}`}>
-                          <span>{value.label}</span><strong>{value.value}</strong>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <DynamicDiscoveredSection block={block} />
                 </div>
               </details>
             ))}
@@ -7578,11 +7643,11 @@ function SourcesView({
         <div className="ingestion-steps definitive">
           <div><b>01</b><strong>Subida</strong><span>Un archivo y un botón; el original se conserva.</span></div>
           <div><b>02</b><strong>Detección</strong><span>Área, tipo, periodo y moneda se identifican automáticamente.</span></div>
-          <div><b>03</b><strong>Lectura</strong><span>Los formatos estructurados compatibles generan cambios fiables.</span></div>
-          <div><b>04</b><strong>Actualización</strong><span>Los datos válidos se publican; lo ambiguo queda pendiente de revisión.</span></div>
+          <div><b>03</b><strong>Agente de ingesta</strong><span>Lee el formato, consulta plantillas y contrasta esquema, cifras y entidades.</span></div>
+          <div><b>04</b><strong>Actualización</strong><span>Los datos válidos se publican juntos; cada cifra conserva fuente y evidencia.</span></div>
           <div><b>05</b><strong>Sincronización</strong><span>Cifras, barras y gráficas reciben la revisión en menos de 5 s.</span></div>
         </div>
-        <p className="governance-note">La carga, clasificación y sincronización son procesos del Centro de Control. Todos los formatos admitidos se leen por la vía adecuada: lector directo, conversión segura o lectura asistida. Los datos que encajan en el modelo se publican automáticamente; la información nueva crea una sección provisional con fuente y evidencia, sin perderse ni inventarse.</p>
+        <p className="governance-note">La carga, clasificación y sincronización son procesos del Centro de Control. Todos los formatos admitidos se leen por la vía adecuada: lector directo, conversión segura o agente con herramientas. Los datos que encajan en el modelo se publican automáticamente; la información nueva crea una sección visual con fuente y evidencia, y su interpretación queda memorizada para el siguiente archivo de la misma familia.</p>
       </section>
       <section className="panel data-authority-panel">
         <div className="panel-heading">

@@ -81,6 +81,9 @@ function fallbackArrayItem(path: string) {
       sourceName: "",
       detectedAt: "",
       values: [{ label: "", value: "" }],
+      visualization: "list",
+      unit: "",
+      series: [{ label: "", value: 0 }],
     };
   }
   if (path === "buildings.*.units") {

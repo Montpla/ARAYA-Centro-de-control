@@ -176,6 +176,13 @@
       "when": 1787231157244,
       "tag": "0024_sleepy_nightshade",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1787260700756,
+      "tag": "0025_yellow_bullseye",
+      "breakpoints": true
     }
   ]
 }

@@ -204,13 +204,25 @@ logs; sólo nombres de clave, estados y metadatos.
   apaga los avisos en el siguiente despliegue, sin error en ninguna parte. El
   despliegue lo comprueba y falla en rojo si faltan.
 - La cadena de migraciones D1 llega hasta
-  `drizzle/0024_sleepy_nightshade.sql` y debe desplegarse junto con
+  `drizzle/0025_yellow_bullseye.sql` y debe desplegarse junto con
   `drizzle/meta/_journal.json`. La `0024` versiona la ingesta y registra archivos
-  derivados/superados. Aplicarla antes de desplegar el Worker que usa esas
-  columnas.
+  derivados/superados; la `0025` añade `document_templates` e
+  `ingestion_agent_runs`, memoria y trazabilidad del agente documental.
+  Aplicar el journal completo antes de desplegar el Worker que usa esas tablas.
 - Las escrituras críticas de publicación y baja/restauración usan batches
   atómicos acotados. Las recomputaciones son set-based, una publicación admite
   como máximo 250 cambios y ningún listado debe ejecutar una consulta por fila.
+- El agente documental usa como máximo cuatro iteraciones y doce herramientas
+  por documento. Los formatos conocidos siguen el lector determinista; la IA
+  se usa para documentos narrativos, imágenes o huecos no cubiertos. Cada
+  recorrido registra modelo, versión de prompt, herramientas, validación,
+  tokens y resultado, pero no guarda razonamiento privado ni duplica el
+  contenido del archivo. `OPENAI_API_KEY` continúa siendo un Secret del Worker.
+- Una publicación correcta actualiza la plantilla de esa familia documental.
+  Borrar o restaurar un archivo no se resuelve por la plantilla: el ciclo
+  reversible existente vuelve a calcular el ganador efectivo desde el
+  historial publicado, por lo que cifras y secciones dinámicas retroceden o
+  reaparecen con su fuente real.
 - Producción vigente:
   `https://araya-centro-control.grupobricket.workers.dev`. Fuente canónica:
   GitHub `Montpla/ARAYA-Centro-de-control`. El dominio corporativo (punto 7)

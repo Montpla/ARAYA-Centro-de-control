@@ -43,6 +43,8 @@ test("the exact journal migrates an empty database with ingestion and control-ro
   assert.ok(tables.includes("file_reviews"));
   assert.ok(tables.includes("control_actions"));
   assert.ok(tables.includes("report_snapshots"));
+  assert.ok(tables.includes("document_templates"));
+  assert.ok(tables.includes("ingestion_agent_runs"));
 
   const uploadedColumns = tableColumns(database, "uploaded_files");
   for (const column of [

@@ -13183,6 +13183,131 @@ button.financial-detail-row:focus-visible {
   padding-left: 1.1rem;
 }
 
+.dynamic-section-kpi {
+  display: grid;
+  gap: 0.2rem;
+  width: min(100%, 24rem);
+  margin-top: 0.8rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(177, 92, 56, 0.24);
+  border-radius: 1rem;
+  background: #fbf4e8;
+}
+
+.dynamic-section-kpi span,
+.dynamic-section-bar span,
+.dynamic-section-line span {
+  color: var(--muted, #6b7280);
+  font-size: 0.72rem;
+}
+
+.dynamic-section-kpi strong {
+  font-family: var(--font-display, Georgia, serif);
+  font-size: clamp(1.7rem, 4vw, 2.7rem);
+  color: #20211f;
+}
+
+.dynamic-section-bars {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.8rem;
+}
+
+.dynamic-section-bar {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.8fr) minmax(8rem, 2fr) minmax(5rem, auto);
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.dynamic-section-bar i {
+  display: block;
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e7e2d9;
+}
+
+.dynamic-section-bar i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #b15c38;
+}
+
+.dynamic-section-bar strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dynamic-section-line {
+  margin-top: 0.8rem;
+  overflow-x: auto;
+}
+
+.dynamic-section-line svg {
+  display: block;
+  min-width: 38rem;
+  width: 100%;
+  border-radius: 0.9rem;
+  background: #172b45;
+}
+
+.dynamic-section-line polyline {
+  fill: none;
+  stroke: #3dd6ee;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dynamic-section-line circle {
+  fill: #3dd6ee;
+  stroke: #172b45;
+  stroke-width: 3;
+}
+
+.dynamic-section-line > div {
+  display: flex;
+  justify-content: space-between;
+  min-width: 38rem;
+  gap: 0.7rem;
+  padding-top: 0.35rem;
+}
+
+.dynamic-section-line span {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.dynamic-section-line span b { color: #20211f; }
+
+.dynamic-section-table {
+  display: grid;
+  margin-top: 0.8rem;
+  overflow: hidden;
+  border: 1px solid var(--line, #dedad2);
+  border-radius: 0.85rem;
+}
+
+.dynamic-section-table > div {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1.2fr) minmax(7rem, 1fr);
+  gap: 1rem;
+  padding: 0.65rem 0.85rem;
+  border-top: 1px solid var(--line, #dedad2);
+}
+
+.dynamic-section-table > div:first-child { border-top: 0; }
+.dynamic-section-table strong { text-align: right; }
+
+@media (max-width: 640px) {
+  .dynamic-section-bar {
+    grid-template-columns: minmax(5.5rem, 0.8fr) minmax(5rem, 1.5fr);
+  }
+  .dynamic-section-bar strong { grid-column: 2; }
+}
+
 /* Certificaciones del proyecto y carátula de cubicación, secciones modeladas. */
 .certifications-block { margin-top: 1rem; }
 .certifications-block .compact-row {

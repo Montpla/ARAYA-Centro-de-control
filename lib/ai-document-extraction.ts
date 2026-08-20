@@ -5,13 +5,16 @@ import {
   type LiveDataUpdate,
   type LiveDataValue,
 } from "./live-data";
+import type { DocumentTemplateHint, IngestionAgentTrace } from "./ingestion-agent";
 
 type KnownArea = { id: string; label: string };
 
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 const EXTRACTION_MODEL = "gpt-5.6-terra";
-const PROMPT_VERSION = "araya-live-data-extraction-2026-08-20-cubicaciones-v2";
+const PROMPT_VERSION = "araya-ingestion-agent-2026-08-20-v1";
 const SAFETY_IDENTIFIER = "araya_document_ingestion_service";
+const MAX_AGENT_ITERATIONS = 4;
+const MAX_AGENT_TOOL_CALLS = 12;
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -157,6 +160,11 @@ SEGURIDAD
 - safetyFindings es la lista de actos y condiciones inseguras identificadas (columnas "Acto Inseguro" y "Condición Insegura"). No mezcles ahí las buenas prácticas ni el seguimiento de acciones.
 
 RESPUESTA
+- Trabajas como un agente acotado, no como una respuesta de una sola pasada. Antes de terminar consulta al menos una herramienta para contrastar el esquema, una plantilla conocida o una conciliaciÃ³n numÃ©rica.
+- Usa find_document_template para comprobar si un archivo anterior de la misma familia ya publicÃ³ correctamente sus claves. Una plantilla es una pista, nunca evidencia: los valores siempre se leen del archivo actual.
+- Usa inspect_live_schema o read_current_value antes de crear una ruta. Usa reconcile_numbers para contrastar cocientes y porcentajes; no hagas cÃ¡lculos mentalmente.
+- recommend_dynamic_section sirve para elegir la representaciÃ³n de un concepto nuevo. El valor observado sigue yendo en unmapped_candidates.
+- Detente en cuanto dispongas de evidencia suficiente y una salida completa. No repitas una herramienta con los mismos argumentos.
 - Devuelve solamente el objeto que exige el esquema JSON.
 - confidence y la confianza de cada update deben estar entre 0 y 1 y reflejar legibilidad, correspondencia de clave y fuerza de la evidencia.
 - Si no hay hechos publicables, devuelve updates vacío, confidence 0 y explica el motivo en summary/warnings.
@@ -175,6 +183,7 @@ type ExtractionInput = {
   currentValues?: LiveDataMap;
   knownAreas?: readonly KnownArea[];
   schemaReference?: Record<string, unknown>;
+  templateHints?: readonly DocumentTemplateHint[];
 };
 
 type UnmappedCandidate = {
@@ -195,6 +204,10 @@ type ExtractionResult = {
   model: string;
   promptVersion: string;
   unmappedCandidates: UnmappedCandidate[];
+  agentTrace: IngestionAgentTrace[];
+  agentIterations: number;
+  inputTokens: number;
+  outputTokens: number;
 };
 
 type ModelUpdate = {
@@ -233,6 +246,10 @@ function emptyResult(summary: string, warnings: string[] = []): ExtractionResult
     model: EXTRACTION_MODEL,
     promptVersion: PROMPT_VERSION,
     unmappedCandidates: [],
+    agentTrace: [],
+    agentIterations: 0,
+    inputTokens: 0,
+    outputTokens: 0,
   };
 }
 
@@ -459,6 +476,318 @@ function responseOutputText(payload: Record<string, unknown>) {
   return fragments.join("");
 }
 
+type AgentFunctionCall = {
+  callId: string;
+  name: string;
+  arguments: string;
+  raw: Record<string, unknown>;
+};
+
+const INGESTION_AGENT_TOOLS = [
+  {
+    type: "function",
+    name: "inspect_live_schema",
+    description: "Muestra la forma autorizada de una raÃ­z del contrato vivo. Ãšsala antes de proponer claves nuevas o cuando el nombre exacto de un campo sea dudoso.",
+    strict: true,
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      required: ["root"],
+      properties: {
+        root: { type: "string", description: "RaÃ­z exacta o cadena vacÃ­a para listar todas las raÃ­ces." },
+      },
+    },
+  },
+  {
+    type: "function",
+    name: "read_current_value",
+    description: "Lee el valor vivo actual de una clave exacta para diferenciar un dato nuevo de una repeticiÃ³n y evitar sobrescribir otra entidad.",
+    strict: true,
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      required: ["key"],
+      properties: { key: { type: "string" } },
+    },
+  },
+  {
+    type: "function",
+    name: "find_document_template",
+    description: "Busca interpretaciones publicadas anteriormente para la misma familia de archivo. Devuelve solo claves y metadatos; nunca sustituye la evidencia del documento actual.",
+    strict: true,
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      required: ["query"],
+      properties: { query: { type: "string", description: "Nombre o tipo de documento que se estÃ¡ interpretando." } },
+    },
+  },
+  {
+    type: "function",
+    name: "validate_candidate_updates",
+    description: "Comprueba de forma determinista nombres de raÃ­z, JSON, duplicados y porcentajes antes de que el agente emita la respuesta final.",
+    strict: true,
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      required: ["updates"],
+      properties: {
+        updates: {
+          type: "array",
+          maxItems: 250,
+          items: {
+            type: "object",
+            additionalProperties: false,
+            required: ["key", "value_json"],
+            properties: {
+              key: { type: "string" },
+              value_json: { type: "string" },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    name: "reconcile_numbers",
+    description: "Calcula y contrasta un porcentaje declarado contra numerador/denominador. Ãšala para cubicaciones, totales ponderados, ejecuciÃ³n y desviaciones; el resultado valida, pero no crea evidencia documental.",
+    strict: true,
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      required: ["numerator", "denominator", "reported_percentage", "tolerance"],
+      properties: {
+        numerator: { type: "number" },
+        denominator: { type: "number" },
+        reported_percentage: { type: ["number", "null"] },
+        tolerance: { type: "number", minimum: 0, maximum: 5 },
+      },
+    },
+  },
+  {
+    type: "function",
+    name: "recommend_dynamic_section",
+    description: "Elige una representaciÃ³n segura (KPI, barras, lÃ­nea, tabla o lista) para un concepto relevante que todavÃ­a no tiene pantalla propia.",
+    strict: true,
+    parameters: {
+      type: "object",
+      additionalProperties: false,
+      required: ["value_json"],
+      properties: { value_json: { type: "string" } },
+    },
+  },
+] as const;
+
+function responseFunctionCalls(payload: Record<string, unknown>): AgentFunctionCall[] {
+  if (!Array.isArray(payload.output)) return [];
+  return payload.output.flatMap((item) => {
+    if (!isRecord(item) || item.type !== "function_call") return [];
+    const callId = typeof item.call_id === "string" ? item.call_id : "";
+    const name = typeof item.name === "string" ? item.name : "";
+    const args = typeof item.arguments === "string" ? item.arguments : "{}";
+    return callId && name ? [{ callId, name, arguments: args, raw: item }] : [];
+  });
+}
+
+function readLivePath(values: LiveDataMap | undefined, key: string) {
+  if (!values) return undefined;
+  if (Object.hasOwn(values, key)) return values[key];
+  const segments = key.split(".");
+  let current: unknown = values[segments[0]];
+  for (const segment of segments.slice(1)) {
+    if (Array.isArray(current) && /^\d+$/.test(segment)) current = current[Number(segment)];
+    else if (isRecord(current)) current = current[segment];
+    else return undefined;
+  }
+  return current;
+}
+
+function safeTemplateMapping(value: string) {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.slice(0, 250).flatMap((item) => {
+      if (!isRecord(item) || typeof item.key !== "string") return [];
+      return [{
+        key: item.key.slice(0, 300),
+        area: typeof item.area === "string" ? item.area.slice(0, 80) : "",
+        valueType: typeof item.valueType === "string" ? item.valueType.slice(0, 40) : "",
+      }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function numberFromDisplay(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string") return null;
+  const compact = value.trim().replace(/\s/g, "").replace(/%$/, "");
+  const decimalComma = /^-?\d{1,3}(?:\.\d{3})*,\d+$/.test(compact);
+  const normalized = decimalComma
+    ? compact.replace(/\./g, "").replace(",", ".")
+    : compact.replace(/,/g, "");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function dynamicSectionRecommendation(valueJson: string) {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(valueJson) as unknown;
+  } catch {
+    return { visualization: "list", reason: "El valor no contiene JSON vÃ¡lido." };
+  }
+  const entries = Array.isArray(parsed)
+    ? parsed.map((value, index) => [`Dato ${index + 1}`, value] as const)
+    : isRecord(parsed)
+      ? Object.entries(parsed)
+      : [["Valor", parsed] as const];
+  const numeric = entries.filter(([, value]) => numberFromDisplay(value) !== null);
+  if (entries.length === 1 && numeric.length === 1) {
+    return { visualization: "kpi", reason: "Un Ãºnico valor numÃ©rico." };
+  }
+  if (numeric.length === entries.length && entries.length >= 2) {
+    const chronological = entries.every(([label]) =>
+      /(?:\b20\d{2}\b|ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic|semana)/i.test(label));
+    return {
+      visualization: chronological ? "line" : "bars",
+      reason: chronological ? "Serie numÃ©rica cronolÃ³gica." : "ComparaciÃ³n numÃ©rica por categorÃ­a.",
+    };
+  }
+  if (Array.isArray(parsed) && parsed.some((item) => isRecord(item))) {
+    return { visualization: "table", reason: "ColecciÃ³n de registros con varias columnas." };
+  }
+  return { visualization: "list", reason: "Contenido textual o heterogÃ©neo." };
+}
+
+function executeIngestionAgentTool(
+  call: AgentFunctionCall,
+  input: ExtractionInput,
+): { ok: boolean; output: Record<string, unknown>; summary: string } {
+  let args: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(call.arguments) as unknown;
+    if (isRecord(parsed)) args = parsed;
+  } catch {
+    return { ok: false, output: { error: "Los argumentos no son JSON vÃ¡lido." }, summary: "Argumentos invÃ¡lidos" };
+  }
+
+  if (call.name === "inspect_live_schema") {
+    const root = String(args.root ?? "").trim();
+    const source = input.schemaReference ?? {};
+    if (!root) {
+      return {
+        ok: true,
+        output: { roots: Object.keys(source).slice(0, 100) },
+        summary: `${Object.keys(source).length} raÃ­ces listadas`,
+      };
+    }
+    const value = source[root];
+    return value === undefined
+      ? { ok: false, output: { error: `La raÃ­z ${root} no existe.` }, summary: "RaÃ­z desconocida" }
+      : { ok: true, output: { root, schema: buildValueSkeleton(value, 0) }, summary: `Esquema ${root} consultado` };
+  }
+  if (call.name === "read_current_value") {
+    const key = String(args.key ?? "").trim();
+    const value = readLivePath(input.currentValues, key);
+    return {
+      ok: value !== undefined,
+      output: value === undefined ? { found: false, key } : { found: true, key, value },
+      summary: value === undefined ? `${key || "Clave"} no publicada` : `${key} leÃ­da`,
+    };
+  }
+  if (call.name === "find_document_template") {
+    const normalizeLookup = (value: string) => value
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    const query = normalizeLookup(String(args.query ?? ""));
+    const templates = (input.templateHints ?? [])
+      .filter((template) => !query || [template.namePattern, template.documentType, template.area]
+        .some((value) => normalizeLookup(value).includes(query) || query.includes(normalizeLookup(value))))
+      .slice(0, 5)
+      .map((template) => ({
+        id: template.id,
+        namePattern: template.namePattern,
+        area: template.area,
+        documentType: template.documentType,
+        successCount: template.successCount,
+        confidence: template.confidence,
+        mapping: safeTemplateMapping(template.mappingJson),
+      }));
+    return {
+      ok: true,
+      output: { templates },
+      summary: `${templates.length} plantilla(s) recuperada(s)`,
+    };
+  }
+  if (call.name === "validate_candidate_updates") {
+    const candidates = Array.isArray(args.updates) ? args.updates.filter(isRecord).slice(0, MAX_UPDATES) : [];
+    const seen = new Set<string>();
+    const errors: Array<{ key: string; reason: string }> = [];
+    for (const candidate of candidates) {
+      const key = typeof candidate.key === "string" ? candidate.key.trim() : "";
+      const valueJson = typeof candidate.value_json === "string" ? candidate.value_json : "";
+      if (!isLiveDataKey(key)) errors.push({ key, reason: "Clave fuera del contrato vivo." });
+      else if (seen.has(key)) errors.push({ key, reason: "Clave duplicada." });
+      else {
+        seen.add(key);
+        try {
+          const value = JSON.parse(valueJson) as unknown;
+          if (/progress|percent|porcentaje|avance/i.test(key) && typeof value === "number" && (value < 0 || value > 100)) {
+            errors.push({ key, reason: "Porcentaje fuera de 0-100." });
+          }
+        } catch {
+          errors.push({ key, reason: "value_json no es JSON vÃ¡lido." });
+        }
+      }
+    }
+    return {
+      ok: errors.length === 0,
+      output: { valid: errors.length === 0, checked: candidates.length, errors },
+      summary: `${candidates.length} candidato(s), ${errors.length} error(es)`,
+    };
+  }
+  if (call.name === "reconcile_numbers") {
+    const numerator = Number(args.numerator);
+    const denominator = Number(args.denominator);
+    const reported = args.reported_percentage === null ? null : Number(args.reported_percentage);
+    const tolerance = Math.max(0, Math.min(5, Number(args.tolerance) || 0.05));
+    if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
+      return { ok: false, output: { error: "Numerador o denominador invÃ¡lido." }, summary: "ConciliaciÃ³n invÃ¡lida" };
+    }
+    const calculated = (numerator / denominator) * 100;
+    const difference = reported === null || !Number.isFinite(reported) ? null : Math.abs(calculated - reported);
+    const matches = difference === null ? null : difference <= tolerance;
+    return {
+      ok: matches !== false,
+      output: {
+        calculated_percentage: Math.round(calculated * 10_000) / 10_000,
+        reported_percentage: reported,
+        difference_points: difference === null ? null : Math.round(difference * 10_000) / 10_000,
+        tolerance,
+        matches,
+      },
+      summary: matches === null ? "Porcentaje calculado" : matches ? "ConciliaciÃ³n correcta" : "ConciliaciÃ³n no cuadra",
+    };
+  }
+  if (call.name === "recommend_dynamic_section") {
+    const recommendation = dynamicSectionRecommendation(String(args.value_json ?? "null"));
+    return { ok: true, output: recommendation, summary: `VisualizaciÃ³n ${recommendation.visualization}` };
+  }
+  return { ok: false, output: { error: "Herramienta no autorizada." }, summary: "Herramienta desconocida" };
+}
+
+function responseUsage(payload: Record<string, unknown>) {
+  const usage = isRecord(payload.usage) ? payload.usage : {};
+  return {
+    input: typeof usage.input_tokens === "number" ? Math.max(0, Math.round(usage.input_tokens)) : 0,
+    output: typeof usage.output_tokens === "number" ? Math.max(0, Math.round(usage.output_tokens)) : 0,
+  };
+}
+
 function modelUpdates(payload: Record<string, unknown>) {
   if (!Array.isArray(payload.updates)) return [];
   return payload.updates.filter((candidate): candidate is ModelUpdate => {
@@ -640,6 +969,10 @@ function validateModelOutput(
     model: responseModel || EXTRACTION_MODEL,
     promptVersion: PROMPT_VERSION,
     unmappedCandidates,
+    agentTrace: [],
+    agentIterations: 0,
+    inputTokens: 0,
+    outputTokens: 0,
   };
 }
 
@@ -697,7 +1030,7 @@ function buildSchemaContext(
 
 function inputMetadata(input: ExtractionInput) {
   return JSON.stringify({
-    task: "Extraer hechos explícitos del archivo adjunto para revisión humana",
+    task: "Extraer, contrastar y preparar hechos explícitos para publicación automática trazable",
     prompt_version: PROMPT_VERSION,
     file_name: safeFileName(input.fileName, normalizeExtension(input.extension)),
     mime_type: String(input.mimeType ?? "").slice(0, 120),
@@ -713,28 +1046,7 @@ function inputMetadata(input: ExtractionInput) {
  * Extracts conservative live-data proposals from an untrusted document.
  * Operational/API failures are returned as warnings; malformed programmer input throws.
  */
-export async function extractDocumentWithAI(input: {
-  bytes: ArrayBuffer;
-  fileName: string;
-  mimeType: string;
-  extension: string;
-  area: string;
-  cutoff: string;
-  sourceCurrency: "DOP" | "USD";
-  apiKey: string;
-  currentValues?: LiveDataMap;
-  knownAreas?: readonly KnownArea[];
-  schemaReference?: Record<string, unknown>;
-}): Promise<{
-  updates: LiveDataUpdate[];
-  updateConfidences: number[];
-  summary: string;
-  warnings: string[];
-  confidence: number;
-  model: string;
-  promptVersion: string;
-  unmappedCandidates: UnmappedCandidate[];
-}> {
+export async function extractDocumentWithAI(input: ExtractionInput): Promise<ExtractionResult> {
   if (!input || !(input.bytes instanceof ArrayBuffer)) {
     throw new TypeError("extractDocumentWithAI requiere bytes en un ArrayBuffer.");
   }
@@ -786,41 +1098,98 @@ export async function extractDocumentWithAI(input: {
       content.push({ type: "input_file", file_id: temporaryFileId });
     }
 
-    const response = await requestOpenAIJson(`${OPENAI_API_BASE}/responses`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${input.apiKey.trim()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: EXTRACTION_MODEL,
-        instructions: EXTRACTION_INSTRUCTIONS,
-        input: [{ type: "message", role: "user", content }],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "araya_live_data_extraction",
-            description: "Hechos documentales conservadores para el contrato vivo de ARAYA.",
-            strict: true,
-            schema: EXTRACTION_SCHEMA,
-          },
-          verbosity: "low",
-        },
-        max_output_tokens: 20_000,
-        safety_identifier: SAFETY_IDENTIFIER,
-        prompt_cache_key: PROMPT_VERSION,
-        store: false,
-      }),
-    });
+    const conversationInput: Record<string, unknown>[] = [
+      { type: "message", role: "user", content },
+    ];
+    const trace: IngestionAgentTrace[] = [];
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalToolCalls = 0;
+    let finalResponse: Record<string, unknown> | null = null;
+    let completedIterations = 0;
 
-    if (isRecord(response.error)) {
-      throw new OpenAIOperationalError(apiErrorMessage(response, 200));
+    for (let iteration = 1; iteration <= MAX_AGENT_ITERATIONS; iteration += 1) {
+      completedIterations = iteration;
+      const response = await requestOpenAIJson(`${OPENAI_API_BASE}/responses`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${input.apiKey.trim()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: EXTRACTION_MODEL,
+          instructions: EXTRACTION_INSTRUCTIONS,
+          input: conversationInput,
+          tools: INGESTION_AGENT_TOOLS,
+          tool_choice: iteration === 1 ? "required" : "auto",
+          parallel_tool_calls: true,
+          text: {
+            format: {
+              type: "json_schema",
+              name: "araya_live_data_extraction",
+              description: "Hechos documentales conservadores para el contrato vivo de ARAYA.",
+              strict: true,
+              schema: EXTRACTION_SCHEMA,
+            },
+            verbosity: "low",
+          },
+          max_output_tokens: 20_000,
+          safety_identifier: SAFETY_IDENTIFIER,
+          prompt_cache_key: PROMPT_VERSION,
+          store: false,
+        }),
+      });
+      if (isRecord(response.error)) {
+        throw new OpenAIOperationalError(apiErrorMessage(response, 200));
+      }
+      const usage = responseUsage(response);
+      totalInputTokens += usage.input;
+      totalOutputTokens += usage.output;
+      const calls = responseFunctionCalls(response);
+      if (!calls.length) {
+        finalResponse = response;
+        break;
+      }
+      if (totalToolCalls + calls.length > MAX_AGENT_TOOL_CALLS) {
+        throw new OpenAIOperationalError("El agente superÃ³ el lÃ­mite de herramientas de una sola ingesta.");
+      }
+      totalToolCalls += calls.length;
+      if (Array.isArray(response.output)) {
+        conversationInput.push(...response.output.filter(isRecord));
+      }
+      for (const call of calls) {
+        const started = Date.now();
+        const tool = executeIngestionAgentTool(call, input);
+        trace.push({
+          name: call.name,
+          ok: tool.ok,
+          iteration,
+          durationMs: Math.max(0, Date.now() - started),
+          summary: tool.summary.slice(0, 240),
+        });
+        conversationInput.push({
+          type: "function_call_output",
+          call_id: call.callId,
+          output: JSON.stringify(tool.output),
+        });
+      }
     }
-    result = validateModelOutput(
-      responseOutputText(response),
-      input,
-      typeof response.model === "string" ? response.model : EXTRACTION_MODEL,
-    );
+    if (!finalResponse) {
+      throw new OpenAIOperationalError(
+        `El agente no completÃ³ una salida estructurada tras ${MAX_AGENT_ITERATIONS} iteraciones.`,
+      );
+    }
+    result = {
+      ...validateModelOutput(
+        responseOutputText(finalResponse),
+        input,
+        typeof finalResponse.model === "string" ? finalResponse.model : EXTRACTION_MODEL,
+      ),
+      agentTrace: trace,
+      agentIterations: completedIterations,
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
+    };
   } catch (error) {
     if (!(error instanceof OpenAIOperationalError)) throw error;
     result = emptyResult("La API no pudo completar la extracción del documento.", [error.message]);

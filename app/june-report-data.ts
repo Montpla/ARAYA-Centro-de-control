@@ -90,6 +90,9 @@ export type DiscoveredSection = {
   sourceName: string;
   detectedAt: string;
   values: Array<{ label: string; value: string }>;
+  visualization: "kpi" | "bars" | "line" | "table" | "list";
+  unit: string;
+  series: Array<{ label: string; value: number }>;
 };
 
 export const discoveredSections: DiscoveredSection[] = [];

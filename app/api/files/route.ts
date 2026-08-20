@@ -16,7 +16,9 @@ import {
 import { getDb } from "../../../db";
 import {
   documentDataProposals,
+  documentTemplates,
   fileActivity,
+  ingestionAgentRuns,
   uploadedFiles,
   unmappedFieldCandidates,
 } from "../../../db/schema";
@@ -25,6 +27,12 @@ import { resolveSourceCurrency } from "../../../lib/currency";
 import { areaLabels, classifyUpload, isUploadArea, safeFileName, uploadAreas } from "../../../lib/file-routing";
 import { analyzeDocument, archiveDocumentsForAI, extractStructuredUpdates } from "../../../lib/ingestion";
 import { CURRENT_INGESTION_VERSION } from "../../../lib/ingestion-version";
+import {
+  deriveDynamicSectionConfig,
+  documentTemplateFingerprint,
+  reconcileIngestionUpdates,
+  templateMappingFromUpdates,
+} from "../../../lib/ingestion-agent";
 import {
   canAutomaticallyPublishExtraction,
   extractDocumentWithAI,
@@ -785,6 +793,12 @@ export async function POST(request: Request) {
     area: classification.area,
     classificationConfidence: classification.confidence,
   });
+  const templateIdentity = await documentTemplateFingerprint({
+    fileName: candidate.name,
+    extension,
+    area: classification.area,
+    documentType: analysis.documentType,
+  });
   let initiallyProtectedUpload = requiresFinanceAccessForDocument(
     classification.area,
     analysis.documentType,
@@ -1063,7 +1077,46 @@ export async function POST(request: Request) {
   let publicationCompleted = false;
   let extractionGeneration = "";
   let extractionCommitted = false;
+  let agentRunId = "";
+  let matchedTemplateId = "";
+  let agentValidation: ReturnType<typeof reconcileIngestionUpdates> = {
+    safe: true,
+    issues: [],
+    checkedKeys: 0,
+    percentageKeys: 0,
+    conflictingKeys: [],
+  };
+  let agentModel = "deterministic";
+  let agentPromptVersion = "structured-file-v1";
+  let agentIterations = 0;
+  let agentTrace: Array<{ name: string; ok: boolean; iteration: number; durationMs: number; summary: string }> = [];
+  let agentInputTokens = 0;
+  let agentOutputTokens = 0;
+  let agentProposedCount = 0;
+  let agentPublishedCount = 0;
   try {
+    const templateHints = await db.select().from(documentTemplates)
+      .where(or(
+        eq(documentTemplates.fingerprint, templateIdentity.fingerprint),
+        and(
+          eq(documentTemplates.extension, extension),
+          eq(documentTemplates.area, classification.area),
+          eq(documentTemplates.documentType, analysis.documentType),
+        ),
+      ))
+      .orderBy(desc(documentTemplates.successCount), desc(documentTemplates.lastRunAt))
+      .limit(5);
+    matchedTemplateId = templateHints.find(
+      (template) => template.fingerprint === templateIdentity.fingerprint,
+    )?.id ?? "";
+    agentRunId = crypto.randomUUID();
+    await db.insert(ingestionAgentRuns).values({
+      id: agentRunId,
+      fileId: id,
+      templateId: matchedTemplateId,
+      fingerprint: templateIdentity.fingerprint,
+      status: "running",
+    });
     const deterministicExtraction = await extractStructuredUpdates(bytes, extension, {
       area: classification.area,
       cutoff: effectiveCutoff,
@@ -1081,6 +1134,10 @@ export async function POST(request: Request) {
       model: "deterministic",
       promptVersion: "structured-file-v1",
       unmappedCandidates: [],
+      agentTrace: [],
+      agentIterations: 0,
+      inputTokens: 0,
+      outputTokens: 0,
     };
     // Se lee antes de llamar a la IA (no solo para validar el contrato
     // después) porque también se le pasa como referencia de esquema: sin ver
@@ -1132,6 +1189,7 @@ export async function POST(request: Request) {
           currentValues: currentLiveData.values,
           knownAreas: uploadAreas,
           schemaReference: getContractRootsSnapshot(),
+          templateHints,
         }));
       }
       const iaExtraction = aiResults.reduce<Awaited<ReturnType<typeof extractDocumentWithAI>>>((merged, result) => ({
@@ -1143,6 +1201,10 @@ export async function POST(request: Request) {
         model: result.model || merged.model,
         promptVersion: result.promptVersion || merged.promptVersion,
         unmappedCandidates: [...merged.unmappedCandidates, ...result.unmappedCandidates],
+        agentTrace: [...merged.agentTrace, ...result.agentTrace],
+        agentIterations: merged.agentIterations + result.agentIterations,
+        inputTokens: merged.inputTokens + result.inputTokens,
+        outputTokens: merged.outputTokens + result.outputTokens,
       }), {
         updates: [],
         updateConfidences: [],
@@ -1152,6 +1214,10 @@ export async function POST(request: Request) {
         model: "openai_responses",
         promptVersion: "archive-multi-document-v1",
         unmappedCandidates: [],
+        agentTrace: [],
+        agentIterations: 0,
+        inputTokens: 0,
+        outputTokens: 0,
       });
       if (!deterministicExtraction.updates.length) {
         extraction = iaExtraction;
@@ -1193,6 +1259,12 @@ export async function POST(request: Request) {
         };
       }
     }
+    agentModel = extraction.model;
+    agentPromptVersion = extraction.promptVersion;
+    agentIterations = extraction.agentIterations;
+    agentTrace = extraction.agentTrace;
+    agentInputTokens = extraction.inputTokens;
+    agentOutputTokens = extraction.outputTokens;
     // Las colecciones de partida permiten traducir a posición el nombre de una
     // entidad en cualquier lista del modelo, no sólo en las espaciales: las
     // económicas no tienen id y sólo se distinguen por su nombre. Si la
@@ -1297,6 +1369,7 @@ export async function POST(request: Request) {
             // Sin valor estructurado queda la evidencia, que es lo que de
             // verdad contiene el dato cuando la extracción no lo estructuró.
           }
+          const visual = deriveDynamicSectionConfig(candidato.valueJson);
           return {
             key: `discoveredSections.${existingDiscoveredCount + posicion}`,
             value: {
@@ -1309,6 +1382,9 @@ export async function POST(request: Request) {
               sourceName: candidate.name,
               detectedAt: new Date().toISOString(),
               values: valores,
+              visualization: visual.visualization,
+              unit: visual.unit,
+              series: visual.series,
             },
             area: requiresFinanceAccessForArea(candidateArea) ? candidateArea : resolvedArea,
             cutoff: effectiveCutoff,
@@ -1339,6 +1415,19 @@ export async function POST(request: Request) {
     // que nunca llegue a la publicación desde la ingesta automática.
     const sinChoques = resolvePublicationKeyConflicts(normalizacion.normalized);
     const extractedUpdates = sinChoques.resueltas;
+    agentValidation = reconcileIngestionUpdates(extractedUpdates.flatMap((update) => {
+      try {
+        return [{ key: update.key, value: JSON.parse(update.valueJson) }];
+      } catch {
+        return [];
+      }
+    }));
+    if (!agentValidation.safe) {
+      extraction = {
+        ...extraction,
+        warnings: [...extraction.warnings, ...agentValidation.issues],
+      };
+    }
     const datosDescartados = normalizacion.descartadas + sinChoques.descartadas;
     if (datosDescartados > 0) {
       extraction = {
@@ -1385,6 +1474,7 @@ export async function POST(request: Request) {
             ? { ...update, area: "obra" }
             : { ...update, area: resolvedArea })
       : extractedUpdates;
+    agentProposedCount = normalizedUpdates.length;
     extractionGeneration = `ingest:${crypto.randomUUID()}`;
     const existingPoints = await selectLivePointValues(
       getD1JsonDatabase(),
@@ -1554,12 +1644,13 @@ export async function POST(request: Request) {
     // se publican los datos que individualmente son seguros y el resto queda
     // para revisión, en vez de bloquear el informe completo.
     const wholeBatchSafe = batchPreconditions &&
+      agentValidation.safe &&
       !buildingScopeIncomplete &&
       normalizedUpdates.every(updateIsAutoPublishable) &&
       automaticContractIsSafe(normalizedUpdates, liveValues);
     const autoPublishable = wholeBatchSafe
       ? normalizedUpdates
-      : batchPreconditions
+      : batchPreconditions && agentValidation.safe
         ? normalizedUpdates.filter(updateIsAutoPublishable)
         : [];
     if (autoPublishable.length) {
@@ -1590,6 +1681,7 @@ export async function POST(request: Request) {
         } : {}),
       });
       publicationCompleted = true;
+      agentPublishedCount = autoPublishable.length;
       automaticMessage = isFullBatch
         ? `${autoPublishable.length} datos se han actualizado automáticamente en la revisión ${publication.id}; las cifras y gráficas se refrescarán en menos de 5 segundos.`
         : buildingScopeIncomplete
@@ -1610,6 +1702,79 @@ export async function POST(request: Request) {
           updatedAt: new Date().toISOString(),
         }).where(eq(uploadedFiles.id, id)).catch(() => undefined);
       }
+    }
+    if (publicationCompleted) {
+      const templateId = matchedTemplateId || crypto.randomUUID();
+      const [storedTemplate] = await db.insert(documentTemplates).values({
+        id: templateId,
+        fingerprint: templateIdentity.fingerprint,
+        namePattern: templateIdentity.namePattern,
+        extension,
+        area: resolvedArea,
+        documentType: resolvedDocumentType,
+        mappingJson: JSON.stringify(templateMappingFromUpdates(autoPublishable)),
+        visualizationJson: JSON.stringify(seccionesDescubiertas.map((section) => ({
+          key: section.key,
+          visualization: section.value.visualization,
+          unit: section.value.unit,
+        }))),
+        promptVersion: agentPromptVersion,
+        confidence: extraction.confidence,
+        successCount: 1,
+        lastSourceFileId: id,
+        lastRunAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }).onConflictDoUpdate({
+        target: documentTemplates.fingerprint,
+        set: {
+          area: resolvedArea,
+          documentType: resolvedDocumentType,
+          mappingJson: JSON.stringify(templateMappingFromUpdates(autoPublishable)),
+          visualizationJson: JSON.stringify(seccionesDescubiertas.map((section) => ({
+            key: section.key,
+            visualization: section.value.visualization,
+            unit: section.value.unit,
+          }))),
+          promptVersion: agentPromptVersion,
+          confidence: extraction.confidence,
+          successCount: sql`${documentTemplates.successCount} + 1`,
+          lastSourceFileId: id,
+          lastRunAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      }).returning({ id: documentTemplates.id });
+      matchedTemplateId = storedTemplate?.id ?? templateId;
+    } else if (matchedTemplateId && !normalizedUpdates.length) {
+      await db.update(documentTemplates).set({
+        failureCount: sql`${documentTemplates.failureCount} + 1`,
+        lastRunAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }).where(eq(documentTemplates.id, matchedTemplateId)).catch(() => undefined);
+    }
+    if (agentRunId) {
+      await db.update(ingestionAgentRuns).set({
+        templateId: matchedTemplateId,
+        status: publicationCompleted ? "published" : normalizedUpdates.length ? "prepared" : "no_data",
+        model: agentModel,
+        promptVersion: agentPromptVersion,
+        iterations: agentIterations,
+        toolCallsJson: JSON.stringify(agentTrace.slice(0, 20)),
+        validationJson: JSON.stringify(agentValidation),
+        proposedCount: agentProposedCount,
+        publishedCount: agentPublishedCount,
+        inputTokens: agentInputTokens,
+        outputTokens: agentOutputTokens,
+        completedAt: new Date().toISOString(),
+      }).where(eq(ingestionAgentRuns.id, agentRunId));
+      await db.insert(fileActivity).values({
+        fileId: id,
+        eventType: "agente_ingesta_completado",
+        message: publicationCompleted
+          ? `El agente contrastó ${agentProposedCount} dato(s), publicó ${agentPublishedCount} y memorizó la plantilla documental.`
+          : `El agente contrastó ${agentProposedCount} dato(s); el original y el diagnóstico quedan trazados.`,
+        actorEmail: user.email,
+        actorName: user.displayName,
+      }).catch(() => undefined);
     }
     let currentRow = row;
     try {
@@ -1651,6 +1816,30 @@ export async function POST(request: Request) {
     // fase son mensajes descriptivos del contrato/publicación o del motor D1
     // (nombres de restricción), nunca valores de negocio.
     const debugDetail = (error instanceof Error ? `${error.name}: ${error.message}` : String(error)).slice(0, 600);
+    if (agentRunId) {
+      await db.update(ingestionAgentRuns).set({
+        templateId: matchedTemplateId,
+        status: publicationCompleted ? "published_with_close_error" : "failed",
+        model: agentModel,
+        promptVersion: agentPromptVersion,
+        iterations: agentIterations,
+        toolCallsJson: JSON.stringify(agentTrace.slice(0, 20)),
+        validationJson: JSON.stringify(agentValidation),
+        proposedCount: agentProposedCount,
+        publishedCount: agentPublishedCount,
+        inputTokens: agentInputTokens,
+        outputTokens: agentOutputTokens,
+        error: debugDetail,
+        completedAt: new Date().toISOString(),
+      }).where(eq(ingestionAgentRuns.id, agentRunId)).catch(() => undefined);
+    }
+    if (matchedTemplateId && !publicationCompleted) {
+      await db.update(documentTemplates).set({
+        failureCount: sql`${documentTemplates.failureCount} + 1`,
+        lastRunAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }).where(eq(documentTemplates.id, matchedTemplateId)).catch(() => undefined);
+    }
     let authoritativePointerReadSucceeded = false;
     if (!extractionCommitted && extractionGeneration) {
       try {

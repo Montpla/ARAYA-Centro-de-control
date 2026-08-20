@@ -39,6 +39,76 @@ export const agentLogs = sqliteTable("agent_logs", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+// Memoria operativa del agente de ingesta. La firma identifica una familia de
+// documentos (por ejemplo, la carátula mensual de cubicaciones) sin depender
+// del número de cubicación o del mes concreto. El mapeo no contiene el
+// documento: únicamente las claves del contrato vivo que una ejecución
+// publicada consiguió alimentar, para que el siguiente archivo parta de una
+// interpretación ya probada.
+export const documentTemplates = sqliteTable(
+  "document_templates",
+  {
+    id: text("id").primaryKey(),
+    fingerprint: text("fingerprint").notNull(),
+    namePattern: text("name_pattern").notNull(),
+    extension: text("extension").notNull(),
+    area: text("area").notNull(),
+    documentType: text("document_type").notNull(),
+    mappingJson: text("mapping_json").notNull().default("[]"),
+    visualizationJson: text("visualization_json").notNull().default("[]"),
+    promptVersion: text("prompt_version").notNull().default(""),
+    schemaVersion: text("schema_version").notNull().default("live-v1"),
+    successCount: integer("success_count").notNull().default(0),
+    failureCount: integer("failure_count").notNull().default(0),
+    confidence: real("confidence").notNull().default(0),
+    lastSourceFileId: text("last_source_file_id").notNull().default(""),
+    lastRunAt: text("last_run_at").notNull().default(""),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("document_templates_fingerprint_idx").on(table.fingerprint),
+    index("document_templates_lookup_idx").on(
+      table.extension,
+      table.area,
+      table.documentType,
+    ),
+    index("document_templates_last_run_idx").on(table.lastRunAt),
+  ],
+);
+
+// Una fila por recorrido completo del agente. Permite saber qué herramientas
+// usó, cuántas vueltas necesitó y si terminó publicando, sin guardar el
+// razonamiento privado del modelo ni replicar el contenido confidencial del
+// archivo.
+export const ingestionAgentRuns = sqliteTable(
+  "ingestion_agent_runs",
+  {
+    id: text("id").primaryKey(),
+    fileId: text("file_id").notNull(),
+    templateId: text("template_id").notNull().default(""),
+    fingerprint: text("fingerprint").notNull().default(""),
+    status: text("status").notNull().default("running"),
+    model: text("model").notNull().default(""),
+    promptVersion: text("prompt_version").notNull().default(""),
+    iterations: integer("iterations").notNull().default(0),
+    toolCallsJson: text("tool_calls_json").notNull().default("[]"),
+    validationJson: text("validation_json").notNull().default("{}"),
+    proposedCount: integer("proposed_count").notNull().default(0),
+    publishedCount: integer("published_count").notNull().default(0),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    error: text("error").notNull().default(""),
+    startedAt: text("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    completedAt: text("completed_at").notNull().default(""),
+  },
+  (table) => [
+    index("ingestion_agent_runs_file_idx").on(table.fileId),
+    index("ingestion_agent_runs_status_idx").on(table.status),
+    index("ingestion_agent_runs_started_idx").on(table.startedAt),
+  ],
+);
+
 export const uploadedFiles = sqliteTable(
   "uploaded_files",
   {
