@@ -55,6 +55,8 @@ test("el lector queda versionado y reprocesa históricos en lotes acotados", asy
   assert.match(route, /ingestionVersion: CURRENT_INGESTION_VERSION/);
   assert.match(script, /String\(file\.ingestionVersion \|\| ""\) !== currentVersion/);
   assert.match(script, /form\.set\("reprocess", "true"\)/);
+  assert.match(script, /form\.set\("reprocessFileId", file\.id\)/);
+  assert.match(route, /eq\(uploadedFiles\.id, reprocessFileId\)/);
   assert.match(workflow, /MAX_POR_EJECUCION: "3"/);
 });
 
@@ -81,6 +83,7 @@ test("el XLS de junio se conserva como antecedente y no puede reprocesarse", asy
   assert.match(supersede, /supersededByFileId: replacement\.id/);
   assert.match(supersede, /status: "historico"/);
   assert.match(script, /avance-fisico-y-cubicaciones-junio-2026\.xls/);
+  assert.match(script, /Number\(b\.publicationRevision \?\? -1\)/);
   assert.match(decision, /18,231973 %/);
   assert.match(decision, /no publica datos vivos/);
 });

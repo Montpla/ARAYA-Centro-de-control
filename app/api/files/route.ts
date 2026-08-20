@@ -748,6 +748,12 @@ export async function POST(request: Request) {
   // original— y publica una revisión nueva encima. Sin esta señal explícita, un
   // archivo idéntico ya publicado se queda como está.
   const reprocessRequested = formData.get("reprocess") === "true";
+  const reprocessFileId = String(formData.get("reprocessFileId") ?? "").trim().slice(0, 160);
+  if (reprocessFileId && (!reprocessRequested || user.role !== "admin")) {
+    return Response.json({
+      error: "Sólo un administrador puede dirigir un reproceso al expediente exacto.",
+    }, { status: 403 });
+  }
   const derivedFromFileId = String(formData.get("derivedFromFileId") ?? "").trim().slice(0, 160);
   const automationKind = String(formData.get("automationKind") ?? "").trim().slice(0, 80);
   if (Boolean(derivedFromFileId) !== Boolean(automationKind)) {
@@ -801,11 +807,28 @@ export async function POST(request: Request) {
     }
   }
 
-  const [duplicate] = await db
-    .select()
-    .from(uploadedFiles)
-    .where(and(eq(uploadedFiles.sha256, sha256), eq(uploadedFiles.deletedAt, "")))
-    .limit(1);
+  let duplicate: typeof uploadedFiles.$inferSelect | undefined;
+  if (reprocessFileId) {
+    [duplicate] = await db
+      .select()
+      .from(uploadedFiles)
+      .where(and(eq(uploadedFiles.id, reprocessFileId), eq(uploadedFiles.deletedAt, "")))
+      .limit(1);
+    if (!duplicate) {
+      return Response.json({ error: "El expediente indicado para reproceso no está activo." }, { status: 404 });
+    }
+    if (duplicate.sha256 !== sha256) {
+      return Response.json({
+        error: "El original descargado no coincide con el expediente indicado para reproceso.",
+      }, { status: 409 });
+    }
+  } else {
+    [duplicate] = await db
+      .select()
+      .from(uploadedFiles)
+      .where(and(eq(uploadedFiles.sha256, sha256), eq(uploadedFiles.deletedAt, "")))
+      .limit(1);
+  }
   let resumedRow: typeof uploadedFiles.$inferSelect | null = null;
   let reprocessing = false;
   if (duplicate) {

@@ -80,6 +80,10 @@ for (const file of objetivo) {
     type: file.mimeType || download.headers.get("content-type") || "application/octet-stream",
   }));
   form.set("reprocess", "true");
+  // Los registros históricos pueden contener varias filas antiguas con la
+  // misma huella. Se dirige el reproceso a la fila enumerada para que el lote
+  // avance realmente y no vuelva a reclamar siempre la primera coincidencia.
+  form.set("reprocessFileId", file.id);
   form.set("autoPublish", "true");
   form.set("area", file.area || "auto");
   form.set("sourceCurrency", file.sourceCurrency || "auto");

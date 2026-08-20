@@ -44,8 +44,14 @@ async function readAllFiles() {
 
 const files = await readAllFiles();
 const source = files.find((file) => !file.deletedAt && file.originalName.toLowerCase() === OLD_NAME.toLowerCase());
-const replacement = files.find((file) =>
+const replacementCandidates = files.filter((file) =>
   !file.deletedAt && !file.supersededAt && file.originalName.toLowerCase() === REPLACEMENT_NAME.toLowerCase());
+// Puede haber importaciones históricas duplicadas del mismo libro. La
+// relación debe apuntar a una que haya publicado datos de verdad; entre ellas
+// se prefiere la revisión más reciente.
+const replacement = replacementCandidates.sort((a, b) =>
+  Number(b.publicationRevision ?? -1) - Number(a.publicationRevision ?? -1) ||
+  Date.parse(b.updatedAt || b.createdAt) - Date.parse(a.updatedAt || a.createdAt))[0];
 if (!source) {
   console.error(`✖ No se encontró el antecedente exacto: ${OLD_NAME}`);
   process.exit(1);
@@ -60,6 +66,7 @@ if (!replacement) {
 }
 console.log(`Origen: ${source.originalName} · publicado=${source.publicationRevision ?? "no"}`);
 console.log(`Sustituto: ${replacement.originalName} · revisión=${replacement.publicationRevision ?? "no"}`);
+console.log(`Coincidencias activas del sustituto: ${replacementCandidates.length}. Se prioriza una revisión publicada.`);
 console.log(`Motivo: ${REASON}`);
 if (!APLICAR) {
   console.log("Simulación: no se ha modificado el registro.");
