@@ -123,6 +123,27 @@ test("el avance del cronograma sale del propio plan, no de un número a mano", (
   assert.notEqual(crono.value, 17);
 });
 
+test("un MPP parcial no sustituye el porcentaje ni la fecha del cronograma maestro", () => {
+  const resultado = extractProjectXmlUpdates(
+    planDeObra,
+    edificiosReales,
+    "Urbanismo fase I MODIFICADO CORTE 30-07-2026 (convertido de MPP).xml",
+  );
+  assert.ok(!resultado.updates.some((u) => u.key === "projectSnapshot.scheduleProgress"));
+  assert.ok(!resultado.updates.some((u) => u.key === "projectSnapshot.forecastFinish"));
+  assert.ok(resultado.updates.some((u) => u.key === "buildings.TH-14.progress"));
+  assert.ok(resultado.warnings.some((aviso) => /plan parcial/.test(aviso)));
+});
+
+test("el MPP maestro sí puede actualizar el porcentaje global", () => {
+  const resultado = extractProjectXmlUpdates(
+    planDeObra,
+    edificiosReales,
+    "Araya 26 edificios CORTE 30-07-2026 (convertido de MPP).xml",
+  );
+  assert.ok(resultado.updates.some((u) => u.key === "projectSnapshot.scheduleProgress"));
+});
+
 test("la fecha de fin del proyecto sale de la tarea más tardía del plan", () => {
   // TH-14 Estructura acaba el 2026-09-30; es la única con fecha, así que marca
   // el fin del proyecto. El dato vivo usa ISO y la pantalla lo formatea aparte.

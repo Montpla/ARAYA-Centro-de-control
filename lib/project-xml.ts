@@ -151,7 +151,11 @@ export type ProjectXmlExtraction = {
  * muestra en la raíz del plan —la señal de que la agregación es fiel y no una
  * aproximación—.
  */
-export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>): ProjectXmlExtraction {
+export function extractProjectXmlUpdates(
+  text: string,
+  conocidos?: Set<string>,
+  sourceName = "",
+): ProjectXmlExtraction {
   const tareas = readProjectTasks(text);
   if (!tareas.length) {
     return {
@@ -224,10 +228,30 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
   // aviso y el resumen cuentan edificios, no el % global del plan.
   const edificioUpdates = updates.length;
 
+  // Un MPP parcial (urbanismo, flujo o una fase aislada) puede tener su propio
+  // 5%, fecha final y cientos de tareas, pero esos valores NO son los del plan
+  // maestro de ARAYA. El error del 20/08 vino exactamente de un archivo llamado
+  // "Urbanismo fase I...": sustituyó el 22,37% global por su 5,08% interno.
+  //
+  // La actualización global sólo se admite cuando el nombre identifica el plan
+  // maestro/general o cuando el XML cubre al menos diez edificios conocidos.
+  // Las llamadas antiguas sin sourceName conservan el comportamiento previo.
+  const nombreNormalizado = sourceName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const parecePlanParcial = /\b(?:urbanismo|flujo|fase\s+[ivx]+)\b/.test(nombreNormalizado);
+  const parecePlanMaestro = /\b(?:cronograma|plan)\s+(?:maestro|general)\b/.test(nombreNormalizado) ||
+    /\baraya\b[\s\S]*\b\d+\s+edificios\b/.test(nombreNormalizado);
+  const permiteDatosGlobales = !sourceName ||
+    (!parecePlanParcial && (parecePlanMaestro || edificioUpdates >= 10));
+
+  const warnings: string[] = [];
+
   // El avance del cronograma sale del propio plan, no de un número a mano: se
   // publica junto a los edificios para que el KPI "Cronograma MPP" se actualice
   // solo con cada plan que se suba.
-  if (cronoPeso > 0) {
+  if (permiteDatosGlobales && cronoPeso > 0) {
     updates.push({
       key: "projectSnapshot.scheduleProgress",
       value: Math.round((cronoSuma / cronoPeso) * 100) / 100,
@@ -240,14 +264,18 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
   // pantalla y el contrato la rechazaba: por eso la conversión real del MPP
   // extrajo 28 datos, pero sólo 27 llegaron a producción.
   const finIso = finMax.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (finIso) {
+  if (permiteDatosGlobales && finIso) {
     updates.push({
       key: "projectSnapshot.forecastFinish",
       value: `${finIso[1]}-${finIso[2]}-${finIso[3]}`,
     });
   }
 
-  const warnings: string[] = [];
+  if (!permiteDatosGlobales) {
+    warnings.push(
+      "El archivo es un plan parcial: se conservan el avance y la fecha final del cronograma maestro.",
+    );
+  }
   if (!edificioUpdates) {
     warnings.push(
       `Se leyeron ${tareas.length} tareas, pero ninguna cuelga de un edificio reconocible (se esperan nombres tipo "TH-14" o "Edificio 14").`,

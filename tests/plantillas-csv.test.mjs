@@ -215,6 +215,7 @@ test("un plan de Project en XML actualiza los edificios que nombra", async () =>
   ].join("\n");
   const extraccion = await ingestion.extractStructuredUpdates(comoCsv(plan), "xml", {
     ...defaults,
+    sourceName: "Araya 26 edificios CORTE mensual (convertido de MPP).xml",
     knownBuildingTokens: new Set(["14"]),
   });
   // Además del edificio, el plan publica el % de cronograma del propio plan.

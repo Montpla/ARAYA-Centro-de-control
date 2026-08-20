@@ -1317,7 +1317,7 @@ export async function extractStructuredUpdates(
         warnings: ["Sólo se interpretan los XML guardados desde Project con Archivo → Guardar como → XML."],
       };
     }
-    const plan = extractProjectXmlUpdates(text, defaults.knownBuildingTokens);
+    const plan = extractProjectXmlUpdates(text, defaults.knownBuildingTokens, defaults.sourceName);
     return {
       updates: plan.updates.map((update) => ({
         key: update.key,
