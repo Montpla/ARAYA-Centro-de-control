@@ -601,6 +601,18 @@ export async function POST(request: Request) {
     };
   }
 
+  // No se puede convertir en "sincronizado 100%" una cubicación que declaró
+  // edificios pero no generó su avance. El reproceso correcto sustituirá este
+  // resumen y entonces la aprobación normal volverá a estar disponible.
+  if (
+    action === "approve" &&
+    /Falta el avance físico de TH-\d/i.test(file.processingSummary ?? "")
+  ) {
+    return Response.json({
+      error: "La cubicación está incompleta: primero hay que reprocesar el avance de los edificios indicados.",
+    }, { status: 409 });
+  }
+
   const requestKey = rawRequestKey || crypto.randomUUID();
   const processingAction = processingActionLabel(action);
   const startedAt = new Date().toISOString();

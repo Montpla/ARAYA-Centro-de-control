@@ -129,8 +129,14 @@ test("la matriz de cubicación del Informe Ejecutivo actualiza cada edificio por
   );
   const porClave = new Map(resultado.updates.map((u) => [u.key, u.value]));
   // La fila TOTAL (sin números) se descarta; sólo entran los tres edificios.
-  assert.equal(resultado.updates.length, 3);
+  // Cada uno publica su total y las cinco fases que dan color al detalle.
+  assert.equal(
+    resultado.updates.filter((update) => /\.progress$/.test(update.key) && !/\.phases\./.test(update.key)).length,
+    3,
+  );
+  assert.equal(resultado.updates.length, 18);
   assert.equal(porClave.get("buildings.TH-03.progress"), 60.3);
+  assert.equal(porClave.get("buildings.TH-03.phases.0.progress"), 100);
   assert.equal(porClave.get("buildings.TH-01.progress"), 50.4);
   assert.equal(porClave.get("buildings.TH-11.progress"), 28.1);
   assert.match(resultado.summary, /por disciplina/);

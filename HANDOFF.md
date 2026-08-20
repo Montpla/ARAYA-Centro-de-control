@@ -3075,3 +3075,36 @@ del despliegue actual de Cloudflare Workers.
   además de las claves VAPID. Nunca imprimir ni copiar los valores.
 - Pruebas nuevas: `tests/ingestion-automation.test.mjs` y límites ZIP en
   `tests/zip-pdf-lectura.test.mjs`. TypeScript y build Vinext están verdes.
+
+## Cubicación Nº8 · edificios 76 y 77 — corrección local pendiente de publicar (20/08/2026)
+
+- Expediente de producción: `458097f8-36d1-4761-88f7-9336da6d1a1f`,
+  `Cubicacion 8 Araya Jul.xlsx`, subido por Ernesto Álvarez el 20/08/2026.
+  La revisión 54 publicó solo `cubicacionCaratula.0`,
+  `projectSnapshot.declaredCutoff` y `projectSnapshot.overallProgress`; no
+  publicó ninguna clave `buildings.*` para TH-76/TH-77. Después una aprobación
+  sin propuestas sustituyó el resumen por “no modifica indicadores vivos”,
+  aunque el alcance físico había quedado sin integrar.
+- Rama local: `fix/cubicacion-edificios-76-77`. No hay todavía commit ni push.
+- Corrección: el XLSX recorre todas sus hojas, busca hasta 100 filas con
+  contenido, acepta `EDIF.` y variantes de “avance físico acumulado”, reconoce
+  el alcance conjunto “Edificios 76 y 77”, publica los edificios en área Obra
+  y conserva sus fases por rutas hijas. Excel también recibe complemento IA sin
+  que ésta pise la lectura directa; el prompt prohíbe confundir un avance de
+  TH-76/TH-77 con el avance global de ARAYA.
+- Un documento que nombra edificios sin generar su avance queda abierto y no
+  puede cerrarse como “sincronizado 100 %”. Un original mixto conserva el
+  archivo/evento protegido en Finanzas, pero las claves físicas `buildings.*`
+  mantienen área Obra; la publicación sigue exigiendo un usuario autorizado si
+  el original está protegido.
+- `CURRENT_INGESTION_VERSION` local: `2026-08-20.3`. El workflow de reproceso
+  admite ahora `file_id`, necesario porque existe otra copia homónima y no debe
+  tocarse por accidente.
+- Verificación local: TypeScript verde, build Vinext verde, ESLint focalizado
+  sin errores y suite completa **303/303**.
+- Siguiente secuencia, tras autorización expresa: commit, push, esperar deploy,
+  ejecutar `Reprocesar archivos con el pipeline actual` con
+  `file_id=458097f8-36d1-4761-88f7-9336da6d1a1f`, `filtro=Cubicacion 8 Araya
+  Jul`, `formatos=xlsx`, `reemplazar=0`, `aplicar=1`, y comprobar que la nueva
+  revisión contiene `buildings.<índice TH-76>.progress` y
+  `buildings.<índice TH-77>.progress` (y fases si la tabla las declara).

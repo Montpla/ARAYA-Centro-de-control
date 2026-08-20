@@ -1118,7 +1118,7 @@ export async function POST(request: Request) {
       }
     }
     const documentoNarrativo = aiDocuments.some((document) =>
-      ["ppt", "pptx", "doc", "docx", "pdf", "xls", "jpg", "jpeg", "png"].includes(document.extension));
+      ["ppt", "pptx", "doc", "docx", "pdf", "xls", "xlsx", "jpg", "jpeg", "png"].includes(document.extension));
     const lecturaParcial = deterministicExtraction.updates.length > 0 && documentoNarrativo;
     if ((!deterministicExtraction.updates.length || lecturaParcial) && aiDocuments.length) {
       const aiResults: Awaited<ReturnType<typeof extractDocumentWithAI>>[] = [];
@@ -1200,6 +1200,31 @@ export async function POST(request: Request) {
     // cual en vez de tumbar toda la ingesta: la normalización posterior ya
     // descarta dato a dato lo que no encaje.
     let identityResolvedUpdates = extraction.updates;
+    // Una cubicación puede traer importes en la carátula y el avance físico de
+    // varios edificios en otra hoja. El lector devuelve el alcance que vio y
+    // aquí se comprueba que cada edificio nombrado haya generado al menos su
+    // progreso o una fase. Si falta alguno, los datos reconocidos sí pueden
+    // publicarse, pero el expediente no se cierra falsamente como completo.
+    const expectedBuildingCodes = deterministicExtraction.expectedBuildingCodes ?? [];
+    const extractedBuildingCodes = new Set(
+      extraction.updates.flatMap((update) => {
+        const match = update.key.match(/^buildings\.(TH-\d+)\.(?:progress|phases(?:\.|$))/i);
+        return match ? [match[1].toUpperCase()] : [];
+      }),
+    );
+    const missingExpectedBuildingCodes = expectedBuildingCodes.filter(
+      (code) => !extractedBuildingCodes.has(code.toUpperCase()),
+    );
+    const buildingScopeIncomplete = missingExpectedBuildingCodes.length > 0;
+    if (buildingScopeIncomplete) {
+      extraction = {
+        ...extraction,
+        warnings: [
+          ...extraction.warnings,
+          `El documento nombra ${missingExpectedBuildingCodes.join(", ")}, pero no se extrajo su avance físico. El expediente queda abierto y no se marcará como sincronizado al 100%.`,
+        ],
+      };
+    }
     if (currentLiveData) {
       try {
         identityResolvedUpdates = resolveSpatialIdentityUpdates(
@@ -1355,7 +1380,10 @@ export async function POST(request: Request) {
     // proposal inherits that protected area. Later metadata edits cannot make
     // the persisted document public again.
     const normalizedUpdates = financeProtectedUpload
-      ? extractedUpdates.map((update) => ({ ...update, area: resolvedArea }))
+      ? extractedUpdates.map((update) =>
+          /^buildings\./.test(update.key) && !isFinancialLiveKey(update.key)
+            ? { ...update, area: "obra" }
+            : { ...update, area: resolvedArea })
       : extractedUpdates;
     extractionGeneration = `ingest:${crypto.randomUUID()}`;
     const existingPoints = await selectLivePointValues(
@@ -1513,7 +1541,11 @@ export async function POST(request: Request) {
     // decide dato a dato: los que encajan se publican solos y el resto va a
     // revisión.
     const updateIsAutoPublishable = (update: ReturnType<typeof normalizeLiveDataUpdates>[number]) =>
-      update.area === resolvedArea &&
+      (update.area === resolvedArea || (
+        financeProtectedUpload &&
+        !requiresFinanceAccessForArea(update.area) &&
+        !isFinancialLiveKey(update.key)
+      )) &&
       (user.financeAccess || !isFinancialLiveKey(update.key)) &&
       isSafeAutomaticStructuredUpdate(update) &&
       individualUpdateContractIsSafe(update, liveValues);
@@ -1522,6 +1554,7 @@ export async function POST(request: Request) {
     // se publican los datos que individualmente son seguros y el resto queda
     // para revisión, en vez de bloquear el informe completo.
     const wholeBatchSafe = batchPreconditions &&
+      !buildingScopeIncomplete &&
       normalizedUpdates.every(updateIsAutoPublishable) &&
       automaticContractIsSafe(normalizedUpdates, liveValues);
     const autoPublishable = wholeBatchSafe
@@ -1531,7 +1564,7 @@ export async function POST(request: Request) {
         : [];
     if (autoPublishable.length) {
       publicationStarted = true;
-      const isFullBatch = autoPublishable.length === normalizedUpdates.length;
+      const isFullBatch = autoPublishable.length === normalizedUpdates.length && !buildingScopeIncomplete;
       const publication = await publishLiveDataUpdates({
         normalized: autoPublishable,
         actor: user,
@@ -1559,7 +1592,9 @@ export async function POST(request: Request) {
       publicationCompleted = true;
       automaticMessage = isFullBatch
         ? `${autoPublishable.length} datos se han actualizado automáticamente en la revisión ${publication.id}; las cifras y gráficas se refrescarán en menos de 5 segundos.`
-        : `${autoPublishable.length} de ${normalizedUpdates.length} datos se han actualizado automáticamente en la revisión ${publication.id}; ${normalizedUpdates.length - autoPublishable.length} no encajan en un campo conocido todavía y siguen pendientes de revisión manual.`;
+        : buildingScopeIncomplete
+          ? `${autoPublishable.length} datos reconocidos se han actualizado en la revisión ${publication.id}, pero falta el avance de ${missingExpectedBuildingCodes.join(", ")}; el expediente queda abierto para revisión.`
+          : `${autoPublishable.length} de ${normalizedUpdates.length} datos se han actualizado automáticamente en la revisión ${publication.id}; ${normalizedUpdates.length - autoPublishable.length} no encajan en un campo conocido todavía y siguen pendientes de revisión manual.`;
       if (!isFullBatch) {
         // publishLiveDataUpdates marca el archivo como aprobado/sin revisión
         // pendiente de forma incondicional (no depende de reviewClosure). En
@@ -1569,7 +1604,9 @@ export async function POST(request: Request) {
         await db.update(uploadedFiles).set({
           requiresReview: true,
           reviewStatus: "listo_revision",
-          processingSummary: `${extractionSummary} ${autoPublishable.length} de ${normalizedUpdates.length} datos ya están publicados en la revisión ${publication.id}; el resto necesita revisión manual.`,
+          processingSummary: buildingScopeIncomplete
+            ? `${extractionSummary} ${autoPublishable.length} datos reconocidos ya están publicados en la revisión ${publication.id}. Falta el avance físico de ${missingExpectedBuildingCodes.join(", ")}; el expediente no está completo.`
+            : `${extractionSummary} ${autoPublishable.length} de ${normalizedUpdates.length} datos ya están publicados en la revisión ${publication.id}; el resto necesita revisión manual.`,
           updatedAt: new Date().toISOString(),
         }).where(eq(uploadedFiles.id, id)).catch(() => undefined);
       }
