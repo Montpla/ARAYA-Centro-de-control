@@ -22,6 +22,11 @@ test("una cubicación incompleta no puede cerrarse como sincronizada", () => {
   assert.match(reviewRoute, /La cubicación está incompleta/);
 });
 
+test("el alcance no confunde el inventario histórico con los edificios cubicados", () => {
+  assert.match(filesRoute, /deterministicExtraction\.expectedBuildingCodes/);
+  assert.match(reprocessScript, /diagnóstico de edificios/);
+});
+
 test("un original mixto conserva el avance en Obra y los importes en Finanzas", () => {
   assert.match(filesRoute, /\^buildings\\\.\/\.test\(update\.key\)[\s\S]*?area: "obra"/);
   assert.match(filesRoute, /canPublishInArea = !financeProtectedUpload \|\| user\.financeAccess/);
