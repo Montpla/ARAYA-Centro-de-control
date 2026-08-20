@@ -839,6 +839,17 @@ function numeroVentas(texto: string | undefined): number | null {
   return Number.isFinite(valor) ? valor : null;
 }
 
+function decimalVentas(texto: string | undefined): number | null {
+  if (!texto) return null;
+  const limpio = texto.replace(/\s+/g, "");
+  // En esta lámina los ritmos son decimales de una cifra ("4,9" o "4.9").
+  // No se reutiliza numeroVentas porque allí la coma representa millares en
+  // importes como "64,810.00".
+  if (/^\d+,\d{1,2}$/.test(limpio)) return Number.parseFloat(limpio.replace(",", "."));
+  const valor = Number.parseFloat(limpio.replace(/,/g, ""));
+  return Number.isFinite(valor) ? valor : null;
+}
+
 function primerNumero(texto: string, patron: RegExp): number | null {
   return numeroVentas(texto.match(patron)?.[1]);
 }
@@ -870,6 +881,19 @@ export function extractSalesReport(textoLaminas: string, defaults: ExtractionDef
   anota("juneReport.sales.phaseOneSales", numeroVentas(faseUno?.[2]));
   anota("juneReport.sales.phaseTwoActive", primerNumero(t, /(\d+)\s+Activas\s*-\s*\d+%\s+Fase\s+II/i));
   anota("juneReport.sales.withdrawn", primerNumero(t, /(\d+)\s+Desistidas\s*[–-]/i));
+
+  // Ritmo mensual por modelo. La lámina usa cuatro nombres fijos y separa el
+  // modelo con un guion del valor ("Balcony – 6.3 Unidades / Mes"). Se guarda
+  // dentro del informe comercial para que el panel y las siguientes cargas
+  // compartan exactamente el mismo contrato vivo.
+  for (const model of ["Balcony", "Garden", "Sunset", "Flex"] as const) {
+    const escaped = model.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = t.match(new RegExp(`${escaped}\\s*[–—-]\\s*([\\d.,]+)\\s*Unidades?\\s*\\/?\\s*Mes`, "i"));
+    anota(
+      `juneReport.sales.reservationsByModel.${model}`,
+      decimalVentas(match?.[1]),
+    );
+  }
 
   // Depuración y vinculación (pipeline de contratos).
   anota("juneReport.contracts.reviewed", primerNumero(t, /(\d+)\s+Unidades\s+Depuradas/i));

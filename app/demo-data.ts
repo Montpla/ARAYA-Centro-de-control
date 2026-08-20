@@ -133,7 +133,8 @@ export type DataSource = {
 // Project (Araya 26 edificios · CORTE_30072026), atribuida por capítulo y
 // promediada por duración. En ambos casos son la medición real, no una cifra
 // derivada de un total: de ellas sale el porcentaje del edificio
-// (lib/progress-model.ts), y su media reproduce el ~22% global del proyecto.
+// (lib/progress-model.ts). Su media sirve para leer el plano, pero no sustituye
+// el avance físico oficial, que está ponderado por el monto total de obra.
 //
 // Columnas: [código, obra común, superestructura, albañilería, instalaciones, acabados].
 const buildingPhaseRows: Array<[string, number, number, number, number, number]> = [
@@ -232,12 +233,11 @@ export const buildings: Building[] = buildingPhaseRows.map(([code, ...valores]) 
   };
 });
 
-// Avance global del proyecto ahora mismo: media del avance real de los 26
-// edificios. Sale de la misma fuente que la implantación (el plan de obra), así
-// que la Curva S y los colores del plano cuentan la misma historia. Reproduce el
-// ~22% que el propio Project muestra en la raíz.
-export const overallProgressNow =
-  Math.round((buildings.reduce((suma, edificio) => suma + edificio.progress, 0) / buildings.length) * 100) / 100;
+// Avance físico oficial del proyecto al corte de julio. Lo declara el Informe
+// Ejecutivo y coincide con el último "Ejecutado Real" del Excel maestro de la
+// Curva S. No se calcula promediando edificios: ese promedio describe el plano,
+// pero no pondera el monto total de obra y por tanto no sustituye el KPI físico.
+export const overallProgressNow = 22.71;
 
 // Avance medio de los edificios ya en marcha (con obra empezada). Acompaña al
 // global sin sustituirlo: el global mide el proyecto entero; éste, el ritmo de
@@ -263,10 +263,9 @@ const planCurvePlanned = [
 ];
 
 // Ejecutado real medido, mes a mes, hasta el corte anterior (jun 2025 → jun
-// 2026). El punto del mes en curso NO se escribe a mano: se calcula del modelo
-// vivo (overallProgressNow) y se añade al final. Por eso el mes del corte nunca
-// vuelve a quedar vacío como pasó con julio — cada corte nuevo lo rellena solo.
-// Al cerrar un mes, se congela aquí su valor y el cálculo pasa al siguiente.
+// 2026). El último punto es el avance físico oficial del corte, no el promedio
+// simple de edificios. En producción cada nuevo Excel/informe publica el punto
+// mensual correspondiente y reemplaza esta línea base.
 const planCurveActualsToDate = [
   0, 0.31, 0.94, 1.88, 2.51, 3.45, 3.83, 4.47, 6.05, 8.96, 11.59, 16, 18.23,
   overallProgressNow,
@@ -782,8 +781,8 @@ export const dataSources: DataSource[] = [
 
 export const projectSnapshot = {
   project: "ARAYA",
-  declaredCutoff: "30/07/2026",
-  lastUpdated: "30/07/2026 12:17",
+  declaredCutoff: "31/07/2026",
+  lastUpdated: "31/07/2026",
   // Avance físico global del corte de julio. En producción lo recalcula el
   // ciclo en vivo desde el último "Ejecutado Real" de la Curva S; estos valores
   // son el punto de partida y se mantienen alineados con ese corte.

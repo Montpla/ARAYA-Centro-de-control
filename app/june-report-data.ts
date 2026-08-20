@@ -20,6 +20,15 @@ export const juneReport = {
     phaseTwoActive: 92,
     phaseTwoSales: 54,
     juneReservations: 18,
+    // Promedio mensual declarado en la lámina "Reservas por Modelos" del
+    // informe comercial de julio. El lector actualiza cada modelo por separado
+    // cuando llegue el informe del mes siguiente.
+    reservationsByModel: {
+      Balcony: 6.3,
+      Garden: 4.9,
+      Sunset: 6.8,
+      Flex: 3.8,
+    },
   },
   contracts: {
     reviewed: 198,

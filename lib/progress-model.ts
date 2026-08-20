@@ -122,14 +122,10 @@ export function currentPhaseName(phases: readonly PhaseProgress[]): string {
 }
 
 /**
- * Avance físico global del proyecto: la media del avance real de los edificios.
- *
- * Es la cifra grande del panel y el último punto "Ejecutado Real" de la Curva S.
- * Al salir de los mismos edificios que pinta el plano, el número grande, la
- * curva y los colores cuentan siempre la misma historia y se mueven a la vez:
- * cuando una cubicación cambia un edificio, el global cambia con él, sin
- * depender de que además se toque otra cifra aparte. Devuelve null si no hay
- * edificios, para que quien llame conserve el valor que tuviera.
+ * Promedio simple de avance de los edificios, incluidos los que no han
+ * empezado. Es una métrica espacial de apoyo; no equivale al avance físico
+ * oficial, que procede de la Curva S y se pondera por el monto total de obra.
+ * Devuelve null si no hay edificios.
  */
 export function projectProgressFromBuildings(buildings: readonly { progress: number }[]): number | null {
   if (!buildings.length) return null;
@@ -140,10 +136,10 @@ export function projectProgressFromBuildings(buildings: readonly { progress: num
 /**
  * Avance medio de los edificios que ya están en marcha (con obra empezada).
  *
- * El avance global reparte entre los 26 edificios, y los que aún no han
+ * El promedio simple reparte entre los 26 edificios, y los que aún no han
  * arrancado lo tiran hacia abajo. Este número mira solo a los que tienen obra
- * en curso, para ver el ritmo real de lo que se está construyendo sin ocultar
- * el número honesto del proyecto entero. Devuelve null si ninguno ha empezado.
+ * en curso para ver su ritmo, separado del avance físico oficial. Devuelve
+ * null si ninguno ha empezado.
  */
 export function activeBuildingsProgress(buildings: readonly { progress: number }[]): number | null {
   const activos = buildings.filter((building) => building.progress > 0);

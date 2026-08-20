@@ -13,7 +13,6 @@ import {
 import {
   activeBuildingsProgress,
   averageNumeric,
-  projectProgressFromBuildings,
 } from "./progress-model";
 import { unitOverallProgress } from "./unit-progress";
 
@@ -44,26 +43,16 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
   const apartmentAverageProgress = allUnits.length
     ? allUnits.reduce((sum, unit) => sum + unitOverallProgress(unit, constructionDisciplines), 0) / allUnits.length
     : snapshot.apartmentAverageProgress;
-  // El avance físico global y el último punto "Ejecutado Real" de la Curva S
-  // salen del avance real de los edificios, para que se muevan A LA VEZ que
-  // ellos: cuando una cubicación cambia los edificios/apartamentos, el número
-  // grande y la curva cambian con ellos, sin depender de que además se toque
-  // otra cifra aparte. El "Plan operativo" (KPI) se sigue leyendo del mismo mes
-  // de monthlyPlan que el ejecutado, para no comparar el avance de julio contra
-  // el plan congelado de junio.
-  const overallFromBuildings = projectProgressFromBuildings(buildings);
   let cutoffIndex = -1;
   for (let index = 0; index < monthlyPlan.length; index += 1) {
     if (monthlyPlan[index].actual !== null) cutoffIndex = index;
   }
-  // El mes del corte adopta el promedio vivo de los edificios como "Ejecutado
-  // Real", así el plano y la curva muestran exactamente lo mismo.
-  const coupledMonthlyPlan = overallFromBuildings === null || cutoffIndex < 0
-    ? monthlyPlan
-    : monthlyPlan.map((entry, index) =>
-      index === cutoffIndex ? { ...entry, actual: overallFromBuildings } : entry);
-  const cutoffEntry = cutoffIndex >= 0 ? coupledMonthlyPlan[cutoffIndex] : null;
-  const overallProgress = cutoffEntry?.actual ?? overallFromBuildings ?? snapshot.overallProgress;
+  // El avance físico global procede del último "Ejecutado Real" publicado en
+  // la Curva S; si todavía no existe ese corte, cae al valor declarado por el
+  // Informe Ejecutivo. El promedio de edificios es una métrica de apoyo y no
+  // puede sustituir un KPI ponderado por el monto total de obra.
+  const cutoffEntry = cutoffIndex >= 0 ? monthlyPlan[cutoffIndex] : null;
+  const overallProgress = cutoffEntry?.actual ?? snapshot.overallProgress;
   const plannedProgress = cutoffEntry?.planned ?? snapshot.plannedProgress;
   const deviationPoints = Math.round((overallProgress - plannedProgress) * 100) / 100;
   // Ritmo de los edificios ya en marcha, aparte del global (que reparte entre
@@ -78,7 +67,7 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
   return {
     buildings,
     urbanismAreas,
-    monthlyPlan: coupledMonthlyPlan,
+    monthlyPlan,
     projectSnapshot: {
       ...snapshot,
       overallProgress,

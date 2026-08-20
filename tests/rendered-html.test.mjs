@@ -37,7 +37,7 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /progress-point actual/);
   assert.match(source, /FICHA INDIVIDUAL DE APARTAMENTO/);
   assert.match(source, /CAPAS OPERATIVAS DEL PLANO/);
-  assert.match(source, /INFORME COMERCIAL · JUNIO 2026/);
+  assert.match(source, /INFORME COMERCIAL · CORTE \{juneReport\.collections\.cutoff\}/);
   assert.match(source, /CONTROL TRANSVERSAL · JUNIO 2026/);
   assert.match(source, /INFORME FINANCIERO · \{financePeriodLabel\}/);
 });
@@ -592,12 +592,13 @@ test("S-curve matches the supplied executive reference without changing its data
   assert.match(styles, /\.s-curve\.is-fullscreen\s*\{[^}]*position: fixed/s);
   assert.match(styles, /\.s-curve-fullscreen-button/);
   // La Curva S ya no se escribe como objetos a mano: el ejecutado real hasta el
-  // corte anterior está fijo y el punto del mes en curso se calcula del modelo
-  // vivo, así que el mes del corte nunca vuelve a quedar vacío como pasó con
-  // julio. Se comprueba que el histórico sigue ahí, que julio se rellena solo y
-  // que el plan llega al 100.
+  // corte anterior está fijo y el último punto toma el avance físico oficial
+  // del informe/Excel maestro, no el promedio simple de edificios. Se comprueba
+  // que el histórico sigue ahí, que julio usa el KPI oficial y que el plan
+  // llega al 100.
   assert.match(data, /const planCurveActualsToDate = \[/);
-  assert.match(data, /18\.23,\n\s*overallProgressNow,/);
+  assert.match(data, /18\.23,\r?\n\s*overallProgressNow,/);
+  assert.match(data, /export const overallProgressNow = 22\.71/);
   assert.match(data, /99\.56, 100,/);
 });
 
@@ -964,7 +965,7 @@ test("the collaborative document registry archives every upload by year and mont
     readFile("app/api/files/route.ts", "utf8"),
   ]);
   const registry = dashboard.match(
-    /function CollaborativeFileRegistry[\s\S]*?\n}\n\nasync function fetchDataHistory/,
+    /function CollaborativeFileRegistry[\s\S]*?\r?\n}\r?\n\r?\nasync function fetchDataHistory/,
   )?.[0] ?? "";
 
   assert.ok(registry, "CollaborativeFileRegistry must remain present");
@@ -996,7 +997,7 @@ test("the in-app document viewer renders PDFs with PDF.js and downloads only on 
     readFile("package.json", "utf8"),
   ]);
   const viewer = dashboard.match(
-    /function PdfDocumentPreview[\s\S]*?function FileViewer[\s\S]*?\n}\n\nconst notificationAreaViews/,
+    /function PdfDocumentPreview[\s\S]*?function FileViewer[\s\S]*?\r?\n}\r?\n\r?\nconst notificationAreaViews/,
   )?.[0] ?? "";
 
   assert.match(packageJson, /"pdfjs-dist"/);

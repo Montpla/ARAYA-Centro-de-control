@@ -1,8 +1,32 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 18/08/2026
+Actualizado: 20/08/2026
 Zona horaria del usuario: Europe/Madrid
 Idioma de trabajo: español
+
+## Reanudación desde GitHub (20/08/2026)
+
+- Fuente canónica confirmada por el usuario: GitHub,
+  `Montpla/ARAYA-Centro-de-control`. No continuar ni publicar por Sites salvo
+  que el usuario lo solicite expresamente en una sesión posterior.
+- La copia local se avanzó limpiamente hasta `github/main` en el commit
+  `c090cda` (`Reponer el cronograma con el 22,37% real del plan de julio`). Su
+  despliegue automático de GitHub Actions terminó correctamente en la ejecución
+  `32282923131`.
+- Producción vigente: `https://araya-centro-control.grupobricket.workers.dev`.
+  El pipeline activo sigue siendo GitHub Actions → Cloudflare Workers.
+- Los últimos cambios de `main` incorporan la conversión robusta de `.mpp` con
+  MPXJ en un runner, la recuperación del 22,37% de avance real del plan de
+  julio y el modelado de morosidad/recaudo del informe. La conversión se probó
+  correctamente mediante el workflow `Convertir MPP a XML y leerlo`.
+- Existe una rama remota todavía no integrada,
+  `claude/programa-continuacion-1tgsaq` (`ecd036e`), que añade al workflow una
+  vista previa del avance, edificios y fin previsto cuando se ejecuta en modo
+  simulación. No asumir que esa mejora forma parte de `main` ni mezclarla sin
+  revisarla y validarla.
+- El grafo local de conocimiento del código se reindexó contra `c090cda` para
+  que otros LLM puedan descubrir la arquitectura actual en vez de la versión
+  antigua de agosto.
 
 ## Instrucción para el próximo LLM
 
@@ -2870,3 +2894,56 @@ El usuario seguirá entregando datos para completar:
 
 Al recibir nuevos archivos, incorporarlos al Centro de datos, mantener su
 trazabilidad y adaptar las fichas interactivas sin inventar valores.
+
+## Auditoría de avance y cargas recientes — 20/08/2026
+
+- El **19,39 %** visible no es el avance físico oficial. Es la media aritmética
+  de los avances de los 26 edificios importados del MPP: suma 504,26 / 26 =
+  19,394615 %, redondeado a 19,39 %. Once edificios están al 0 %.
+- La base viva conserva tres indicadores distintos y trazables:
+  - avance físico ejecutado: **22,71 %** (`Informe_Ejecutivo_ARAYA_Julio_FINAL.pptx`,
+    corte 31/07/2026, revisión 50);
+  - avance físico planificado: **26,61 %** (misma fuente y corte);
+  - avance del cronograma MPP: **22,37 %** (XML convertido del MPP, corte
+    30/07/2026, revisión 51).
+- La causa está en la capa de presentación: `projectProgressFromBuildings`
+  calcula la media simple y `lib/spatial-live-data.ts` y
+  `app/dashboard-client.tsx` sustituyen con ella el último punto real de la
+  Curva S y `projectSnapshot.overallProgress`. Esto contradice los propios
+  textos de la interfaz, que indican que el avance físico procede del informe
+  y del Excel maestro.
+- Corrección recomendada: mantener **22,71 %** como avance físico principal y
+  último punto ejecutado de la Curva S; mantener **22,37 %** como KPI separado
+  de cronograma MPP; mostrar **19,39 %** sólo como “Promedio simple de avance de
+  edificios”, si se considera útil.
+- Cargas activas del 18–20/08: el informe de ventas de julio (revisión 52) y el
+  MPP convertido (revisión 51) están sincronizados, aprobados y sin propuestas
+  de datos pendientes. Una segunda copia del informe de ventas fue retirada y
+  sus propuestas pendientes no intervienen en el dato vivo.
+- Quedan tres candidatos comerciales sin clasificar. Los dos cualitativos ya
+  están cubiertos por datos vivos: morosidad máxima 1 % y recaudo frente a lo
+  proyectado 92 %. El único contenido realmente no modelado es **Reservas por
+  modelos**: Balcony 6,3; Garden 4,9; Sunset 6,8; Flex 3,8 unidades/mes.
+- La nota histórica anterior que indicaba que el Informe Ejecutivo de julio
+  seguía pendiente queda superada: sus 22 datos se publicaron en la revisión
+  50 el 19/08/2026.
+
+### Corrección implementada localmente — 20/08/2026
+
+- `overallProgressNow` queda fijado a la cifra física oficial **22,71 %** del
+  corte 31/07/2026. El último ejecutado de la Curva S usa ese valor.
+- Servidor (`lib/spatial-live-data.ts`) y cliente
+  (`synchronizeSpatialSummary`) dejaron de sustituir el KPI físico por la media
+  simple de edificios. Los edificios y apartamentos siguen actualizándose y
+  conservan sus métricas propias, sin gobernar el total físico.
+- El informe comercial incorpora `juneReport.sales.reservationsByModel` con
+  Balcony 6,3; Garden 4,9; Sunset 6,8; Flex 3,8 unidades/mes. El lector de PPTX
+  extrae esas cuatro cifras automáticamente en cargas futuras.
+- La vista de Ventas y cobranza muestra el bloque interactivo “Reservas por
+  modelo” y eliminó rótulos, conteos y barras congeladas de junio; ahora usa el
+  corte y los valores vivos del informe más reciente.
+- Verificación local: TypeScript verde, compilación Vinext verde, ESLint
+  focalizado sin errores y suite completa **279/279**.
+- Pendiente de operación: commit y push explícitamente autorizados a GitHub;
+  después, comprobar el despliegue de Cloudflare y marcar como adaptados los
+  tres candidatos comerciales en D1.
