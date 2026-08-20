@@ -174,6 +174,14 @@ test("los 77 edificios tienen coordenadas en ambos planos y seis apartamentos li
     .map((code) => layout.visualPlanCoordinates[code].y);
   assert.equal(new Set(topRow).size, topRow.length);
   assert.ok(topRow.every((height, index) => index === 0 || height < topRow[index - 1]));
+
+  // Anclas contrastadas contra los centros de cubierta de la imagen maestra
+  // (982 × 1602 px). Protegen los extremos de la perspectiva, donde una fila
+  // aproximada produce el mayor desplazamiento visual.
+  assert.deepEqual(layout.visualPlanCoordinates["37"], { x: 18.74, y: 10.11 });
+  assert.deepEqual(layout.visualPlanCoordinates["45"], { x: 87.42, y: 6.55 });
+  assert.deepEqual(layout.visualPlanCoordinates["46"], { x: 82.89, y: 16.01 });
+  assert.deepEqual(layout.visualPlanCoordinates["69"], { x: 81.36, y: 44.85 });
 });
 
 test("la promoción de demostración ya no forma parte del Centro de Control", async () => {
