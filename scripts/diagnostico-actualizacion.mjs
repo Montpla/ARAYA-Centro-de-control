@@ -70,9 +70,13 @@ for (const [rev, { info, claves }] of revisiones.slice(0, 8)) {
 // que ve el panel es el real del plan. NO se imprime ningún valor de dinero.
 const valores = live.values ?? {};
 const crono = valores["projectSnapshot.scheduleProgress"];
+const avanceFisico = valores["projectSnapshot.overallProgress"];
+const urbanismo = valores["urbanismAreas.0.progress"];
 const fin = valores["projectSnapshot.forecastFinish"];
 const edificios = Object.keys(valores).filter((k) => /^buildings\..+\.progress$/.test(k));
 console.log(`\n=== Cronograma y obra (progreso físico, sin cifras de dinero) ===`);
+console.log(`avance físico total (projectSnapshot.overallProgress): ${avanceFisico ?? "(sin dato)"}%`);
+console.log(`avance de urbanismo (urbanismAreas.0.progress): ${urbanismo ?? "(sin dato)"}%`);
 console.log(`avance de cronograma (projectSnapshot.scheduleProgress): ${crono ?? "(sin dato)"}%`);
 console.log(`previsión de fin (projectSnapshot.forecastFinish): ${fin ?? "(sin dato)"}`);
 console.log(`edificios con avance físico publicado: ${edificios.length}`);
