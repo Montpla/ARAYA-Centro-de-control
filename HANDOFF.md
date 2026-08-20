@@ -13,7 +13,9 @@ Idioma de trabajo: español
 - Las coordenadas de los dos fondos del plano están centralizadas en
   `lib/site-plan-layout.ts`: cada edificio tiene posición en la implantación
   visual y en el plano técnico. No volver a mantener mapas parciales dentro de
-  `app/dashboard-client.tsx`.
+  `app/dashboard-client.tsx`. En el plano visual las alturas son individuales,
+  no comunes por fila: la perspectiva hace que las cubiertas —especialmente
+  TH-37 a TH-45— suban de izquierda a derecha.
 - Los 77 edificios y los 462 apartamentos son interactivos desde el primer día.
   El color del edificio responde a su avance vivo y los seis indicadores de
   apartamento responden al estado/avance de sus disciplinas. Al publicar nuevos

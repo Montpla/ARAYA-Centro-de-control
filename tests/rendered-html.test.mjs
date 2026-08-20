@@ -167,6 +167,13 @@ test("los 77 edificios tienen coordenadas en ambos planos y seis apartamentos li
   assert.equal(nuevos.length, 51);
   assert.ok(nuevos.every((building) => building.progress === 0));
   assert.ok(nuevos.flatMap((building) => building.units).every((unit) => unit.progress === 0 && unit.status === "pendiente"));
+
+  // La fila superior está en perspectiva: no puede volver a simplificarse a
+  // una única altura porque los rótulos se desplazarían respecto a las cubiertas.
+  const topRow = ["37", "38", "39", "40", "41", "42", "43", "44", "45"]
+    .map((code) => layout.visualPlanCoordinates[code].y);
+  assert.equal(new Set(topRow).size, topRow.length);
+  assert.ok(topRow.every((height, index) => index === 0 || height < topRow[index - 1]));
 });
 
 test("la promoción de demostración ya no forma parte del Centro de Control", async () => {
