@@ -3084,18 +3084,19 @@ del despliegue actual de Cloudflare Workers.
   La inspección acotada del original demostró que no es una cubicación exclusiva
   de dos edificios: la hoja `CARATULA` resume Urbanismo y 26 edificios (TH-01 a
   TH-18 y TH-70 a TH-77), con el dato válido en `% Actual acumulado`.
-- Publicado mediante PR #88, #89 y #90. El lector recorre todas las hojas,
+- Publicado mediante PR #88, #89, #90 y #91. El lector recorre todas las hojas,
   reconoce tablas corrientes y matrices, y además interpreta la tabla real
   `Capitulo | Monto | En el periodo | Anterior acumulado | Actual acumulado`.
-  Calcula el total por acumulado/presupuesto, nunca por promedio simple.
-- Revisión viva **64**: 28 cambios automáticos —26 avances de edificios,
-  `urbanismAreas.0.progress`/dato equivalente efectivo y
-  `projectSnapshot.overallProgress`—. Valores del original:
+  Toma la fila TOTAL declarada (que incluye Urbanismo), nunca un promedio
+  simple ni un subtotal exclusivo de edificios.
+- Revisión viva **65**: 29 cambios automáticos —26 avances de edificios,
+  `urbanismAreas.0.progress`, `projectSnapshot.overallProgress` y la carátula
+  financiera—. El expediente quedó `sincronizado 100 %`. Valores efectivos:
   - TH-76: `8.043668717674729 %` (pantalla: 8,04 %).
   - TH-77: `8.327368133099393 %` (pantalla: 8,33 %).
   - Urbanismo: `21.246731092069879 %` (pantalla: 21,25 %).
   - Avance físico ponderado total: `22.709932764800073 %` (pantalla: 22,71 %).
-- La comprobación de producción `32416676932` confirmó revisión 64, 26 claves
+- La comprobación de producción `32417455902` confirmó revisión 65, 26 claves
   `buildings.*.progress` efectivas y los índices espaciales: TH-77 es
   `buildings.24.progress`; TH-76 es `buildings.25.progress`.
 - Un documento que nombra edificios sin generar su avance queda abierto y no
@@ -3103,9 +3104,9 @@ del despliegue actual de Cloudflare Workers.
   archivo/evento protegido en Finanzas, pero las claves físicas `buildings.*`
   mantienen área Obra; la publicación sigue exigiendo un usuario autorizado si
   el original está protegido.
-- `CURRENT_INGESTION_VERSION`: `2026-08-20.5`. El workflow de reproceso admite
+- `CURRENT_INGESTION_VERSION`: `2026-08-20.6`. El workflow de reproceso admite
   `file_id`, necesario porque existe otra copia homónima. El diagnóstico XLSX
   solo muestra filas relevantes y dos vecinas; el original permanece en R2.
 - Verificación: TypeScript y build Vinext verdes, ESLint sin errores, suite
-  completa **306/306**, despliegue `32416279534` correcto y reproceso exacto
-  `32416529542` correcto.
+  completa **306/306**, despliegue final `32417070935`, reproceso exacto
+  `32417350117` y comprobación efectiva `32417455902`, todos correctos.
