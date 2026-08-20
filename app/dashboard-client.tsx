@@ -21,6 +21,11 @@ import {
   averageNumeric,
   projectDateForDisplay,
 } from "../lib/progress-model";
+import {
+  progressBandClass,
+  progressBandDefinitions,
+  type ProgressBandId,
+} from "../lib/progress-palette";
 import { clearTrailingMonthlyActualPlaceholders } from "../lib/monthly-plan";
 import {
   technicalPlanCoordinates as planCoordinates,
@@ -1185,6 +1190,11 @@ function visualUnitStatus(unit: Unit): Unit["status"] {
   if (overall >= 100) return "terminada";
   if (overall > 0) return "en_curso";
   return "pendiente";
+}
+
+function unitProgressClasses(unit: Unit) {
+  const blocked = unit.status === "bloqueada" ? " is-blocked" : "";
+  return `${progressBandClass(unitOverallProgress(unit))}${blocked}`;
 }
 
 function disciplineClassName(discipline: UnitDiscipline) {
@@ -2804,10 +2814,14 @@ function SitePlan({
   const [selectedUrbanism, setSelectedUrbanism] = useState<UrbanismArea | null>(null);
   const [planZoom, setPlanZoom] = useState(100);
   const [planExpanded, setPlanExpanded] = useState(false);
+  const [planProgressFilter, setPlanProgressFilter] = useState<ProgressBandId | "all">("all");
   const allUnits = buildings.flatMap((item) => item.units);
-  const completed = allUnits.filter((unit) => visualUnitStatus(unit) === "terminada").length;
-  const active = allUnits.filter((unit) => visualUnitStatus(unit) === "en_curso").length;
-  const pending = allUnits.filter((unit) => ["pendiente", "bloqueada"].includes(visualUnitStatus(unit))).length;
+  const blockedUnits = allUnits.filter((unit) => unit.status === "bloqueada").length;
+  const progressLegend = progressBandDefinitions.map((band) => ({
+    ...band,
+    buildings: buildings.filter((building) => progressBandClass(building.progress) === band.id).length,
+    units: allUnits.filter((unit) => progressBandClass(unitOverallProgress(unit)) === band.id).length,
+  }));
 
   useEffect(() => {
     if (!planExpanded) return;
@@ -2853,11 +2867,30 @@ function SitePlan({
         <button onClick={() => onNavigate("viviendas")}><span>APARTAMENTOS</span><strong>Abrir {allUnits.length} fichas</strong><i>→</i></button>
         <button onClick={() => onNavigate("urbanismo")}><span>URBANISMO</span><strong>Explorar áreas y datos</strong><i>→</i></button>
       </div>
-      <div className="plan-legend">
-        <span><i className="done" />Superestructura terminada · {completed}</span>
-        <span><i className="active" />En curso · {active}</span>
-        <span><i className="pending" />Pendiente · {pending}</span>
-        <span><i className="uninformed" />Sin ficha creada · {projectSnapshot.buildingsPendingIntegration}</span>
+      <div className="plan-legend" role="group" aria-label="Filtrar el plano por nivel de avance">
+        <button
+          type="button"
+          className={`plan-legend-all ${planProgressFilter === "all" ? "active" : ""}`}
+          aria-pressed={planProgressFilter === "all"}
+          onClick={() => setPlanProgressFilter("all")}
+        >
+          Todos
+        </button>
+        {progressLegend.map((band) => (
+          <button
+            type="button"
+            key={band.id}
+            className={`${band.id} ${planProgressFilter === band.id ? "active" : ""}`}
+            aria-pressed={planProgressFilter === band.id}
+            title={`${band.detail}: ${band.buildings} edificios y ${band.units} apartamentos`}
+            onClick={() => setPlanProgressFilter((current) => current === band.id ? "all" : band.id)}
+          >
+            <i />
+            <span><strong>{band.label}</strong><small>{band.detail}</small></span>
+          </button>
+        ))}
+        <span className="plan-legend-static progress-none"><i />Sin datos</span>
+        <span className="plan-legend-static is-blocked"><i />Bloqueado · {blockedUnits}</span>
       </div>
       <p className="plan-disclaimer">
         La implantación visual conserva la organización del plano DWG y mantiene
@@ -2944,8 +2977,8 @@ function SitePlan({
                   ? visualPlanCoordinates[building.shortName]
                   : planCoordinates[building.shortName]);
               if (!point) return null;
-              const buildingVisualStatus =
-                building.progress >= 100 ? "done" : building.progress > 0 ? "active" : "pending";
+              const buildingProgressBand = progressBandClass(building.progress);
+              const buildingMuted = planProgressFilter !== "all" && planProgressFilter !== buildingProgressBand;
               return (
                 <div
                   key={building.id}
@@ -2953,7 +2986,7 @@ function SitePlan({
                   style={{ left: `${point.x}%`, top: `${point.y}%` }}
                 >
                   <button
-                    className={`plan-building-trigger ${buildingVisualStatus}`}
+                    className={`plan-building-trigger ${buildingProgressBand} ${buildingMuted ? "is-progress-muted" : ""}`}
                     title={`Abrir TH-${building.shortName.padStart(2, "0")} · ${number.format(building.progress)}%`}
                     onClick={() => {
                       setPlanExpanded(false);
@@ -2965,20 +2998,24 @@ function SitePlan({
                     TH-{building.shortName.padStart(2, "0")}
                   </button>
                   <div className="plan-home-statuses" aria-label={`Apartamentos de TH-${building.shortName.padStart(2, "0")}`}>
-                    {building.units.map((unit) => (
-                      <button
-                        key={unit.id}
-                        className={visualUnitStatus(unit)}
-                        title={`${unit.code} · ${statusLabel[visualUnitStatus(unit)]} · ${number.format(unitOverallProgress(unit))}% conjunto`}
-                        aria-label={`Abrir ${unit.code}`}
-                        onClick={() => {
-                          setPlanExpanded(false);
-                          setPlanBuilding(null);
-                          setSelectedUrbanism(null);
-                          setSelectedUnit({ building, unit });
-                        }}
-                      />
-                    ))}
+                    {building.units.map((unit) => {
+                      const unitBand = progressBandClass(unitOverallProgress(unit));
+                      const unitMuted = planProgressFilter !== "all" && planProgressFilter !== unitBand;
+                      return (
+                        <button
+                          key={unit.id}
+                          className={`${unitProgressClasses(unit)} ${unitMuted ? "is-progress-muted" : ""}`}
+                          title={`${unit.code} · ${statusLabel[visualUnitStatus(unit)]} · ${number.format(unitOverallProgress(unit))}% conjunto`}
+                          aria-label={`Abrir ${unit.code}`}
+                          onClick={() => {
+                            setPlanExpanded(false);
+                            setPlanBuilding(null);
+                            setSelectedUrbanism(null);
+                            setSelectedUnit({ building, unit });
+                          }}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -3013,7 +3050,7 @@ function SitePlan({
         </div>
       </div>
       {planBuilding && (
-        <div className="plan-building-picker" role="dialog" aria-modal="true">
+        <div className={`plan-building-picker ${progressBandClass(planBuilding.progress)}`} role="dialog" aria-modal="true">
           <button className="close-button" onClick={() => setPlanBuilding(null)} aria-label="Cerrar">×</button>
           <span className="section-kicker">TH-{planBuilding.shortName.padStart(2, "0")}</span>
           <h3>{planBuilding.name} · selecciona apartamento</h3>
@@ -3026,7 +3063,7 @@ function SitePlan({
             {planBuilding.units.map((unit) => (
               <button
                 key={unit.id}
-                className={`plan-unit ${visualUnitStatus(unit)}`}
+                className={`plan-unit ${unitProgressClasses(unit)}`}
                 onClick={() => {
                   setSelectedUnit({ building: planBuilding, unit });
                   setPlanBuilding(null);
@@ -3051,7 +3088,7 @@ function SitePlan({
         </div>
       )}
       {selectedUnit && (
-        <div className="unit-inspector" role="dialog" aria-modal="true">
+        <div className={`unit-inspector ${unitProgressClasses(selectedUnit.unit)}`} role="dialog" aria-modal="true">
           <button className="close-button" onClick={() => setSelectedUnit(null)} aria-label="Cerrar">×</button>
           <div>
             <span className="section-kicker">FICHA DE APARTAMENTO</span>
@@ -3305,7 +3342,7 @@ function UnitDetailPanel({
   const disciplines = unitDisciplines(unit);
   const openIssues = (unit.issues ?? []).filter((issue) => issue.status === "abierta");
   return (
-    <aside className="data-detail-panel" role="dialog" aria-modal="true" aria-label={`Detalle de ${unit.code}`}>
+    <aside className={`data-detail-panel ${unitProgressClasses(unit)}`} role="dialog" aria-modal="true" aria-label={`Detalle de ${unit.code}`}>
       <button className="close-button" onClick={onClose} aria-label="Cerrar detalle">×</button>
       <span className="section-kicker">FICHA INDIVIDUAL DE APARTAMENTO</span>
       <h3>{unit.code}</h3>
@@ -3378,7 +3415,7 @@ function BuildingsView({
         {buildings.map((building) => (
           <button
             key={building.id}
-            className={building.id === selected.id ? "active" : ""}
+            className={`${progressBandClass(building.progress)} ${building.id === selected.id ? "active" : ""}`}
             onClick={() => {
               setSelected(building);
               setSelectedUnit(null);
@@ -3389,7 +3426,7 @@ function BuildingsView({
           </button>
         ))}
       </section>
-      <section className="panel building-detail">
+      <section className={`panel building-detail ${progressBandClass(selected.progress)}`}>
         <div className="panel-heading">
           <div>
             <span className="section-kicker">DETALLE NORMALIZADO DEL EDIFICIO</span>
@@ -3414,7 +3451,7 @@ function BuildingsView({
           <span><strong>{selected.units.reduce((total, unit) => total + (unit.issues ?? []).filter((issue) => issue.status === "abierta").length, 0)}</strong>Incidencias</span>
         </div>
         <div className="filter-row">
-          {["todos", "en_curso", "pendiente", "terminada"].map((filter) => (
+          {["todos", "en_curso", "pendiente", "terminada", "bloqueada"].map((filter) => (
             <button
               key={filter}
               className={statusFilter === filter ? "active" : ""}
@@ -3427,11 +3464,11 @@ function BuildingsView({
         <div className="unit-grid">
           {units.map((unit) => (
             <button
-              className={`unit-card interactive ${visualUnitStatus(unit)}`}
+              className={`unit-card interactive ${unitProgressClasses(unit)}`}
               key={unit.id}
               onClick={() => setSelectedUnit(unit)}
             >
-              <div><strong>{unit.code}</strong><span>Planta {unit.floor}</span></div>
+              <div><strong>{unit.code}</strong><span>Planta {unit.floor} · {number.format(unitOverallProgress(unit))}%</span></div>
               <div className="unit-mini-disciplines compact">
                 {unitDisciplines(unit).map((discipline) => (
                   <span key={discipline.id} className={disciplineClassName(discipline)}>
@@ -3538,7 +3575,7 @@ function HousingView() {
             </select>
           </label>
           <div className="filter-row">
-            {["todos", "en_curso", "pendiente", "terminada"].map((filter) => (
+            {["todos", "en_curso", "pendiente", "terminada", "bloqueada"].map((filter) => (
               <button key={filter} className={statusFilter === filter ? "active" : ""} onClick={() => setStatusFilter(filter)}>
                 {filter === "todos" ? "Todas" : statusLabel[filter as keyof typeof statusLabel]}
               </button>
@@ -3549,7 +3586,7 @@ function HousingView() {
         <div className="housing-grid">
           {unitRows.map(({ building, unit }) => (
             <button
-              className={`housing-card ${visualUnitStatus(unit)}`}
+              className={`housing-card ${unitProgressClasses(unit)}`}
               key={unit.id}
               onClick={() => setSelectedUnit({ building, unit })}
             >

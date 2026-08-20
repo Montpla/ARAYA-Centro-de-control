@@ -429,13 +429,18 @@ test("user initials can be replaced by protected persistent profile photos", asy
 });
 
 test("spatial views derive live colors and accept new mapped buildings and urbanism areas", async () => {
-  const [dashboard, data] = await Promise.all([
+  const [dashboard, data, palette] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),
     readFile("app/demo-data.ts", "utf8"),
+    readFile("lib/progress-palette.ts", "utf8"),
   ]);
   assert.match(dashboard, /function visualUnitStatus/);
-  assert.match(dashboard, /overall >= 100/);
-  assert.match(dashboard, /overall > 0/);
+  assert.match(dashboard, /function unitProgressClasses/);
+  assert.match(dashboard, /progressBandClass\(unitOverallProgress\(unit\)\)/);
+  assert.match(dashboard, /progressBandClass\(building\.progress\)/);
+  assert.match(dashboard, /unit\.status === "bloqueada" \? " is-blocked"/);
+  assert.match(palette, /progress-81-99/);
+  assert.match(palette, /return "progress-100"/);
   assert.match(dashboard, /building\.mapCoordinates\?\.\[planMode\]/);
   assert.match(dashboard, /area\.mapCoordinates\?\.\[planMode\]/);
   assert.match(dashboard, /synchronizeSpatialSummary/);
