@@ -406,9 +406,26 @@ function detectedBuildingProgressScope(
   filas: Array<Record<string, string>>,
   knownBuildingTokens?: Set<string>,
 ) {
-  const text = filas.flatMap((row) => Object.values(row)).join(" ");
-  if (!/\b(?:avance|progreso|ejecutado|completado|cubicacion)\b/.test(normalizarCabecera(text))) return [];
-  return buildingCodesFromText(text, knownBuildingTokens);
+  // El alcance se declara en la caratula o el titulo ("Edificios 76 y 77"),
+  // no en cualquier aparicion posterior de un codigo. Unir toda la hoja hacia
+  // que el inventario historico de apartamentos TH-01...TH-77 se interpretara
+  // como alcance de la cubicacion y dejara el expediente falsamente incompleto.
+  // Se examinan las primeras filas una a una y solo se acepta una declaracion
+  // que nombre de forma conjunta dos o mas edificios.
+  const codes = new Set<string>();
+  for (const row of filas.slice(0, 40)) {
+    const values = Object.values(row).filter((value) => value.trim());
+    const candidates = [...values, values.join(" ")];
+    for (const candidate of candidates) {
+      const normalized = normalizarCabecera(candidate);
+      if (!/\b(?:edificios?|edif\.?|ed\.?|torres?|bloques?|th)\b/.test(normalized)) continue;
+      const found = buildingCodesFromText(candidate, knownBuildingTokens);
+      if (found.length < 2) continue;
+      for (const code of found) codes.add(code);
+    }
+    if (codes.size >= 2) break;
+  }
+  return [...codes];
 }
 
 function numeroDeCelda(valor: string) {

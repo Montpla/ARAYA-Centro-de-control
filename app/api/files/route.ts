@@ -1634,6 +1634,14 @@ export async function POST(request: Request) {
               extension,
               extraction.warnings,
             )),
+        ...(debugRequested && user.financeAccess ? {
+          diagnostic: {
+            expectedBuildingCodes,
+            buildingUpdates: extraction.updates
+              .filter((update) => /^buildings\.TH-\d+\.(?:progress|phases(?:\.|$))/i.test(update.key))
+              .map((update) => ({ key: update.key, value: update.value })),
+          },
+        } : {}),
       },
       { status: 201 },
     );

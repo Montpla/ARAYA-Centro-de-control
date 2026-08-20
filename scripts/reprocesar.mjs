@@ -133,5 +133,8 @@ for (const f of objetivo) {
     continue;
   }
   console.log(`✔ ${f.originalName}: ${cuerpo.message ?? cuerpo.processingSummary ?? "reprocesado"}`);
+  if (process.env.DEBUG === "1" && cuerpo.diagnostic) {
+    console.log(`   ↳ diagnóstico de edificios: ${JSON.stringify(cuerpo.diagnostic)}`);
+  }
   if (cuerpo.debug) console.log(`   ↳ detalle del error: ${cuerpo.debug}`);
 }

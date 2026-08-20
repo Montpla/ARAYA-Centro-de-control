@@ -141,6 +141,8 @@ construir(SALIDA / "cubicacion-alcance-76-77.xlsx", [
     ["CUBICACION Nº8 - EDIFICIOS 76 Y 77", ""],
     ["RELACION DE OBRA EJECUTADA", ""],
     ["% Avance fisico ejecutado", 0.1845],
+    ["Inventario historico de apartamentos", ""],
+    ["TH-01", "TH-07", "TH-19", "TH-31", "TH-53", "TH-69", "TH-73"],
 ])
 
 
