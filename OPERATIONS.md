@@ -62,7 +62,9 @@ cinco segundos.
 - `Calidad y cobertura`: estado de cargas colaborativas, propuestas,
   discrepancias y puntos vivos por área.
 - `Plano operativo`: integridad de coordenadas, edificios integrados,
-  apartamentos, disciplinas y áreas urbanas.
+  apartamentos, disciplinas y áreas urbanas. El inventario vigente es de 77
+  edificios posicionados y 462 apartamentos interactivos; los elementos aún no
+  iniciados permanecen al 0 % y se colorean al publicar su avance.
 - `Planificación`: avance físico, referencias del plan, paquetes desviados,
   criticidad y previsión de fin.
 - `Conciliaciones`: diferencias conservadas entre fuentes, con acceso directo a

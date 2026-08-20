@@ -88,11 +88,17 @@ test("ningún edificio contradice ya a sus apartamentos", () => {
   }
 });
 
-test("la media de todos los edificios reproduce el avance global del plan", () => {
+test("los 26 edificios medidos conservan su avance y los 51 restantes parten de cero", () => {
   // El plan de Project muestra el proyecto al 22% en su raíz. Si la agregación
-  // es fiel, la media de los 26 edificios cae cerca de esa cifra.
-  const media = buildings.reduce((s, b) => s + b.progress, 0) / buildings.length;
+  // es fiel, la media del bloque histórico de 26 edificios cae cerca de esa
+  // cifra. Los 51 del DWG ya existen en el modelo, pero no inventan avance.
+  const medidos = buildings.slice(0, 26);
+  const pendientes = buildings.slice(26);
+  const media = medidos.reduce((s, b) => s + b.progress, 0) / medidos.length;
   assert.ok(media > 17 && media < 25, `media global ${media.toFixed(1)}% fuera de rango`);
+  assert.equal(buildings.length, 77);
+  assert.equal(pendientes.length, 51);
+  assert.ok(pendientes.every((building) => building.progress === 0));
 });
 
 test("las fechas vivas ISO se presentan en formato español sin alterar las antiguas", () => {

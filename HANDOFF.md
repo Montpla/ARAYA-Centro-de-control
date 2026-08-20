@@ -4,6 +4,28 @@ Actualizado: 20/08/2026
 Zona horaria del usuario: Europe/Madrid
 Idioma de trabajo: español
 
+## Implantación completa de los 77 edificios (20/08/2026)
+
+- El modelo base ya contiene los **77 edificios TH-01 a TH-77** y sus **462
+  apartamentos** (seis por edificio). Los 26 que ya tenían medición conservan
+  sus avances y su orden histórico; los 51 restantes se añaden después, con
+  avance y disciplinas al 0 %, para no alterar las claves vivas existentes.
+- Las coordenadas de los dos fondos del plano están centralizadas en
+  `lib/site-plan-layout.ts`: cada edificio tiene posición en la implantación
+  visual y en el plano técnico. No volver a mantener mapas parciales dentro de
+  `app/dashboard-client.tsx`.
+- Los 77 edificios y los 462 apartamentos son interactivos desde el primer día.
+  El color del edificio responde a su avance vivo y los seis indicadores de
+  apartamento responden al estado/avance de sus disciplinas. Al publicar nuevos
+  datos, el refresco normal de cinco segundos los recolorea sin redibujar el
+  plano.
+- La medición de Project sigue documentando sólo los 26 edificios iniciados; no
+  inventar avance para los otros 51. Que una ficha exista al 0 % no significa
+  que su obra haya comenzado.
+- `scripts/deploy.mjs` comprueba en producción que `/api/control-room` devuelva
+  77 edificios integrados y posicionados, 462 apartamentos y cero edificios
+  pendientes. Un despliegue que vuelva a recortar el plano queda bloqueado.
+
 ## Reanudación desde GitHub (20/08/2026)
 
 - Fuente canónica confirmada por el usuario: GitHub,

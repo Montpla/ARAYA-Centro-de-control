@@ -6,6 +6,10 @@ import {
   weightedUnitProgress,
   type PhaseProgress,
 } from "../lib/progress-model.ts";
+import {
+  buildingMapCoordinates,
+  masterPlanBuildingCodes,
+} from "../lib/site-plan-layout.ts";
 
 export type UnitStatus = "terminada" | "en_curso" | "bloqueada" | "pendiente";
 
@@ -129,15 +133,16 @@ export type DataSource = {
 // albañilería e instalaciones entran directas; los acabados son la media de las
 // cinco disciplinas de terminación del informe (pintura, revestimientos,
 // herrería, carpintería y misceláneos), que en su mayoría siguen a 0%. Los
-// edificios 13 a 26, aún sin acabados, conservan la medición del plan de obra de
-// Project (Araya 26 edificios · CORTE_30072026), atribuida por capítulo y
-// promediada por duración. En ambos casos son la medición real, no una cifra
-// derivada de un total: de ellas sale el porcentaje del edificio
-// (lib/progress-model.ts). Su media sirve para leer el plano, pero no sustituye
-// el avance físico oficial, que está ponderado por el monto total de obra.
+// Los otros 14 edificios del programa de Project, aún sin acabados, conservan
+// la medición del plan de obra (Araya 26 edificios · CORTE_30072026), atribuida
+// por capítulo y promediada por duración. Los 51 TH restantes ya se crean en el
+// modelo desde la implantación DWG, con todas sus fases y apartamentos al 0%,
+// listos para recibir avance sin tener que redibujar ni reprogramar el panel.
+// Las 26 primeras filas mantienen exactamente su orden histórico: las claves
+// vivas publicadas por posición dependen de él.
 //
 // Columnas: [código, obra común, superestructura, albañilería, instalaciones, acabados].
-const buildingPhaseRows: Array<[string, number, number, number, number, number]> = [
+const measuredBuildingPhaseRows: Array<[string, number, number, number, number, number]> = [
   ["3", 100, 100, 96.7, 34.7, 32.3],
   ["2", 100, 100, 96.7, 34.7, 21.7],
   ["4", 100, 100, 80, 34.7, 12.7],
@@ -165,6 +170,13 @@ const buildingPhaseRows: Array<[string, number, number, number, number, number]>
   ["77", 73.9, 0, 0, 0, 0],
   ["76", 73.9, 0, 0, 0, 0],
 ];
+
+const measuredBuildingCodes = new Set(measuredBuildingPhaseRows.map(([code]) => code));
+const pendingBuildingPhaseRows: Array<[string, number, number, number, number, number]> =
+  masterPlanBuildingCodes
+    .filter((code) => !measuredBuildingCodes.has(code))
+    .map((code) => [code, 0, 0, 0, 0, 0]);
+const buildingPhaseRows = [...measuredBuildingPhaseRows, ...pendingBuildingPhaseRows];
 
 // Desvío de días y fin previsto por edificio, en el mismo orden.
 const buildingScheduleRows: Array<[string, number, string]> = [
@@ -220,7 +232,7 @@ const buildingSchedule = new Map(
 
 export const buildings: Building[] = buildingPhaseRows.map(([code, ...valores]) => {
   const phases = phasesFromValues(valores);
-  const schedule = buildingSchedule.get(code) ?? { deviationDays: 0, forecastFinish: "" };
+  const schedule = buildingSchedule.get(code) ?? { deviationDays: 0, forecastFinish: "Pendiente de programar" };
   return {
     id: `edificio-${code}`,
     name: `Edificio ${code}`,
@@ -230,8 +242,14 @@ export const buildings: Building[] = buildingPhaseRows.map(([code, ...valores]) 
     deviationDays: schedule.deviationDays,
     forecastFinish: schedule.forecastFinish,
     units: makeUnits(code, phases),
+    mapCoordinates: buildingMapCoordinates[code],
   };
 });
+
+const apartmentUnits = buildings.flatMap((building) => building.units);
+const apartmentAverageProgressNow = apartmentUnits.length
+  ? apartmentUnits.reduce((sum, unit) => sum + unit.progress, 0) / apartmentUnits.length
+  : 0;
 
 // Avance físico oficial del proyecto al corte de julio. Lo declara el Informe
 // Ejecutivo y coincide con el último "Ejecutado Real" del Excel maestro de la
@@ -493,7 +511,7 @@ export const dataSources: DataSource[] = [
     records: "TH-01 a TH-77 · viales · estacionamientos · urbanismo",
     notes: [
       "La implantación se contrastó con la fotografía aportada: coinciden el perímetro, la retícula vial y la distribución general.",
-      "Sólo 26 edificios tienen datos de avance integrados; los otros 51 permanecen visibles como implantación sin estado operativo.",
+      "Los 77 edificios y sus 462 apartamentos están creados y posicionados; 26 conservan la medición del cronograma y los 51 restantes parten de 0% hasta recibir avance.",
       "Se conserva el DWG original de 17,59 MB para descarga y revisión en software CAD compatible.",
     ],
     downloadUrl: "/data-center/002-implantacion-general.dwg",
@@ -788,7 +806,7 @@ export const projectSnapshot = {
   // son el punto de partida y se mantienen alineados con ese corte.
   overallProgress: overallProgressNow,
   activeBuildingsProgress: activeBuildingsProgressNow,
-  apartmentAverageProgress: 18.8,
+  apartmentAverageProgress: apartmentAverageProgressNow,
   plannedProgress: 26.61,
   scheduleProgress: 22.37,
   deviationPoints: Math.round((overallProgressNow - 26.61) * 100) / 100,
@@ -796,9 +814,9 @@ export const projectSnapshot = {
   baselineFinish: "31/05/2027",
   deviationDays: 7,
   masterPlanBuildingCount: 77,
-  buildingCount: 26,
-  buildingsPendingIntegration: 51,
-  unitCount: 156,
+  buildingCount: buildings.length,
+  buildingsPendingIntegration: 0,
+  unitCount: apartmentUnits.length,
   urbanismProgress: 18.28,
   urbanismPlanned: 16.18,
   cubicacionesMeasured: 67342153.573152,

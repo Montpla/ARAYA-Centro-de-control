@@ -127,6 +127,32 @@ async function smokeVerify() {
   }
   console.log(`✔ Plan operativo y Curva S coinciden (${kpiPlan}%, mismo corte).`);
 
+  // El plano general debe conservar siempre el inventario completo del DWG,
+  // incluso cuando 51 edificios todavía no tengan avance. Si un dato vivo
+  // antiguo volviera a recortar la colección a los 26 edificios medidos, esta
+  // comprobación detiene el despliegue antes de publicar una implantación
+  // incompleta.
+  const {
+    masterPlanBuildings,
+    integratedBuildings,
+    mappedBuildings,
+    apartments,
+    pendingBuildings,
+  } = controlRoom.spatial ?? {};
+  if (
+    masterPlanBuildings !== 77 ||
+    integratedBuildings !== 77 ||
+    mappedBuildings !== 77 ||
+    apartments !== 462 ||
+    pendingBuildings !== 0
+  ) {
+    console.error(
+      "✖ La implantación publicada no contiene los 77 edificios posicionados y sus 462 apartamentos.",
+    );
+    process.exit(1);
+  }
+  console.log("✔ Implantación completa: 77 edificios posicionados y 462 apartamentos interactivos.");
+
   if (!controlRoom.documents || typeof controlRoom.documents.total !== "number") {
     console.error("✖ /api/control-room no devolvió un resumen de documentos válido.");
     process.exit(1);

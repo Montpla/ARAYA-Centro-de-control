@@ -866,11 +866,11 @@ test("natural spatial identities resolve to stable slots across repeated extract
 
   assert.deepEqual(
     published.filter((update) => /^buildings\.\d+$/.test(update.key)).map((update) => update.key),
-    ["buildings.26", "buildings.27", "buildings.28"],
+    ["buildings.77", "buildings.78", "buildings.79"],
   );
   assert.deepEqual(
     published.filter((update) => update.key.includes(".units.")).map((update) => update.key),
-    ["buildings.26.units.0", "buildings.27.units.0", "buildings.28.units.0"],
+    ["buildings.77.units.0", "buildings.78.units.0", "buildings.79.units.0"],
   );
   assert.deepEqual(
     published.filter((update) => update.key.startsWith("urbanismAreas.")).map((update) => update.key),
@@ -881,23 +881,23 @@ test("natural spatial identities resolve to stable slots across repeated extract
     key: "buildings.edificio81",
     value: { id: "edificio-81", progress: 55 },
   }], values)[0];
-  assert.equal(sameIdentity.key, "buildings.27");
+  assert.equal(sameIdentity.key, "buildings.78");
   assert.equal(sameIdentity.value.progress, 55);
 
-  const deletedValue = values["buildings.27"];
-  delete values["buildings.27"];
+  const deletedValue = values["buildings.78"];
+  delete values["buildings.78"];
   const afterDelete = resolveSpatialIdentityUpdates([{
     key: "buildings.edificio83",
     value: { id: "edificio-83", name: "Edificio 83", shortName: "83" },
   }], values)[0];
-  assert.equal(afterDelete.key, "buildings.29", "a deleted stable slot must never be reused");
+  assert.equal(afterDelete.key, "buildings.80", "a deleted stable slot must never be reused");
   values[afterDelete.key] = afterDelete.value;
-  values["buildings.27"] = deletedValue;
+  values["buildings.78"] = deletedValue;
   const restoredIdentity = resolveSpatialIdentityUpdates([{
     key: "buildings.edificio81",
     value: { id: "edificio-81", progress: 60 },
   }], values)[0];
-  assert.equal(restoredIdentity.key, "buildings.27");
+  assert.equal(restoredIdentity.key, "buildings.78");
 });
 
 test("one publication cannot contain both an ancestor and its child", async () => {

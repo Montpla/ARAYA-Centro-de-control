@@ -25,7 +25,7 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /Nuevo proveedor/);
   assert.match(source, /Añadir métrica/);
   assert.match(source, /IMPLANTACIÓN GENERAL · DWG 002/);
-  assert.match(source, /156 apartamentos/);
+  assert.match(source, /462 apartamentos/);
   assert.match(source, /araya-site-plan-clean\.png/);
   assert.match(source, /planCoordinates/);
   assert.match(source, /Abrir documento/);
@@ -122,12 +122,17 @@ test("desktop, tablet and mobile share the requested grouped navigation", async 
   assert.match(source, /className="mobile-menu-links"/);
 });
 
-test("normalized source data contains 26 buildings and 156 apartments", async () => {
+test("normalized source data contains all 77 buildings and 462 apartments", async () => {
   const source = await readFile("app/demo-data.ts", "utf8");
-  assert.match(source, /buildingCount: 26/);
-  assert.match(source, /unitCount: 156/);
+  const { buildings, projectSnapshot } = await import("../app/demo-data.ts");
+  assert.equal(buildings.length, 77);
+  assert.equal(buildings.flatMap((building) => building.units).length, 462);
+  assert.equal(projectSnapshot.buildingCount, 77);
+  assert.equal(projectSnapshot.unitCount, 462);
+  assert.match(source, /buildingCount: buildings\.length/);
+  assert.match(source, /unitCount: apartmentUnits\.length/);
   assert.match(source, /masterPlanBuildingCount: 77/);
-  assert.match(source, /buildingsPendingIntegration: 51/);
+  assert.match(source, /buildingsPendingIntegration: 0/);
   assert.match(source, /urbanismProgress: 18\.28/);
   // El corte de julio: el avance global se calcula del modelo vivo
   // (overallProgressNow) y el plan operativo se lee del mes del corte (26,61,
@@ -138,6 +143,30 @@ test("normalized source data contains 26 buildings and 156 apartments", async ()
   assert.match(source, /002 - IMPLANTACIÓN GENERAL\.dwg/);
   assert.match(source, /\/data-center\/002-implantacion-general\.dwg/);
   assert.match(source, /urbanismAreas/);
+});
+
+test("los 77 edificios tienen coordenadas en ambos planos y seis apartamentos listos", async () => {
+  const [{ buildings }, layout] = await Promise.all([
+    import("../app/demo-data.ts"),
+    import("../lib/site-plan-layout.ts"),
+  ]);
+  const expectedCodes = Array.from({ length: 77 }, (_, index) => String(index + 1));
+  assert.deepEqual([...buildings.map((building) => building.shortName)].sort((a, b) => Number(a) - Number(b)), expectedCodes);
+  assert.deepEqual(Object.keys(layout.visualPlanCoordinates).sort((a, b) => Number(a) - Number(b)), expectedCodes);
+  assert.deepEqual(Object.keys(layout.technicalPlanCoordinates).sort((a, b) => Number(a) - Number(b)), expectedCodes);
+
+  for (const building of buildings) {
+    assert.equal(building.units.length, 6, `TH-${building.shortName} debe tener seis apartamentos`);
+    assert.ok(building.mapCoordinates?.visual, `TH-${building.shortName} necesita posición visual`);
+    assert.ok(building.mapCoordinates?.technical, `TH-${building.shortName} necesita posición técnica`);
+    assert.ok(building.mapCoordinates.visual.x > 0 && building.mapCoordinates.visual.x < 100);
+    assert.ok(building.mapCoordinates.visual.y > 0 && building.mapCoordinates.visual.y < 100);
+  }
+
+  const nuevos = buildings.filter((building) => Number(building.shortName) >= 19 && Number(building.shortName) <= 69);
+  assert.equal(nuevos.length, 51);
+  assert.ok(nuevos.every((building) => building.progress === 0));
+  assert.ok(nuevos.flatMap((building) => building.units).every((unit) => unit.progress === 0 && unit.status === "pendiente"));
 });
 
 test("la promoción de demostración ya no forma parte del Centro de Control", async () => {

@@ -22,6 +22,10 @@ import {
   projectDateForDisplay,
 } from "../lib/progress-model";
 import { clearTrailingMonthlyActualPlaceholders } from "../lib/monthly-plan";
+import {
+  technicalPlanCoordinates as planCoordinates,
+  visualPlanCoordinates,
+} from "../lib/site-plan-layout";
 import { computedView } from "../lib/computed-view";
 import {
   STAT_CARD_FRESHNESS_KEYS,
@@ -918,8 +922,8 @@ const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
     sourceIds: ["source-dwg-implantacion", "source-mpp", "source-june-works"],
     modules: [
       { id: "masterplan", label: "Plano general", detail: "Implantación visual y plano técnico DWG.", status: "live", sourceIds: ["source-dwg-implantacion"] },
-      { id: "building-layer", label: "Capa de edificios", detail: "26 edificios integrados y 51 posiciones de implantación.", status: "live", sourceIds: ["source-dwg-implantacion", "source-mpp"], targetView: "edificios" },
-      { id: "apartment-layer", label: "Capa de apartamentos", detail: "156 fichas operativas enlazadas con sus edificios.", status: "live", sourceIds: ["source-mpp"], targetView: "viviendas" },
+      { id: "building-layer", label: "Capa de edificios", detail: "77 edificios nombrados, posicionados y listos para actualizarse.", status: "live", sourceIds: ["source-dwg-implantacion", "source-mpp"], targetView: "edificios" },
+      { id: "apartment-layer", label: "Capa de apartamentos", detail: "462 fichas operativas enlazadas con sus edificios.", status: "live", sourceIds: ["source-dwg-implantacion", "source-mpp"], targetView: "viviendas" },
       { id: "urban-layer", label: "Capas de urbanismo", detail: "Viales, estacionamientos, paisajismo, acceso y equipamientos.", status: "partial", sourceIds: ["source-dwg-implantacion", "source-june-works"], targetView: "urbanismo" },
     ],
     connections: [{ label: "Edificios", view: "edificios" }, { label: "Apartamentos", view: "viviendas" }, { label: "Urbanismo", view: "urbanismo" }],
@@ -930,7 +934,7 @@ const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
     description: "La ficha de cada edificio concentra apartamentos, avance, desviaciones, incidencias y futuras evidencias.",
     sourceIds: ["source-mpp", "source-june-works", "source-xls"],
     modules: [
-      { id: "building-register", label: "Registro de 26 edificios", detail: "Avance, previsión y desviación por edificio.", status: "live", sourceIds: ["source-mpp"] },
+      { id: "building-register", label: "Registro de 77 edificios", detail: "Avance, previsión y desviación por edificio.", status: "live", sourceIds: ["source-dwg-implantacion", "source-mpp"] },
       { id: "disciplines", label: "Disciplinas", detail: "Superestructura, albañilería, instalaciones y acabados.", status: "partial", sourceIds: ["source-june-works", "source-mpp"], pendingFields: ["Avance por disciplina y edificio", "Fecha de corte"] },
       { id: "materials", label: "Materiales y suministros", detail: "Pedidos vencidos y restricciones de producción.", status: "partial", sourceIds: ["source-june-works"], targetView: "proveedores", pendingFields: ["Pedido", "Proveedor", "Entrega comprometida", "Estado"] },
       { id: "field-evidence", label: "Evidencias de campo", detail: "Espacio preparado para fotografías, actas e incidencias.", status: "ready", sourceIds: [], pendingFields: ["Fotografías", "Responsable", "Incidencias", "Acta semanal"] },
@@ -943,7 +947,7 @@ const workspaceAreaConfigs: Partial<Record<View, WorkspaceAreaConfig>> = {
     description: "Cada apartamento admite nuevas disciplinas, responsables, incidencias, documentos y evidencias sin cambiar la interfaz.",
     sourceIds: ["source-mpp", "source-june-works"],
     modules: [
-      { id: "unit-progress", label: "Avance por apartamento", detail: "Superestructura disponible en las 156 fichas.", status: "live", sourceIds: ["source-mpp"] },
+      { id: "unit-progress", label: "Avance por apartamento", detail: "Seis apartamentos preparados en cada uno de los 77 edificios.", status: "live", sourceIds: ["source-dwg-implantacion", "source-mpp"] },
       { id: "unit-disciplines", label: "Disciplinas interiores", detail: "Estructura preparada para albañilería, instalaciones y acabados.", status: "ready", sourceIds: [], pendingFields: ["Albañilería", "Electricidad", "Sanitaria", "Climatización", "Acabados"] },
       { id: "unit-issues", label: "Incidencias y responsables", detail: "Responsable, criticidad, fecha objetivo y estado.", status: "ready", sourceIds: [], pendingFields: ["Responsable", "Incidencia", "Prioridad", "Fecha objetivo", "Estado"] },
       { id: "unit-documents", label: "Documentación del apartamento", detail: "Espacio para planos, fotos, inspecciones y entrega.", status: "ready", sourceIds: [], pendingFields: ["Plano", "Fotografías", "Checklist", "Acta de entrega"] },
@@ -1096,7 +1100,7 @@ const projects: Record<ProjectId, {
     id: "araya",
     code: "AR",
     name: "ARAYA",
-    summary: "26 edificios · 156 apartamentos",
+    summary: "77 edificios · 462 apartamentos",
     cutoff: "",
     demo: false,
   },
@@ -1534,64 +1538,6 @@ async function uploadProjectFile(
   window.dispatchEvent(new CustomEvent("araya-files-updated"));
   return result;
 }
-
-const planCoordinates: Record<string, { x: number; y: number }> = {
-  "1": { x: 20.4, y: 74.4 },
-  "2": { x: 28.7, y: 74.6 },
-  "3": { x: 36.7, y: 74.5 },
-  "4": { x: 38.4, y: 70.7 },
-  "5": { x: 31.1, y: 70.6 },
-  "6": { x: 23.3, y: 70.5 },
-  "7": { x: 20.7, y: 64.7 },
-  "8": { x: 28.7, y: 64.8 },
-  "9": { x: 36.7, y: 64.8 },
-  "10": { x: 36.7, y: 60.8 },
-  "11": { x: 28.7, y: 60.7 },
-  "12": { x: 20.6, y: 60.7 },
-  "13": { x: 21.6, y: 54.5 },
-  "14": { x: 29.8, y: 54.5 },
-  "15": { x: 38.1, y: 54.6 },
-  "16": { x: 39.1, y: 50.6 },
-  "17": { x: 30.6, y: 50.5 },
-  "18": { x: 22.1, y: 50.4 },
-  "70": { x: 66.6, y: 50.3 },
-  "71": { x: 59.0, y: 50.2 },
-  "72": { x: 59.0, y: 54.1 },
-  "73": { x: 66.6, y: 54.2 },
-  "74": { x: 66.5, y: 61.3 },
-  "75": { x: 58.9, y: 61.2 },
-  "76": { x: 59.0, y: 65.1 },
-  "77": { x: 66.6, y: 65.1 },
-};
-
-const visualPlanCoordinates: Record<string, { x: number; y: number }> = {
-  "1": { x: 19.9, y: 80.21 },
-  "2": { x: 28.26, y: 80.37 },
-  "3": { x: 36.78, y: 80.62 },
-  "4": { x: 37.01, y: 76.94 },
-  "5": { x: 28.54, y: 76.72 },
-  "6": { x: 20.04, y: 76.5 },
-  "7": { x: 20.7, y: 68.13 },
-  "8": { x: 28.98, y: 68.26 },
-  "9": { x: 37.31, y: 68.45 },
-  "10": { x: 37.57, y: 64.89 },
-  "11": { x: 29.23, y: 64.7 },
-  "12": { x: 20.91, y: 64.51 },
-  "13": { x: 21.44, y: 56.34 },
-  "14": { x: 29.83, y: 56.52 },
-  "15": { x: 38.05, y: 56.68 },
-  "16": { x: 38.24, y: 53.12 },
-  "17": { x: 30.0, y: 52.97 },
-  "18": { x: 21.68, y: 52.81 },
-  "70": { x: 67.39, y: 52.81 },
-  "71": { x: 58.91, y: 52.62 },
-  "72": { x: 58.74, y: 56.24 },
-  "73": { x: 67.2, y: 56.4 },
-  "74": { x: 67.11, y: 64.67 },
-  "75": { x: 58.58, y: 64.45 },
-  "76": { x: 58.46, y: 68.16 },
-  "77": { x: 66.97, y: 68.32 },
-};
 
 const urbanismMapPoints: Record<string, { x: number; y: number; short: string }> = {
   "urban-general": { x: 50.5, y: 69.5, short: "URB" },
@@ -2898,7 +2844,7 @@ function SitePlan({
       </div>
       <div className="plan-data-strip">
         <span><strong>{projectSnapshot.masterPlanBuildingCount}</strong> TH identificados en implantación</span>
-        <span><strong>{projectSnapshot.buildingCount}</strong> edificios con datos integrados</span>
+        <span><strong>{projectSnapshot.buildingCount}</strong> edificios creados e interactivos</span>
         <span><strong>{projectSnapshot.unitCount}</strong> apartamentos en seguimiento</span>
         <span><strong>{projectSnapshot.buildingsPendingIntegration}</strong> TH pendientes de integrar</span>
       </div>
@@ -2911,7 +2857,7 @@ function SitePlan({
         <span><i className="done" />Superestructura terminada · {completed}</span>
         <span><i className="active" />En curso · {active}</span>
         <span><i className="pending" />Pendiente · {pending}</span>
-        <span><i className="uninformed" />Sin datos integrados · {projectSnapshot.buildingsPendingIntegration}</span>
+        <span><i className="uninformed" />Sin ficha creada · {projectSnapshot.buildingsPendingIntegration}</span>
       </div>
       <p className="plan-disclaimer">
         La implantación visual conserva la organización del plano DWG y mantiene
