@@ -3,6 +3,7 @@ import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { buildings, monthlyPlan, overallProgressNow, projectSnapshot } from "../app/demo-data.ts";
+import { clearTrailingMonthlyActualPlaceholders } from "../lib/monthly-plan.ts";
 
 // Guarda contra la clase de bug que motivó esta suite: un resumen calculado
 // a partir de otros datos en vivo (antonelyDetailTotals, plannedProgress...)
@@ -31,6 +32,31 @@ test("el avance físico oficial de julio es 22,71% y no la media simple de edifi
   assert.equal(projectSnapshot.overallProgress, 22.71);
   assert.equal(monthlyPlan.at(-1)?.actual, null);
   assert.equal(monthlyPlan.findLast((entry) => entry.actual !== null)?.actual, 22.71);
+});
+
+test("los ceros de fórmula de meses futuros no desplazan el corte de la Curva S", () => {
+  const planContaminado = monthlyPlan.map((point) => ({
+    ...point,
+    actual: point.actual ?? 0,
+  }));
+
+  const limpiados = clearTrailingMonthlyActualPlaceholders(planContaminado);
+  assert.equal(limpiados, monthlyPlan.length - 14);
+  assert.equal(planContaminado[13].actual, 22.71);
+  assert.ok(planContaminado.slice(14).every((point) => point.actual === null));
+
+  const corte = planContaminado.findLast((point) => point.actual !== null);
+  assert.equal(corte.actual, 22.71);
+  assert.equal(corte.planned, 26.61);
+});
+
+test("una Curva S que todavía está realmente a cero conserva sus ceros iniciales", () => {
+  const sinArrancar = [
+    { month: "jun 25", planned: 0, actual: 0 },
+    { month: "jul", planned: 0.52, actual: 0 },
+  ];
+  assert.equal(clearTrailingMonthlyActualPlaceholders(sinArrancar), 0);
+  assert.deepEqual(sinArrancar.map((point) => point.actual), [0, 0]);
 });
 
 test("computed-view summaries recompute on every read and never enter the snapshot-freeze target list", async () => {
@@ -91,6 +117,11 @@ test("overallProgress and plannedProgress always come from the same monthlyPlan 
     /const plannedProgress = cutoffEntry\?\.planned/,
     "plannedProgress debe leerse del mismo cutoffEntry que overallProgress (servidor); si esto falta, el KPI puede quedarse comparando un mes distinto al del avance físico (bug real, corregido el 13/08/2026)",
   );
+  assert.match(
+    spatialLiveData,
+    /clearTrailingMonthlyActualPlaceholders\(monthlyPlan\)/,
+    "el servidor debe retirar los ceros de fórmula futuros antes de calcular el corte",
+  );
 
   // Cliente: app/dashboard-client.tsx (synchronizeSpatialSummary)
   assert.match(
@@ -102,6 +133,11 @@ test("overallProgress and plannedProgress always come from the same monthlyPlan 
     dashboard,
     /projectSnapshot\.overallProgress = cutoffActual;\s*\n\s*projectSnapshot\.plannedProgress = cutoffPlanned;/,
     "la reasignación cliente debe fijar overallProgress y plannedProgress juntos, en el mismo bloque",
+  );
+  assert.match(
+    dashboard,
+    /clearTrailingMonthlyActualPlaceholders\(monthlyPlan\)/,
+    "el cliente debe retirar los ceros de fórmula futuros antes de pintar resumen y Curva S",
   );
   // El avance físico oficial no se puede sustituir por la media simple de los
   // 26 edificios: no pondera el monto total de obra y produjo el 19,39% falso.

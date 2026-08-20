@@ -21,6 +21,7 @@ import {
   averageNumeric,
   projectDateForDisplay,
 } from "../lib/progress-model";
+import { clearTrailingMonthlyActualPlaceholders } from "../lib/monthly-plan";
 import { computedView } from "../lib/computed-view";
 import {
   STAT_CARD_FRESHNESS_KEYS,
@@ -1368,6 +1369,10 @@ function synchronizeSpatialSummary() {
     averageNumeric(urbanismAreas.map((area) => area.progress)) ?? projectSnapshot.urbanismProgress;
   projectSnapshot.urbanismPlanned =
     averageNumeric(urbanismAreas.map((area) => area.planned)) ?? projectSnapshot.urbanismPlanned;
+  // Los Excel de obra dejan fórmulas con valor 0 en los meses futuros. No son
+  // cortes ejecutados: se limpian antes de buscar el último dato real para que
+  // resumen y Curva S compartan siempre el mismo corte válido.
+  clearTrailingMonthlyActualPlaceholders(monthlyPlan);
   let cutoffIndex = -1;
   for (let index = 0; index < monthlyPlan.length; index += 1) {
     if (monthlyPlan[index].actual !== null) cutoffIndex = index;

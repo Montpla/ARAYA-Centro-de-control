@@ -15,6 +15,7 @@ import {
   averageNumeric,
   projectDateForDisplay,
 } from "./progress-model";
+import { clearTrailingMonthlyActualPlaceholders } from "./monthly-plan";
 import { unitOverallProgress } from "./unit-progress";
 
 export function materializeSpatialLiveData(values: LiveDataMap) {
@@ -30,6 +31,7 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
   );
   const snapshot = materializeLiveRoot("projectSnapshot", projectSnapshot, values);
   const monthlyPlan = materializeLiveRoot("monthlyPlan", baselineMonthlyPlan, values);
+  clearTrailingMonthlyActualPlaceholders(monthlyPlan);
   const unitCount = buildings.reduce((total, building) => total + building.units.length, 0);
   const constructionDisciplines = materializeLiveRoot(
     "constructionDisciplines",
