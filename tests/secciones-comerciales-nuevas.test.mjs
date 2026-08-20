@@ -47,6 +47,22 @@ test("los aliados guardan lo que consta y no inventan los nombres", () => {
   assert.equal(julio.names, "");
 });
 
+test("las reservas mensuales por modelo conservan las cifras del informe de julio", () => {
+  assert.deepEqual(juneReport.juneReport.sales.reservationsByModel, {
+    Balcony: 6.3,
+    Garden: 4.9,
+    Sunset: 6.8,
+    Flex: 3.8,
+  });
+  for (const model of Object.keys(juneReport.juneReport.sales.reservationsByModel)) {
+    assert.equal(
+      liveData.isCommercialLiveKey(`juneReport.sales.reservationsByModel.${model}`),
+      true,
+      model,
+    );
+  }
+});
+
 test("el campo de fase no impone un catálogo cerrado", () => {
   // "phase" entra en la lista de campos de enumeración del contrato, que sólo
   // admite los valores del dato base: usarlo dejaría fuera una Fase III el día

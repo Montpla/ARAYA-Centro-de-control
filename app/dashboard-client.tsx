@@ -19,7 +19,6 @@ import {
 import {
   activeBuildingsProgress,
   averageNumeric,
-  projectProgressFromBuildings,
 } from "../lib/progress-model";
 import { computedView } from "../lib/computed-view";
 import {
@@ -1341,19 +1340,14 @@ function synchronizeSpatialSummary() {
   // se derivan de nada y no conviene envolver el objeto entero.
   juneReport = liveJuneReportFinance(juneReport, antonelyDetailTotals, antonelyBalanceLines, financialProjection);
   payablesReconciliation = livePayablesReconciliation(payablesReconciliation, antonelyDetailTotals.payablesTotalDop);
-  // Espejo del cálculo del servidor (lib/spatial-live-data.ts): el avance
-  // físico global y el último "Ejecutado Real" de la Curva S salen del avance
-  // real de los edificios, para que se muevan A LA VEZ que ellos. El avance por
-  // apartamento se conserva como métrica de apoyo.
+  // Espejo del cálculo del servidor (lib/spatial-live-data.ts). El avance por
+  // apartamento y el ritmo de edificios se conservan como métricas de apoyo;
+  // el avance físico oficial procede del último punto publicado de la Curva S.
   const allUnits = buildings.flatMap((building) => building.units);
   if (allUnits.length) {
     projectSnapshot.apartmentAverageProgress =
       allUnits.reduce((sum, unit) => sum + unitOverallProgress(unit), 0) / allUnits.length;
   }
-  // El mes del corte adopta el promedio vivo de los edificios como "Ejecutado
-  // Real", y de esa misma fila se lee el "Plan operativo" (KPI), para no
-  // comparar el avance de julio contra el plan congelado de junio.
-  const overallFromBuildings = projectProgressFromBuildings(buildings);
   // Ritmo de los edificios ya en marcha, al lado del global. Se recalcula solo.
   projectSnapshot.activeBuildingsProgress =
     activeBuildingsProgress(buildings) ?? projectSnapshot.overallProgress;
@@ -1366,11 +1360,6 @@ function synchronizeSpatialSummary() {
   let cutoffIndex = -1;
   for (let index = 0; index < monthlyPlan.length; index += 1) {
     if (monthlyPlan[index].actual !== null) cutoffIndex = index;
-  }
-  if (overallFromBuildings !== null && cutoffIndex >= 0) {
-    // Se ancla el punto del corte al promedio vivo, así el plano y la curva
-    // muestran exactamente lo mismo.
-    monthlyPlan[cutoffIndex] = { ...monthlyPlan[cutoffIndex], actual: overallFromBuildings };
   }
   const cutoffActual = cutoffIndex >= 0 ? monthlyPlan[cutoffIndex].actual : null;
   const cutoffPlanned = cutoffIndex >= 0 ? monthlyPlan[cutoffIndex].planned : null;
@@ -2832,7 +2821,7 @@ function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
       <div className="s-curve-reconciliation-note">
         <strong>Fuente del avance físico global:</strong>
         <span>
-          {" "}El {number.format(projectSnapshot.overallProgress)}% que se muestra en todo el tablero es el "Ejecutado Real" declarado por el equipo de obra en el Excel maestro (Curva S), no un promedio calculado aquí.
+          {" "}El {number.format(projectSnapshot.overallProgress)}% que se muestra en todo el tablero es el “Ejecutado Real” declarado por el equipo de obra en el Excel maestro (Curva S), no un promedio calculado aquí.
           Como referencia de apoyo, el cálculo apartamento a apartamento (4 disciplinas por unidad) da {number.format(projectSnapshot.apartmentAverageProgress)}%.
         </span>
       </div>
@@ -3624,11 +3613,15 @@ function HousingView() {
 function CommercialView({ currency }: { currency: CurrencyCode }) {
   const [section, setSection] = useState<"reservas" | "vinculacion" | "cobranza">("reservas");
   const workspace = useContext(WorkspaceDetailContext);
+  const collectionContracts = Math.max(juneReport.collections.contracts, 0);
+  const collectionDenominator = Math.max(collectionContracts, 1);
+  const reservationRates = Object.entries(juneReport.sales.reservationsByModel);
+  const maxReservationRate = Math.max(1, ...reservationRates.map(([, value]) => value));
   return (
     <div className="view-stack">
       <section className="data-view-intro">
-        <div><span className="section-kicker">INFORME COMERCIAL · JUNIO 2026</span><h2>Ventas, vinculación y cobranza</h2></div>
-        <p>Selecciona un bloque para abrir su detalle. Los datos de morosidad están actualizados al 06/07/2026.</p>
+        <div><span className="section-kicker">INFORME COMERCIAL · CORTE {juneReport.collections.cutoff}</span><h2>Ventas, vinculación y cobranza</h2></div>
+        <p>Selecciona un bloque para abrir su detalle. Todas las cifras siguen el último informe comercial publicado.</p>
       </section>
       <section className="stat-grid wide">
         <StatCard eyebrow="Reservas activas" value={`${juneReport.sales.active}`} detail={`${juneReport.sales.reservations} históricas · ${juneReport.sales.withdrawn} desistidas`} />
@@ -3639,9 +3632,9 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
       </section>
       <section className="report-tabs" aria-label="Secciones del informe comercial">
         {[
-          { id: "reservas", label: "Reservas y producto", detail: "279 reservas" },
-          { id: "vinculacion", label: "Vinculación", detail: "198 depurados" },
-          { id: "cobranza", label: "Cobranza", detail: "172 contratos" },
+          { id: "reservas", label: "Reservas y producto", detail: `${juneReport.sales.reservations} reservas` },
+          { id: "vinculacion", label: "Vinculación", detail: `${juneReport.contracts.reviewed} depurados` },
+          { id: "cobranza", label: "Cobranza", detail: `${juneReport.collections.contracts} contratos` },
         ].map((item) => (
           <button
             key={item.id}
@@ -3713,7 +3706,7 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
             ))}
           </article>
           <article className="panel">
-            <div className="panel-heading"><div><span className="section-kicker">FASE II</span><h3>Mix de producto</h3></div><span className="data-note">Junio: 18 reservas</span></div>
+            <div className="panel-heading"><div><span className="section-kicker">FASE II</span><h3>Mix de producto</h3></div><span className="data-note">{number.format(juneReport.sales.activeAverageMonthly)} activas/mes</span></div>
             <div className="rank-list">
               {salesModels.map((model) => (
                 <button
@@ -3734,9 +3727,35 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
                     actions: [{ label: "Abrir Apartamentos", view: "viviendas" }],
                   })}
                 >
-                  <span><strong>{model.name}</strong><small>{model.june} en junio</small></span>
+                  <span><strong>{model.name}</strong><small>{model.value} reservas activas</small></span>
                   <div><i style={{ width: `${(model.value / 32) * 100}%` }} /></div>
                   <b>{model.value}</b>
+                </button>
+              ))}
+            </div>
+          </article>
+          <article className="panel">
+            <div className="panel-heading"><div><span className="section-kicker">RITMO COMERCIAL</span><h3>Reservas por modelo</h3></div><span className="data-note">Unidades por mes</span></div>
+            <div className="rank-list">
+              {reservationRates.map(([model, monthlyAverage]) => (
+                <button
+                  type="button"
+                  className="workspace-data-row rank-data-row"
+                  key={model}
+                  onClick={() => workspace.openDetail({
+                    id: `sales-rate-${model}`,
+                    kicker: "RESERVAS POR MODELO",
+                    title: model,
+                    summary: "Promedio mensual declarado en el último informe comercial.",
+                    status: "live",
+                    metrics: [{ label: "Unidades por mes", value: number.format(monthlyAverage) }],
+                    sourceIds: ["source-june-sales"],
+                    actions: [{ label: "Abrir Apartamentos", view: "viviendas" }],
+                  })}
+                >
+                  <span><strong>{model}</strong><small>promedio mensual</small></span>
+                  <div><i style={{ width: `${(monthlyAverage / maxReservationRate) * 100}%` }} /></div>
+                  <b>{number.format(monthlyAverage)}</b>
                 </button>
               ))}
             </div>
@@ -3779,8 +3798,8 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
           <article className="panel pipeline-panel">
             <div className="panel-heading"><div><span className="section-kicker">DEPURACIÓN</span><h3>Estado documental de clientes</h3></div></div>
             <div className="pipeline">
-              <div><strong>{juneReport.contracts.reviewed}</strong><span>Depurados</span><i style={{ width: "86.8%" }} /></div>
-              <div><strong>{juneReport.contracts.pendingReview}</strong><span>Pendientes</span><i style={{ width: "13.2%" }} /></div>
+              <div><strong>{juneReport.contracts.reviewed}</strong><span>Depurados</span><i style={{ width: `${(juneReport.contracts.reviewed / Math.max(juneReport.contracts.reviewed + juneReport.contracts.pendingReview, 1)) * 100}%` }} /></div>
+              <div><strong>{juneReport.contracts.pendingReview}</strong><span>Pendientes</span><i style={{ width: `${(juneReport.contracts.pendingReview / Math.max(juneReport.contracts.reviewed + juneReport.contracts.pendingReview, 1)) * 100}%` }} /></div>
             </div>
             <p className="section-intro">De los pendientes, {juneReport.contracts.inReview} están en depuración y {juneReport.contracts.awaitingDocuments} esperan documentos.</p>
           </article>
@@ -3791,7 +3810,7 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
               <div><strong>{juneReport.contracts.linking}</strong><span>En vinculación</span></div>
               <div className="warn"><strong>{juneReport.contracts.signing}</strong><span>En firma</span></div>
             </div>
-            <p className="section-intro">La fuente registra 164 unidades vinculadas y 3 desistimientos posteriores; el control financiero usa 161 vigentes.</p>
+            <p className="section-intro">La fuente registra {juneReport.contracts.linked} unidades vinculadas, {juneReport.contracts.linking} en vinculación y {juneReport.contracts.signing} en firma.</p>
           </article>
         </section>
       )}
@@ -3799,16 +3818,16 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
       {section === "cobranza" && (
         <section className="report-grid">
           <article className="panel">
-            <div className="panel-heading"><div><span className="section-kicker">172 CONTRATOS</span><h3>Estado de cobro</h3></div><span className="data-note">Corte 06/07/2026</span></div>
-            <div className="collection-bar" aria-label="106 al día, 42 con cuotas pendientes y 24 vencidos">
-              <i className="current" style={{ width: `${(106 / 172) * 100}%` }} />
-              <i className="pending" style={{ width: `${(42 / 172) * 100}%` }} />
-              <i className="overdue" style={{ width: `${(24 / 172) * 100}%` }} />
+            <div className="panel-heading"><div><span className="section-kicker">{juneReport.collections.contracts} CONTRATOS</span><h3>Estado de cobro</h3></div><span className="data-note">Corte {juneReport.collections.cutoff}</span></div>
+            <div className="collection-bar" aria-label={`${juneReport.collections.current} al día, ${juneReport.collections.installmentsPending} con cuotas pendientes y ${juneReport.collections.overdue} vencidos`}>
+              <i className="current" style={{ width: `${(juneReport.collections.current / collectionDenominator) * 100}%` }} />
+              <i className="pending" style={{ width: `${(juneReport.collections.installmentsPending / collectionDenominator) * 100}%` }} />
+              <i className="overdue" style={{ width: `${(juneReport.collections.overdue / collectionDenominator) * 100}%` }} />
             </div>
             <div className="collection-legend">
-              <span><i className="current" />Al día <strong>106</strong></span>
-              <span><i className="pending" />Cuotas pendientes <strong>42</strong></span>
-              <span><i className="overdue" />Vencidos <strong>24</strong></span>
+              <span><i className="current" />Al día <strong>{juneReport.collections.current}</strong></span>
+              <span><i className="pending" />Cuotas pendientes <strong>{juneReport.collections.installmentsPending}</strong></span>
+              <span><i className="overdue" />Vencidos <strong>{juneReport.collections.overdue}</strong></span>
             </div>
           </article>
           <article className="panel">

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { buildings, monthlyPlan, overallProgressNow, projectSnapshot } from "../app/demo-data.ts";
+
 // Guarda contra la clase de bug que motivó esta suite: un resumen calculado
 // a partir de otros datos en vivo (antonelyDetailTotals, plannedProgress...)
 // que se queda congelado porque nadie recordó conectarlo. Cada campo nuevo
@@ -19,6 +21,17 @@ const COMPUTED_VIEW_SUMMARIES = [
   "dataGovernanceSummary",
   "supplierContactAudit",
 ];
+
+test("el avance físico oficial de julio es 22,71% y no la media simple de edificios", () => {
+  const buildingAverage = Math.round(
+    (buildings.reduce((sum, building) => sum + building.progress, 0) / buildings.length) * 100,
+  ) / 100;
+  assert.notEqual(buildingAverage, 22.71);
+  assert.equal(overallProgressNow, 22.71);
+  assert.equal(projectSnapshot.overallProgress, 22.71);
+  assert.equal(monthlyPlan.at(-1)?.actual, null);
+  assert.equal(monthlyPlan.findLast((entry) => entry.actual !== null)?.actual, 22.71);
+});
 
 test("computed-view summaries recompute on every read and never enter the snapshot-freeze target list", async () => {
   const dashboard = await readFile("app/dashboard-client.tsx", "utf8");
@@ -53,7 +66,7 @@ test("computed-view summaries recompute on every read and never enter the snapsh
 
 test("dataAuthorityMatrix's live decision text is synced centrally, not only inside SourcesView's render", async () => {
   const dashboard = await readFile("app/dashboard-client.tsx", "utf8");
-  const syncFunction = dashboard.match(/function synchronizeSpatialSummary\(\) \{[\s\S]*?\n}\n/)?.[0] ?? "";
+  const syncFunction = dashboard.match(/function synchronizeSpatialSummary\(\) \{[\s\S]*?\r?\n}\r?\n/)?.[0] ?? "";
   assert.match(
     syncFunction,
     /dataAuthorityMatrix = liveDataAuthorityMatrix\(/,
@@ -90,18 +103,17 @@ test("overallProgress and plannedProgress always come from the same monthlyPlan 
     /projectSnapshot\.overallProgress = cutoffActual;\s*\n\s*projectSnapshot\.plannedProgress = cutoffPlanned;/,
     "la reasignación cliente debe fijar overallProgress y plannedProgress juntos, en el mismo bloque",
   );
-  // El avance global se ancla al promedio vivo de los edificios (servidor y
-  // cliente), para que la Curva S y el número grande se muevan a la vez que el
-  // plano cuando cambia una cubicación.
-  assert.match(
+  // El avance físico oficial no se puede sustituir por la media simple de los
+  // 26 edificios: no pondera el monto total de obra y produjo el 19,39% falso.
+  assert.doesNotMatch(
     spatialLiveData,
     /projectProgressFromBuildings\(buildings\)/,
-    "el global del servidor debe salir del promedio de edificios",
+    "el servidor no debe reemplazar la Curva S con el promedio de edificios",
   );
-  assert.match(
+  assert.doesNotMatch(
     dashboard,
     /projectProgressFromBuildings\(buildings\)/,
-    "el global del cliente debe salir del promedio de edificios",
+    "el cliente no debe reemplazar la Curva S con el promedio de edificios",
   );
   // El avance de "edificios en marcha" también se deriva en vivo (servidor y
   // cliente), no es un número aparte que se congele.

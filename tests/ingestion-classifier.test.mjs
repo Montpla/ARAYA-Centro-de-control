@@ -292,6 +292,22 @@ test("el lector de ventas saca la morosidad y el recaudo declarados en frase", (
   assert.equal(mapa["juneReport.collections.collectedVsProjectedPercent"], 92);
 });
 
+test("el lector de ventas saca el ritmo mensual de reservas por modelo", () => {
+  const texto =
+    "Informe de ventas ARAYA. Reservas por Modelos. " +
+    "Balcony – 6.3 Unidades / Mes; Garden - 4,9 Unidades/Mes; " +
+    "Sunset — 6.8 Unidades / Mes; Flex - 3.8 Unidades / Mes.";
+  const updates = ingestion.extractSalesReport(texto, {
+    area: "comercial", cutoff: "31/07/2026", sourceCurrency: "USD", sourceName: "informe-ventas.pptx",
+  });
+  const mapa = Object.fromEntries(updates.map((u) => [u.key, u.value]));
+
+  assert.equal(mapa["juneReport.sales.reservationsByModel.Balcony"], 6.3);
+  assert.equal(mapa["juneReport.sales.reservationsByModel.Garden"], 4.9);
+  assert.equal(mapa["juneReport.sales.reservationsByModel.Sunset"], 6.8);
+  assert.equal(mapa["juneReport.sales.reservationsByModel.Flex"], 3.8);
+});
+
 test("un PowerPoint que no es de ventas no dispara el lector", () => {
   assert.deepEqual(
     ingestion.extractSalesReport("Informe de obra. Avance físico del edificio TH-14.", {
