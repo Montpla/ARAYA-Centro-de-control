@@ -660,6 +660,106 @@ function extractMatrixProgress(
 }
 
 /**
+ * Lee la tabla resumen de la hoja CARATULA de una cubicacion contractual.
+ *
+ * Su forma real es "Capitulo | Monto RD$ | En el periodo | % | Anterior
+ * acumulado | % | Actual acumulado | %". El ultimo porcentaje es el avance
+ * fisico acumulado que debe colorear cada edificio; no es una tabla ordinaria
+ * de "Edificio / Avance" y por eso antes se archivaba sin tocar el plano.
+ */
+function extractCubicacionCoverProgress(
+  filas: Array<Record<string, string>>,
+  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string; knownBuildingTokens?: Set<string> },
+): StructuredExtraction | null {
+  let headerIndex = -1;
+  let buildingColumn = "";
+  let budgetColumn = "";
+  let accumulatedColumn = "";
+  let progressColumn = "";
+
+  for (let index = 0; index < Math.min(filas.length, 100); index += 1) {
+    const cells = Object.entries(filas[index]);
+    const chapterIndex = cells.findIndex(([, value]) => /^(?:capitulo|capítulo)$/.test(normalizarCabecera(value)));
+    const accumulatedIndex = cells.findIndex(([, value]) => /^actual\s+acumulado\.?$/.test(normalizarCabecera(value)));
+    if (chapterIndex < 0 || accumulatedIndex < 0) continue;
+    const percentAfterAccumulated = cells.findIndex(
+      ([, value], cellIndex) => cellIndex > accumulatedIndex && /^%|porcentaje$/.test(normalizarCabecera(value)),
+    );
+    if (percentAfterAccumulated < 0) continue;
+    const budgetIndex = cells.findIndex(([, value]) => /^monto\b|presupuesto/.test(normalizarCabecera(value)));
+    headerIndex = index;
+    buildingColumn = cells[chapterIndex][0];
+    accumulatedColumn = cells[accumulatedIndex][0];
+    progressColumn = cells[percentAfterAccumulated][0];
+    budgetColumn = budgetIndex >= 0 ? cells[budgetIndex][0] : "";
+    break;
+  }
+  if (headerIndex < 0) return null;
+
+  const updates: LiveDataUpdate[] = [];
+  const buildingCodes: string[] = [];
+  let totalBudget = 0;
+  let totalAccumulated = 0;
+  let measuredRows = 0;
+  const baseUpdate = {
+    area: "obra",
+    cutoff: defaults.cutoff,
+    sourceCurrency: defaults.sourceCurrency,
+    sourceName: defaults.sourceName,
+  } as const;
+
+  for (const row of filas.slice(headerIndex + 1, headerIndex + 1 + 100)) {
+    const label = row[buildingColumn] ?? "";
+    const normalizedLabel = normalizarCabecera(label);
+    const code = buildingCodeFromTaskName(label);
+    const isUrbanism = /^urbanismo\b/.test(normalizedLabel);
+    if (!code && !isUrbanism) continue;
+    if (code && defaults.knownBuildingTokens && !defaults.knownBuildingTokens.has(
+      code.replace(/^TH-/i, "").replace(/^0+(?=\d)/, ""),
+    )) continue;
+
+    const rawProgress = numeroDeCelda(row[progressColumn] ?? "");
+    if (rawProgress === null || rawProgress < 0) continue;
+    const progress = rawProgress <= 1 ? rawProgress * 100 : rawProgress;
+    if (progress > 100) continue;
+
+    if (code) {
+      updates.push({ key: `buildings.${code}.progress`, value: progress, ...baseUpdate });
+      buildingCodes.push(code);
+    } else {
+      updates.push({ key: "urbanismAreas.0.progress", value: progress, ...baseUpdate });
+    }
+
+    const budget = budgetColumn ? numeroDeCelda(row[budgetColumn] ?? "") : null;
+    const accumulated = numeroDeCelda(row[accumulatedColumn] ?? "");
+    if (budget !== null && accumulated !== null && budget > 0 && accumulated >= 0) {
+      totalBudget += budget;
+      totalAccumulated += accumulated;
+      measuredRows += 1;
+    }
+  }
+  if (!buildingCodes.length) return null;
+
+  // El total fisico es el acumulado ponderado por el presupuesto de cada
+  // capitulo (urbanismo + edificios), la misma formula de la fila TOTAL del
+  // libro. Nunca se promedian porcentajes simples entre edificios.
+  if (measuredRows > 0 && totalBudget > 0) {
+    updates.push({
+      key: "projectSnapshot.overallProgress",
+      value: Math.round((totalAccumulated / totalBudget) * 10_000) / 100,
+      ...baseUpdate,
+    });
+  }
+
+  return {
+    updates,
+    summary: `${buildingCodes.length} edificios, urbanismo y avance fisico total actualizados desde la caratula de la cubicacion.`,
+    warnings: [],
+    expectedBuildingCodes: [...new Set(buildingCodes)],
+  };
+}
+
+/**
  * Lee una cifra de avance que pertenece al alcance completo de una
  * cubicacion, por ejemplo "Edificios 76 y 77" + "Avance fisico ejecutado
  * 4,25 %". Solo se usa cuando no existe una tabla individual por edificio y la
@@ -1446,6 +1546,13 @@ export async function extractStructuredUpdates(
           });
           continue;
         }
+      }
+
+      const caratula = extractCubicacionCoverProgress(filas, defaults);
+      if (caratula) {
+        results.push(caratula);
+        for (const code of caratula.expectedBuildingCodes ?? []) expectedBuildingCodes.add(code);
+        continue;
       }
 
       const tabla = extractSheetProgress(filas, defaults);

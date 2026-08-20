@@ -145,6 +145,17 @@ construir(SALIDA / "cubicacion-alcance-76-77.xlsx", [
     ["TH-01", "TH-07", "TH-19", "TH-31", "TH-53", "TH-69", "TH-73"],
 ])
 
+# Resumen real de la hoja CARATULA: el porcentaje valido es el ultimo, junto a
+# "Actual acumulado". Incluye urbanismo y permite recalcular el total ponderado.
+construir(SALIDA / "cubicacion-caratula-acumulado.xlsx", [
+    ["CUBICACION Nro. 8", "", "", "", "", "", "", "", ""],
+    ["RELACION DE OBRA EJECUTADA", "", "", "", "", "", "", "", ""],
+    ["Nº", "Capitulo", "Monto RD$.", "En el periodo", "%", "Anterior Acumulado", "%", "Actual Acumulado", "%"],
+    [1, "URBANISMO", 100, 5, 0.05, 20, 0.20, 25, 0.25],
+    [2, "EDIFICIO 76", 100, 6, 0.06, 2, 0.02, 8, 0.08],
+    [3, "EDIFICIO 77", 100, 9, 0.09, 0, 0, 9, 0.09],
+])
+
 
 # --- Word y PowerPoint -------------------------------------------------------
 # Comparten envoltorio con Excel (ZIP con XML), asi que sus tablas se leen con

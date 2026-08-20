@@ -200,6 +200,27 @@ test("un avance único y explícito del alcance actualiza TH-76 y TH-77", async 
   assert.match(resultado.summary, /2 edificios actualizados/);
 });
 
+test("la carátula de cubicación actualiza edificios, urbanismo y total ponderado", async () => {
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("cubicacion-caratula-acumulado.xlsx"),
+    "xlsx",
+    {
+      ...defaults,
+      area: "finanzas",
+      sourceName: "Cubicacion 8 Araya Jul.xlsx",
+      knownBuildingTokens: new Set(["76", "77"]),
+    },
+  );
+  const porClave = new Map(resultado.updates.map((update) => [update.key, update]));
+  assert.equal(porClave.get("buildings.TH-76.progress").value, 8);
+  assert.equal(porClave.get("buildings.TH-77.progress").value, 9);
+  assert.equal(porClave.get("urbanismAreas.0.progress").value, 25);
+  assert.equal(porClave.get("projectSnapshot.overallProgress").value, 14);
+  assert.equal(porClave.get("projectSnapshot.overallProgress").area, "obra");
+  assert.deepEqual([...resultado.expectedBuildingCodes].sort(), ["TH-76", "TH-77"]);
+});
+
 test("el Excel de finanzas actualiza el flujo reprogramado mes a mes", async () => {
   // El flujo mensual (hoja Comparación Mensual) es la parte que cambia cada mes.
   // Se lee y se traduce cada mes a su posición en la línea temporal del flujo.
