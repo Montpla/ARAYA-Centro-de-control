@@ -4,6 +4,55 @@ Actualizado: 20/08/2026
 Zona horaria del usuario: Europe/Madrid
 Idioma de trabajo: español
 
+## Cierre más reciente: paleta viva de avance espacial (20/08/2026)
+
+- La fuente canónica está en `github/main`, commit **`caa6eb3`**
+  (`Mejora la paleta de avance espacial`). La copia local de `main` y
+  `github/main` quedaron exactamente en ese SHA antes de abrir esta rama
+  documental de relevo.
+- GitHub Actions publicó y verificó ese commit correctamente en la ejecución
+  **`32387219462`**. Producción respondió en
+  `https://araya-centro-control.grupobricket.workers.dev`; el control de humo
+  confirmó 77 edificios posicionados, 462 apartamentos interactivos, acceso
+  privado a documentos, notificaciones disponibles y coherencia de la Curva S.
+- `lib/progress-palette.ts` es ahora la única escala cromática común para
+  edificios y apartamentos. No volver a crear condiciones de color separadas
+  en cada vista. Los tramos son:
+  - `progress-0`: 0 %, grafito;
+  - `progress-1-20`: 1–20 %, terracota;
+  - `progress-21-40`: 21–40 %, ámbar;
+  - `progress-41-60`: 41–60 %, oliva;
+  - `progress-61-80`: 61–80 %, verde azulado;
+  - `progress-81-99`: 81–99,99 %, esmeralda;
+  - `progress-100`: 100 %, verde bosque;
+  - `progress-none`: valor ausente, crema con borde discontinuo.
+- El relleno expresa exclusivamente el avance. `is-blocked` añade un contorno
+  rojo sin sustituir el relleno y la clase `active` conserva un contorno oscuro
+  separado para la selección. No usar rojo como banda porcentual ni volver a
+  mezclar selección, bloqueo y avance en una sola clase.
+- La escala se aplica al plano visual y técnico, a los seis indicadores de cada
+  edificio, al selector ampliado, a las pestañas de edificios, a las fichas de
+  apartamentos, a sus paneles de detalle y a las barras del explorador general.
+  La leyenda del plano es interactiva: filtra por tramo atenuando los elementos
+  restantes, sin ocultarlos ni modificar sus datos.
+- Los colores se recalculan desde el dato vivo en cada render. Cuando la
+  sincronización de cinco segundos recibe un nuevo porcentaje, mapa, fichas y
+  barras cambian juntos sin reglas manuales adicionales.
+- Limitación conocida: el contrato actual guarda los avances de edificios y
+  apartamentos como números y convierte la ausencia histórica en `0`. Por eso
+  los 51 edificios futuros se muestran correctamente como 0 % y no como “Sin
+  datos”. `progress-none` ya está preparado para valores nulos futuros, pero no
+  inferir ausencia a partir de un cero ni cambiar el modelo sin migración y
+  evidencia explícita.
+- La suite completa quedó en **297/297**, además de TypeScript, build Vinext y
+  ESLint focalizado sin errores. `tests/progress-palette.test.mjs` vigila todos
+  los límites, el contraste WCAG AA y la coexistencia de avance, bloqueo y
+  selección. `tests/rendered-html.test.mjs` ya no exige la antigua lógica
+  binaria `done/active/pending`.
+- La estética siguió la pauta editorial existente: colores apagados, superficies
+  cálidas, jerarquía legible, sin gradientes ni sombras pesadas. No mover las
+  coordenadas de `lib/site-plan-layout.ts` al retocar esta paleta.
+
 ## Implantación completa de los 77 edificios (20/08/2026)
 
 - El modelo base ya contiene los **77 edificios TH-01 a TH-77** y sus **462
@@ -34,23 +83,22 @@ Idioma de trabajo: español
   `Montpla/ARAYA-Centro-de-control`. No continuar ni publicar por Sites salvo
   que el usuario lo solicite expresamente en una sesión posterior.
 - La copia local se avanzó limpiamente hasta `github/main` en el commit
-  `c090cda` (`Reponer el cronograma con el 22,37% real del plan de julio`). Su
+  `caa6eb3` (`Mejora la paleta de avance espacial`). Su
   despliegue automático de GitHub Actions terminó correctamente en la ejecución
-  `32282923131`.
+  `32387219462`.
 - Producción vigente: `https://araya-centro-control.grupobricket.workers.dev`.
   El pipeline activo sigue siendo GitHub Actions → Cloudflare Workers.
-- Los últimos cambios de `main` incorporan la conversión robusta de `.mpp` con
-  MPXJ en un runner, la recuperación del 22,37% de avance real del plan de
-  julio y el modelado de morosidad/recaudo del informe. La conversión se probó
-  correctamente mediante el workflow `Convertir MPP a XML y leerlo`.
+- Los últimos cambios de `main` conservan la conversión robusta de `.mpp`, la
+  separación del 22,71 % físico y el cronograma, los 77 edificios/462
+  apartamentos, las coordenadas ajustadas y la nueva paleta viva común.
 - Existe una rama remota todavía no integrada,
   `claude/programa-continuacion-1tgsaq` (`ecd036e`), que añade al workflow una
   vista previa del avance, edificios y fin previsto cuando se ejecuta en modo
   simulación. No asumir que esa mejora forma parte de `main` ni mezclarla sin
   revisarla y validarla.
-- El grafo local de conocimiento del código se reindexó contra `c090cda` para
-  que otros LLM puedan descubrir la arquitectura actual en vez de la versión
-  antigua de agosto.
+- Si el grafo de conocimiento de código de otro entorno no muestra el commit
+  `caa6eb3`, reindexarlo antes de confiar en sus rutas; el repositorio y este
+  documento son la referencia final.
 
 ## Instrucción para el próximo LLM
 
@@ -2953,7 +3001,7 @@ trazabilidad y adaptar las fichas interactivas sin inventar valores.
   seguía pendiente queda superada: sus 22 datos se publicaron en la revisión
   50 el 19/08/2026.
 
-### Corrección implementada localmente — 20/08/2026
+### Corrección implementada y publicada — 20/08/2026
 
 - `overallProgressNow` queda fijado a la cifra física oficial **22,71 %** del
   corte 31/07/2026. El último ejecutado de la Curva S usa ese valor.
@@ -2969,15 +3017,14 @@ trazabilidad y adaptar las fichas interactivas sin inventar valores.
   corte y los valores vivos del informe más reciente.
 - Verificación local: TypeScript verde, compilación Vinext verde, ESLint
   focalizado sin errores y suite completa **279/279**.
-- La operación anterior se publicó en `github/main`. Las modificaciones nuevas
-  descritas a continuación son otro lote y requieren una autorización nueva de
-  commit/push y de migración/operación en producción.
+- Este lote y las automatizaciones descritas a continuación ya forman parte de
+  `github/main`; no quedan como cambios locales pendientes.
 
-## Automatización documental universal — implementada localmente (20/08/2026)
+## Automatización documental universal — implementada y publicada (20/08/2026)
 
 El usuario ordenó ejecutar los puntos 1 a 6; el punto 7 (dominio) queda
-expresamente descartado. Este lote está implementado y probado localmente, pero
-no debe considerarse desplegado hasta completar la secuencia operativa de abajo.
+expresamente descartado. El lote quedó integrado en `main` y funciona dentro
+del despliegue actual de Cloudflare Workers.
 
 1. **Fecha de fin del plan.** `lib/project-xml.ts` publica
    `projectSnapshot.forecastFinish` como ISO `YYYY-MM-DD`, que es lo que exige
@@ -3011,15 +3058,16 @@ no debe considerarse desplegado hasta completar la secuencia operativa de abajo.
    administrador, fecha, actividad y notificación. Un expediente superado no se
    puede reprocesar. `cerrar-historico-junio.yml` aplica esa decisión una vez.
 
-### Esquema y secuencia segura de producción
+### Esquema aplicado y secuencia para un entorno nuevo
 
 - Migración nueva: `drizzle/0024_sleepy_nightshade.sql`; añade seis columnas e
-  índices a `uploaded_files`. La cadena exacta ya está en el journal.
-- **No empujar directamente a main antes de migrar**: el Worker nuevo selecciona
-  esas columnas. Secuencia: crear rama, commit y push autorizados; ejecutar
-  `Aplicar migración D1` sobre la rama con `0024_sleepy_nightshade.sql`; integrar
-  a `main`; esperar el deploy; ejecutar `Cerrar antecedente XLS de junio` primero
-  con `aplicar=0` y después con `aplicar=1`.
+  índices a `uploaded_files`. La cadena exacta ya está en el journal y llega a
+  `0024_sleepy_nightshade`.
+- En el entorno vigente esta migración y el código dependiente ya están
+  desplegados. Para levantar una base nueva, aplicar el journal completo antes
+  del Worker: el Worker selecciona esas columnas desde el arranque. Después se
+  puede ejecutar `Cerrar antecedente XLS de junio`, primero con `aplicar=0` y
+  luego con `aplicar=1`.
 - Tras el deploy, los cron de MPP, DWG y reproceso completan la puesta al día.
   Comprobar que `projectSnapshot.forecastFinish` aparece en `/api/live-data` y
   que el XLS de junio muestra `historico/superado`.
