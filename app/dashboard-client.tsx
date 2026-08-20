@@ -19,6 +19,7 @@ import {
 import {
   activeBuildingsProgress,
   averageNumeric,
+  projectDateForDisplay,
 } from "../lib/progress-model";
 import { computedView } from "../lib/computed-view";
 import {
@@ -442,6 +443,10 @@ type UploadedFileRecord = {
   extractionConfidence: number;
   extractionSummary: string;
   discrepancyCount: number;
+  ingestionVersion: string;
+  processedAt: string;
+  derivedFromFileId: string;
+  automationKind: string;
   reviewStatus: string;
   reviewedByName: string;
   reviewedAt: string;
@@ -452,6 +457,8 @@ type UploadedFileRecord = {
   deletedByName: string;
   deleteReason: string;
   restoredAt: string;
+  supersededByFileId: string;
+  supersededAt: string;
   createdAt: string;
   updatedAt: string;
   canManage: boolean;
@@ -1316,6 +1323,10 @@ function operationalAlerts(
 }
 
 function synchronizeSpatialSummary() {
+  projectSnapshot.forecastFinish = projectDateForDisplay(projectSnapshot.forecastFinish);
+  buildings.forEach((building) => {
+    building.forecastFinish = projectDateForDisplay(building.forecastFinish);
+  });
   projectSnapshot.buildingCount = buildings.length;
   projectSnapshot.unitCount = buildings.reduce((total, building) => total + building.units.length, 0);
   projectSnapshot.buildingsPendingIntegration = Math.max(
@@ -1459,6 +1470,12 @@ const processingStageLabels: Record<string, string> = {
   contraste: "Contraste y validación",
   sincronizado: "Datos sincronizados",
   observado: "Revisión requerida",
+  historico: "Fuente histórica sustituida",
+};
+
+const automationKindLabels: Record<string, string> = {
+  mpp_to_xml: "Project XML generado automáticamente",
+  dwg_to_png: "Vista de plano generada automáticamente",
 };
 
 function financialQualityIssues() {
@@ -1482,15 +1499,9 @@ const defaultUploadArea: Record<View, UploadArea> = {
   usuarios: "direccion",
 };
 
-// Formatos que el sistema archiva íntegros pero cuyo contenido no sabe leer,
-// así que ninguna de sus cifras llega al panel.
-//
-// No es ya el espejo exacto de UNSUPPORTED_EXTENSIONS (lib/ai-document-
-// extraction.ts): un ZIP sigue sin poder enviarse a la lectura con IA, pero se
-// abre antes y se procesa lo que lleva dentro, así que sus cifras sí llegan.
-// Avisar aquí de lo contrario desanimaba a subir el corte del mes comprimido,
-// que es como viene casi siempre.
-const ARCHIVE_ONLY_EXTENSIONS = ["mpp", "dwg"];
+// El Worker no abre estos binarios directamente: se confirman primero y un
+// workflow genera un derivado legible sin pedir otra carga al usuario.
+const DEFERRED_CONVERSION_EXTENSIONS = ["mpp", "dwg"];
 
 async function uploadProjectFile(
   file: File,
@@ -3617,6 +3628,8 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
   const collectionDenominator = Math.max(collectionContracts, 1);
   const reservationRates = Object.entries(juneReport.sales.reservationsByModel);
   const maxReservationRate = Math.max(1, ...reservationRates.map(([, value]) => value));
+  const commercialDiscoveredSections = discoveredSections.filter((block) =>
+    ["comercial", "finanzas"].includes(block.area));
   return (
     <div className="view-stack">
       <section className="data-view-intro">
@@ -3646,12 +3659,12 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
         ))}
       </section>
 
-      {section === "reservas" && discoveredSections.length > 0 && (
+      {section === "reservas" && commercialDiscoveredSections.length > 0 && (
         <section className="panel discovered-sections">
           <div className="panel-heading">
             <div>
               <span className="section-kicker">DETECTADO AUTOMÁTICAMENTE</span>
-              <h3>{discoveredSections.length} bloque{discoveredSections.length === 1 ? "" : "s"} nuevo{discoveredSections.length === 1 ? "" : "s"} en los documentos</h3>
+              <h3>{commercialDiscoveredSections.length} bloque{commercialDiscoveredSections.length === 1 ? "" : "s"} nuevo{commercialDiscoveredSections.length === 1 ? "" : "s"} en los documentos</h3>
             </div>
             <span className="data-note">Sin revisar por una persona</span>
           </div>
@@ -3661,7 +3674,7 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
             esperando a que alguien la mire.
           </p>
           <ul className="quality-list control-list">
-            {discoveredSections.map((bloque) => (
+            {commercialDiscoveredSections.map((bloque) => (
               <li key={bloque.id}>
                 <strong>{bloque.title}</strong>
                 {bloque.description ? <> · {bloque.description}</> : null}
@@ -5650,7 +5663,10 @@ function UploadAgentsCard({ users }: { users: Array<{ email: string; displayName
     }
   }, []);
 
-  useEffect(() => { void refreshTokens(); }, [refreshTokens]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refreshTokens(), 0);
+    return () => window.clearTimeout(timer);
+  }, [refreshTokens]);
 
   async function createToken() {
     if (creating) return;
@@ -6047,7 +6063,7 @@ function ManualProgressCard() {
       <p>
         Escribe el avance de los edificios que hayan cambiado y publícalo. Los
         que dejes en blanco se quedan como están. Sirve para el corte que llega
-        en un <b>.mpp</b> —el único formato que no se puede leer— o para
+        con urgencia antes de que termine una conversión de <b>.mpp</b>, o para
         corregir una cifra suelta sin volver a subir el archivo entero.
       </p>
       <p className="quality-note">
@@ -6140,7 +6156,8 @@ function TvScreensCard() {
   }, []);
 
   useEffect(() => {
-    void refreshScreens();
+    const timer = window.setTimeout(() => void refreshScreens(), 0);
+    return () => window.clearTimeout(timer);
   }, [refreshScreens]);
 
   async function createScreen() {
@@ -7150,6 +7167,17 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
         months: [...year.months.values()].sort((left, right) => right.sortValue - left.sortValue),
       }));
   }, [visibleFiles]);
+  const filesById = useMemo(() => new Map(files.map((file) => [file.id, file])), [files]);
+  const derivedChildrenByParent = useMemo(() => {
+    const result = new Map<string, UploadedFileRecord[]>();
+    for (const file of files) {
+      if (!file.derivedFromFileId || file.deletedAt) continue;
+      const children = result.get(file.derivedFromFileId) ?? [];
+      children.push(file);
+      result.set(file.derivedFromFileId, children);
+    }
+    return result;
+  }, [files]);
 
   async function manageLifecycle(file: UploadedFileRecord, action: "delete" | "restore") {
     if (
@@ -7244,6 +7272,13 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
                               <span>{file.areaLabel} · {fileSize(file.sizeBytes)} · v{file.version}</span>
                               <small>{documentTypeLabels[file.documentType] ?? file.documentType} · periodo {file.detectedPeriod || file.declaredCutoff || "pendiente"} · moneda {file.sourceCurrency}</small>
                               <small>{file.classificationReason}</small>
+                              {file.ingestionVersion && <small>Lector documental {file.ingestionVersion} · procesado {file.processedAt ? new Date(file.processedAt).toLocaleString("es-DO") : "en curso"}</small>}
+                              {file.derivedFromFileId && (
+                                <small>{automationKindLabels[file.automationKind] ?? "Archivo derivado automáticamente"} · origen {filesById.get(file.derivedFromFileId)?.originalName ?? file.derivedFromFileId}</small>
+                              )}
+                              {file.supersededByFileId && (
+                                <small>Conservado como antecedente · sustituido por {filesById.get(file.supersededByFileId)?.originalName ?? "una fuente posterior"}</small>
+                              )}
                               <div className="file-processing-track">
                                 <span>
                                   {processingStageLabels[file.processingStage] ?? file.processingStage}
@@ -7268,6 +7303,16 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
                                 {currentUser.role === "admin" && file.requiresReview ? "Revisar" : "Abrir expediente"}
                               </button>}
                               {!file.deletedAt && <a className="button secondary" href={file.downloadUrl} data-file-title={file.originalName}>Abrir original</a>}
+                              {derivedChildrenByParent.get(file.id)?.map((child) => (
+                                <button type="button" className="button secondary" key={child.id} onClick={() => setSelectedFile(child)}>
+                                  {child.automationKind === "dwg_to_png" ? "Abrir vista del plano" : "Abrir conversión"}
+                                </button>
+                              ))}
+                              {file.supersededByFileId && filesById.has(file.supersededByFileId) && (
+                                <button type="button" className="button secondary" onClick={() => setSelectedFile(filesById.get(file.supersededByFileId) ?? null)}>
+                                  Abrir fuente vigente
+                                </button>
+                              )}
                               {file.canManage && (
                                 <button
                                   type="button"
@@ -7497,6 +7542,46 @@ function SourcesView({
         <StatCard eyebrow="Alertas de calidad" value={`${visibleIssues.length}`} detail="Visibles según permisos y sin corrección silenciosa" tone="warn" />
         <StatCard eyebrow="Corte declarado" value="30/06/2026" detail="Fecha tomada de los archivos" />
       </section>
+      {discoveredSections.length > 0 && (
+        <section className="panel discovered-sections">
+          <div className="panel-heading">
+            <div>
+              <span className="section-kicker">SECCIONES PROVISIONALES · TRAZABILIDAD COMPLETA</span>
+              <h3>Información nueva detectada en los documentos</h3>
+            </div>
+            <span className="data-note">{discoveredSections.length} bloque{discoveredSections.length === 1 ? "" : "s"} visible{discoveredSections.length === 1 ? "" : "s"}</span>
+          </div>
+          <p className="section-copy">
+            Cuando un archivo trae información para la que aún no existe una pantalla, el Centro de Control crea este bloque provisional sin perder su fuente, evidencia ni confianza. Los permisos se aplican por área.
+          </p>
+          <div className="document-archive">
+            {discoveredSections.map((block) => (
+              <details className="integrated-source-archive" key={block.id}>
+                <summary>
+                  <span>
+                    <strong>{block.title}</strong>
+                    <small>{areaLabels[block.area as keyof typeof areaLabels] ?? block.area} · {block.sourceName}</small>
+                  </span>
+                  <em>{Math.round(block.confidence * 100)}%</em>
+                </summary>
+                <div className="workspace-detail-body">
+                  {block.description && <p>{block.description}</p>}
+                  {block.evidence && <p className="quality-note"><strong>Evidencia:</strong> {block.evidence}</p>}
+                  {block.values.length > 0 && (
+                    <div className="workspace-data-list">
+                      {block.values.map((value) => (
+                        <div className="workspace-data-row" key={`${block.id}-${value.label}`}>
+                          <span>{value.label}</span><strong>{value.value}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </details>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="panel ingestion-workflow">
         <div className="panel-heading">
           <div><span className="section-kicker">CARGA COLABORATIVA</span><h3>Cómo entra un archivo al Centro de Control</h3></div>
@@ -7509,7 +7594,7 @@ function SourcesView({
           <div><b>04</b><strong>Actualización</strong><span>Los datos válidos se publican; lo ambiguo queda pendiente de revisión.</span></div>
           <div><b>05</b><strong>Sincronización</strong><span>Cifras, barras y gráficas reciben la revisión en menos de 5 s.</span></div>
         </div>
-        <p className="governance-note">La carga, clasificación y sincronización son procesos del Centro de Control y no consumen tokens. Cualquier persona registrada puede lograr publicación automática: las plantillas CSV y JSON coherentes se validan por una vía directa, y Excel, PDF y otros formatos pasan por lectura asistida con IA. Si el resultado tiene alta confianza y encaja en un campo conocido de tu área, se publica solo; si no, queda guardado y catalogado de inmediato como propuesta pendiente de revisión, para no inventar cifras.</p>
+        <p className="governance-note">La carga, clasificación y sincronización son procesos del Centro de Control. Todos los formatos admitidos se leen por la vía adecuada: lector directo, conversión segura o lectura asistida. Los datos que encajan en el modelo se publican automáticamente; la información nueva crea una sección provisional con fuente y evidencia, sin perderse ni inventarse.</p>
       </section>
       <section className="panel data-authority-panel">
         <div className="panel-heading">
@@ -8291,11 +8376,10 @@ function UploadModal({
     setError("");
   }
 
-  // El aviso se da al elegir el archivo, no al terminar de subirlo: quien trae
-  // el corte del mes en un .mpp necesita saber antes de esperar la subida que
-  // sus cifras no van a llegar al panel.
-  const archiveOnlyExtension = selectedFile
-    ? ARCHIVE_ONLY_EXTENSIONS.find((extension) => selectedFile.name.toLowerCase().endsWith(`.${extension}`)) ?? ""
+  // El aviso se da al elegir el archivo: quien trae un MPP/DWG sabe desde el
+  // principio que el original se confirma ahora y el derivado llegará después.
+  const deferredConversionExtension = selectedFile
+    ? DEFERRED_CONVERSION_EXTENSIONS.find((extension) => selectedFile.name.toLowerCase().endsWith(`.${extension}`)) ?? ""
     : "";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -8348,7 +8432,7 @@ function UploadModal({
             />
           )}
           <strong>{selectedFile ? selectedFile.name : "Selecciona o arrastra un archivo"}</strong>
-          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON, XML de Project, Word, PowerPoint, PDF y ZIP se leen tal cual · las imágenes y los PDF escaneados se interpretan · MPP y DWG solo se archivan · máximo 50 MB"}</span>
+          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON, XML, Word, PowerPoint, PDF, imágenes y ZIP se procesan al subir · MPP y DWG se convierten automáticamente · máximo 50 MB"}</span>
         </div>
         <div className="upload-source-actions" aria-label="Opciones de carga en móvil">
           <label>
@@ -8362,31 +8446,28 @@ function UploadModal({
           </label>
           <small>Ideal para avance de obra, incidencias, albaranes y evidencias de campo.</small>
         </div>
-        {archiveOnlyExtension && (
-          <div className="callout warn">
-            <strong>Este archivo se guardará, pero sus datos no actualizarán el panel</strong>
+        {deferredConversionExtension && (
+          <div className="callout info">
+            <strong>El original se guardará y su conversión continuará automáticamente</strong>
             <p>
-              Los <b>.{archiveOnlyExtension}</b> se conservan como documento descargable y quedan registrados con su
-              autor y su fecha, pero el sistema no puede leer las cifras de dentro: los avances, los colores de la
-              implantación y los porcentajes seguirán como están.
+              El <b>.{deferredConversionExtension}</b> se conserva privado con su autor y fecha. Un proceso externo
+              genera un derivado legible, lo enlaza al original y lo vuelve a pasar por la misma ingesta.
             </p>
-            {archiveOnlyExtension === "mpp" ? (
+            {deferredConversionExtension === "mpp" ? (
               <>
                 <p>
-                  Vuelve a guardarlo desde Microsoft Project como <b>XML</b>
-                  (<i>Archivo → Guardar como → tipo «XML (*.xml)»</i>) y sube ese archivo: el sistema lee
-                  el plan entero y actualiza el avance de cada edificio.
+                  La conversión a <b>XML de Project</b> se comprueba cada 15 minutos. Cuando termine, actualizará
+                  las tareas, el cronograma, los edificios y la fecha prevista que superen el contrato de datos.
                 </p>
                 <p>
-                  Si ahora mismo no puedes abrir Project, en <b>Usuarios → Actualizar porcentajes a
-                  mano</b> se escriben los avances directamente y se publican igual que una carga,
-                  con su corte y su histórico.
+                  Para un corte urgente, <b>Usuarios → Actualizar porcentajes a mano</b> sigue disponible como
+                  alternativa trazable mientras termina la conversión.
                 </p>
               </>
             ) : (
               <p>
-                Para que las cifras se actualicen, exporta el mismo corte a <b>Excel</b> o <b>CSV</b>
-                desde el programa de origen y sube ese archivo.
+                Se generará una <b>vista PNG de alta resolución</b>, abrible en móvil y tableta y apta para lectura
+                visual. El proceso se comprueba cada hora; no tienes que volver a subir el plano.
               </p>
             )}
           </div>
@@ -8741,8 +8822,11 @@ export function DashboardClient({
   }, []);
 
   useEffect(() => {
-    const stored = window.localStorage.getItem("bricket-agent-open-v1");
-    if (stored === "true") setAgentOpen(true);
+    const timer = window.setTimeout(() => {
+      const stored = window.localStorage.getItem("bricket-agent-open-v1");
+      if (stored === "true") setAgentOpen(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {

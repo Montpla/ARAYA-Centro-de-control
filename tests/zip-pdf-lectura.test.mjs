@@ -86,6 +86,22 @@ test("los restos que mete el sistema al comprimir se ignoran", async () => {
   assert.ok(resultado.updates.every((update) => !update.sourceName.includes("MACOSX")));
 });
 
+test("un ZIP que supera el volumen permitido se rechaza antes de descomprimirlo", async () => {
+  const bytes = await leerFixture("corte-mensual.zip");
+  await assert.rejects(
+    xlsxReader.readZipEntries(bytes, () => true, { maxTotalUncompressedBytes: 1 }),
+    /tamaño descomprimido|límite/i,
+  );
+});
+
+test("un ZIP con una relación de compresión desproporcionada se rechaza", async () => {
+  const bytes = await leerFixture("corte-mensual.zip");
+  await assert.rejects(
+    xlsxReader.readZipEntries(bytes, () => true, { maxCompressionRatio: 0.01 }),
+    /compresión (?:no segura|desproporcionada)|relación de compresión/i,
+  );
+});
+
 // --- PDF ---------------------------------------------------------------------
 
 test("se recupera el texto de un PDF con texto digital", async () => {

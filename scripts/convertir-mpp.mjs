@@ -20,6 +20,7 @@ const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 const APLICAR = process.env.APLICAR === "1";
 const FILTRO = (process.env.FILTRO ?? "").toLowerCase();
 const MPXJ_CP = process.env.MPXJ_CP ?? "";
+const MAX_POR_EJECUCION = Math.max(1, Math.min(10, Number(process.env.MAX_POR_EJECUCION ?? 5) || 5));
 
 const email = process.env.DEPLOY_VERIFY_EMAIL;
 const pin = process.env.DEPLOY_VERIFY_PIN;
@@ -46,12 +47,23 @@ const Cookie = `araya_session=${cookieMatch[1]}`;
 
 const filesResponse = await fetch(`${PRODUCTION_URL}/api/files?limit=200`, { headers: { Cookie } });
 const { files = [] } = await filesResponse.json();
-const objetivo = files.filter((f) =>
+const activos = files.filter((f) => !f.deletedAt);
+const candidatos = activos.filter((f) =>
   !f.deletedAt &&
   String(f.extension).toLowerCase() === "mpp" &&
   f.originalName.toLowerCase().includes(FILTRO));
 
-console.log(`=== ${objetivo.length} archivo(s) .mpp que contienen "${FILTRO}" ===`);
+// Un reintento o un cron no puede crear otra conversión del mismo original.
+// La relación durable es la primera opción; el nombre/fecha conserva
+// idempotencia para los XML creados antes de que existiera esa columna.
+const objetivo = candidatos.filter((mpp) => !activos.some((file) => {
+  const relacionExplicita = file.derivedFromFileId === mpp.id && file.automationKind === "mpp_to_xml";
+  const conversionLegada = file.originalName === nombreXml(mpp.originalName) &&
+    Date.parse(file.createdAt) >= Date.parse(mpp.createdAt);
+  return relacionExplicita || conversionLegada;
+})).slice(0, MAX_POR_EJECUCION);
+
+console.log(`=== ${objetivo.length} MPP pendiente(s) de ${candidatos.length} candidato(s) ===`);
 for (const f of objetivo) {
   console.log(`  · ${f.originalName} · área ${f.areaLabel} · subido ${f.createdAt}`);
 }
@@ -120,10 +132,15 @@ for (const f of objetivo) {
   const esMspdi = /<Project[\s>][\s\S]{0,400}schemas\.microsoft\.com\/project/i.test(xml) ||
     /xmlns\s*=\s*["']http:\/\/schemas\.microsoft\.com\/project["']/i.test(xml);
   const tareas = (xml.match(/<Task>/g) || []).length;
-  console.log(`\n✔ ${f.originalName}: convertido · ${(xml.length / 1024).toFixed(0)} KB · ${tareas} tareas · ${esMspdi ? "MSPDI OK" : "⚠ no parece MSPDI"}`);
+  const fechasFin = (xml.match(/<Finish>/g) || []).length;
+  console.log(`\n✔ ${f.originalName}: convertido · ${(xml.length / 1024).toFixed(0)} KB · ${tareas} tareas · ${fechasFin} fechas de fin · ${esMspdi ? "MSPDI OK" : "⚠ no parece MSPDI"}`);
 
   if (!esMspdi) {
     console.error("   El XML convertido no es MSPDI reconocible; no se sube.");
+    continue;
+  }
+  if (!fechasFin) {
+    console.error("   El XML no contiene fechas Finish; se conserva el MPP y no se publica una previsión incompleta.");
     continue;
   }
   if (!APLICAR) {
@@ -137,6 +154,8 @@ for (const f of objetivo) {
   // El plan de obra manda sobre edificios y cronograma; se dirige a Obra para
   // que la publicación automática no se frene por «sin clasificar».
   form.set("area", "obra");
+  form.set("derivedFromFileId", f.id);
+  form.set("automationKind", "mpp_to_xml");
   if (f.declaredCutoff) form.set("declaredCutoff", f.declaredCutoff);
   form.set("description", `Convertido de ${f.originalName} con MPXJ (${new Date().toISOString().slice(0, 10)}).`);
 

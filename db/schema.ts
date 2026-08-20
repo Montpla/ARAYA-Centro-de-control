@@ -73,6 +73,10 @@ export const uploadedFiles = sqliteTable(
     extractionConfidence: real("extraction_confidence").notNull().default(0),
     extractionSummary: text("extraction_summary").notNull().default(""),
     discrepancyCount: integer("discrepancy_count").notNull().default(0),
+    ingestionVersion: text("ingestion_version").notNull().default(""),
+    processedAt: text("processed_at").notNull().default(""),
+    derivedFromFileId: text("derived_from_file_id").notNull().default(""),
+    automationKind: text("automation_kind").notNull().default(""),
     proposalGeneration: text("proposal_generation").notNull().default(""),
     reviewStatus: text("review_status").notNull().default("pendiente_extraccion"),
     reviewedByEmail: text("reviewed_by_email").notNull().default(""),
@@ -87,6 +91,8 @@ export const uploadedFiles = sqliteTable(
     deleteReason: text("delete_reason").notNull().default(""),
     restoredAt: text("restored_at").notNull().default(""),
     restoredByEmail: text("restored_by_email").notNull().default(""),
+    supersededByFileId: text("superseded_by_file_id").notNull().default(""),
+    supersededAt: text("superseded_at").notNull().default(""),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
@@ -102,6 +108,9 @@ export const uploadedFiles = sqliteTable(
     uniqueIndex("uploaded_files_area_name_version_idx")
       .on(table.area, table.safeName, table.version),
     index("uploaded_files_deleted_at_idx").on(table.deletedAt),
+    index("uploaded_files_ingestion_version_idx").on(table.ingestionVersion),
+    index("uploaded_files_derived_from_idx").on(table.derivedFromFileId),
+    index("uploaded_files_superseded_by_idx").on(table.supersededByFileId),
   ],
 );
 

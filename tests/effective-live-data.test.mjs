@@ -302,6 +302,34 @@ test("non-finance snapshots redact commercial data and protected provenance", as
   assert.deepEqual(JSON.parse(JSON.stringify(financeSnapshot.values.juneReport.sales)), { reservations: 12 });
 });
 
+test("provisional sections are visible by their published area, not by a global root gate", async () => {
+  const { deriveEffectiveLiveDataSnapshot } = await loadCore();
+  const operational = row({
+    historyId: 10,
+    eventId: 10,
+    key: "discoveredSections.0",
+    valueJson: JSON.stringify({ id: "obra-nueva", title: "Ensayo de hormigón", area: "obra" }),
+    area: "obra",
+    eventArea: "obra",
+  });
+  const financial = row({
+    historyId: 11,
+    eventId: 11,
+    key: "discoveredSections.1",
+    valueJson: JSON.stringify({ id: "coste-nuevo", title: "Proyección reservada", area: "finanzas" }),
+    area: "finanzas",
+    eventArea: "finanzas",
+  });
+
+  const publicSnapshot = deriveEffectiveLiveDataSnapshot([financial, operational], false);
+  assert.equal(publicSnapshot.values["discoveredSections.0"].title, "Ensayo de hormigón");
+  assert.equal(publicSnapshot.values["discoveredSections.1"], undefined);
+
+  const financeSnapshot = deriveEffectiveLiveDataSnapshot([financial, operational], true);
+  assert.equal(financeSnapshot.values["discoveredSections.0"].title, "Ensayo de hormigón");
+  assert.equal(financeSnapshot.values["discoveredSections.1"].title, "Proyección reservada");
+});
+
 test("published history excludes preparing/compensated and protects commercial rows", async () => {
   const { sanitizePublishedHistoryRows } = await loadCore();
   const operational = row();

@@ -5,6 +5,10 @@ name: Convertir MPP a XML y leerlo
 # re-ingiere por el lector de Project que ya existe. Simula por defecto.
 
 on:
+  schedule:
+    # GitHub ejecuta los cron en UTC. Cada cuarto de hora busca únicamente MPP
+    # sin conversión; el script es idempotente y limita el lote.
+    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       filtro:
@@ -22,11 +26,11 @@ jobs:
   convertir:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -52,5 +56,10 @@ jobs:
           DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
           DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
           FILTRO: ${{ inputs.filtro }}
-          APLICAR: ${{ inputs.aplicar }}
+          APLICAR: ${{ github.event_name == 'schedule' && '1' || inputs.aplicar }}
+          MAX_POR_EJECUCION: "5"
         run: node scripts/convertir-mpp.mjs
+
+concurrency:
+  group: convertir-mpp-produccion
+  cancel-in-progress: false

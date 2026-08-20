@@ -2870,9 +2870,10 @@ desplegados (60+ pruebas en verde).
 - Usar siempre `apartamento` y `apartamentos` en la interfaz, los informes y
   las respuestas del agente. `vivienda` se conserva únicamente como alias
   técnico interno para clasificar documentos o reconocer consultas antiguas.
-- Mantener Sites en modo público y conservar el contenido protegido por inicio
-  de sesión, `app_users` y permisos server-side. Sólo un administrador puede
-  gestionar usuarios.
+- Mantener GitHub (`Montpla/ARAYA-Centro-de-control`) como fuente canónica y
+  Cloudflare Workers como producción. No usar Sites salvo nueva orden expresa.
+  El contenido sigue protegido por sesión, `app_users` y permisos server-side.
+  Sólo un administrador puede gestionar usuarios.
 - Mantener USD como moneda de visualización inicial y DOP como regla de
   origen cuando un archivo no indique moneda. Cada nueva carga debe persistir
   `source_currency`.
@@ -2944,6 +2945,61 @@ trazabilidad y adaptar las fichas interactivas sin inventar valores.
   corte y los valores vivos del informe más reciente.
 - Verificación local: TypeScript verde, compilación Vinext verde, ESLint
   focalizado sin errores y suite completa **279/279**.
-- Pendiente de operación: commit y push explícitamente autorizados a GitHub;
-  después, comprobar el despliegue de Cloudflare y marcar como adaptados los
-  tres candidatos comerciales en D1.
+- La operación anterior se publicó en `github/main`. Las modificaciones nuevas
+  descritas a continuación son otro lote y requieren una autorización nueva de
+  commit/push y de migración/operación en producción.
+
+## Automatización documental universal — implementada localmente (20/08/2026)
+
+El usuario ordenó ejecutar los puntos 1 a 6; el punto 7 (dominio) queda
+expresamente descartado. Este lote está implementado y probado localmente, pero
+no debe considerarse desplegado hasta completar la secuencia operativa de abajo.
+
+1. **Fecha de fin del plan.** `lib/project-xml.ts` publica
+   `projectSnapshot.forecastFinish` como ISO `YYYY-MM-DD`, que es lo que exige
+   el contrato. La UI la presenta como `DD/MM/YYYY` mediante
+   `projectDateForDisplay`. Esto corrige el dato 28 que el MPP ya extraía pero
+   el contrato rechazaba; el XML derivado existente lo recuperará al reproceso.
+2. **MPP automático.** `convertir-mpp.yml` corre cada 15 minutos, procesa como
+   máximo cinco originales sin conversión, genera MSPDI con MPXJ y lo reingresa
+   con `derived_from_file_id=mpp` y `automation_kind=mpp_to_xml`. Valida que
+   existan fechas `Finish` antes de subir.
+3. **ZIP y DWG.** Los ZIP abren hasta 200 entradas con límites de tamaño,
+   cantidad y relación de compresión; leen formatos estructurados y envían a la
+   IA hasta cinco documentos narrativos internos. `convertir-dwg.yml` corre una
+   vez por hora: LibreDWG genera SVG, librsvg lo rasteriza a PNG de 3.200 px y la
+   vista vuelve a la ingesta, enlazada al DWG original y abrible en móvil.
+4. **Versionado y reproceso.** Cada expediente guarda `ingestion_version` y
+   `processed_at`. `CURRENT_INGESTION_VERSION` es `2026-08-20.2`.
+   `reprocesar-obsoletos.yml` compara la marca cada seis horas y relee tres
+   expedientes antiguos por ciclo, sobre la misma fila y el mismo original,
+   sin duplicar. Los expedientes superados y los binarios MPP/DWG se excluyen.
+5. **Secciones provisionales.** Un candidato nuevo sin campo del modelo ya no
+   desaparece ni exige que todo sea Finanzas: crea `discoveredSections.N` con
+   título, área, evidencia, fuente, confianza y valores. Centro de datos las
+   muestra de forma interactiva. La privacidad se aplica por el área del punto;
+   Finanzas/Comercial siguen invisibles para quien no tenga permiso.
+6. **XLS histórico de junio.** El análisis está en
+   `historical/data-center/junio-2026/DECISION-avance-fisico-y-cubicaciones.md`.
+   El libro contiene 21,236557 % plan / 18,231973 % ejecutado y cubicaciones 1 a
+   4; queda como antecedente, sustituido por el libro oficial de julio. La ruta
+   `/api/files/supersede` conserva el original y registra sustituto, motivo,
+   administrador, fecha, actividad y notificación. Un expediente superado no se
+   puede reprocesar. `cerrar-historico-junio.yml` aplica esa decisión una vez.
+
+### Esquema y secuencia segura de producción
+
+- Migración nueva: `drizzle/0024_sleepy_nightshade.sql`; añade seis columnas e
+  índices a `uploaded_files`. La cadena exacta ya está en el journal.
+- **No empujar directamente a main antes de migrar**: el Worker nuevo selecciona
+  esas columnas. Secuencia: crear rama, commit y push autorizados; ejecutar
+  `Aplicar migración D1` sobre la rama con `0024_sleepy_nightshade.sql`; integrar
+  a `main`; esperar el deploy; ejecutar `Cerrar antecedente XLS de junio` primero
+  con `aplicar=0` y después con `aplicar=1`.
+- Tras el deploy, los cron de MPP, DWG y reproceso completan la puesta al día.
+  Comprobar que `projectSnapshot.forecastFinish` aparece en `/api/live-data` y
+  que el XLS de junio muestra `historico/superado`.
+- Se verificó por Wrangler que el Worker tiene el secreto `OPENAI_API_KEY`,
+  además de las claves VAPID. Nunca imprimir ni copiar los valores.
+- Pruebas nuevas: `tests/ingestion-automation.test.mjs` y límites ZIP en
+  `tests/zip-pdf-lectura.test.mjs`. TypeScript y build Vinext están verdes.

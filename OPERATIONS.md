@@ -5,9 +5,9 @@
 1. Cargar el archivo desde `Centro de datos`, la cámara o el agente.
 2. El servidor guarda primero el original en R2 `FILES` y después confirma el
    expediente en D1. Confirmar el área sólo si la detección no coincide.
-3. CSV/JSON conforme al contrato vivo sigue el importador determinista. Los
-   formatos semánticos sólo se interpretan si existe `OPENAI_API_KEY`; cualquier
-   resultado que no cumpla contrato, confianza o permisos queda pendiente.
+3. El sistema elige automáticamente lector directo, conversión segura o lectura
+   asistida según el formato. Los datos válidos se publican; la información nueva
+   crea una sección provisional con fuente, evidencia y permisos de área.
 4. En una excepción, comparar `Valor vigente → Valor propuesto` y aprobar,
    observar o rechazar desde el expediente.
 5. Comprobar la nueva revisión en la Sala operativa y en la sección afectada.
@@ -19,17 +19,21 @@ semántica de un documento o una consulta al asistente usa la API de IA.
 
 ## Formatos e interpretación
 
-- CSV y JSON estructurados se leen de forma determinista; una revisión sólo se
-  publica si sus claves, valores, corte, área y permisos cumplen el contrato.
-- PDF, XLS/XLSX, PPT/PPTX, DOC/DOCX e imágenes requieren `OPENAI_API_KEY`
-  para interpretación semántica automática. Sin la clave se conserva el
-  original y queda pendiente de extracción/revisión; no cambia el dashboard.
+- CSV, JSON, XML de Project, XLS/XLSX y las tablas de DOCX/PPTX/PDF se leen por
+  lectores directos cuando su estructura es reconocible. La lectura asistida
+  completa huecos narrativos o visuales sin pisar el dato directo.
+- PDF, XLS/XLSX, PPT/PPTX, DOC/DOCX e imágenes pueden usar
+  `OPENAI_API_KEY` para interpretación semántica. El Worker vigente sí conserva
+  esa clave como secreto.
 - Actualizado el 13/08/2026: en el entorno de Cloudflare Workers vigente
   (ver `HANDOFF.md`, "Aviso importante: plataforma de despliegue vigente")
   `OPENAI_API_KEY` SÍ está configurada y la extracción semántica funciona en
   producción con `gpt-5.6-terra`. La nota anterior sobre la clave ausente en
   "Sites" describía un entorno distinto que no es el que se usa actualmente.
-- DWG, MPP y ZIP se pueden custodiar y abrir/descargar, pero no se interpretan.
+- ZIP se abre dentro de límites de seguridad y procesa cada documento interno.
+  MPP se convierte automáticamente a XML de Project cada 15 minutos. DWG genera
+  una vista PNG privada cada hora, enlazada al original y apta para lectura
+  visual y consulta desde móvil/tableta.
 - Guardar o interpretar no equivale a publicar. Cifras, gráficos, cronograma,
   edificios, apartamentos y urbanismo cambian únicamente tras una revisión
   publicada y aparecen en un máximo de cinco segundos.
@@ -163,8 +167,10 @@ sobre todo el conjunto que el usuario puede ver.
 
 ## Reprocesar y recuperar un informe (workflows en Actions)
 
-Cuando se mejora un lector, los archivos subidos **antes** no se re-analizan
-solos. Desde la pestaña **Actions** (requieren los secretos `DEPLOY_VERIFY`):
+Cada expediente conserva `ingestion_version`. Cuando mejora un lector, el cron
+**Reprocesar archivos con lector nuevo** detecta los antiguos y reanaliza tres
+por ciclo, sobre la misma fila y sin duplicar el original. También permanecen
+estas herramientas manuales en **Actions** (requieren `DEPLOY_VERIFY`):
 
 - **Reprocesar archivos con el pipeline actual** — re-analiza un archivo ya
   subido con la ingesta de hoy. Campos: `filtro` (parte del nombre), `formatos`
@@ -196,26 +202,17 @@ logs; sólo nombres de clave, estados y metadatos.
   apaga los avisos en el siguiente despliegue, sin error en ninguna parte. El
   despliegue lo comprueba y falla en rojo si faltan.
 - La cadena de migraciones D1 llega hasta
-  `drizzle/0016_outstanding_stark_industries.sql` y debe desplegarse junto con
-  `drizzle/meta/_journal.json`. La `0016` añade índices compuestos para la
-  paginación por creación y el feed por actualización.
+  `drizzle/0024_sleepy_nightshade.sql` y debe desplegarse junto con
+  `drizzle/meta/_journal.json`. La `0024` versiona la ingesta y registra archivos
+  derivados/superados. Aplicarla antes de desplegar el Worker que usa esas
+  columnas.
 - Las escrituras críticas de publicación y baja/restauración usan batches
   atómicos acotados. Las recomputaciones son set-based, una publicación admite
   como máximo 250 cambios y ningún listado debe ejecutar una consulta por fila.
-- URL técnica: `https://araya-centro-control.enriquemontesplaza.chatgpt.site`.
-  Es la dirección para la prueba de humo hasta validar el dominio corporativo.
-- `https://www.proyectosgrupobricket.com/` está reservado en Sites, pero sigue
-  pendiente del DNS de Nominalia. `www` aún apunta a Railway. El CNAME de
-  `www.proyectosgrupobricket.com` debe cambiarse a
-  `custom-domains.chatgpt.site.` y publicar estos TXT:
-  `_openai-site-verification.www.proyectosgrupobricket.com` =
-  `openai-site-verification=ReIYEqnjHes6RI0bLxmvNyvX_4zHPvwez1eDmc6Z2WE` y
-  `_cf-custom-hostname.www.proyectosgrupobricket.com` =
-  `fafd06b2-640d-4bba-8c7b-36b7151c87bd`.
-- No anunciar el dominio corporativo como activo hasta que Sites confirme DNS
-  y SSL y se complete una prueba externa de login, carga, apertura y cierre.
-- La infraestructura de Sites es pública para alcanzar el login; los datos
-  siguen protegidos por identidad, `app_users` y permisos server-side.
+- Producción vigente:
+  `https://araya-centro-control.grupobricket.workers.dev`. Fuente canónica:
+  GitHub `Montpla/ARAYA-Centro-de-control`. El dominio corporativo (punto 7)
+  está descartado por ahora; no cambiar DNS ni reactivar Sites.
 
 ## Continuidad
 

@@ -77,7 +77,9 @@ function juneData(financeAccess: boolean) {
     cxpAging: financeAccess ? june.cxpAging : [],
     cxpCategories: financeAccess ? june.cxpCategories : [],
     delayedUrbanismStarts: june.delayedUrbanismStarts,
-    discoveredSections: financeAccess ? june.discoveredSections : [],
+    // La lista base está vacía. Los bloques publicados se filtran por el área
+    // de cada punto vivo en el servidor, no bloqueando la raíz completa.
+    discoveredSections: june.discoveredSections,
     financialProjection: financeAccess ? june.financialProjection : [],
     financingProcesses: financeAccess ? june.financingProcesses : [],
     juneDataQualityIssues: financeAccess ? june.juneDataQualityIssues : [],

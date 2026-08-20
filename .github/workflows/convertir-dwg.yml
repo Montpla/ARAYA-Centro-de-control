@@ -1,0 +1,47 @@
+name: Convertir DWG a vista navegable
+
+# El Worker conserva el DWG privado. Este runner genera una vista PNG enlazada
+# para abrir el plano en ordenador, tableta y móvil, y la reingiere para que la
+# visión asistida pueda extraer contenido cuando haya clave de IA configurada.
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+    inputs:
+      filtro:
+        description: "Texto que debe contener el nombre del DWG"
+        required: false
+        default: ""
+        type: string
+      aplicar:
+        description: "Subir la vista generada (1) o sólo validarla (0)"
+        required: false
+        default: "0"
+        type: string
+
+jobs:
+  convertir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Instalar conversores DWG y SVG
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libredwg-tools librsvg2-bin
+          dwg2SVG --version
+          rsvg-convert --version
+      - name: Convertir y reingresar vistas
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+          FILTRO: ${{ inputs.filtro }}
+          APLICAR: ${{ github.event_name == 'schedule' && '1' || inputs.aplicar }}
+          MAX_POR_EJECUCION: "3"
+        run: node scripts/convertir-dwg.mjs
+
+concurrency:
+  group: convertir-dwg-produccion
+  cancel-in-progress: false

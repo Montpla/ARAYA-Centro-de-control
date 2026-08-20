@@ -94,3 +94,9 @@ test("la media de todos los edificios reproduce el avance global del plan", () =
   const media = buildings.reduce((s, b) => s + b.progress, 0) / buildings.length;
   assert.ok(media > 17 && media < 25, `media global ${media.toFixed(1)}% fuera de rango`);
 });
+
+test("las fechas vivas ISO se presentan en formato español sin alterar las antiguas", () => {
+  assert.equal(pm.projectDateForDisplay("2027-06-07"), "07/06/2027");
+  assert.equal(pm.projectDateForDisplay("2027-06-07T17:00:00Z"), "07/06/2027");
+  assert.equal(pm.projectDateForDisplay("07/06/2027"), "07/06/2027");
+});

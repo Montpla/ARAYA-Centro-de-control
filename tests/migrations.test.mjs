@@ -51,6 +51,12 @@ test("the exact journal migrates an empty database with ingestion and control-ro
     "review_status",
     "publication_revision",
     "deleted_at",
+    "ingestion_version",
+    "processed_at",
+    "derived_from_file_id",
+    "automation_kind",
+    "superseded_by_file_id",
+    "superseded_at",
   ]) {
     assert.ok(uploadedColumns.includes(column), `missing uploaded_files.${column}`);
   }

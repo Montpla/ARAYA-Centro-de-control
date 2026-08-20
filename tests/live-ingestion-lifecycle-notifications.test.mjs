@@ -110,7 +110,7 @@ test("multiformat ingestion falls back to AI and gates automatic publication", (
     // El lector determinista manda; la IA se ejecuta también cuando la lectura
     // de un documento narrativo fue sólo parcial, y complementa los huecos.
     /const lecturaParcial = deterministicExtraction\.updates\.length > 0 && documentoNarrativo;/,
-    /if \(!deterministicExtraction\.updates\.length \|\| lecturaParcial\) \{[\s\S]*?extractDocumentWithAI\(/,
+    /if \(\(!deterministicExtraction\.updates\.length \|\| lecturaParcial\) && aiDocuments\.length\) \{[\s\S]*?for \(const document of aiDocuments\)[\s\S]*?extractDocumentWithAI\(/,
     /const clavesDeterministas = deterministicExtraction\.updates\.map\(\(update\) => update\.key\);/,
     // La IA no puede aportar una lista entera cuando el lector ya emite una hija
     // suya (collectionTargets vs collectionTargets\.0\.targetUsd): choca en la

@@ -13,6 +13,7 @@ import {
 import {
   activeBuildingsProgress,
   averageNumeric,
+  projectDateForDisplay,
 } from "./progress-model";
 import { unitOverallProgress } from "./unit-progress";
 
@@ -21,6 +22,7 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
     materializeLiveRoot("buildings", baselineBuildings, values),
   ).map((building) => ({
     ...building,
+    forecastFinish: projectDateForDisplay(building.forecastFinish),
     units: compactLiveEntities(building.units),
   }));
   const urbanismAreas = compactLiveEntities(
@@ -70,6 +72,7 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
     monthlyPlan,
     projectSnapshot: {
       ...snapshot,
+      forecastFinish: projectDateForDisplay(snapshot.forecastFinish),
       overallProgress,
       activeBuildingsProgress: activeProgress,
       urbanismProgress,

@@ -22,8 +22,9 @@ import {
 } from "../../../db/schema";
 import { requireApiUser } from "../../../lib/access-control";
 import { resolveSourceCurrency } from "../../../lib/currency";
-import { areaLabels, classifyUpload, safeFileName, uploadAreas } from "../../../lib/file-routing";
-import { analyzeDocument, extractStructuredUpdates } from "../../../lib/ingestion";
+import { areaLabels, classifyUpload, isUploadArea, safeFileName, uploadAreas } from "../../../lib/file-routing";
+import { analyzeDocument, archiveDocumentsForAI, extractStructuredUpdates } from "../../../lib/ingestion";
+import { CURRENT_INGESTION_VERSION } from "../../../lib/ingestion-version";
 import {
   canAutomaticallyPublishExtraction,
   extractDocumentWithAI,
@@ -300,6 +301,10 @@ function publicFileRow(
     extractionConfidence: row.extractionConfidence,
     extractionSummary: row.extractionSummary,
     discrepancyCount: row.discrepancyCount,
+    ingestionVersion: row.ingestionVersion,
+    processedAt: row.processedAt,
+    derivedFromFileId: row.derivedFromFileId,
+    automationKind: row.automationKind,
     reviewStatus: row.reviewStatus,
     reviewedByName: row.reviewedByName,
     reviewedAt: row.reviewedAt,
@@ -310,6 +315,8 @@ function publicFileRow(
     deletedByName: row.deletedByName,
     deleteReason: row.deleteReason,
     restoredAt: row.restoredAt,
+    supersededByFileId: row.supersededByFileId,
+    supersededAt: row.supersededAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     canManage: Boolean(user && (user.role === "admin" || user.email === row.uploaderEmail)),
@@ -741,6 +748,14 @@ export async function POST(request: Request) {
   // original— y publica una revisión nueva encima. Sin esta señal explícita, un
   // archivo idéntico ya publicado se queda como está.
   const reprocessRequested = formData.get("reprocess") === "true";
+  const derivedFromFileId = String(formData.get("derivedFromFileId") ?? "").trim().slice(0, 160);
+  const automationKind = String(formData.get("automationKind") ?? "").trim().slice(0, 80);
+  if (Boolean(derivedFromFileId) !== Boolean(automationKind)) {
+    return Response.json({ error: "Una conversión automática debe indicar origen y tipo de automatización." }, { status: 400 });
+  }
+  if (derivedFromFileId && user.role !== "admin") {
+    return Response.json({ error: "Sólo un administrador puede registrar archivos derivados automáticamente." }, { status: 403 });
+  }
   // Diagnóstico acotado: cuando quien sube lo pide expresamente y tiene acceso,
   // la respuesta incluye el mensaje del error que dejó el expediente en
   // «observado». Es sólo el texto del error (nunca cifras), para localizar qué
@@ -774,6 +789,18 @@ export async function POST(request: Request) {
   const sha256 = hexDigest(await crypto.subtle.digest("SHA-256", bytes));
   const db = getDb();
 
+  if (derivedFromFileId) {
+    const [parent] = await db.select().from(uploadedFiles)
+      .where(and(eq(uploadedFiles.id, derivedFromFileId), eq(uploadedFiles.deletedAt, "")))
+      .limit(1);
+    if (!parent) {
+      return Response.json({ error: "El archivo de origen de la conversión no existe o está retirado." }, { status: 400 });
+    }
+    if (fileRequiresFinanceAccess(parent) && !user.financeAccess) {
+      return Response.json({ error: "No tienes permiso para convertir ese archivo de origen." }, { status: 403 });
+    }
+  }
+
   const [duplicate] = await db
     .select()
     .from(uploadedFiles)
@@ -795,6 +822,7 @@ export async function POST(request: Request) {
     // lo pide tenga el acceso que ese contenido exige. Un archivo rechazado no
     // se reabre por esta vía: esa decisión es deliberada y se respeta.
     const canReprocess = reprocessRequested &&
+      !duplicate.supersededAt &&
       duplicate.status !== "rechazado" &&
       (user.financeAccess || !fileRequiresFinanceAccess(duplicate));
     if (!canResume && !canReprocess) {
@@ -928,6 +956,10 @@ export async function POST(request: Request) {
         extractionConfidence: analysis.confidence,
         extractionSummary: analysis.summary,
         discrepancyCount: 0,
+        ingestionVersion: CURRENT_INGESTION_VERSION,
+        processedAt: "",
+        derivedFromFileId,
+        automationKind,
         reviewStatus: "pendiente_extraccion",
       })
       .returning();
@@ -1042,21 +1074,61 @@ export async function POST(request: Request) {
     // también cuando el lector sólo cubrió parte de un documento narrativo, y
     // sólo se quedan de la IA las claves que ningún lector tocó. Un Excel o un
     // plan de Project se leen enteros y no necesitan ese complemento.
-    const documentoNarrativo = ["pptx", "docx", "pdf"].includes(extension);
+    let aiDocuments = [{
+      bytes,
+      fileName: candidate.name,
+      mimeType: candidate.type || canonicalMimeByExtension[extension] || "application/octet-stream",
+      extension,
+    }];
+    if (extension === "zip") {
+      try {
+        aiDocuments = await archiveDocumentsForAI(bytes);
+      } catch (archiveError) {
+        extraction = {
+          ...extraction,
+          warnings: [
+            ...extraction.warnings,
+            archiveError instanceof Error ? archiveError.message : "El ZIP no pudo abrirse de forma segura.",
+          ],
+        };
+        aiDocuments = [];
+      }
+    }
+    const documentoNarrativo = aiDocuments.some((document) =>
+      ["ppt", "pptx", "doc", "docx", "pdf", "xls", "jpg", "jpeg", "png"].includes(document.extension));
     const lecturaParcial = deterministicExtraction.updates.length > 0 && documentoNarrativo;
-    if (!deterministicExtraction.updates.length || lecturaParcial) {
-      const iaExtraction = await extractDocumentWithAI({
-        bytes,
-        fileName: candidate.name,
-        mimeType: candidate.type || canonicalMimeByExtension[extension] || "application/octet-stream",
-        extension,
-        area: classification.area,
-        cutoff: effectiveCutoff,
-        sourceCurrency: sourceCurrency === "USD" ? "USD" : "DOP",
-        apiKey: process.env.OPENAI_API_KEY ?? "",
-        currentValues: currentLiveData.values,
-        knownAreas: uploadAreas,
-        schemaReference: getContractRootsSnapshot(),
+    if ((!deterministicExtraction.updates.length || lecturaParcial) && aiDocuments.length) {
+      const aiResults: Awaited<ReturnType<typeof extractDocumentWithAI>>[] = [];
+      for (const document of aiDocuments) {
+        aiResults.push(await extractDocumentWithAI({
+          ...document,
+          area: classification.area,
+          cutoff: effectiveCutoff,
+          sourceCurrency: sourceCurrency === "USD" ? "USD" : "DOP",
+          apiKey: process.env.OPENAI_API_KEY ?? "",
+          currentValues: currentLiveData.values,
+          knownAreas: uploadAreas,
+          schemaReference: getContractRootsSnapshot(),
+        }));
+      }
+      const iaExtraction = aiResults.reduce<Awaited<ReturnType<typeof extractDocumentWithAI>>>((merged, result) => ({
+        updates: [...merged.updates, ...result.updates],
+        updateConfidences: [...merged.updateConfidences, ...result.updateConfidences],
+        summary: [merged.summary, result.summary].filter(Boolean).join(" "),
+        warnings: [...merged.warnings, ...result.warnings],
+        confidence: Math.max(merged.confidence, result.confidence),
+        model: result.model || merged.model,
+        promptVersion: result.promptVersion || merged.promptVersion,
+        unmappedCandidates: [...merged.unmappedCandidates, ...result.unmappedCandidates],
+      }), {
+        updates: [],
+        updateConfidences: [],
+        summary: "",
+        warnings: [],
+        confidence: 0,
+        model: "openai_responses",
+        promptVersion: "archive-multi-document-v1",
+        unmappedCandidates: [],
       });
       if (!deterministicExtraction.updates.length) {
         extraction = iaExtraction;
@@ -1118,9 +1190,18 @@ export async function POST(request: Request) {
     }
     // Cuántos bloques descubiertos hay ya: los nuevos se añaden al final, y
     // escribir un índice ocupado sobrescribiría el bloque de otro documento.
-    const existingDiscoveredCount = Array.isArray(currentLiveData.values.discoveredSections)
+    const discoveredRootLength = Array.isArray(currentLiveData.values.discoveredSections)
       ? currentLiveData.values.discoveredSections.length
       : 0;
+    const discoveredChildIndices = Object.keys(currentLiveData.values)
+      .map((key) => key.match(/^discoveredSections\.(\d+)(?:\.|$)/)?.[1])
+      .filter((index): index is string => Boolean(index))
+      .map(Number)
+      .filter(Number.isSafeInteger);
+    const existingDiscoveredCount = Math.max(
+      discoveredRootLength,
+      discoveredChildIndices.length ? Math.max(...discoveredChildIndices) + 1 : 0,
+    );
 
     // Un bloque que la lectura descubre y para el que no existe ningún campo ya
     // no espera aprobación: se publica como sección descubierta, con su
@@ -1128,12 +1209,22 @@ export async function POST(request: Request) {
     // se quedaba apartado indefinidamente y nadie llegaba a verlo — el informe
     // de ventas de julio pasó así dos bloques enteros.
     //
-    // Sólo se crea cuando quien sube tiene autorización financiera: el
-    // contenido descubierto puede ser cualquier cosa, incluidas cifras de
-    // ventas, y no se sabe qué es hasta mirarlo. Sin esa condición, una carga
-    // de obra podría publicar contenido comercial sin querer.
-    const seccionesDescubiertas = user.financeAccess
-      ? extraction.unmappedCandidates.map((candidato, posicion) => {
+    // Cada candidato sin campo conocido se convierte en un bloque provisional
+    // visible en Centro de datos. Su área conserva la misma privacidad que el
+    // resto del sistema: un usuario sin Finanzas nunca puede crear ni ver un
+    // candidato comercial/financiero, pero sí puede incorporar uno de obra,
+    // seguridad, permisos, planos, etc.
+    const candidatosProvisionales = extraction.unmappedCandidates
+      .map((candidato) => {
+        const suggested = candidato.suggestedArea.trim().toLowerCase();
+        const candidateArea = isUploadArea(suggested) && !["auto", "sin_clasificar"].includes(suggested)
+          ? suggested
+          : resolvedArea;
+        return { candidato, candidateArea };
+      })
+      .filter(({ candidateArea }) => user.financeAccess || !requiresFinanceAccessForArea(candidateArea));
+    const seccionesDescubiertas = candidatosProvisionales
+      .map(({ candidato, candidateArea }, posicion) => {
           let valores: Array<{ label: string; value: string }> = [];
           try {
             const contenido = JSON.parse(candidato.valueJson) as unknown;
@@ -1164,20 +1255,19 @@ export async function POST(request: Request) {
               id: `descubierto-${id}-${posicion}`,
               title: candidato.label.slice(0, 160),
               description: candidato.description.slice(0, 400),
-              area: candidato.suggestedArea || resolvedArea,
+              area: candidateArea,
               evidence: candidato.evidence.slice(0, 600),
               confidence: candidato.confidence,
               sourceName: candidate.name,
               detectedAt: new Date().toISOString(),
               values: valores,
             },
-            area: resolvedArea,
+            area: requiresFinanceAccessForArea(candidateArea) ? candidateArea : resolvedArea,
             cutoff: effectiveCutoff,
             sourceCurrency: (sourceCurrency === "USD" ? "USD" : "DOP") as "USD" | "DOP",
             sourceName: candidate.name,
           };
-        })
-      : [];
+        });
 
     const normalizacion = identityResolvedUpdates.length || seccionesDescubiertas.length
       ? normalizeIngestedUpdatesResilient(
@@ -1329,6 +1419,8 @@ export async function POST(request: Request) {
         extractionConfidence: normalizedUpdates.length ? extraction.confidence : analysis.confidence,
         extractionSummary,
         discrepancyCount,
+        ingestionVersion: CURRENT_INGESTION_VERSION,
+        processedAt: classifiedAt,
         proposalGeneration: extractionGeneration,
         reviewStatus: normalizedUpdates.length ? "listo_revision" : "pendiente_extraccion",
         updatedAt: classifiedAt,
@@ -1530,6 +1622,8 @@ export async function POST(request: Request) {
       // If classification never completed, the provisional document type
       // remains protected and can only be resolved by an authorized retry.
       documentType: protectionResolved ? resolvedDocumentType : PROVISIONAL_DOCUMENT_TYPE,
+      ingestionVersion: CURRENT_INGESTION_VERSION,
+      processedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }).where(extractionCommitted
       ? and(

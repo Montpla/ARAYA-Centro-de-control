@@ -50,14 +50,14 @@ test("la guía de carga ya no está registrada por separado", () => {
   assert.doesNotMatch(lista, /id: "carga"/);
 });
 
-test("sólo el mpp y el dwg figuran como ilegibles", () => {
-  // Es la afirmación que más caduca de toda la guía: cada lector nuevo saca un
-  // formato de esta lista, y dejarlo dentro desanima a subirlo.
+test("mpp y dwg figuran como conversión automática", () => {
   const grupo = generador.slice(
-    generador.indexOf('"Sólo se guarda"'),
-    generador.indexOf('"Sólo se guarda"') + 300,
+    generador.indexOf('"Se convierte"'),
+    generador.indexOf('"Se convierte"') + 500,
   );
   assert.match(grupo, /\[".mpp", ".dwg"\]/);
+  assert.match(grupo, /ACTUALIZA AL TERMINAR/);
+  assert.doesNotMatch(grupo, /NO MUEVE NINGUNA CIFRA/);
 });
 
 test("el zip y el pdf figuran entre los que se leen solos", () => {
@@ -73,7 +73,7 @@ test("el zip y el pdf figuran entre los que se leen solos", () => {
 test("la guía lleva a la pantalla de avance manual con su ruta exacta", () => {
   // Si la ruta escrita no coincide con el rótulo de la aplicación, quien la
   // sigue no encuentra nada y vuelve a quedarse sin publicar el corte.
-  assert.match(generador, /Usuarios → Actualizar porcentajes a mano/);
+  assert.match(generador, /Usuarios \/ Actualizar porcentajes a mano/);
   assert.match(cliente, /Actualizar porcentajes a mano/);
 });
 

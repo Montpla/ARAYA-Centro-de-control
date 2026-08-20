@@ -27,6 +27,52 @@ type StructuredExtraction = {
   warnings: string[];
 };
 
+export type ArchiveAiDocument = {
+  bytes: ArrayBuffer;
+  fileName: string;
+  extension: string;
+  mimeType: string;
+};
+
+const archiveAiMime: Record<string, string> = {
+  doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  jpeg: "image/jpeg",
+  jpg: "image/jpeg",
+  pdf: "application/pdf",
+  png: "image/png",
+  ppt: "application/vnd.ms-powerpoint",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  xls: "application/vnd.ms-excel",
+};
+
+/** Documentos narrativos/visuales de un ZIP que deben pasar por lectura IA. */
+export async function archiveDocumentsForAI(bytes: ArrayBuffer, maxDocuments = 5): Promise<ArchiveAiDocument[]> {
+  const allowed = new Set(Object.keys(archiveAiMime));
+  const entries = await readZipEntries(bytes, (name) => {
+    const normalized = name.toLowerCase();
+    if (normalized.endsWith("/") || normalized.startsWith("__macosx/") || normalized.includes("/.")) return false;
+    const extension = normalized.slice(normalized.lastIndexOf(".") + 1);
+    return allowed.has(extension);
+  }, {
+    maxEntries: 200,
+    maxSelectedEntries: 20,
+    maxEntryUncompressedBytes: 25 * 1024 * 1024,
+    maxTotalUncompressedBytes: 50 * 1024 * 1024,
+    maxCompressionRatio: 200,
+  });
+  return entries.slice(0, Math.max(1, Math.min(8, maxDocuments))).map((entry) => {
+    const fileName = entry.name.split("/").pop() || entry.name;
+    const extension = fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase();
+    return {
+      bytes: entry.data.slice().buffer,
+      fileName,
+      extension,
+      mimeType: archiveAiMime[extension] ?? "application/octet-stream",
+    };
+  });
+}
+
 const monthNumbers: Record<string, string> = {
   ene: "01",
   enero: "01",
@@ -1045,6 +1091,12 @@ export async function extractStructuredUpdates(
         // Se ignoran las carpetas y los restos que mete macOS al comprimir.
         if (limpio.endsWith("/") || limpio.startsWith("__macosx/") || limpio.includes("/.")) return false;
         return PRIORIDAD.some((ext) => limpio.endsWith(`.${ext}`));
+      }, {
+        maxEntries: 200,
+        maxSelectedEntries: 40,
+        maxEntryUncompressedBytes: 25 * 1024 * 1024,
+        maxTotalUncompressedBytes: 50 * 1024 * 1024,
+        maxCompressionRatio: 200,
       });
     } catch {
       return {

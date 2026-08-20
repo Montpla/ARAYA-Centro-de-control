@@ -34,6 +34,7 @@ export const uploadStatusLabels: Record<string, string> = {
   integrado: "Integrado",
   observado: "Observado",
   rechazado: "Rechazado",
+  historico: "Histórico sustituido",
 };
 
 export const documentTypeLabels: Record<string, string> = {
@@ -56,6 +57,7 @@ export const reviewStatusLabels: Record<string, string> = {
   cambios_solicitados: "Cambios solicitados",
   aprobado: "Aprobado",
   rechazado: "Rechazado",
+  superado: "Superado por una fuente posterior",
 };
 
 const areaKeywords: Record<Exclude<ClassifiedArea, "sin_clasificar">, string[]> = {

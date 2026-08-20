@@ -126,9 +126,9 @@ def cover(c: canvas.Canvas) -> None:
 
     draw_wrapped(
         c,
-        "Cuando subes un archivo al Centro de Control, casi todo actualiza el "
-        "panel solo, sin revisión: lo que se lee tal cual y lo que hay que "
-        "interpretar (fotos, escaneos). Sólo dos formatos no se pueden leer.",
+        "Cuando subes un archivo al Centro de Control, el sistema elige cómo "
+        "procesarlo: lectura directa, interpretación visual o conversión segura. "
+        "El original y cada resultado quedan enlazados.",
         MARGIN_X,
         PAGE_H - 312,
         CONTENT_W * 0.66,
@@ -144,8 +144,7 @@ def cover(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X + 22, box_y + 104, "LA REGLA CORTA")
     draw_wrapped(
         c,
-        "Subes el archivo y el panel se actualiza solo. Sólo dos formatos no se "
-        "pueden leer: .mpp y .dwg.",
+        "Subes el archivo una vez. El sistema lo lee, lo interpreta o lo convierte y actualiza el panel.",
         MARGIN_X + 22,
         box_y + 82,
         CONTENT_W - 44,
@@ -156,8 +155,8 @@ def cover(c: canvas.Canvas) -> None:
     )
     draw_wrapped(
         c,
-        "Ya no hay revisión de por medio: lo que el programa lee o interpreta "
-        "entra automáticamente. Y para el .mpp hay dos salidas, en la página 3.",
+        "Lo que el programa lee, interpreta o convierte entra automáticamente. "
+        "MPP y DWG también tienen su proceso, explicado en la página 3.",
         MARGIN_X + 22,
         box_y + 40,
         CONTENT_W - 44,
@@ -213,15 +212,14 @@ def page_resultados(c: canvas.Canvas) -> None:
             134,
         ),
         (
-            "Sólo se guarda",
-            "NO MUEVE NINGUNA CIFRA",
-            RED_DEEP,
-            RED_PALE,
+            "Se convierte",
+            "ACTUALIZA AL TERMINAR",
+            NAVY,
+            BLUE_PALE,
             [".mpp", ".dwg"],
-            "El archivo se conserva completo y descargable, con tu nombre y "
-            "la fecha, pero sus cifras no entran. Son formatos binarios "
-            "cerrados: no existe forma de leerlos. Si subes uno, el aviso te "
-            "lo dice en el momento, antes de esperar a que termine la subida.",
+            "El original se guarda primero. Después, un proceso seguro genera "
+            "un XML de Project o una vista PNG del plano, lo enlaza al original "
+            "y lo vuelve a leer. No hay que convertir ni subir otra copia.",
             134,
         ),
     ]
@@ -285,13 +283,13 @@ def page_resultados(c: canvas.Canvas) -> None:
 
 
 def page_mpp(c: canvas.Canvas) -> None:
-    draw_page_frame(c, 3, "El corte en .mpp")
+    draw_page_frame(c, 3, "MPP y DWG automáticos")
     y = draw_section_title(
         c,
-        "MICROSOFT PROJECT",
-        "El corte del mes viene en un .mpp",
-        "Es el caso más frecuente de los que no se leen, y tiene dos salidas. "
-        "Cualquiera de las dos resuelve el mes.",
+        "FORMATOS BINARIOS",
+        "Los formatos binarios se convierten solos",
+        "El original queda protegido desde el primer momento. La conversión "
+        "continúa en segundo plano y vuelve a la misma ingesta.",
     )
 
     y -= 24
@@ -300,26 +298,25 @@ def page_mpp(c: canvas.Canvas) -> None:
 
     salidas = [
         (
-            "SI PUEDES ABRIR PROJECT",
-            "Guárdalo como XML",
-            "Archivo → Guardar como → XML (*.xml)",
-            "Ese formato sí se lee entero: nombres de tarea, porcentajes, "
-            "fechas y jerarquía. Subes el .xml y el avance de cada edificio "
-            "se actualiza solo.",
-            "Es mejor que exportar a Excel, que pierde el plan y depende de "
-            "qué columnas eligiera quien lo generó.",
+            "MICROSOFT PROJECT",
+            "MPP a XML",
+            "Comprobación cada 15 minutos",
+            "Se genera un XML completo con tareas, porcentajes, fechas y "
+            "jerarquía. El cronograma, los edificios y la fecha prevista se "
+            "actualizan cuando los datos pasan el contrato.",
+            "El XML queda enlazado al .mpp: siempre se puede volver al original "
+            "y saber de qué archivo salió cada dato.",
             SAGE,
             SAGE_PALE,
         ),
         (
-            "SI NO PUEDES",
-            "Escribe los porcentajes",
-            "Usuarios → Actualizar porcentajes a mano",
-            "Escribes el avance de los edificios que hayan cambiado y lo "
-            "publicas. Los que dejes en blanco se quedan como están.",
-            "Se registra igual que una carga: con tu nombre, la fecha de "
-            "corte que indiques y su entrada en el histórico, así que se "
-            "puede revisar y deshacer después.",
+            "AUTOCAD",
+            "DWG a vista PNG",
+            "Comprobación cada hora",
+            "LibreDWG genera el dibujo y una vista PNG de alta resolución. "
+            "Se abre en móvil o tableta y puede pasar por lectura visual.",
+            "El .dwg nunca se sustituye ni se expone: la imagen es un derivado "
+            "privado y queda identificada como vista automática.",
             NAVY,
             BLUE_PALE,
         ),
@@ -370,16 +367,15 @@ def page_mpp(c: canvas.Canvas) -> None:
 
     c.setFillColor(INK)
     c.setFont(font_name("Display-Bold"), 13)
-    c.drawString(MARGIN_X, y, "Por qué un .mpp no se puede leer")
+    c.drawString(MARGIN_X, y, "Por qué se convierten fuera del panel")
     y -= 20
     y = draw_wrapped(
         c,
-        "Microsoft Project guarda en un formato binario cerrado, sin "
-        "documentación pública. Las dos herramientas que sí lo leen no sirven "
-        "aquí: una está escrita para otro lenguaje y la otra es un servicio de "
-        "pago por suscripción. No es una tarea pendiente que vaya a "
-        "resolverse más adelante — por eso hay dos salidas en vez de una "
-        "promesa.",
+        "El servidor del Centro de Control es ligero y no incluye Java ni las "
+        "herramientas CAD. Un runner privado aporta MPXJ, LibreDWG y librsvg, "
+        "valida el resultado y lo devuelve por la API autenticada. Si una "
+        "conversión falla, el original sigue intacto y el error queda visible; "
+        "nunca se publica un derivado incompleto.",
         MARGIN_X,
         y,
         CONTENT_W,
@@ -392,12 +388,12 @@ def page_mpp(c: canvas.Canvas) -> None:
     rounded_rect(c, MARGIN_X, y - 74, CONTENT_W, 74, PALE, PALE, 11, 0)
     c.setFillColor(ORANGE_DARK)
     c.setFont(font_name("Body-Bold"), 7.4)
-    c.drawString(MARGIN_X + 18, y - 24, "LO MISMO VALE PARA EL .DWG")
+    c.drawString(MARGIN_X + 18, y - 24, "SI EL CORTE ES URGENTE")
     draw_wrapped(
         c,
-        "Un plano de AutoCAD se guarda y se descarga, pero sus cifras no "
-        "entran. Si de ese plano sale una medición, mándala también en Excel "
-        "o CSV.",
+        "En Usuarios / Actualizar porcentajes a mano puedes publicar un avance "
+        "puntual mientras termina el MPP. Queda con autor, fecha e histórico; "
+        "no es necesario volver a subir el archivo.",
         MARGIN_X + 18,
         y - 42,
         CONTENT_W - 36,
@@ -412,19 +408,15 @@ def page_mpp(c: canvas.Canvas) -> None:
     y -= 26
     c.setFillColor(INK)
     c.setFont(font_name("Display-Bold"), 13)
-    c.drawString(MARGIN_X, y, "Escribirlo a mano no es saltarse nada")
+    c.drawString(MARGIN_X, y, "La conversión también es trazable")
     y -= 20
     draw_bullets(
         c,
         [
-            "Queda a tu nombre, con la fecha de corte que hayas indicado, "
-            "igual que si hubieras subido el archivo.",
-            "Entra en el histórico, así que se puede consultar quién lo "
-            "cambió y deshacerlo si hizo falta.",
-            "Los edificios que dejes en blanco no se tocan: puedes publicar "
-            "sólo los tres que cambiaron este mes.",
-            "Lo publica un administrador. Si tú no lo eres, pásale los "
-            "porcentajes y los sube en un minuto.",
+            "El original y el derivado aparecen enlazados en el mismo expediente.",
+            "Cada derivado guarda el tipo de automatización y la versión del lector.",
+            "El MPP no publica una previsión si el XML no contiene fechas Finish.",
+            "El DWG conserva siempre el archivo CAD original, aunque la vista falle.",
         ],
         MARGIN_X,
         y,
@@ -513,8 +505,8 @@ def page_detalles(c: canvas.Canvas) -> None:
             "Lee el mensaje que aparece al terminar la subida. Si dice "
             "cuántos datos se han actualizado, ya está: no hay nada más que "
             "esperar.",
-            "Si dice que no se ha extraído ningún dato, tampoco lo hará más "
-            "tarde. El texto explica por qué y qué hacer.",
+            "Si es MPP o DWG, el mensaje indica que la conversión sigue en "
+            "segundo plano y el plazo normal de cada formato.",
             "Mira la implantación: los colores y los porcentajes cambian en "
             "menos de cinco segundos, en todas las pantallas a la vez.",
             "Si algo no cuadra, cada cifra guarda de qué archivo salió, quién "
@@ -536,9 +528,8 @@ def page_detalles(c: canvas.Canvas) -> None:
     draw_wrapped(
         c,
         "Tu archivo nunca se pierde: se guarda siempre, con tu nombre y la "
-        "fecha. Lo único que puede quedarse fuera son las cifras de dentro, y "
-        "el mensaje del final de la subida te dice si han entrado o no. No "
-        "hace falta esperar ni volver a mirarlo más tarde.",
+        "fecha. El Centro de Control elige lector, interpretación o conversión, "
+        "y cada resultado conserva su fuente. La bandeja se actualiza sola.",
         MARGIN_X + 18,
         y - 42,
         CONTENT_W - 36,

@@ -15,6 +15,14 @@
 
 type ZipEntry = { name: string; data: Uint8Array };
 
+export type ZipReadLimits = {
+  maxEntries?: number;
+  maxSelectedEntries?: number;
+  maxEntryUncompressedBytes?: number;
+  maxTotalUncompressedBytes?: number;
+  maxCompressionRatio?: number;
+};
+
 function readUint16(view: DataView, offset: number) {
   return view.getUint16(offset, true);
 }
@@ -36,7 +44,17 @@ async function inflateRaw(data: Uint8Array) {
  * cuando el archivo se escribió en streaming, que es justo como los genera
  * Excel al guardar desde algunas versiones.
  */
-export async function readZipEntries(bytes: ArrayBuffer, wanted: (name: string) => boolean) {
+export async function readZipEntries(
+  bytes: ArrayBuffer,
+  wanted: (name: string) => boolean,
+  limits: ZipReadLimits = {},
+) {
+  const maxEntries = limits.maxEntries ?? 10_000;
+  const maxSelectedEntries = limits.maxSelectedEntries ?? 5_000;
+  const maxEntryUncompressedBytes = limits.maxEntryUncompressedBytes ?? 100 * 1024 * 1024;
+  const maxTotalUncompressedBytes = limits.maxTotalUncompressedBytes ?? 250 * 1024 * 1024;
+  const maxCompressionRatio = limits.maxCompressionRatio ?? 1_000;
+  if (bytes.byteLength < 22) throw new Error("El archivo ZIP está incompleto.");
   const view = new DataView(bytes);
   const all = new Uint8Array(bytes);
   // El fin del directorio central está al final, tras un comentario de longitud
@@ -51,13 +69,17 @@ export async function readZipEntries(bytes: ArrayBuffer, wanted: (name: string) 
   if (endOffset < 0) throw new Error("El archivo no tiene la estructura de un .xlsx.");
 
   const entryCount = readUint16(view, endOffset + 10);
+  if (entryCount > maxEntries) throw new Error("El ZIP contiene demasiadas entradas.");
   let pointer = readUint32(view, endOffset + 16);
   const entries: ZipEntry[] = [];
+  let selectedUncompressedBytes = 0;
 
   for (let index = 0; index < entryCount; index += 1) {
+    if (pointer < 0 || pointer + 46 > all.length) throw new Error("El directorio del ZIP está dañado.");
     if (readUint32(view, pointer) !== 0x02014b50) break;
     const method = readUint16(view, pointer + 10);
     const compressedSize = readUint32(view, pointer + 20);
+    const uncompressedSize = readUint32(view, pointer + 24);
     const nameLength = readUint16(view, pointer + 28);
     const extraLength = readUint16(view, pointer + 30);
     const commentLength = readUint16(view, pointer + 32);
@@ -66,14 +88,30 @@ export async function readZipEntries(bytes: ArrayBuffer, wanted: (name: string) 
     pointer += 46 + nameLength + extraLength + commentLength;
     if (!wanted(name)) continue;
 
+    if (entries.length >= maxSelectedEntries) throw new Error("El ZIP contiene demasiados documentos procesables.");
+    if (uncompressedSize > maxEntryUncompressedBytes) throw new Error(`La entrada ${name} supera el tamaño permitido.`);
+    selectedUncompressedBytes += uncompressedSize;
+    if (selectedUncompressedBytes > maxTotalUncompressedBytes) {
+      throw new Error("El contenido descomprimido del ZIP supera el límite permitido.");
+    }
+    const ratio = uncompressedSize / Math.max(1, compressedSize);
+    if (ratio > maxCompressionRatio) throw new Error(`La entrada ${name} tiene una compresión no segura.`);
+    if (method !== 0 && method !== 8) throw new Error(`La entrada ${name} usa un método de compresión no admitido.`);
+
     // La cabecera local repite el nombre y los extras, con longitudes propias.
+    if (localOffset < 0 || localOffset + 30 > all.length || readUint32(view, localOffset) !== 0x04034b50) {
+      throw new Error(`La entrada ${name} no tiene una cabecera válida.`);
+    }
     const localNameLength = readUint16(view, localOffset + 26);
     const localExtraLength = readUint16(view, localOffset + 28);
     const start = localOffset + 30 + localNameLength + localExtraLength;
+    if (start < 0 || start + compressedSize > all.length) throw new Error(`La entrada ${name} está truncada.`);
     const raw = all.subarray(start, start + compressedSize);
+    const data = method === 0 ? raw : await inflateRaw(raw);
+    if (data.byteLength !== uncompressedSize) throw new Error(`La entrada ${name} no coincide con el tamaño declarado.`);
     entries.push({
       name,
-      data: method === 0 ? raw : await inflateRaw(raw),
+      data,
     });
   }
   return entries;

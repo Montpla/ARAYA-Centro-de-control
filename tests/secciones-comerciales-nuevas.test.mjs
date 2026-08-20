@@ -74,12 +74,13 @@ test("el campo de fase no impone un catálogo cerrado", () => {
 
 // Bloques descubiertos: lo que antes esperaba aprobación y ahora entra solo.
 
-test("el contenedor de bloques descubiertos es un dato vivo protegido", () => {
+test("el contenedor de bloques descubiertos aplica privacidad por área", () => {
   assert.ok(liveData.LIVE_DATA_ROOTS.includes("discoveredSections"));
-  // Un bloque descubierto puede contener cualquier cosa, incluidas cifras de
-  // ventas, y no se sabe qué es hasta mirarlo: se protege como financiero para
-  // que no aparezca ante una cuenta sin ese permiso.
-  assert.equal(liveData.isFinancialLiveKey("discoveredSections"), true);
+  // La raíz no se bloquea entera: cada punto publicado conserva un área y el
+  // lector efectivo filtra Finanzas/Comercial antes de materializarlo.
+  assert.equal(liveData.isFinancialLiveKey("discoveredSections"), false);
+  assert.equal(liveData.requiresFinanceAccessForArea("comercial"), true);
+  assert.equal(liveData.requiresFinanceAccessForArea("obra"), false);
 });
 
 test("empieza vacío y admite crecer", () => {

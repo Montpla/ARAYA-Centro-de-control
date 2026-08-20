@@ -125,11 +125,11 @@ test("el avance del cronograma sale del propio plan, no de un número a mano", (
 
 test("la fecha de fin del proyecto sale de la tarea más tardía del plan", () => {
   // TH-14 Estructura acaba el 2026-09-30; es la única con fecha, así que marca
-  // el fin del proyecto, en el formato del panel (DD/MM/YYYY).
+  // el fin del proyecto. El dato vivo usa ISO y la pantalla lo formatea aparte.
   const resultado = extractProjectXmlUpdates(planDeObra, edificiosReales);
   const fin = resultado.updates.find((u) => u.key === "projectSnapshot.forecastFinish");
   assert.ok(fin, "el plan debe publicar la fecha de fin");
-  assert.equal(fin.value, "30/09/2026");
+  assert.equal(fin.value, "2026-09-30");
 });
 
 test("un edificio que no existe no se da de alta desde una tarea", () => {

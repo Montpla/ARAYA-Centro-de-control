@@ -155,6 +155,12 @@ export function averageNumeric(values: readonly (number | null | undefined)[]): 
   return Math.round((validos.reduce((total, valor) => total + valor, 0) / validos.length) * 100) / 100;
 }
 
+/** Presenta una fecha ISO del dato vivo con el formato habitual de la obra. */
+export function projectDateForDisplay(value: string): string {
+  const iso = String(value ?? "").match(/^(\d{4})-(\d{2})-(\d{2})(?:T|$)/);
+  return iso ? `${iso[3]}/${iso[2]}/${iso[1]}` : String(value ?? "");
+}
+
 /**
  * La más tardía de una lista de fechas "DD/MM/YYYY". El proyecto termina cuando
  * termina su último edificio, así que la fecha de fin del conjunto es el máximo

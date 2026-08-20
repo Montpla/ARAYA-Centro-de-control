@@ -127,7 +127,7 @@ function numeroDeCodigo(codigo: string) {
 }
 
 export type ProjectXmlExtraction = {
-  // El avance es numérico; la fecha de fin del proyecto es texto (DD/MM/YYYY).
+  // El avance es numérico; la fecha de fin se publica como ISO YYYY-MM-DD.
   updates: Array<{ key: string; value: number | string }>;
   warnings: string[];
   summary: string;
@@ -234,13 +234,16 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
     });
   }
 
-  // Fin del proyecto: la fecha más tardía del plan, en el formato del panel
-  // (DD/MM/YYYY). Así el KPI "Previsión final" también sale del plan.
+  // Fin del proyecto: la fecha más tardía del plan. Los datos vivos se guardan
+  // en ISO, que es el contrato común de todas las fechas; la interfaz se ocupa
+  // de presentarla como DD/MM/YYYY. Antes se publicaba ya formateada para la
+  // pantalla y el contrato la rechazaba: por eso la conversión real del MPP
+  // extrajo 28 datos, pero sólo 27 llegaron a producción.
   const finIso = finMax.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (finIso) {
     updates.push({
       key: "projectSnapshot.forecastFinish",
-      value: `${finIso[3]}/${finIso[2]}/${finIso[1]}`,
+      value: `${finIso[1]}-${finIso[2]}-${finIso[3]}`,
     });
   }
 

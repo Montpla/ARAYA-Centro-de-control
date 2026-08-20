@@ -122,8 +122,11 @@ export function TvClient({ initialToken }: { initialToken: string }) {
       return;
     }
     const stored = window.sessionStorage.getItem(TOKEN_STORAGE_KEY) ?? "";
-    if (stored) setToken(stored);
-    else setError("Falta el enlace de pantalla. Pide a un administrador el enlace del modo TV.");
+    const hydrate = window.setTimeout(() => {
+      if (stored) setToken(stored);
+      else setError("Falta el enlace de pantalla. Pide a un administrador el enlace del modo TV.");
+    }, 0);
+    return () => window.clearTimeout(hydrate);
   }, [initialToken]);
 
   const refresh = useCallback(async () => {
@@ -152,9 +155,12 @@ export function TvClient({ initialToken }: { initialToken: string }) {
 
   useEffect(() => {
     if (!token) return;
-    void refresh();
+    const initialRefresh = window.setTimeout(() => void refresh(), 0);
     const interval = window.setInterval(() => void refresh(), snapshot?.refreshIntervalMs ?? 30_000);
-    return () => window.clearInterval(interval);
+    return () => {
+      window.clearTimeout(initialRefresh);
+      window.clearInterval(interval);
+    };
   }, [token, refresh, snapshot?.refreshIntervalMs]);
 
   useEffect(() => {

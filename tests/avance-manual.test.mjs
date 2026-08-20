@@ -63,20 +63,20 @@ test("las claves van por código de edificio, no por posición", () => {
   assert.match(tarjeta, /`buildings\.\$\{building\.shortName\}\.progress`/);
 });
 
-test("quien se topa con un .mpp encuentra esta salida", () => {
-  // El aviso de la subida es el único momento en que alguien descubre que su
-  // archivo no se puede leer; si ahí no se dice a dónde ir, la pantalla existe
-  // pero no la usa nadie.
+test("quien sube un .mpp ve la conversión y la salida manual urgente", () => {
+  // El aviso de la subida confirma el proceso automático y conserva una salida
+  // manual trazable para un corte que no pueda esperar 15 minutos.
   const aviso = cliente.slice(
-    cliente.indexOf('archiveOnlyExtension === "mpp"'),
-    cliente.indexOf('archiveOnlyExtension === "mpp"') + 1200,
+    cliente.indexOf('deferredConversionExtension === "mpp"'),
+    cliente.indexOf('deferredConversionExtension === "mpp"') + 1400,
   );
+  assert.match(aviso, /15 minutos/);
   assert.match(aviso, /Actualizar porcentajes a\s*\n?\s*mano/);
 });
 
-test("el zip deja de anunciarse como formato que sólo se archiva", () => {
-  const lista = cliente.match(/const ARCHIVE_ONLY_EXTENSIONS = \[([^\]]*)\]/);
-  assert.ok(lista, "debe existir la lista de formatos que sólo se archivan");
+test("sólo MPP y DWG usan conversión diferida", () => {
+  const lista = cliente.match(/const DEFERRED_CONVERSION_EXTENSIONS = \[([^\]]*)\]/);
+  assert.ok(lista, "debe existir la lista de formatos con conversión diferida");
   assert.doesNotMatch(lista[1], /"zip"/);
   assert.match(lista[1], /"mpp"/);
   assert.match(lista[1], /"dwg"/);

@@ -1,9 +1,6 @@
-// Formatos que se archivan íntegros pero cuyo contenido no se lee, así que
-// ninguna de sus cifras llega al panel.
-// Un ZIP salió de esta lista al empezar a abrirse y procesarse lo que lleva
-// dentro. Mantenerlo aquí decía a quien subía el corte del mes comprimido que
-// sus cifras no iban a llegar, justo cuando ya llegaban.
-const ARCHIVE_ONLY_EXTENSIONS = new Set(["mpp", "dwg"]);
+// Formatos binarios cuya lectura se completa fuera del Worker. El original se
+// confirma primero y un workflow idempotente genera después un derivado legible.
+const DEFERRED_CONVERSION_EXTENSIONS = new Set(["mpp", "dwg"]);
 
 /**
  * Explica por qué una subida no ha movido ninguna cifra.
@@ -26,12 +23,10 @@ export function nothingExtractedMessage(
 ) {
   const base = `Archivo registrado en ${areaLabel} y disponible para descarga`;
   if (extension === "mpp") {
-    // El .mpp es el caso con salida propia: Project guarda en XML de forma
-    // nativa y ese formato sí se lee entero, con el avance de cada tarea.
-    return `${base}, pero los .mpp no se leen por dentro: ninguna de sus cifras ha actualizado el panel. Vuelve a guardarlo desde Microsoft Project como XML (Archivo → Guardar como → tipo «XML») y súbelo: de ese formato sí se lee el plan completo y se actualiza el avance de cada edificio.`;
+    return `${base}. La conversión automática a XML de Project queda programada y, normalmente, completa el cronograma, los edificios y la fecha prevista en un máximo de 15 minutos. El derivado quedará enlazado a este original.`;
   }
-  if (ARCHIVE_ONLY_EXTENSIONS.has(extension)) {
-    return `${base}, pero los .${extension} no se leen por dentro: ninguna de sus cifras ha actualizado el panel, y no lo hará más adelante. Para que las cifras entren, exporta el mismo corte a Excel o CSV y súbelo.`;
+  if (DEFERRED_CONVERSION_EXTENSIONS.has(extension)) {
+    return `${base}. La vista automática del .${extension} queda programada y se enlazará a este original cuando termine. En un DWG, la conversión genera una imagen navegable para móvil/tableta y lectura visual, normalmente en menos de una hora.`;
   }
   const detalle = warnings
     .map((warning) => warning.trim())

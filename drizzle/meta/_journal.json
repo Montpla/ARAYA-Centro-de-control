@@ -169,6 +169,13 @@
       "when": 1786702500002,
       "tag": "0023_weekly_summary_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1787231157244,
+      "tag": "0024_sleepy_nightshade",
+      "breakpoints": true
     }
   ]
 }

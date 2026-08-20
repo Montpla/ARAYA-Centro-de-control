@@ -117,7 +117,6 @@ const financialRootSet = new Set([
   "costBreakdown",
   "cubicaciones",
   "cubicacionCaratula",
-  "discoveredSections",
   "cxpAging",
   "cxpCategories",
   "financialProjection",
