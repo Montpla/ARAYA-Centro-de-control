@@ -2027,7 +2027,6 @@ button {
   z-index: 2;
   width: 6.3%;
   min-width: 54px;
-  perspective: 260px;
   transform: translate(-50%, -50%);
 }
 
@@ -2040,24 +2039,23 @@ button {
   font-size: clamp(6px, 0.72vw, 9px);
   font-weight: 900;
   cursor: pointer;
-  transform: rotateX(28deg);
-  transform-origin: bottom;
-  transition: transform 160ms ease;
+  transform: none;
+  transition: filter 160ms ease;
 }
 
 .plan-building-trigger.done {
   background: rgba(25, 128, 82, 0.92);
-  box-shadow: 0 5px 0 #0e4629, 0 9px 12px rgba(14, 70, 41, 0.45);
+  box-shadow: 0 0 0 1px rgba(14, 70, 41, 0.45), 0 2px 5px rgba(14, 70, 41, 0.34);
 }
 
 .plan-building-trigger.active {
   background: rgba(226, 111, 28, 0.94);
-  box-shadow: 0 5px 0 #7c3d0f, 0 9px 12px rgba(124, 61, 15, 0.45);
+  box-shadow: 0 0 0 1px rgba(124, 61, 15, 0.48), 0 2px 5px rgba(124, 61, 15, 0.34);
 }
 
 .plan-building-trigger.pending {
   background: rgba(97, 101, 96, 0.88);
-  box-shadow: 0 5px 0 #353735, 0 9px 12px rgba(53, 55, 53, 0.4);
+  box-shadow: 0 0 0 1px rgba(53, 55, 53, 0.5), 0 2px 5px rgba(53, 55, 53, 0.32);
 }
 
 .plan-building-hotspot:hover {
@@ -2066,7 +2064,7 @@ button {
 }
 
 .plan-building-hotspot:hover .plan-building-trigger {
-  transform: rotateX(12deg);
+  filter: brightness(1.08);
 }
 
 .plan-building-trigger:focus-visible,
@@ -2084,7 +2082,7 @@ button {
   padding: 2px;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 2px 7px rgba(19, 24, 20, 0.25);
+  box-shadow: 0 1px 4px rgba(19, 24, 20, 0.24);
 }
 
 .plan-home-statuses button {
@@ -2103,22 +2101,22 @@ button {
 
 .plan-home-statuses .terminada {
   background: #198052;
-  box-shadow: 0 2px 0 #0e4629;
+  box-shadow: inset 0 0 0 1px rgba(14, 70, 41, 0.55);
 }
 
 .plan-home-statuses .en_curso {
   background: #e26f1c;
-  box-shadow: 0 2px 0 #7c3d0f;
+  box-shadow: inset 0 0 0 1px rgba(124, 61, 15, 0.55);
 }
 
 .plan-home-statuses .pendiente {
   background: #777d78;
-  box-shadow: 0 2px 0 #414542;
+  box-shadow: inset 0 0 0 1px rgba(65, 69, 66, 0.55);
 }
 
 .plan-home-statuses .bloqueada {
   background: #b74536;
-  box-shadow: 0 2px 0 #64261e;
+  box-shadow: inset 0 0 0 1px rgba(100, 38, 30, 0.55);
 }
 
 .urbanism-map-point {

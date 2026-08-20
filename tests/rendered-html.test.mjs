@@ -146,9 +146,10 @@ test("normalized source data contains all 77 buildings and 462 apartments", asyn
 });
 
 test("los 77 edificios tienen coordenadas en ambos planos y seis apartamentos listos", async () => {
-  const [{ buildings }, layout] = await Promise.all([
+  const [{ buildings }, layout, styles] = await Promise.all([
     import("../app/demo-data.ts"),
     import("../lib/site-plan-layout.ts"),
+    readFile("app/globals.css", "utf8"),
   ]);
   const expectedCodes = Array.from({ length: 77 }, (_, index) => String(index + 1));
   assert.deepEqual([...buildings.map((building) => building.shortName)].sort((a, b) => Number(a) - Number(b)), expectedCodes);
@@ -182,6 +183,11 @@ test("los 77 edificios tienen coordenadas en ambos planos y seis apartamentos li
   assert.deepEqual(layout.visualPlanCoordinates["45"], { x: 87.42, y: 6.55 });
   assert.deepEqual(layout.visualPlanCoordinates["46"], { x: 82.89, y: 16.01 });
   assert.deepEqual(layout.visualPlanCoordinates["69"], { x: 81.36, y: 44.85 });
+
+  // La ficha debe conservar su centro visual sobre el ancla. Una proyecciÃ³n
+  // rotateX y sombras extrusionadas desplazaban el dibujo hacia abajo al
+  // ampliar el plano en mÃ³vil o tableta, aunque el punto matemÃ¡tico fuese exacto.
+  assert.doesNotMatch(styles, /rotateX\(/);
 });
 
 test("la promoción de demostración ya no forma parte del Centro de Control", async () => {
