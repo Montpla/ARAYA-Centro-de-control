@@ -83,6 +83,7 @@ let permits: DashboardBootstrapData["june"]["permits"] = [];
 let safetyFindingTracking: DashboardBootstrapData["june"]["safetyFindingTracking"] = [];
 let safetyFindings: DashboardBootstrapData["june"]["safetyFindings"] = [];
 let safetyMetrics: DashboardBootstrapData["june"]["safetyMetrics"] = [];
+let safetyWeeklySeries: DashboardBootstrapData["june"]["safetyWeeklySeries"] = [];
 let discoveredSections: DashboardBootstrapData["june"]["discoveredSections"] = [];
 let collectionTargets: DashboardBootstrapData["june"]["collectionTargets"] = [];
 let commercialPartners: DashboardBootstrapData["june"]["commercialPartners"] = [];
@@ -231,6 +232,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     safetyFindingTracking,
     safetyFindings,
     safetyMetrics,
+    safetyWeeklySeries,
     collectionTargets,
     commercialPartners,
     discoveredSections,
@@ -356,6 +358,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     safetyFindingTracking,
     safetyFindings,
     safetyMetrics,
+    safetyWeeklySeries,
     collectionTargets,
     commercialPartners,
     discoveredSections,
@@ -1364,7 +1367,13 @@ function synchronizeSpatialSummary() {
   // resincronizar. juneReport y payablesReconciliation siguen el patrón
   // anterior (reasignación explícita) porque tienen campos hermanos que no
   // se derivan de nada y no conviene envolver el objeto entero.
-  juneReport = liveJuneReportFinance(juneReport, antonelyDetailTotals, antonelyBalanceLines, financialProjection);
+  juneReport = liveJuneReportFinance(
+    juneReport,
+    antonelyDetailTotals,
+    antonelyBalanceLines,
+    financialProjection,
+    antonelyCostAccounts,
+  );
   payablesReconciliation = livePayablesReconciliation(payablesReconciliation, antonelyDetailTotals.payablesTotalDop);
   // Espejo del cálculo del servidor (lib/spatial-live-data.ts). El avance por
   // apartamento y el ritmo de edificios se conservan como métricas de apoyo;
@@ -4063,6 +4072,24 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
               </button>
             ))}
           </section>
+          <section className="panel">
+            <div className="panel-heading">
+              <div><span className="section-kicker">SERIE SEMANAL</span><h3>EvoluciÃ³n de seguridad</h3></div>
+              <span className="data-note">Actividad del periodo y acumulado</span>
+            </div>
+            <div className="compact-table">
+              <div className="compact-row head"><span>Semana</span><span>Horas</span><span>Observaciones</span><span>Reuniones</span><span>Inspecciones</span></div>
+              {safetyWeeklySeries.map((week) => (
+                <div className="compact-row" key={week.cutoff}>
+                  <strong>{week.week}<small>{week.startDate} â†’ {week.endDate}</small></strong>
+                  <span>{week.hoursWeek} / {week.hoursCumulative}</span>
+                  <span>{week.observationsWeek} / {week.observationsCumulative}</span>
+                  <span>{week.meetingsWeek} / {week.meetingsCumulative}</span>
+                  <span>{week.inspectionsWeek} / {week.inspectionsCumulative}</span>
+                </div>
+              ))}
+            </div>
+          </section>
           <section className="report-grid">
             <article className="panel">
               <div className="panel-heading"><div><span className="section-kicker">HALLAZGOS</span><h3>Observaciones del corte</h3></div></div>
@@ -4756,7 +4783,7 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
       </section>
       <section className="stat-grid wide">
         <StatCard eyebrow="Presupuesto de control" value={rdMillions(juneReport.finance.budgetDop)} detail={`${number.format((juneReport.finance.executedDop / juneReport.finance.budgetDop) * 100)}% ejecutado`} />
-        <StatCard eyebrow="Coste acumulado" value={rdMillions(juneReport.finance.executedDop)} detail={`${rdMillions(juneReport.finance.juneExecutedDop)} en junio`} />
+        <StatCard eyebrow="Coste acumulado" value={rdMillions(juneReport.finance.executedDop)} detail={`${rdMillions(juneReport.finance.juneExecutedDop)} en el último periodo`} />
         <StatCard eyebrow="Cuentas por pagar" value={rdMillions(juneReport.finance.cxpDop)} detail={`${number.format(cxpAging.find((item) => item.name === "Corriente")?.percent ?? 0)}% corriente`} tone="warn" />
         <StatCard eyebrow="Caja proyectada · dic" value={rdMillions(juneReport.finance.projectedCashDecemberDop)} detail="Requiere materializar financiación" tone="danger" />
       </section>
@@ -5151,14 +5178,14 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
       {section === "control" && (
         <section className="report-grid">
           <article className="panel">
-            <div className="panel-heading"><div><span className="section-kicker">COSTES</span><h3>Acumulado y ejecución de junio</h3></div></div>
+            <div className="panel-heading"><div><span className="section-kicker">COSTES</span><h3>Acumulado y ejecución del último periodo</h3></div></div>
             <div className="compact-table cost-table">
-              <div className="compact-row head"><span>Bloque</span><span>Acumulado</span><span>Junio</span></div>
+              <div className="compact-row head"><span>Bloque</span><span>Acumulado</span><span>Periodo</span></div>
               {costBreakdown.map((item) => (
                 <div className="compact-row" key={item.name}><strong>{item.name}</strong><span>{rdMillions(item.cumulative)}</span><span>{rdMillions(item.june)}</span></div>
               ))}
             </div>
-            <p className="quality-note">Antonely registra {rd(antonelyCostAccounts.reduce((total, item) => total + item.june, 0))} en junio y {rd(antonelyCostAccounts.reduce((total, item) => total + item.cumulative, 0))} acumulados. Frente al consolidado, las diferencias son {rd(juneReport.finance.juneExecutedDop - antonelyCostAccounts.reduce((total, item) => total + item.june, 0))} y {rd(juneReport.finance.executedDop - antonelyCostAccounts.reduce((total, item) => total + item.cumulative, 0))} respectivamente.</p>
+            <p className="quality-note">Antonely registra {rd(antonelyCostAccounts.reduce((total, item) => total + item.june, 0))} en el último periodo y {rd(antonelyCostAccounts.reduce((total, item) => total + item.cumulative, 0))} acumulados. El resumen se recalcula automáticamente con estas mismas cuentas.</p>
           </article>
           <article className="panel">
             <div className="panel-heading"><div><span className="section-kicker">CONTROL INTERNO</span><h3>Posición financiera de gestión</h3></div></div>
@@ -5184,7 +5211,7 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
             </div>
             <div className="financial-detail-scroll">
               <div className="financial-detail-table cost-detail-table">
-                <div className="financial-detail-row head"><span>Código</span><span>Cuenta</span><span>A mayo</span><span>Junio</span><span>Acumulado</span></div>
+                <div className="financial-detail-row head"><span>Código</span><span>Cuenta</span><span>Periodo anterior</span><span>Periodo actual</span><span>Acumulado</span></div>
                 {antonelyCostAccounts.map((item) => (
                   <div className="financial-detail-row" key={item.code}>
                     <b>{item.code}</b><strong>{item.name}</strong><span>{rd(item.may)}</span><span>{rd(item.june)}</span><span>{rd(item.cumulative)}</span>

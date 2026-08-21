@@ -165,6 +165,7 @@ async function controlRoomPayload(auth: ControlRoomUser) {
   const db = getDb();
   const activeVisibleFiles = and(
     eq(uploadedFiles.deletedAt, ""),
+    eq(uploadedFiles.supersededByFileId, ""),
     visibleFileSql(auth.financeAccess),
   );
   const [
@@ -183,14 +184,16 @@ async function controlRoomPayload(auth: ControlRoomUser) {
         pendingFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.reviewStatus} not in ('aprobado', 'rechazado') then 1 else 0 end), 0)`,
         observedFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.reviewStatus} = 'cambios_solicitados' then 1 else 0 end), 0)`,
         rejectedFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.reviewStatus} = 'rechazado' then 1 else 0 end), 0)`,
-        discrepancies: sql<number>`coalesce(sum(${uploadedFiles.discrepancyCount}), 0)`,
         lastUploadAt: sql<string>`coalesce(max(${uploadedFiles.createdAt}), '')`,
       })
       .from(uploadedFiles)
       .where(activeVisibleFiles)
       .groupBy(uploadedFiles.area),
     db
-      .select({ count: sql<number>`count(*)` })
+      .select({
+        count: sql<number>`count(*)`,
+        discrepancies: sql<number>`coalesce(sum(case when ${documentDataProposals.discrepancy} then 1 else 0 end), 0)`,
+      })
       .from(documentDataProposals)
       .innerJoin(uploadedFiles, eq(documentDataProposals.fileId, uploadedFiles.id))
       .where(and(
@@ -267,7 +270,9 @@ async function controlRoomPayload(auth: ControlRoomUser) {
     pendingFiles: Number(row.pendingFiles),
     observedFiles: Number(row.observedFiles),
     rejectedFiles: Number(row.rejectedFiles),
-    discrepancies: Number(row.discrepancies),
+    // The file-level number is historical extraction metadata. Open
+    // discrepancies are counted from the current proposal generation below.
+    discrepancies: 0,
     lastUploadAt: row.lastUploadAt,
   }));
   const fileAreas = new Map(normalizedFileAreas.map((row) => [row.area, row]));
@@ -314,6 +319,7 @@ async function controlRoomPayload(auth: ControlRoomUser) {
     lastUploadAt: "",
   });
   const pendingProposals = Number(pendingProposalRows[0]?.count ?? 0);
+  documentTotals.discrepancies = Number(pendingProposalRows[0]?.discrepancies ?? 0);
   const dossierScore = documentTotals.total
     ? Math.round((documentTotals.approved / documentTotals.total) * 100)
     : null;
@@ -664,6 +670,7 @@ export async function POST(request: Request) {
       currentAntonelyDetailTotals,
       currentAntonelyBalanceLines,
       currentFinancialProjection,
+      currentAntonelyCostAccounts,
     );
     const currentCxpAging = materializeLiveRoot("cxpAging", cxpAging, values);
     const currentPayablesReconciliation: readonly (typeof payablesReconciliation)[number][] = livePayablesReconciliation(

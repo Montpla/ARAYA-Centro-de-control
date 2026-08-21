@@ -266,7 +266,13 @@ async function executeTool(name: ToolName, args: Record<string, unknown>, canAcc
   // resúmenes (juneReport.finance, la fila "Archivo Antonely" de la
   // conciliación de CxP) eran copias aparte que se quedaban en la semilla
   // original — ver las notas junto a cada función.
-  currentJuneReport = liveJuneReportFinance(currentJuneReport, currentAntonelyDetailTotals, currentAntonelyBalanceLines, currentFinancialProjection);
+  currentJuneReport = liveJuneReportFinance(
+    currentJuneReport,
+    currentAntonelyDetailTotals,
+    currentAntonelyBalanceLines,
+    currentFinancialProjection,
+    currentAntonelyCostAccounts,
+  );
   currentPayablesReconciliation = livePayablesReconciliation(currentPayablesReconciliation, currentAntonelyDetailTotals.payablesTotalDop);
   const currentSafetyMetrics = materializeLiveRoot("safetyMetrics", safetyMetrics, live.values);
   const currentSafetyFindings = materializeLiveRoot("safetyFindings", safetyFindings, live.values);
@@ -549,11 +555,12 @@ async function fallbackAnswer(question: string, currency: CurrencyCode, canAcces
   const live = await getLiveDataSnapshot(canAccessFinance);
   const currentProjectSnapshot = materializeSpatialLiveData(live.values).projectSnapshot;
   const currentAntonelyBalanceLines = materializeLiveRoot("antonelyBalanceLines", antonelyBalanceLines, live.values);
+  const currentAntonelyCostAccounts = materializeLiveRoot("antonelyCostAccounts", antonelyCostAccounts, live.values);
   const currentAntonelyDetailTotals = liveAntonelyDetailTotals(
     materializeLiveRoot("antonelyDetailTotals", antonelyDetailTotals, live.values),
     {
       advances: materializeLiveRoot("antonelyAdvances", antonelyAdvances, live.values),
-      costAccounts: materializeLiveRoot("antonelyCostAccounts", antonelyCostAccounts, live.values),
+      costAccounts: currentAntonelyCostAccounts,
       payableCategories: materializeLiveRoot("antonelyPayableCategories", antonelyPayableCategories, live.values),
       balanceLines: currentAntonelyBalanceLines,
     },
@@ -563,6 +570,7 @@ async function fallbackAnswer(question: string, currency: CurrencyCode, canAcces
     currentAntonelyDetailTotals,
     currentAntonelyBalanceLines,
     materializeLiveRoot("financialProjection", financialProjection, live.values),
+    currentAntonelyCostAccounts,
   );
   const currentJuneDataQualityIssues = materializeLiveRoot("juneDataQualityIssues", juneDataQualityIssues, live.values);
   const currentSafetyMetrics = materializeLiveRoot("safetyMetrics", safetyMetrics, live.values);

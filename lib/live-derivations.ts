@@ -56,6 +56,7 @@ export function liveJuneReportFinance<
       clientDepositsDop: number;
       budgetDop: number;
       executedDop: number;
+      juneExecutedDop: number;
       remainingDop: number;
     };
   },
@@ -64,11 +65,22 @@ export function liveJuneReportFinance<
   detail: { payablesTotalDop: number; advancePendingDop: number },
   balanceLines: readonly { section: string; name: string; amount: number }[],
   projection: readonly { month: string; cumulative: number }[],
+  costAccounts: readonly { june: number; cumulative: number }[],
 ): J {
   const finance = report.finance;
   const line = (section: string, name: string) =>
     balanceLines.find((item) => item.section === section && item.name === name)?.amount;
   const december = projection.find((item) => item.month === "Dic");
+  // may/june/cumulative are legacy property names. Importers populate them
+  // with previous-period/current-period/cumulative values from the latest
+  // workbook, so these totals follow the live detail rather than June's
+  // frozen summary.
+  const periodExecutedDop = costAccounts.length
+    ? costAccounts.reduce((sum, item) => sum + item.june, 0)
+    : finance.juneExecutedDop;
+  const accumulatedExecutedDop = costAccounts.length
+    ? costAccounts.reduce((sum, item) => sum + item.cumulative, 0)
+    : finance.executedDop;
   return {
     ...report,
     finance: {
@@ -81,7 +93,9 @@ export function liveJuneReportFinance<
       equityDop: line("Balance", "Activos netos") ?? finance.equityDop,
       liquidityDop: line("Bancos", "Total bancos") ?? finance.liquidityDop,
       clientDepositsDop: line("Pasivo corriente", "Depósitos diferidos clientes") ?? finance.clientDepositsDop,
-      remainingDop: finance.budgetDop - finance.executedDop,
+      executedDop: accumulatedExecutedDop,
+      juneExecutedDop: periodExecutedDop,
+      remainingDop: finance.budgetDop - accumulatedExecutedDop,
     },
   };
 }

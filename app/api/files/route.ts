@@ -361,7 +361,10 @@ function fileRegistryVisibilityCondition(
         notInArray(uploadedFiles.documentType, financeProtectedDocumentTypeValues()),
       );
   const deletedCondition = !includeDeleted
-    ? eq(uploadedFiles.deletedAt, "")
+    ? and(
+        eq(uploadedFiles.deletedAt, ""),
+        eq(uploadedFiles.supersededByFileId, ""),
+      )
     : user.role === "admin"
       ? sql`1 = 1`
       : or(
@@ -372,12 +375,12 @@ function fileRegistryVisibilityCondition(
 }
 
 function fileRegistryRowVisible(
-  row: Pick<typeof uploadedFiles.$inferSelect, "area" | "documentType" | "deletedAt" | "uploaderEmail">,
+  row: Pick<typeof uploadedFiles.$inferSelect, "area" | "documentType" | "deletedAt" | "uploaderEmail" | "supersededByFileId">,
   user: FileRegistryUser,
   includeDeleted: boolean,
 ) {
   if (!user.financeAccess && fileRequiresFinanceAccess(row)) return false;
-  if (!row.deletedAt) return true;
+  if (!row.deletedAt && (!row.supersededByFileId || includeDeleted)) return true;
   return includeDeleted && (user.role === "admin" || row.uploaderEmail === user.email);
 }
 
@@ -385,14 +388,14 @@ async function fileRegistrySummary(user: FileRegistryUser, includeDeleted: boole
   const [row] = await getDb()
     .select({
       total: sql<number>`count(*)`,
-      active: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' then 1 else 0 end), 0)`,
+      active: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.supersededByFileId} = '' then 1 else 0 end), 0)`,
       deleted: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} <> '' then 1 else 0 end), 0)`,
-      pendingReview: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.requiresReview} = 1 then 1 else 0 end), 0)`,
-      synchronized: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.processingProgress} >= 100 then 1 else 0 end), 0)`,
-      observed: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.status} in ('observado', 'rechazado') then 1 else 0 end), 0)`,
-      averageProgress: sql<number>`coalesce(round(avg(case when ${uploadedFiles.deletedAt} = '' then ${uploadedFiles.processingProgress} end)), 0)`,
-      discrepancies: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' then ${uploadedFiles.discrepancyCount} else 0 end), 0)`,
-      lastUploadAt: sql<string>`coalesce(max(case when ${uploadedFiles.deletedAt} = '' then ${uploadedFiles.createdAt} end), '')`,
+      pendingReview: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.supersededByFileId} = '' and ${uploadedFiles.requiresReview} = 1 then 1 else 0 end), 0)`,
+      synchronized: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.supersededByFileId} = '' and ${uploadedFiles.processingProgress} >= 100 then 1 else 0 end), 0)`,
+      observed: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.supersededByFileId} = '' and ${uploadedFiles.status} in ('observado', 'rechazado') then 1 else 0 end), 0)`,
+      averageProgress: sql<number>`coalesce(round(avg(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.supersededByFileId} = '' then ${uploadedFiles.processingProgress} end)), 0)`,
+      discrepancies: sql<number>`coalesce(sum(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.supersededByFileId} = '' then ${uploadedFiles.discrepancyCount} else 0 end), 0)`,
+      lastUploadAt: sql<string>`coalesce(max(case when ${uploadedFiles.deletedAt} = '' and ${uploadedFiles.supersededByFileId} = '' then ${uploadedFiles.createdAt} end), '')`,
     })
     .from(uploadedFiles)
     .where(fileRegistryVisibilityCondition(user, includeDeleted));
@@ -620,6 +623,7 @@ export async function GET(request: Request) {
               documentType: uploadedFiles.documentType,
               deletedAt: uploadedFiles.deletedAt,
               uploaderEmail: uploadedFiles.uploaderEmail,
+              supersededByFileId: uploadedFiles.supersededByFileId,
             })
             .from(uploadedFiles)
             .where(inArray(uploadedFiles.id, knownIds))

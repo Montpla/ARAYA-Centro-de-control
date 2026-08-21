@@ -3,6 +3,9 @@ import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { buildings, monthlyPlan, overallProgressNow, projectSnapshot } from "../app/demo-data.ts";
+import { safetyWeeklySeries } from "../app/june-report-data.ts";
+import { liveJuneReportFinance } from "../lib/live-derivations.ts";
+import { LIVE_DATA_ROOTS } from "../lib/live-data.ts";
 import { clearTrailingMonthlyActualPlaceholders } from "../lib/monthly-plan.ts";
 
 // Guarda contra la clase de bug que motivó esta suite: un resumen calculado
@@ -57,6 +60,45 @@ test("una Curva S que todavía está realmente a cero conserva sus ceros inicial
   ];
   assert.equal(clearTrailingMonthlyActualPlaceholders(sinArrancar), 0);
   assert.deepEqual(sinArrancar.map((point) => point.actual), [0, 0]);
+});
+
+test("el resumen financiero sigue las cuentas del último periodo", () => {
+  const report = {
+    finance: {
+      cxpDop: 0,
+      advancesPendingDop: 0,
+      projectedCashDecemberDop: 0,
+      assetsDop: 0,
+      liabilitiesDop: 0,
+      equityDop: 0,
+      liquidityDop: 0,
+      clientDepositsDop: 0,
+      budgetDop: 1_000,
+      executedDop: 100,
+      juneExecutedDop: 10,
+      remainingDop: 900,
+    },
+  };
+  const derived = liveJuneReportFinance(
+    report,
+    { payablesTotalDop: 20, advancePendingDop: 30 },
+    [],
+    [],
+    [
+      { june: 40, cumulative: 300 },
+      { june: 60, cumulative: 200 },
+    ],
+  );
+  assert.equal(derived.finance.juneExecutedDop, 100);
+  assert.equal(derived.finance.executedDop, 500);
+  assert.equal(derived.finance.remainingDop, 500);
+});
+
+test("seguridad conserva una serie semanal viva y ordenada", () => {
+  assert.ok(LIVE_DATA_ROOTS.includes("safetyWeeklySeries"));
+  assert.deepEqual(safetyWeeklySeries.map((week) => week.week), ["S1", "S2", "S3", "S4"]);
+  assert.equal(safetyWeeklySeries.at(-1)?.hoursCumulative, 192);
+  assert.equal(safetyWeeklySeries.at(-1)?.observationsCumulative, 24);
 });
 
 test("computed-view summaries recompute on every read and never enter the snapshot-freeze target list", async () => {

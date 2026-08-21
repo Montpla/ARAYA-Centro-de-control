@@ -98,6 +98,7 @@ function juneData(financeAccess: boolean) {
     safetyFindingTracking: june.safetyFindingTracking,
     safetyFindings: june.safetyFindings,
     safetyMetrics: june.safetyMetrics,
+    safetyWeeklySeries: june.safetyWeeklySeries,
     collectionTargets: financeAccess ? june.collectionTargets : [],
     commercialPartners: financeAccess ? june.commercialPartners : [],
     salesLocations: financeAccess ? june.salesLocations : [],

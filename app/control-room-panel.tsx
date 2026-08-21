@@ -182,7 +182,7 @@ const tabLabels: Array<{ id: ControlTab; label: string }> = [
   { id: "quality", label: "Calidad y cobertura" },
   { id: "spatial", label: "Plano operativo" },
   { id: "planning", label: "Planificación" },
-  { id: "reconciliations", label: "Conciliaciones" },
+  { id: "reconciliations", label: "Observaciones" },
   { id: "reports", label: "Informes" },
   { id: "actions", label: "Acciones" },
 ];
@@ -363,7 +363,7 @@ export function ControlRoomPanel({
           <small>{snapshot.spatial.apartments} apartamentos vinculados</small>
         </button>
         <button type="button" onClick={() => setTab("reconciliations")}>
-          <span>Conciliaciones abiertas</span>
+          <span>Observaciones de conciliación</span>
           <strong>{snapshot.reconciliationSummary.total}</strong>
           <small>{snapshot.reconciliationSummary.critical} críticas</small>
         </button>

@@ -289,6 +289,35 @@ export const safetyMetrics = [
   { label: "Acciones", value: "3", detail: "Correctivas en proceso" },
 ] as const;
 
+export type SafetyWeeklyRecord = {
+  week: string;
+  startDate: string;
+  endDate: string;
+  cutoff: string;
+  eventsWeek: number | null;
+  eventsCumulative: number;
+  personnel: number;
+  hoursWeek: number;
+  hoursCumulative: number;
+  observationsWeek: number;
+  observationsCumulative: number;
+  meetingsWeek: number;
+  meetingsCumulative: number;
+  inspectionsWeek: number;
+  inspectionsCumulative: number;
+  openActions: number;
+};
+
+// Serie semanal separada de los KPI acumulados. Evita que una recarga tardÃ­a
+// de una semana antigua sustituya el corte mÃ¡s reciente y permite comparar
+// tendencia, acumulado y actividad del periodo sin mezclar sus alcances.
+export const safetyWeeklySeries: SafetyWeeklyRecord[] = [
+  { week: "S1", startDate: "2026-07-06", endDate: "2026-07-11", cutoff: "2026-07-11", eventsWeek: null, eventsCumulative: 2, personnel: 134, hoursWeek: 48, hoursCumulative: 48, observationsWeek: 5, observationsCumulative: 5, meetingsWeek: 5, meetingsCumulative: 5, inspectionsWeek: 5, inspectionsCumulative: 5, openActions: 3 },
+  { week: "S2", startDate: "2026-07-13", endDate: "2026-07-18", cutoff: "2026-07-18", eventsWeek: null, eventsCumulative: 2, personnel: 134, hoursWeek: 48, hoursCumulative: 96, observationsWeek: 5, observationsCumulative: 10, meetingsWeek: 5, meetingsCumulative: 10, inspectionsWeek: 5, inspectionsCumulative: 10, openActions: 3 },
+  { week: "S3", startDate: "2026-07-20", endDate: "2026-07-25", cutoff: "2026-07-25", eventsWeek: 0, eventsCumulative: 2, personnel: 134, hoursWeek: 48, hoursCumulative: 144, observationsWeek: 7, observationsCumulative: 17, meetingsWeek: 4, meetingsCumulative: 14, inspectionsWeek: 5, inspectionsCumulative: 15, openActions: 2 },
+  { week: "S4", startDate: "2026-07-27", endDate: "2026-08-01", cutoff: "2026-08-01", eventsWeek: 0, eventsCumulative: 2, personnel: 134, hoursWeek: 48, hoursCumulative: 192, observationsWeek: 7, observationsCumulative: 24, meetingsWeek: 5, meetingsCumulative: 19, inspectionsWeek: 5, inspectionsCumulative: 20, openActions: 2 },
+];
+
 export const safetyFindings = [
   "Uso incompleto de equipos de protección personal.",
   "Escombros y residuos en zonas de circulación.",

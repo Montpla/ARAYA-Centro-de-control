@@ -91,7 +91,7 @@ cinco segundos.
   iniciados permanecen al 0 % y se colorean al publicar su avance.
 - `Planificación`: avance físico, referencias del plan, paquetes desviados,
   criticidad y previsión de fin.
-- `Conciliaciones`: diferencias conservadas entre fuentes, con acceso directo a
+- `Observaciones`: diferencias conservadas entre fuentes, con acceso directo a
   la sección responsable.
 - `Informes`: archivo inmutable de informes semanales y mensuales, ligado a la
   revisión usada en su generación.
@@ -104,6 +104,28 @@ con cursor estable. El sondeo de cinco segundos consume un feed de cambios y
 fusiona altas, revisiones, bajas y reclasificaciones sin volver a descargar el
 histórico ni descartar meses ya abiertos. Los totales proceden de agregados D1
 sobre todo el conjunto que el usuario puede ver.
+
+### Reglas de limpieza y precedencia (21/08/2026)
+
+- El registro principal oculta por defecto versiones `superseded`, pero conserva
+  el original, su historial y su trazabilidad. `includeDeleted` permite a un
+  administrador auditar tambien esas versiones historicas.
+- Los contadores de pendientes y discrepancias usan exclusivamente propuestas
+  de la generacion vigente. Una observacion historica no se presenta como una
+  conciliacion abierta ni como una accion activa.
+- Para una misma clave gana primero la fecha de corte del negocio y despues la
+  revision. Por ello, reprocesar tarde una semana antigua no puede sobrescribir
+  el ultimo corte de Seguridad, Obra o Finanzas.
+- Seguridad mantiene una serie S1-S4 que distingue valores de la semana y
+  acumulados. La Curva S representa los meses futuros sin dato como `null`, no
+  como un falso 0 % ejecutado.
+- El resumen financiero se calcula desde el ultimo libro publicado de cuentas
+  de coste; las etiquetas son periodo actual/anterior y ya no quedan fijadas a
+  un mes concreto.
+- El saneamiento reproducible esta en
+  `scripts/production-cleanup-2026-08-21.sql`. No elimina archivos ni altera el
+  avance fisico vigente; reclasifica duplicados, publica hechos conciliados y
+  convierte la discrepancia critica del flujo de proveedores en una accion.
 
 ## Permisos
 

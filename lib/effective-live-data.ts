@@ -35,6 +35,7 @@ export type PublishedLiveDataRow = {
   eventCreatedAt: string;
   linkedFileId: string | null;
   linkedFileDeletedAt: string | null;
+  linkedFileSupersededByFileId: string | null;
   linkedFileArea: string | null;
   linkedFileDocumentType: string | null;
   eventContainsProtectedHistory?: boolean;
@@ -93,7 +94,9 @@ function sourceIsActive(row: PublishedLiveDataRow) {
   // Historical/manual revisions may carry a legacy source identifier without a
   // managed uploaded_files row. Only a managed, soft-deleted source is inactive.
   if (!row.sourceFileId || !row.linkedFileId) return true;
-  return row.linkedFileId === row.sourceFileId && row.linkedFileDeletedAt === "";
+  return row.linkedFileId === row.sourceFileId &&
+    row.linkedFileDeletedAt === "" &&
+    (row.linkedFileSupersededByFileId ?? "") === "";
 }
 
 function fileIsProtected(row: PublishedLiveDataRow) {
@@ -113,9 +116,30 @@ function isStrictAncestorPath(ancestor: string, descendant: string) {
   return descendant.startsWith(`${ancestor}.`);
 }
 
+function normalizedCutoff(row: Pick<PublishedLiveDataRow, "cutoff" | "eventCutoff">) {
+  const raw = row.cutoff || row.eventCutoff;
+  const match = raw.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?/);
+  if (!match) return "";
+  return `${match[1]}-${match[2]}-${match[3] ?? "01"}`;
+}
+
+/**
+ * A later upload is not necessarily a later business period. Reprocessing an
+ * old weekly report used to overwrite Safety week 4 simply because its event
+ * id was larger. The source cutoff is the primary ordering key; publication
+ * order only resolves corrections of the same period (or legacy undated rows).
+ */
+function compareEffectiveRevision(left: PublishedLiveDataRow, right: PublishedLiveDataRow) {
+  const leftCutoff = normalizedCutoff(left);
+  const rightCutoff = normalizedCutoff(right);
+  if (leftCutoff !== rightCutoff) return leftCutoff > rightCutoff ? 1 : -1;
+  if (left.eventId !== right.eventId) return left.eventId > right.eventId ? 1 : -1;
+  if (left.historyId !== right.historyId) return left.historyId > right.historyId ? 1 : -1;
+  return 0;
+}
+
 function isNewerRevision(left: PublishedLiveDataRow, right: PublishedLiveDataRow) {
-  return left.eventId > right.eventId ||
-    (left.eventId === right.eventId && left.historyId > right.historyId);
+  return compareEffectiveRevision(left, right) > 0;
 }
 
 function publicEvent(row: PublishedLiveDataRow, changeCount?: number): EffectiveLiveDataEvent {
@@ -170,7 +194,7 @@ export function deriveEffectiveLiveDataSnapshot(
 ): EffectiveLiveDataSnapshot {
   const publishedRows = inputRows
     .filter((row) => row.eventStatus === "published")
-    .sort((left, right) => right.historyId - left.historyId);
+    .sort((left, right) => compareEffectiveRevision(right, left));
   const exactWinnerByKey = new Map<string, PublishedLiveDataRow>();
   const eventProtected = new Map<number, boolean>();
 
@@ -369,9 +393,22 @@ async function readEffectivePublishedRows() {
         e.created_at AS eventCreatedAt,
         f.id AS linkedFileId,
         f.deleted_at AS linkedFileDeletedAt,
+        f.superseded_by_file_id AS linkedFileSupersededByFileId,
         f.area AS linkedFileArea,
         f.document_type AS linkedFileDocumentType,
-        ROW_NUMBER() OVER (PARTITION BY h.key ORDER BY h.id DESC) AS winnerRank
+        ROW_NUMBER() OVER (
+          PARTITION BY h.key
+          ORDER BY
+            CASE
+              WHEN COALESCE(NULLIF(h.cutoff, ''), NULLIF(e.cutoff, '')) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'
+                THEN substr(COALESCE(NULLIF(h.cutoff, ''), e.cutoff), 1, 10)
+              WHEN COALESCE(NULLIF(h.cutoff, ''), NULLIF(e.cutoff, '')) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+                THEN COALESCE(NULLIF(h.cutoff, ''), e.cutoff) || '-01'
+              ELSE ''
+            END DESC,
+            e.id DESC,
+            h.id DESC
+        ) AS winnerRank
       FROM live_data_history h
       INNER JOIN live_data_events e ON e.id = h.event_id
       LEFT JOIN uploaded_files f ON f.id = h.source_file_id
@@ -379,7 +416,7 @@ async function readEffectivePublishedRows() {
         AND (
           h.source_file_id = ''
           OR f.id IS NULL
-          OR f.deleted_at = ''
+          OR (f.deleted_at = '' AND f.superseded_by_file_id = '')
         )
     )
     SELECT
@@ -407,6 +444,7 @@ async function readEffectivePublishedRows() {
       eventCreatedAt,
       linkedFileId,
       linkedFileDeletedAt,
+      linkedFileSupersededByFileId,
       linkedFileArea,
       linkedFileDocumentType
     FROM eligible
@@ -444,6 +482,7 @@ export async function readPublishedLiveDataRows(limit = 200) {
       eventCreatedAt: liveDataEvents.createdAt,
       linkedFileId: uploadedFiles.id,
       linkedFileDeletedAt: uploadedFiles.deletedAt,
+      linkedFileSupersededByFileId: uploadedFiles.supersededByFileId,
       linkedFileArea: uploadedFiles.area,
       linkedFileDocumentType: uploadedFiles.documentType,
     })

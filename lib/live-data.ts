@@ -68,6 +68,7 @@ export const LIVE_DATA_ROOTS = [
   "safetyFindingTracking",
   "safetyFindings",
   "safetyMetrics",
+  "safetyWeeklySeries",
   "salesLocations",
   "salesModels",
   "structuralDelay",

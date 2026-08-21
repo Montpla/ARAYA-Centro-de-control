@@ -1,7 +1,51 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 20/08/2026
+Actualizado: 21/08/2026
 Zona horaria del usuario: Europe/Madrid
+
+## Auditoria integral y saneamiento de produccion (21/08/2026)
+
+Esta seccion sustituye las notas anteriores que decian que la rama adaptativa,
+la migracion 0025 o el backlog de Seguridad/Finanzas seguian sin aplicar.
+
+- Se exporto una copia completa de D1 y se ensayo el saneamiento dos veces
+  sobre una base local aislada. Resultado idempotente: **19 expedientes
+  canonicos, 19 aprobados, 0 propuestas pendientes y 0 discrepancias abiertas**.
+  Nueve versiones redundantes pasan a `superado/historico`, pero sus originales,
+  eventos e historia se conservan; no se elimina ningun objeto R2.
+- `scripts/production-cleanup-2026-08-21.sql` documenta y reproduce toda la
+  operacion. Concilia los siete expedientes canonicos pendientes (cuatro partes
+  de Seguridad, BCE, CxP y el Excel financiero de julio), cierra 35 propuestas
+  de archivos ya retirados y conserva como secciones visibles las buenas
+  practicas y el tema de charla de la semana 1.
+- El avance fisico permanece en **22,71 %**, frente a **26,61 %** planificado;
+  no se modifica ningun avance de edificio, apartamento ni urbanismo. La Curva
+  S guarda como `null` los ceros de formula posteriores a julio, por lo que el
+  corte real no puede volver a saltar a 0 %.
+- Seguridad dispone de `safetyWeeklySeries` S1-S4 y muestra valores semanales y
+  acumulados por separado. El consolidado vigente sigue siendo 01/08/2026:
+  134 personas, 192 horas-persona, 24 observaciones, 19 reuniones, 20
+  inspecciones y 2 acciones. Una recarga tardia de S1/S2 ya no pisa S4: el
+  ganador efectivo se ordena primero por fecha de corte y despues por revision.
+- CxP conserva el total RD$20.921.175,00 y recupera los centavos del Excel de
+  autoridad: corriente RD$19.747.897,22, menor de un mes RD$1.003.815,37 y
+  anterior RD$169.462,41. El resumen de costes ya se deriva de
+  `antonelyCostAccounts`, de modo que ejecutado, periodo y restante siguen el
+  ultimo libro en vez de quedarse congelados en junio.
+- Las 23 conciliaciones estaticas pasan a llamarse **observaciones de
+  conciliacion**. La unica critica se convirtio en accion gestionable: corregir
+  la formula del flujo de proveedores que omite RD$4.095.000, manteniendo el
+  total auditado RD$202.373.400,47.
+- La Sala operativa y el registro de archivos excluyen las versiones
+  `superseded` antes de contar/paginar. Las discrepancias proceden unicamente de
+  propuestas pendientes de la generacion vigente, no de acumulados historicos.
+- El journal remoto estaba desalineado: produccion tenia todos los objetos de
+  0019-0024 pero no sus registros. Tras comprobar tablas, columnas, trigger e
+  indices, `scripts/reconcile-production-migrations-2026-08-21.sql` registro
+  esas migraciones y Wrangler aplico normalmente `0025_yellow_bullseye.sql`.
+- Verificacion antes de publicar: TypeScript verde, build Vinext verde, ESLint
+  0 errores (20 avisos historicos) y suite completa verde, incluida la prueba
+  de precedencia temporal, derivacion financiera y serie semanal de Seguridad.
 Idioma de trabajo: español
 
 ## Cierre más reciente: paleta viva de avance espacial (20/08/2026)

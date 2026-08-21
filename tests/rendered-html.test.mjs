@@ -508,7 +508,7 @@ test("all variable dashboard values use a versioned live-data layer with five-se
   assert.match(route, /publishLiveDataUpdates/);
   assert.match(route, /provenance/);
   assert.match(route, /refreshIntervalMs: 5_000/);
-  assert.match(effectiveLive, /ROW_NUMBER\(\) OVER \(PARTITION BY h\.key ORDER BY h\.id DESC\)/);
+  assert.match(effectiveLive, /ROW_NUMBER\(\) OVER \([\s\S]*PARTITION BY h\.key[\s\S]*h\.id DESC/);
   assert.match(effectiveLive, /e\.status = 'published'/);
   assert.match(publisher, /status: "preparing"/);
   assert.match(liveData, /LIVE_DATA_ROOTS/);
@@ -772,7 +772,7 @@ test("points three to eight add a live operational control room without autonomo
   assert.match(dashboard, /archivedSnapshot/);
   assert.match(panel, /Calidad y cobertura/);
   assert.match(panel, /Plano operativo/);
-  assert.match(panel, /Conciliaciones/);
+  assert.match(panel, /Observaciones/);
   assert.match(panel, /Responsable, vencimiento, comentarios e historial/);
   assert.match(panel, /Abrir plano interactivo/);
   assert.match(panel, /Revisión \{snapshot\.live\.revision/);

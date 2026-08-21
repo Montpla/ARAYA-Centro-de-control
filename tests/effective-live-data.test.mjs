@@ -266,6 +266,48 @@ test("effective live view ignores uncommitted revisions and reverses delete/rest
   assert.equal(afterRestore.revision, 2);
 });
 
+test("effective live view orders revisions by business cutoff before upload order", async () => {
+  const { deriveEffectiveLiveDataSnapshot } = await loadCore();
+  const latestPeriod = row({
+    historyId: 20,
+    eventId: 20,
+    key: "safetyMetrics",
+    valueJson: JSON.stringify([{ label: "Horas-persona", value: "192", detail: "Semana 4" }]),
+    cutoff: "2026-07-27",
+    eventCutoff: "2026-07-27",
+  });
+  const reprocessedOlderPeriod = row({
+    historyId: 61,
+    eventId: 61,
+    key: "safetyMetrics",
+    valueJson: JSON.stringify([{ label: "Horas-persona", value: "96", detail: "Semana 2" }]),
+    cutoff: "2026-07-13",
+    eventCutoff: "2026-07-13",
+  });
+
+  const snapshot = deriveEffectiveLiveDataSnapshot(
+    [reprocessedOlderPeriod, latestPeriod],
+    true,
+  );
+  assert.deepEqual(snapshot.values.safetyMetrics, [
+    { label: "Horas-persona", value: "192", detail: "Semana 4" },
+  ]);
+
+  const correctedSamePeriod = row({
+    ...latestPeriod,
+    historyId: 62,
+    eventId: 62,
+    valueJson: JSON.stringify([{ label: "Horas-persona", value: "193", detail: "CorrecciÃ³n" }]),
+  });
+  const corrected = deriveEffectiveLiveDataSnapshot(
+    [latestPeriod, correctedSamePeriod],
+    true,
+  );
+  assert.deepEqual(corrected.values.safetyMetrics, [
+    { label: "Horas-persona", value: "193", detail: "CorrecciÃ³n" },
+  ]);
+});
+
 test("non-finance snapshots redact commercial data and protected provenance", async () => {
   const { deriveEffectiveLiveDataSnapshot } = await loadCore();
   const operational = row({ key: "monthlyPlan", valueJson: "[]" });

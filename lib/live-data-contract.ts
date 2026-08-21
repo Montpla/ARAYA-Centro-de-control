@@ -20,6 +20,7 @@ const APPENDABLE_ARRAY_PATHS = new Set([
   "buildings",
   "buildings.*.units",
   "discoveredSections",
+  "safetyWeeklySeries",
   "urbanismAreas",
 ]);
 const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
@@ -84,6 +85,26 @@ function fallbackArrayItem(path: string) {
       visualization: "list",
       unit: "",
       series: [{ label: "", value: 0 }],
+    };
+  }
+  if (path === "safetyWeeklySeries") {
+    return {
+      week: "",
+      startDate: "",
+      endDate: "",
+      cutoff: "",
+      eventsWeek: null,
+      eventsCumulative: 0,
+      personnel: 0,
+      hoursWeek: 0,
+      hoursCumulative: 0,
+      observationsWeek: 0,
+      observationsCumulative: 0,
+      meetingsWeek: 0,
+      meetingsCumulative: 0,
+      inspectionsWeek: 0,
+      inspectionsCumulative: 0,
+      openActions: 0,
     };
   }
   if (path === "buildings.*.units") {
