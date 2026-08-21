@@ -16,8 +16,9 @@ test("un Excel complejo complementa la lectura directa con IA sin pisarla", () =
   assert.match(filesRoute, /missingExpectedBuildingCodes/);
 });
 
-test("una cubicación incompleta no puede cerrarse como sincronizada", () => {
-  assert.match(filesRoute, /Falta el avance físico de \$\{missingExpectedBuildingCodes\.join/);
+test("una cubicación incompleta publica lo válido y cierra el diagnóstico sin inventar", () => {
+  assert.match(filesRoute, /No se inventó avance para \$\{missingExpectedBuildingCodes\.join/);
+  assert.match(filesRoute, /reviewStatus: "aprobado_con_alertas"/);
   assert.match(reviewRoute, /Falta el avance físico de TH-/);
   assert.match(reviewRoute, /La cubicación está incompleta/);
 });
@@ -29,7 +30,8 @@ test("el alcance no confunde el inventario histórico con los edificios cubicado
 
 test("un original mixto conserva el avance en Obra y los importes en Finanzas", () => {
   assert.match(filesRoute, /\^buildings\\\.\/\.test\(update\.key\)[\s\S]*?area: "obra"/);
-  assert.match(filesRoute, /canPublishInArea = !financeProtectedUpload \|\| user\.financeAccess/);
+  assert.match(filesRoute, /publicationActor = automaticPublicationRequested/);
+  assert.match(filesRoute, /canPublishInArea = automaticPublicationRequested \|\| !financeProtectedUpload \|\| user\.financeAccess/);
   assert.match(filesRoute, /!requiresFinanceAccessForArea\(update\.area\)/);
 });
 

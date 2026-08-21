@@ -61,6 +61,7 @@ export type LiveDataReviewClosure = {
   completedAction: string;
   note: string;
   proposalCount: number;
+  publishedKeys?: string[];
 } & (
   | {
       mode: "reservation";
@@ -383,6 +384,16 @@ export async function publishLiveDataUpdates(input: {
     if (!Number.isSafeInteger(input.reviewClosure.proposalCount) || input.reviewClosure.proposalCount < 1) {
       throw new Error("El cierre de revisión no contiene un número de propuestas válido.");
     }
+    if (input.reviewClosure.publishedKeys) {
+      const uniquePublishedKeys = new Set(input.reviewClosure.publishedKeys);
+      if (
+        uniquePublishedKeys.size !== input.reviewClosure.publishedKeys.length ||
+        uniquePublishedKeys.size > input.reviewClosure.proposalCount ||
+        input.reviewClosure.publishedKeys.some((key) => !input.normalized.some((update) => update.key === key))
+      ) {
+        throw new Error("El cierre automático parcial no coincide con las propuestas publicadas.");
+      }
+    }
   }
   const updatePayloadJson = JSON.stringify(input.normalized.map((update) => ({
     ...update,
@@ -606,11 +617,18 @@ export async function publishLiveDataUpdates(input: {
     ));
     if (input.reviewClosure) {
       const closure = input.reviewClosure;
+      const publishedProposalKeys = closure.publishedKeys ?? input.normalized.map((update) => update.key);
+      const publishedProposalKeysJson = JSON.stringify(publishedProposalKeys);
       atomicStatements.push(statement(
         database,
         `UPDATE document_data_proposals
-         SET status = 'publicado', updated_at = ?
+         SET status = CASE
+               WHEN key IN (SELECT value FROM json_each(?)) THEN 'publicado'
+               ELSE 'descartado_automatico'
+             END,
+             updated_at = ?
          WHERE file_id = ? AND generation = ? AND status = 'pendiente'`,
+        publishedProposalKeysJson,
         updatedAt,
         closure.fileId,
         closure.proposalGeneration,
@@ -630,11 +648,18 @@ export async function publishLiveDataUpdates(input: {
         event.id,
         `(
            SELECT COUNT(*) FROM document_data_proposals
+           WHERE file_id = ? AND generation = ?
+             AND status IN ('publicado', 'descartado_automatico')
+         ) = ? AND (
+           SELECT COUNT(*) FROM document_data_proposals
            WHERE file_id = ? AND generation = ? AND status = 'publicado'
          ) = ?`,
         closure.fileId,
         closure.proposalGeneration,
         closure.proposalCount,
+        closure.fileId,
+        closure.proposalGeneration,
+        publishedProposalKeys.length,
       ));
       if (closure.mode === "reservation") {
         atomicStatements.push(statement(

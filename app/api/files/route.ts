@@ -34,6 +34,11 @@ import {
   templateMappingFromUpdates,
 } from "../../../lib/ingestion-agent";
 import {
+  partitionChangedLiveUpdates,
+  planDynamicSectionSlots,
+  resolveNormalizedUpdateConfidences,
+} from "../../../lib/ingestion-change-set";
+import {
   canAutomaticallyPublishExtraction,
   extractDocumentWithAI,
 } from "../../../lib/ai-document-extraction";
@@ -748,7 +753,10 @@ export async function POST(request: Request) {
     description,
   });
   const declaredCutoff = String(formData.get("declaredCutoff") ?? "").trim().slice(0, 40);
-  const automaticPublicationRequested = formData.get("autoPublish") === "true";
+  // Una carga normal publica por defecto. `false` sólo existe para pruebas o
+  // mantenimiento explícito; así una cámara, un token de obra o un formulario
+  // mínimo no dejan el expediente a medias por omitir este campo técnico.
+  const automaticPublicationRequested = formData.get("autoPublish") !== "false";
   // Un reproceso es una repetición pedida a propósito: vuelve a pasar por la
   // ingesta actual un expediente que ya se archivó (y quizá ya se publicó), para
   // que recoja las mejoras de un lector cuando el archivo se subió antes de que
@@ -1085,6 +1093,7 @@ export async function POST(request: Request) {
     checkedKeys: 0,
     percentageKeys: 0,
     conflictingKeys: [],
+    invalidKeys: [],
   };
   let agentModel = "deterministic";
   let agentPromptVersion = "structured-file-v1";
@@ -1293,7 +1302,7 @@ export async function POST(request: Request) {
         ...extraction,
         warnings: [
           ...extraction.warnings,
-          `El documento nombra ${missingExpectedBuildingCodes.join(", ")}, pero no se extrajo su avance físico. El expediente queda abierto y no se marcará como sincronizado al 100%.`,
+          `El documento nombra ${missingExpectedBuildingCodes.join(", ")}, pero no se extrajo un avance físico verificable para esas entidades; el diagnóstico quedará visible sin bloquear los demás datos.`,
         ],
       };
     }
@@ -1308,21 +1317,6 @@ export async function POST(request: Request) {
         identityResolvedUpdates = extraction.updates;
       }
     }
-    // Cuántos bloques descubiertos hay ya: los nuevos se añaden al final, y
-    // escribir un índice ocupado sobrescribiría el bloque de otro documento.
-    const discoveredRootLength = Array.isArray(currentLiveData.values.discoveredSections)
-      ? currentLiveData.values.discoveredSections.length
-      : 0;
-    const discoveredChildIndices = Object.keys(currentLiveData.values)
-      .map((key) => key.match(/^discoveredSections\.(\d+)(?:\.|$)/)?.[1])
-      .filter((index): index is string => Boolean(index))
-      .map(Number)
-      .filter(Number.isSafeInteger);
-    const existingDiscoveredCount = Math.max(
-      discoveredRootLength,
-      discoveredChildIndices.length ? Math.max(...discoveredChildIndices) + 1 : 0,
-    );
-
     // Un bloque que la lectura descubre y para el que no existe ningún campo ya
     // no espera aprobación: se publica como sección descubierta, con su
     // procedencia, su confianza y la evidencia del documento a la vista. Antes
@@ -1331,9 +1325,8 @@ export async function POST(request: Request) {
     //
     // Cada candidato sin campo conocido se convierte en un bloque provisional
     // visible en Centro de datos. Su área conserva la misma privacidad que el
-    // resto del sistema: un usuario sin Finanzas nunca puede crear ni ver un
-    // candidato comercial/financiero, pero sí puede incorporar uno de obra,
-    // seguridad, permisos, planos, etc.
+    // resto del sistema; el servicio puede incorporarlo aunque el cargador no
+    // tenga permiso de lectura sobre la pantalla financiera resultante.
     const candidatosProvisionales = extraction.unmappedCandidates
       .map((candidato) => {
         const suggested = candidato.suggestedArea.trim().toLowerCase();
@@ -1341,8 +1334,14 @@ export async function POST(request: Request) {
           ? suggested
           : resolvedArea;
         return { candidato, candidateArea };
-      })
-      .filter(({ candidateArea }) => user.financeAccess || !requiresFinanceAccessForArea(candidateArea));
+      });
+    const dynamicSectionSlots = planDynamicSectionSlots(
+      candidatosProvisionales.map(({ candidato, candidateArea }) => ({
+        title: candidato.label,
+        area: candidateArea,
+      })),
+      currentLiveData.values,
+    );
     const seccionesDescubiertas = candidatosProvisionales
       .map(({ candidato, candidateArea }, posicion) => {
           let valores: Array<{ label: string; value: string }> = [];
@@ -1370,10 +1369,11 @@ export async function POST(request: Request) {
             // verdad contiene el dato cuando la extracción no lo estructuró.
           }
           const visual = deriveDynamicSectionConfig(candidato.valueJson);
+          const slot = dynamicSectionSlots[posicion];
           return {
-            key: `discoveredSections.${existingDiscoveredCount + posicion}`,
+            key: slot.key,
             value: {
-              id: `descubierto-${id}-${posicion}`,
+              id: slot.existingId || `descubierto-${id}-${posicion}`,
               title: candidato.label.slice(0, 160),
               description: candidato.description.slice(0, 400),
               area: candidateArea,
@@ -1393,16 +1393,23 @@ export async function POST(request: Request) {
           };
         });
 
-    const normalizacion = identityResolvedUpdates.length || seccionesDescubiertas.length
+    const ingestionCandidates = [
+      ...identityResolvedUpdates.map((update, index) => ({
+        update: {
+          ...update,
+          sourceFileId: id,
+          sourceName: candidate.name,
+        },
+        confidence: extraction.updateConfidences[index] ?? extraction.confidence,
+      })),
+      ...seccionesDescubiertas.map((update, index) => ({
+        update: { ...update, sourceFileId: id },
+        confidence: candidatosProvisionales[index]?.candidato.confidence ?? extraction.confidence,
+      })),
+    ];
+    const normalizacion = ingestionCandidates.length
       ? normalizeIngestedUpdatesResilient(
-          [
-            ...identityResolvedUpdates.map((update) => ({
-              ...update,
-              sourceFileId: id,
-              sourceName: candidate.name,
-            })),
-            ...seccionesDescubiertas.map((update) => ({ ...update, sourceFileId: id })),
-          ],
+          ingestionCandidates.map(({ update }) => update),
           {
             area: classification.area,
             cutoff: effectiveCutoff,
@@ -1415,6 +1422,15 @@ export async function POST(request: Request) {
     // que nunca llegue a la publicación desde la ingesta automática.
     const sinChoques = resolvePublicationKeyConflicts(normalizacion.normalized);
     const extractedUpdates = sinChoques.resueltas;
+    const extractedUpdateConfidences = resolveNormalizedUpdateConfidences(
+      extractedUpdates,
+      ingestionCandidates.map(({ update, confidence }) => ({
+        key: update.key,
+        valueJson: JSON.stringify(update.value),
+        confidence,
+      })),
+      extraction.model === "deterministic" ? 1 : 0,
+    );
     agentValidation = reconcileIngestionUpdates(extractedUpdates.flatMap((update) => {
       try {
         return [{ key: update.key, value: JSON.parse(update.valueJson) }];
@@ -1468,37 +1484,57 @@ export async function POST(request: Request) {
     // Once content has elevated a document to Finanzas or Ventas, every
     // proposal inherits that protected area. Later metadata edits cannot make
     // the persisted document public again.
-    const normalizedUpdates = financeProtectedUpload
+    const preparedUpdates = financeProtectedUpload
       ? extractedUpdates.map((update) =>
           /^buildings\./.test(update.key) && !isFinancialLiveKey(update.key)
             ? { ...update, area: "obra" }
             : { ...update, area: resolvedArea })
       : extractedUpdates;
-    agentProposedCount = normalizedUpdates.length;
+    const preparedUpdateConfidences = resolveNormalizedUpdateConfidences(
+      preparedUpdates,
+      extractedUpdates.map((update, index) => ({
+        key: update.key,
+        valueJson: update.valueJson,
+        confidence: extractedUpdateConfidences[index] ?? extraction.confidence,
+      })),
+      extraction.model === "deterministic" ? 1 : 0,
+    );
+    agentProposedCount = preparedUpdates.length;
     extractionGeneration = `ingest:${crypto.randomUUID()}`;
     const existingPoints = await selectLivePointValues(
       getD1JsonDatabase(),
-      normalizedUpdates.map((update) => update.key),
+      preparedUpdates.map((update) => update.key),
+    );
+    const changeSet = partitionChangedLiveUpdates(preparedUpdates, existingPoints);
+    const normalizedUpdates = changeSet.changed;
+    const unchangedCount = changeSet.unchanged.length;
+    const normalizedUpdateConfidences = resolveNormalizedUpdateConfidences(
+      normalizedUpdates,
+      preparedUpdates.map((update, index) => ({
+        key: update.key,
+        valueJson: update.valueJson,
+        confidence: preparedUpdateConfidences[index] ?? extraction.confidence,
+      })),
+      extraction.model === "deterministic" ? 1 : 0,
     );
     const previousByKey = new Map(existingPoints.map((point) => [point.key, point.valueJson]));
-    const discrepancyCount = normalizedUpdates.filter((update) => {
-      const previous = previousByKey.get(update.key);
-      return previous !== undefined && previous !== update.valueJson;
-    }).length;
+    const discrepancyCount = normalizedUpdates.filter((update) => previousByKey.has(update.key)).length;
     const extractionSummary = [
       analysis.summary,
       extraction.summary,
       extraction.model !== "deterministic" ? `Análisis documental: ${extraction.model}.` : "",
       extraction.warnings.length ? `${extraction.warnings.length} advertencias de estructura.` : "",
+      unchangedCount ? `${unchangedCount} dato(s) ya coincidían con el Centro de Control y no generaron otra revisión.` : "",
       extraction.unmappedCandidates.length
         ? `${extraction.unmappedCandidates.length} propuestas de sección nueva detectadas.`
         : "",
     ].filter(Boolean).join(" ");
 
     const proposalsUpdatedAt = new Date().toISOString();
-    await upsertDocumentProposalRows(
-      getD1JsonDatabase(),
-      normalizedUpdates.map((update, index) => {
+    if (normalizedUpdates.length) {
+      await upsertDocumentProposalRows(
+        getD1JsonDatabase(),
+        normalizedUpdates.map((update, index) => {
         const previousValueJson = previousByKey.get(update.key) ?? null;
         return {
           id: crypto.randomUUID(),
@@ -1512,16 +1548,17 @@ export async function POST(request: Request) {
           area: update.area,
           sourceCurrency: update.sourceCurrency,
           cutoff: update.cutoff,
-          confidence: extraction.updateConfidences[index] ?? 0,
-          discrepancy: previousValueJson !== null && previousValueJson !== update.valueJson,
+          confidence: normalizedUpdateConfidences[index] ?? 0,
+          discrepancy: previousValueJson !== null,
           status: "pendiente",
           notes: extraction.warnings.join(" ").slice(0, 1000),
           createdByEmail: user.email,
           createdByName: user.displayName,
           updatedAt: proposalsUpdatedAt,
         };
-      }),
-    );
+        }),
+      );
+    }
     if (extraction.unmappedCandidates.length) {
       // notify_unmapped_field_candidate_created (migración 0020) genera la
       // notificación al insertar; esta ruta solo escribe la fila y programa
@@ -1536,9 +1573,24 @@ export async function POST(request: Request) {
           suggestedArea: candidate.suggestedArea,
           evidence: candidate.evidence,
           confidence: candidate.confidence,
+          status: "adaptado",
+          reviewedByEmail: user.email,
+          reviewedByName: user.displayName,
+          reviewedAt: proposalsUpdatedAt,
+          reviewNote: "Convertido automáticamente en una sección visual trazable durante la ingesta.",
         })),
       ).catch(() => undefined);
     }
+    await db.update(unmappedFieldCandidates).set({
+      status: "superado",
+      reviewedByEmail: user.email,
+      reviewedByName: user.displayName,
+      reviewedAt: proposalsUpdatedAt,
+      reviewNote: "Sustituido por una generación documental posterior.",
+    }).where(and(
+      eq(unmappedFieldCandidates.fileId, id),
+      eq(unmappedFieldCandidates.status, "pendiente"),
+    )).catch(() => undefined);
     const classifiedAt = new Date().toISOString();
     let classifiedFile: { id: string } | undefined;
     try {
@@ -1551,11 +1603,14 @@ export async function POST(request: Request) {
         classificationReason: financeProtectedUpload && !initiallyProtectedUpload
           ? `${classification.reason} El contenido extraído elevó el expediente a acceso financiero/comercial.`
           : classification.reason,
-        processingStage: normalizedUpdates.length ? "contraste" : classification.confidence > 0 ? "extraccion_pendiente" : "clasificado",
-        processingProgress: normalizedUpdates.length ? 75 : classification.confidence > 0 ? 40 : 20,
-        processingSummary: classification.confidence > 0
+        status: normalizedUpdates.length ? "pendiente_revision" : "integrado",
+        processingStage: normalizedUpdates.length ? "contraste" : "sincronizado",
+        processingProgress: normalizedUpdates.length ? 75 : 100,
+        processingSummary: normalizedUpdates.length
           ? extractionSummary
-          : "Original recibido. Requiere asignación de área antes de normalizar sus datos.",
+          : preparedUpdates.length
+            ? `${extractionSummary} Los ${unchangedCount} datos verificables ya estaban vigentes; no se alteró ninguna cifra.`
+            : `${extractionSummary} El original quedó catalogado y no contiene cambios aplicables al modelo vivo.`,
         extractionMode: extraction.model === "deterministic" ? analysis.extractionMode : "openai_responses",
         extractionConfidence: normalizedUpdates.length ? extraction.confidence : analysis.confidence,
         extractionSummary,
@@ -1563,7 +1618,11 @@ export async function POST(request: Request) {
         ingestionVersion: CURRENT_INGESTION_VERSION,
         processedAt: classifiedAt,
         proposalGeneration: extractionGeneration,
-        reviewStatus: normalizedUpdates.length ? "listo_revision" : "pendiente_extraccion",
+        requiresReview: normalizedUpdates.length > 0,
+        reviewStatus: normalizedUpdates.length ? "listo_revision" : "sin_cambios",
+        reviewedByEmail: normalizedUpdates.length ? "" : user.email,
+        reviewedByName: normalizedUpdates.length ? "" : user.displayName,
+        reviewedAt: normalizedUpdates.length ? "" : classifiedAt,
         updatedAt: classifiedAt,
       }).where(and(
         eq(uploadedFiles.id, id),
@@ -1597,113 +1656,161 @@ export async function POST(request: Request) {
       eventType: "extraccion_preparada",
       message: normalizedUpdates.length
         ? `${normalizedUpdates.length} cambios extraídos y enviados a contraste en ${areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea}.`
-        : `Archivo dirigido a ${areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea}. El original permanece disponible y la interpretación no modifica datos sin propuestas válidas.`,
+        : unchangedCount
+          ? `${unchangedCount} datos contrastados: ya estaban vigentes y el archivo se cerró sin crear una revisión duplicada.`
+          : `Archivo dirigido a ${areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea}. Quedó catalogado sin cambios aplicables al modelo vivo.`,
       actorEmail: user.email,
       actorName: user.displayName,
     }).catch(() => undefined);
-    let automaticMessage = "";
-    const canPublishInArea = !financeProtectedUpload || user.financeAccess;
+    let automaticMessage = unchangedCount
+      ? `${unchangedCount} datos se comprobaron y ya coincidían con el Centro de Control; el archivo quedó sincronizado sin alterar cifras ni crear una revisión duplicada.`
+      : "";
+    let automaticallyDiscardedCount = 0;
+    // El servicio de ingesta puede escribir un hecho financiero validado sin
+    // conceder al cargador permiso para leer Finanzas. La autoría sigue siendo
+    // la persona que subió el archivo y todas las pantallas protegidas continúan
+    // aplicando su control de acceso habitual.
+    const publicationActor = automaticPublicationRequested
+      ? { ...user, financeAccess: true }
+      : user;
+    const canPublishInArea = automaticPublicationRequested || !financeProtectedUpload || user.financeAccess;
     const extractionConfidenceIsSafe = canAutomaticallyPublishExtraction({
       model: extraction.model,
       confidence: extraction.confidence,
-      updateConfidences: extraction.updateConfidences,
+      updateConfidences: normalizedUpdateConfidences,
       warnings: extraction.warnings,
-      // El recuento se cuenta sobre las confianzas de la extracción, no sobre lo
-      // que sobrevive a la normalización: si ésta descarta un dato que no encaja
-      // en el modelo, el lote no debe fallar la comprobación de longitud y
-      // perder también los datos buenos.
-      updateCount: extraction.updateConfidences.length,
+      updateCount: normalizedUpdateConfidences.length,
     });
     const liveValues = currentLiveData?.values ?? {};
+    const confidenceByKey = new Map(
+      normalizedUpdates.map((update, index) => [update.key, normalizedUpdateConfidences[index] ?? 0]),
+    );
+    const unsafeAgentKeys = new Set([
+      ...agentValidation.conflictingKeys,
+      ...agentValidation.invalidKeys,
+    ]);
     // Condiciones del lote: valen para todos los datos por igual (se pidió
     // publicar solo, el área permite publicar, hay datos y contexto vivo).
     const batchPreconditions =
       automaticPublicationRequested &&
       canPublishInArea &&
       resolvedArea !== "sin_clasificar" &&
-      extractionConfidenceIsSafe &&
       normalizedUpdates.length > 0 &&
       Boolean(currentLiveData);
     // Condiciones de cada dato: su área coincide, quien sube puede publicarlo y
     // encaja en el contrato vivo. Antes esto se comprobaba con un `.every` que
     // bloqueaba TODO el lote si un solo dato fallaba —justo lo que hacía que un
     // informe con un dato dudoso de relleno no actualizara ninguna cifra. Ahora
-    // decide dato a dato: los que encajan se publican solos y el resto va a
-    // revisión.
+    // decide dato a dato: los que encajan se publican solos y el resto queda
+    // aislado con diagnóstico, sin bloquear el expediente.
     const updateIsAutoPublishable = (update: ReturnType<typeof normalizeLiveDataUpdates>[number]) =>
       (update.area === resolvedArea || (
         financeProtectedUpload &&
         !requiresFinanceAccessForArea(update.area) &&
         !isFinancialLiveKey(update.key)
       )) &&
-      (user.financeAccess || !isFinancialLiveKey(update.key)) &&
+      (publicationActor.financeAccess || !isFinancialLiveKey(update.key)) &&
+      !unsafeAgentKeys.has(update.key) &&
+      (confidenceByKey.get(update.key) ?? 0) > 0 &&
       isSafeAutomaticStructuredUpdate(update) &&
       individualUpdateContractIsSafe(update, liveValues);
     // Si todo el lote encaja (además, como lote atómico en el contrato), se
     // publica entero —cero cambio de comportamiento cuando todo cuadra—. Si no,
-    // se publican los datos que individualmente son seguros y el resto queda
-    // para revisión, en vez de bloquear el informe completo.
+    // se publican los datos que individualmente son seguros y el resto se
+    // cierra como diagnóstico, en vez de bloquear el informe completo.
     const wholeBatchSafe = batchPreconditions &&
+      extractionConfidenceIsSafe &&
       agentValidation.safe &&
-      !buildingScopeIncomplete &&
       normalizedUpdates.every(updateIsAutoPublishable) &&
       automaticContractIsSafe(normalizedUpdates, liveValues);
     const autoPublishable = wholeBatchSafe
       ? normalizedUpdates
-      : batchPreconditions && agentValidation.safe
+      : batchPreconditions
         ? normalizedUpdates.filter(updateIsAutoPublishable)
         : [];
     if (autoPublishable.length) {
       publicationStarted = true;
-      const isFullBatch = autoPublishable.length === normalizedUpdates.length && !buildingScopeIncomplete;
+      const isFullBatch = autoPublishable.length === normalizedUpdates.length;
       const publication = await publishLiveDataUpdates({
         normalized: autoPublishable,
-        actor: user,
+        actor: publicationActor,
         area: resolvedArea,
         cutoff: effectiveCutoff,
         sourceFileId: id,
         sourceName: candidate.name,
         message: `${autoPublishable.length} datos estructurados publicados automáticamente desde ${candidate.name}.`,
-        ...(isFullBatch ? {
-          reviewClosure: {
-            mode: "insert" as const,
-            fileId: id,
-            proposalGeneration: extractionGeneration,
-            // Un reproceso publica una revisión más sobre un expediente que ya
-            // tenía un cierre `auto:${id}`. La clave idempotente lleva la
-            // generación para no chocar con ese cierre anterior; una primera
-            // publicación conserva la clave estable de siempre.
-            requestKey: reprocessing ? `auto:${id}:${extractionGeneration}` : `auto:${id}`,
-            completedAction: "aprobado_automatico",
-            note: "Publicación automática de hechos explícitos con alta confianza, validados por el contrato vivo y los permisos del usuario.",
-            proposalCount: autoPublishable.length,
-          },
-        } : {}),
+        reviewClosure: {
+          mode: "insert" as const,
+          fileId: id,
+          proposalGeneration: extractionGeneration,
+          // Un reproceso publica una revisión más sobre un expediente que ya
+          // tenía un cierre `auto:${id}`. La clave idempotente lleva la
+          // generación para no chocar con ese cierre anterior; una primera
+          // publicación conserva la clave estable de siempre.
+          requestKey: reprocessing ? `auto:${id}:${extractionGeneration}` : `auto:${id}`,
+          completedAction: "aprobado_automatico",
+          note: isFullBatch
+            ? "Publicación automática de hechos explícitos con confianza positiva, validados por el contrato vivo."
+            : "Publicación automática parcial: los hechos válidos se publicaron y las entradas rechazadas se aislaron sin bloquear el expediente.",
+          proposalCount: normalizedUpdates.length,
+          ...(isFullBatch ? {} : { publishedKeys: autoPublishable.map((update) => update.key) }),
+        },
       });
       publicationCompleted = true;
       agentPublishedCount = autoPublishable.length;
       automaticMessage = isFullBatch
         ? `${autoPublishable.length} datos se han actualizado automáticamente en la revisión ${publication.id}; las cifras y gráficas se refrescarán en menos de 5 segundos.`
-        : buildingScopeIncomplete
-          ? `${autoPublishable.length} datos reconocidos se han actualizado en la revisión ${publication.id}, pero falta el avance de ${missingExpectedBuildingCodes.join(", ")}; el expediente queda abierto para revisión.`
-          : `${autoPublishable.length} de ${normalizedUpdates.length} datos se han actualizado automáticamente en la revisión ${publication.id}; ${normalizedUpdates.length - autoPublishable.length} no encajan en un campo conocido todavía y siguen pendientes de revisión manual.`;
-      if (!isFullBatch) {
-        // publishLiveDataUpdates marca el archivo como aprobado/sin revisión
-        // pendiente de forma incondicional (no depende de reviewClosure). En
-        // un lote parcial eso es falso — todavía queda al menos una propuesta
-        // sin publicar — así que se corrige aparte, sin tocar la transacción
-        // atómica.
+        : `${autoPublishable.length} de ${normalizedUpdates.length} cambios válidos se han actualizado automáticamente en la revisión ${publication.id}; los demás quedaron diagnosticados y cerrados sin bloquear el expediente.`;
+      if (isFullBatch && buildingScopeIncomplete) {
         await db.update(uploadedFiles).set({
-          requiresReview: true,
-          reviewStatus: "listo_revision",
-          processingSummary: buildingScopeIncomplete
-            ? `${extractionSummary} ${autoPublishable.length} datos reconocidos ya están publicados en la revisión ${publication.id}. Falta el avance físico de ${missingExpectedBuildingCodes.join(", ")}; el expediente no está completo.`
-            : `${extractionSummary} ${autoPublishable.length} de ${normalizedUpdates.length} datos ya están publicados en la revisión ${publication.id}; el resto necesita revisión manual.`,
+          reviewStatus: "aprobado_con_alertas",
+          processingSummary: `${extractionSummary} Los datos verificables se publicaron en la revisión ${publication.id}. No se inventó avance para ${missingExpectedBuildingCodes.join(", ")}; la ausencia quedó registrada como diagnóstico.`,
           updatedAt: new Date().toISOString(),
         }).where(eq(uploadedFiles.id, id)).catch(() => undefined);
       }
+      if (!isFullBatch) {
+        const resolvedAt = new Date().toISOString();
+        const discarded = normalizedUpdates.length - autoPublishable.length;
+        automaticallyDiscardedCount += discarded;
+        await db.update(uploadedFiles).set({
+          status: "integrado",
+          processingStage: "sincronizado",
+          processingProgress: 100,
+          requiresReview: false,
+          reviewStatus: "aprobado_con_alertas",
+          processingSummary: `${extractionSummary} ${autoPublishable.length} cambios se publicaron en la revisión ${publication.id}; ${discarded} entradas no válidas se aislaron automáticamente sin bloquear los datos correctos.${buildingScopeIncomplete ? ` El lector no encontró avance verificable para ${missingExpectedBuildingCodes.join(", ")}.` : ""}`,
+          updatedAt: resolvedAt,
+        }).where(eq(uploadedFiles.id, id)).catch(() => undefined);
+      }
     }
-    if (publicationCompleted) {
+    if (normalizedUpdates.length && !publicationCompleted && automaticPublicationRequested) {
+      const resolvedAt = new Date().toISOString();
+      automaticallyDiscardedCount = normalizedUpdates.length;
+      await db.update(documentDataProposals).set({
+        status: "descartado_automatico",
+        updatedAt: resolvedAt,
+      }).where(and(
+        eq(documentDataProposals.fileId, id),
+        eq(documentDataProposals.generation, extractionGeneration),
+        eq(documentDataProposals.status, "pendiente"),
+      ));
+      await db.update(uploadedFiles).set({
+        status: "integrado",
+        processingStage: "sincronizado",
+        processingProgress: 100,
+        requiresReview: false,
+        reviewStatus: "procesado_con_alertas",
+        reviewedByEmail: user.email,
+        reviewedByName: user.displayName,
+        reviewedAt: resolvedAt,
+        processingSummary: `${extractionSummary} Ningún cambio superó las validaciones del modelo; el original y el diagnóstico quedan archivados y ninguna cifra vigente se modificó.`,
+        updatedAt: resolvedAt,
+      }).where(eq(uploadedFiles.id, id));
+      automaticMessage = `El archivo quedó procesado con diagnóstico. Ningún dato seguro requería modificar el Centro de Control y no queda pendiente de revisión.`;
+    }
+    const templateSucceeded = publicationCompleted || unchangedCount > 0;
+    const learnedUpdates = publicationCompleted ? autoPublishable : preparedUpdates;
+    if (templateSucceeded) {
       const templateId = matchedTemplateId || crypto.randomUUID();
       const [storedTemplate] = await db.insert(documentTemplates).values({
         id: templateId,
@@ -1712,7 +1819,7 @@ export async function POST(request: Request) {
         extension,
         area: resolvedArea,
         documentType: resolvedDocumentType,
-        mappingJson: JSON.stringify(templateMappingFromUpdates(autoPublishable)),
+        mappingJson: JSON.stringify(templateMappingFromUpdates(learnedUpdates)),
         visualizationJson: JSON.stringify(seccionesDescubiertas.map((section) => ({
           key: section.key,
           visualization: section.value.visualization,
@@ -1729,7 +1836,7 @@ export async function POST(request: Request) {
         set: {
           area: resolvedArea,
           documentType: resolvedDocumentType,
-          mappingJson: JSON.stringify(templateMappingFromUpdates(autoPublishable)),
+          mappingJson: JSON.stringify(templateMappingFromUpdates(learnedUpdates)),
           visualizationJson: JSON.stringify(seccionesDescubiertas.map((section) => ({
             key: section.key,
             visualization: section.value.visualization,
@@ -1744,7 +1851,7 @@ export async function POST(request: Request) {
         },
       }).returning({ id: documentTemplates.id });
       matchedTemplateId = storedTemplate?.id ?? templateId;
-    } else if (matchedTemplateId && !normalizedUpdates.length) {
+    } else if (matchedTemplateId && !preparedUpdates.length) {
       await db.update(documentTemplates).set({
         failureCount: sql`${documentTemplates.failureCount} + 1`,
         lastRunAt: new Date().toISOString(),
@@ -1754,7 +1861,13 @@ export async function POST(request: Request) {
     if (agentRunId) {
       await db.update(ingestionAgentRuns).set({
         templateId: matchedTemplateId,
-        status: publicationCompleted ? "published" : normalizedUpdates.length ? "prepared" : "no_data",
+        status: publicationCompleted
+          ? "published"
+          : unchangedCount
+            ? "verified_unchanged"
+            : automaticallyDiscardedCount
+              ? "resolved_with_alerts"
+              : normalizedUpdates.length ? "prepared" : "no_data",
         model: agentModel,
         promptVersion: agentPromptVersion,
         iterations: agentIterations,
@@ -1771,7 +1884,11 @@ export async function POST(request: Request) {
         eventType: "agente_ingesta_completado",
         message: publicationCompleted
           ? `El agente contrastó ${agentProposedCount} dato(s), publicó ${agentPublishedCount} y memorizó la plantilla documental.`
-          : `El agente contrastó ${agentProposedCount} dato(s); el original y el diagnóstico quedan trazados.`,
+          : unchangedCount
+            ? `El agente contrastó ${agentProposedCount} dato(s): ya estaban vigentes y cerró el archivo sin duplicar revisiones.`
+            : automaticallyDiscardedCount
+              ? `El agente aisló ${automaticallyDiscardedCount} entrada(s) no válidas, preservó los valores vigentes y cerró el diagnóstico.`
+              : `El agente contrastó ${agentProposedCount} dato(s); el original y el diagnóstico quedan trazados.`,
         actorEmail: user.email,
         actorName: user.displayName,
       }).catch(() => undefined);

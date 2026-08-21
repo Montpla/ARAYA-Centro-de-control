@@ -8,14 +8,37 @@
 3. El sistema elige automáticamente lector directo, conversión segura o lectura
    asistida según el formato. Los datos válidos se publican; la información nueva
    crea una sección provisional con fuente, evidencia y permisos de área.
-4. En una excepción, comparar `Valor vigente → Valor propuesto` y aprobar,
-   observar o rechazar desde el expediente.
+4. El sistema publica cada dato válido y aísla cualquier entrada incompatible
+   con un diagnóstico cerrado; una entrada defectuosa ya no bloquea el archivo
+   completo ni queda indefinidamente pendiente.
 5. Comprobar la nueva revisión en la Sala operativa y en la sección afectada.
 6. Si se elimina o restaura un archivo, revisar la revisión de recomposición que
    el sistema crea y el valor anterior que vuelve a quedar vigente.
 
 El refresco de cinco segundos consulta D1 y no usa tokens. Sólo la interpretación
 semántica de un documento o una consulta al asistente usa la API de IA.
+
+### Cierre automático de cada carga
+
+- La publicación automática es el comportamiento predeterminado aunque una
+  cámara, integración o formulario sencillo no envíe un parámetro técnico.
+- La confianza queda unida a `clave + valor`, no a la posición de una fila. Un
+  reordenamiento de edificios/apartamentos o la eliminación de un duplicado no
+  puede convertir por error un dato válido en confianza cero.
+- Si el valor extraído ya coincide con el vigente, el archivo queda
+  `integrado/sincronizado` sin crear otra revisión, otra notificación o una
+  escritura repetida en el historial.
+- Si un documento contiene datos válidos y otros incompatibles, los válidos se
+  publican en el mismo batch atómico; las propuestas restantes quedan
+  `descartado_automatico` con diagnóstico y el expediente cierra al 100 %.
+- Un concepto nuevo crea una sección visual; los informes posteriores con el
+  mismo título y área actualizan esa sección en vez de añadir otra cada mes.
+- La ingesta interna puede publicar hechos financieros validados aunque quien
+  cargó el documento no tenga permiso de lectura de Finanzas. Esto no concede
+  acceso a la pantalla, al archivo ni a la API financiera: sólo separa el
+  permiso para aportar un original fiable del permiso para consultar sus cifras.
+- Un fallo real de almacenamiento, contrato transaccional o servicio externo sí
+  conserva el original y pasa a `observado`; no se oculta como sincronizado.
 
 ## Formatos e interpretación
 
@@ -36,7 +59,8 @@ semántica de un documento o una consulta al asistente usa la API de IA.
   visual y consulta desde móvil/tableta.
 - Guardar o interpretar no equivale a publicar. Cifras, gráficos, cronograma,
   edificios, apartamentos y urbanismo cambian únicamente tras una revisión
-  publicada y aparecen en un máximo de cinco segundos.
+  publicada automáticamente y aparecen en un máximo de cinco segundos. Si no
+  hay diferencias reales, no se genera una revisión vacía.
 
 ## Visor documental y guía de uso
 

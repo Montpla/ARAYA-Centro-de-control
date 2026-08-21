@@ -64,6 +64,7 @@ test("the independent reconciliation rejects invalid percentages and overlapping
   assert.equal(invalid.safe, false);
   assert.match(invalid.issues.join(" "), /fuera de 0-100/);
   assert.ok(invalid.conflictingKeys.includes("projectSnapshot"));
+  assert.deepEqual(invalid.invalidKeys, ["projectSnapshot.overallProgress"]);
 });
 
 test("template mappings are compact, stable and deduplicated", () => {

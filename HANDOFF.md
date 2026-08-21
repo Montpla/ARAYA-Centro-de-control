@@ -3150,3 +3150,65 @@ del despliegue actual de Cloudflare Workers.
   además la trayectoria de herramienta y su límite. Al cerrar este bloque:
   TypeScript verde, suite completa **313/313**, ESLint 0 errores (20 avisos
   históricos) y build Vinext verde.
+
+## Cierre automático e idempotente de todas las áreas — local (21/08/2026)
+
+Esta sección sustituye las notas históricas que decían que una cubicación
+incompleta debía quedar abierta o que el cargador necesitaba permiso de lectura
+financiera para que la ingesta publicara. Esas reglas eran dos de las causas de
+los expedientes eternamente pendientes.
+
+- No se ha escrito en D1/R2 de producción ni se ha variado ningún valor vigente.
+  Se conservan, entre otros, 22,71 % físico, 26,61 % plan y 22,37 % MPP. Este
+  bloque cambia el comportamiento de cargas futuras; cualquier reproceso del
+  backlog debe hacerse después del despliegue, por expediente y verificando el
+  diff antes de aplicarlo. `CURRENT_INGESTION_VERSION` se mantiene en
+  `2026-08-20.7` precisamente para no lanzar un reproceso masivo implícito.
+- Causa raíz 1: `updateConfidences[index]` se consultaba después de resolver
+  identidades, normalizar y eliminar choques. Una fila descartada desplazaba las
+  siguientes y las secciones descubiertas no tenían posición en ese array;
+  acababan con confianza 0. `lib/ingestion-change-set.ts` enlaza ahora la
+  confianza con la identidad canónica `clave + valueJson`.
+- Causa raíz 2: se preparaban y publicaban otra vez valores idénticos. El mismo
+  módulo compara JSON canónico, separa cambios reales y deja el archivo
+  `integrado/sincronizado` sin evento, historial ni notificación duplicados.
+- Causa raíz 3: la publicación parcial dejaba las propuestas restantes en
+  revisión. `publishLiveDataUpdates` admite `reviewClosure.publishedKeys`; en el
+  mismo batch atómico marca las aceptadas `publicado`, las restantes
+  `descartado_automatico`, verifica los recuentos y cierra el archivo. Si ningún
+  dato pasa, el original y el diagnóstico se conservan y la generación cierra
+  `procesado_con_alertas`, sin modificar el modelo vivo.
+- Finanzas: la ingesta automática actúa como servicio interno con permiso de
+  escritura contractual, manteniendo como actor a la persona que cargó el
+  archivo. Esto permite que un trabajador aporte un balance fiable aunque no
+  pueda consultar Finanzas. Los lectores, archivos, endpoints y notificaciones
+  financieras continúan protegidos; no se concede permiso de lectura.
+- Un `autoPublish` omitido ahora significa publicar; sólo el valor explícito
+  `false` desactiva la automatización para mantenimiento. Cámara, agente, token
+  y formulario sencillo siguen el mismo recorrido.
+- Los porcentajes fuera de 0–100 y rutas conflictivas se identifican por clave.
+  Se aísla sólo la entrada inválida; el resto del informe continúa. La ausencia
+  de un edificio citado queda en el diagnóstico y nunca se rellena inventando un
+  porcentaje.
+- Los candidatos sin campo conocido se guardan ya como `adaptado`, no
+  `pendiente`. `planDynamicSectionSlots` reutiliza título+área e id de una
+  sección existente; el parte siguiente actualiza el mismo bloque en lugar de
+  crear una lista mensual infinita. Los candidatos pendientes de generaciones
+  anteriores del mismo expediente se marcan `superado` al procesar la nueva.
+- Al recibir una generación nueva se siguen eliminando las propuestas de
+  generaciones antiguas del expediente. Las siete propuestas vigentes de los
+  partes históricos de Seguridad y los ocho expedientes antiguos detectados en
+  `extraccion_pendiente` **no se tocaron** para respetar la orden de no variar
+  los datos actuales; deberán reprocesarse expresamente tras publicar este
+  código.
+- Pruebas nuevas: `tests/ingestion-change-set.test.mjs` cubre igualdad canónica,
+  no-op, confianza tras reordenamiento y reutilización de sección; la prueba de
+  conciliación exige `invalidKeys`. Las pruebas de cubicación y multiformato se
+  actualizaron al contrato de “publicar lo válido y cerrar el diagnóstico”.
+- Archivos principales: `app/api/files/route.ts`,
+  `lib/ingestion-change-set.ts`, `lib/ingestion-agent.ts` y
+  `lib/publish-live-data.ts`. No hay migración nueva.
+- Verificación final local: `npm test` **316/316** (incluye TypeScript y build
+  Vinext), `npm run lint -- --quiet` sin errores y `git diff --check` sin errores.
+  El grafo `codebase-memory-mcp` quedó reindexado y persistido para el siguiente
+  LLM. Todavía no se ha hecho push ni deploy de este bloque.

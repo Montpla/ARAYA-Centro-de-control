@@ -1110,7 +1110,7 @@ test("historical originals stay out of public assets and use authenticated R2 de
   assert.match(assetsIgnore, /data-center\/\*\*/);
 });
 
-test("simple uploads request automatic publication only for extracted structured updates", async () => {
+test("simple uploads default to automatic publication and close every processed generation", async () => {
   const [dashboard, filesRoute, publisher] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),
     readFile("app/api/files/route.ts", "utf8"),
@@ -1118,7 +1118,7 @@ test("simple uploads request automatic publication only for extracted structured
   ]);
 
   assert.match(dashboard, /formData\.set\("autoPublish", "true"\)/);
-  assert.match(filesRoute, /formData\.get\("autoPublish"\) === "true"/);
+  assert.match(filesRoute, /formData\.get\("autoPublish"\) !== "false"/);
   assert.match(filesRoute, /extractStructuredUpdates\(bytes, extension/);
   assert.match(filesRoute, /const batchPreconditions =/);
   assert.match(filesRoute, /const updateIsAutoPublishable = /);
@@ -1129,8 +1129,10 @@ test("simple uploads request automatic publication only for extracted structured
   assert.match(filesRoute, /if \(autoPublishable\.length\)/);
   assert.match(filesRoute, /publishLiveDataUpdates\(\{/);
   assert.match(filesRoute, /reviewClosure: \{[\s\S]*?mode: "insert"[\s\S]*?completedAction: "aprobado_automatico"/);
-  assert.doesNotMatch(filesRoute, /update\(documentDataProposals\)[\s\S]*?status: "publicado"/);
-  assert.match(publisher, /UPDATE document_data_proposals[\s\S]*?status = 'publicado'/);
+  assert.match(filesRoute, /status: "descartado_automatico"/);
+  assert.match(filesRoute, /reviewStatus: "procesado_con_alertas"/);
+  assert.match(filesRoute, /reviewStatus: normalizedUpdates\.length \? "listo_revision" : "sin_cambios"/);
+  assert.match(publisher, /UPDATE document_data_proposals[\s\S]*?THEN 'publicado'[\s\S]*?ELSE 'descartado_automatico'/);
   assert.match(filesRoute, /publicaci[^\n]+no pudo confirmarse[^\n]+[\s\S]*requiresReview: true[\s\S]*reviewStatus: "cambios_solicitados"/i);
   // Una subida que no publica nada tiene que decirlo con todas las letras. El
   // texto anterior ("queda pendiente de interpretación; todavía no modifica

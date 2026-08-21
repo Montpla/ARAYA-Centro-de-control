@@ -102,7 +102,7 @@ function expectPatterns(source, patterns, label) {
   }
 }
 
-test("multiformat ingestion falls back to AI and gates automatic publication", () => {
+test("multiformat ingestion publishes valid facts and closes isolated diagnostics", () => {
   expectPatterns(filesRoute, [
     /import \{[\s\S]*?canAutomaticallyPublishExtraction,[\s\S]*?extractDocumentWithAI,[\s\S]*?\} from ["']\.\.\/\.\.\/\.\.\/lib\/ai-document-extraction["'];/,
     /const allowedExtensions = new Set\(\[[\s\S]*?["']pdf["'][\s\S]*?["']pptx["'][\s\S]*?["']xlsx["'][\s\S]*?["']png["'][\s\S]*?\]\);/,
@@ -122,18 +122,20 @@ test("multiformat ingestion falls back to AI and gates automatic publication", (
     /extractionMode: extraction\.model === ["']deterministic["'][\s\S]*?["']openai_responses["']/,
     /automaticPublicationRequested &&/,
     /canAutomaticallyPublishExtraction\(/,
-    /updateConfidences: extraction\.updateConfidences/,
+    /updateConfidences: normalizedUpdateConfidences/,
     /normalizedUpdates\.length > 0/,
     /resolvedArea !== ["']sin_clasificar["']/,
-    /user\.financeAccess \|\| !isFinancialLiveKey\(update\.key\)/,
+    /publicationActor\.financeAccess \|\| !isFinancialLiveKey\(update\.key\)/,
     /isSafeAutomaticStructuredUpdate\(update\)/,
-    // El recuento de confianza se cuenta sobre la extracción, no sobre lo que
-    // sobrevive a la normalización, y la publicación automática decide dato a
-    // dato: un dato dudoso no bloquea el informe entero.
-    /updateCount: extraction\.updateConfidences\.length/,
+    // La confianza se vuelve a enlazar por clave+valor después de normalizar;
+    // un dato descartado o reordenado no desplaza la confianza de los demás.
+    /resolveNormalizedUpdateConfidences\(/,
+    /updateCount: normalizedUpdateConfidences\.length/,
+    /partitionChangedLiveUpdates\(/,
     /const batchPreconditions =/,
     /const updateIsAutoPublishable = /,
     /normalizedUpdates\.filter\(updateIsAutoPublishable\)/,
+    /status: ["']descartado_automatico["']/,
     /publishLiveDataUpdates\(/,
     /reviewClosure: \{[\s\S]*?mode: ["']insert["'][\s\S]*?completedAction: ["']aprobado_automatico["']/,
   ], "files route");

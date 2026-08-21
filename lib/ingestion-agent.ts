@@ -41,6 +41,7 @@ export type IngestionValidation = {
   checkedKeys: number;
   percentageKeys: number;
   conflictingKeys: string[];
+  invalidKeys: string[];
 };
 
 function canonicalText(value: string) {
@@ -189,6 +190,7 @@ function percentageKey(key: string) {
 export function reconcileIngestionUpdates(updates: Array<Pick<LiveDataUpdate, "key" | "value">>): IngestionValidation {
   const issues: string[] = [];
   const conflictingKeys = new Set<string>();
+  const invalidKeys = new Set<string>();
   const values = new Map<string, string>();
   let percentageKeys = 0;
 
@@ -204,7 +206,10 @@ export function reconcileIngestionUpdates(updates: Array<Pick<LiveDataUpdate, "k
       percentageKeys += 1;
       if (typeof update.value === "number" && (
         !Number.isFinite(update.value) || update.value < 0 || update.value > 100
-      )) issues.push(`${update.key}: porcentaje fuera de 0-100.`);
+      )) {
+        invalidKeys.add(update.key);
+        issues.push(`${update.key}: porcentaje fuera de 0-100.`);
+      }
     }
   }
 
@@ -226,6 +231,7 @@ export function reconcileIngestionUpdates(updates: Array<Pick<LiveDataUpdate, "k
     checkedKeys: updates.length,
     percentageKeys,
     conflictingKeys: [...conflictingKeys],
+    invalidKeys: [...invalidKeys],
   };
 }
 
