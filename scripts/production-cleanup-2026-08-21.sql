@@ -1,8 +1,6 @@
 -- Saneamiento idempotente del expediente ARAYA auditado el 21/08/2026.
 -- No borra originales ni historia viva: clasifica versiones, cierra colas
 -- obsoletas y publica únicamente hechos contrastados con sus fuentes.
-BEGIN TRANSACTION;
-
 -- Deja trazabilidad de las decisiones antes de cambiar el estado visible.
 INSERT OR IGNORE INTO file_reviews (
   file_id, action, note, proposal_count, publication_revision, request_key,
@@ -367,5 +365,3 @@ VALUES (
   'cleanup-2026-08-21-provider-formula-activity','sistema@grupobricket.com',
   'Saneamiento automático','2026-08-21T17:05:00.000Z'
 );
-
-COMMIT;
