@@ -51,6 +51,7 @@ import {
   liveSupplierContactAudit,
   liveTypeABudgetSummary,
 } from "../lib/live-derivations";
+import { deriveUrbanismMapAreas } from "../lib/urbanism-map-progress";
 
 let buildings: DashboardBootstrapData["demo"]["buildings"] = [];
 let cubicaciones: DashboardBootstrapData["demo"]["cubicaciones"] = [];
@@ -2985,6 +2986,7 @@ function SitePlan({
   const [planProgressFilter, setPlanProgressFilter] = useState<ProgressBandId | "all">("all");
   const allUnits = buildings.flatMap((item) => item.units);
   const blockedUnits = allUnits.filter((unit) => unit.status === "bloqueada").length;
+  const mapUrbanismAreas = deriveUrbanismMapAreas(urbanismAreas, urbanismReportAreas);
   const progressLegend = progressBandDefinitions.map((band) => ({
     ...band,
     buildings: buildings.filter((building) => progressBandClass(building.progress) === band.id).length,
@@ -3188,7 +3190,7 @@ function SitePlan({
                 </div>
               );
             })}
-            {urbanismAreas.map((area) => {
+            {mapUrbanismAreas.map((area) => {
               const point =
                 area.mapCoordinates?.[planMode] ??
                 (planMode === "visual"

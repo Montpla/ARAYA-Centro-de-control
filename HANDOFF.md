@@ -3368,3 +3368,20 @@ los expedientes eternamente pendientes.
   (20 avisos históricos), `git diff --check` correcto y suite **360/360**.
 - Documento de criterio y ejecución:
   `docs/PLAN-LEGIBILIDAD-IDENTIDAD-CORPORATIVA.md`.
+
+## Vial y Paisajismo enlazados al plano (22/08/2026)
+
+- Causa: el plano pintaba `urbanismAreas`, donde `urban-roads` y
+  `urban-landscape` tenían `progress: null`; los valores reales estaban en la
+  colección paralela `urbanismReportAreas` como Vialidad 6,33 % y Paisajismo
+  12,24 %. No era un fallo de carga, sino un enlace ausente entre ambas vistas.
+- `lib/urbanism-map-progress.ts` une las identidades de forma determinista. El
+  informe completa únicamente un avance espacial vacío; si llega un dato
+  específico a `urbanismAreas`, éste conserva prioridad.
+- `SitePlan` usa la colección derivada para marcador, color y ficha. El
+  indicador consolidado de urbanismo (18,28 %) no se recalcula ni se mezcla con
+  sus subáreas.
+- `tests/urbanism-map-progress.test.mjs` protege Vial 6,33 %, Paisajismo 12,24 %,
+  la prioridad del dato específico y la inmutabilidad del consolidado.
+- Verificación local: TypeScript y build correctos, ESLint 0 errores y suite
+  completa **363/363**.
