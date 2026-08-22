@@ -31,6 +31,15 @@ after(() => {
   globalThis.fetch = originalFetch;
 });
 
+test("un fallo de saldo de IA se explica en lenguaje operativo", () => {
+  const message = extraction.apiErrorMessage({
+    error: { message: "You have no credits remaining. Add credits to continue using the API." },
+  }, 429);
+  assert.match(message, /no tiene saldo disponible/i);
+  assert.match(message, /lectores deterministas siguen activos/i);
+  assert.doesNotMatch(message, /https?:\/\//);
+});
+
 function input(extension, bytes = new Uint8Array([1, 2, 3]).buffer) {
   return {
     bytes,

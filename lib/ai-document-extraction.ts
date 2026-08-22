@@ -386,9 +386,16 @@ function bytesToBase64(buffer: ArrayBuffer) {
   return chunks.join("");
 }
 
-function apiErrorMessage(payload: unknown, status: number) {
+export function apiErrorMessage(payload: unknown, status: number) {
   if (isRecord(payload) && isRecord(payload.error) && typeof payload.error.message === "string") {
-    return payload.error.message.replace(/\s+/g, " ").trim().slice(0, 300);
+    const message = payload.error.message.replace(/\s+/g, " ").trim();
+    if (status === 429 && /credit|quota|billing|saldo/i.test(message)) {
+      return "El servicio de lectura IA no tiene saldo disponible. Los lectores deterministas siguen activos; un administrador debe recargar la cuenta de API para documentos no estructurados y escaneados.";
+    }
+    if (status === 401 || /invalid api key|incorrect api key|authentication/i.test(message)) {
+      return "La clave del servicio de lectura IA no es válida. Un administrador debe actualizar OPENAI_API_KEY en los secretos de producción.";
+    }
+    return message.slice(0, 300);
   }
   return `La API respondió con estado ${status}.`;
 }

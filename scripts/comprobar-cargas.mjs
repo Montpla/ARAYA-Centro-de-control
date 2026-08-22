@@ -71,7 +71,15 @@ for (const file of ultimos) {
 const problemas = [];
 for (const file of recientes) {
   const publicado = Boolean(file.publicationRevision);
-  const marca = file.deletedAt ? "BORRADO" : publicado ? "OK " : "REVISAR";
+  const historico = Boolean(file.supersededByFileId);
+  const activo = !file.deletedAt && !historico;
+  const marca = file.deletedAt
+    ? "BORRADO"
+    : historico
+      ? "HISTÓRICO"
+      : file.requiresReview
+        ? "REVISAR"
+        : "OK ";
   console.log(`\n[${marca}] ${file.originalName}`);
   console.log(`   subido      : ${file.createdAt} por ${file.uploaderName}`);
   console.log(`   área        : ${file.areaLabel} · tipo ${file.documentType} · corte ${file.declaredCutoff || "sin declarar"}`);
@@ -82,7 +90,8 @@ for (const file of recientes) {
   console.log(`   publicado   : ${publicado ? `revisión ${file.publicationRevision} el ${file.publishedAt}` : "NO"}`);
   console.log(`   revisión    : ${file.reviewStatus}${file.requiresReview ? " · REQUIERE REVISIÓN" : ""}`);
   if (file.deletedAt) console.log(`   eliminado   : ${file.deletedAt} por ${file.deletedByName} · ${file.deleteReason || "sin motivo"}`);
-  if (!file.deletedAt && (!publicado || file.requiresReview)) problemas.push(file.originalName);
+  if (historico) console.log(`   histórico   : sustituido por ${file.supersededByFileId}`);
+  if (activo && file.requiresReview) problemas.push(file.originalName);
 }
 
 const liveResponse = await fetch(`${PRODUCTION_URL}/api/live-data`, { headers: { Cookie } });
@@ -100,7 +109,7 @@ console.log(`\n=== Conclusión ===`);
 if (!recientes.length) {
   console.log("Sin cargas recientes que comprobar.");
 } else if (problemas.length) {
-  console.log(`${problemas.length} archivo(s) no han actualizado el panel: ${problemas.join(", ")}`);
+  console.log(`${problemas.length} expediente(s) vigente(s) requieren revisión: ${problemas.join(", ")}`);
 } else {
-  console.log("Todas las cargas recientes publicaron sus datos.");
+  console.log("Todos los expedientes vigentes del periodo están resueltos; los históricos y eliminados no generan falsas alarmas.");
 }

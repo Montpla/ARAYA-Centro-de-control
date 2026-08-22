@@ -56,6 +56,9 @@ export const reviewStatusLabels: Record<string, string> = {
   listo_revision: "Listo para validar",
   cambios_solicitados: "Cambios solicitados",
   aprobado: "Aprobado",
+  sin_cambios: "Comprobado · sin cambios",
+  aprobado_con_alertas: "Publicado · avisos resueltos",
+  procesado_con_alertas: "Procesado · diagnóstico archivado",
   rechazado: "Rechazado",
   superado: "Superado por una fuente posterior",
 };

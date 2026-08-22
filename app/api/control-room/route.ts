@@ -180,8 +180,13 @@ async function controlRoomPayload(auth: ControlRoomUser) {
       .select({
         area: uploadedFiles.area,
         files: sql<number>`count(*)`,
-        integratedFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.reviewStatus} = 'aprobado' then 1 else 0 end), 0)`,
-        pendingFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.reviewStatus} not in ('aprobado', 'rechazado') then 1 else 0 end), 0)`,
+        // La fuente de verdad es `requires_review`, no el texto del cierre.
+        // Un expediente puede terminar como `sin_cambios`,
+        // `aprobado_con_alertas` o `procesado_con_alertas` y estar plenamente
+        // resuelto. Contar sólo el literal `aprobado` reabría falsamente esos
+        // expedientes después de cada reproceso.
+        integratedFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.requiresReview} = 0 and ${uploadedFiles.reviewStatus} <> 'rechazado' then 1 else 0 end), 0)`,
+        pendingFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.requiresReview} = 1 then 1 else 0 end), 0)`,
         observedFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.reviewStatus} = 'cambios_solicitados' then 1 else 0 end), 0)`,
         rejectedFiles: sql<number>`coalesce(sum(case when ${uploadedFiles.reviewStatus} = 'rechazado' then 1 else 0 end), 0)`,
         lastUploadAt: sql<string>`coalesce(max(${uploadedFiles.createdAt}), '')`,

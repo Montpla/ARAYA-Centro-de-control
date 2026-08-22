@@ -35,6 +35,17 @@ if (!liveResponse.ok) {
 const live = await liveResponse.json();
 const provenance = live.provenance ?? {};
 
+const controlRoomResponse = await fetch(`${PRODUCTION_URL}/api/control-room`, { headers: { Cookie } });
+if (controlRoomResponse.ok) {
+  const controlRoom = await controlRoomResponse.json();
+  const documents = controlRoom.documents ?? {};
+  const actions = controlRoom.actionSummary ?? {};
+  console.log("=== Salud del expediente vigente ===");
+  console.log(`documentos vigentes: ${documents.total ?? "?"} · resueltos: ${documents.approved ?? "?"} · pendientes: ${documents.pending ?? "?"}`);
+  console.log(`propuestas pendientes: ${documents.pendingProposals ?? "?"} · discrepancias vigentes: ${documents.discrepancies ?? "?"}`);
+  console.log(`acciones abiertas: ${actions.open ?? "?"} · en curso: ${actions.inProgress ?? "?"} · bloqueadas: ${actions.blocked ?? "?"}`);
+}
+
 // Agrupar las claves por la revisión que las escribió.
 const porRevision = new Map();
 for (const [clave, info] of Object.entries(provenance)) {

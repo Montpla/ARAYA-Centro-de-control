@@ -49,7 +49,11 @@ function forma(valor, profundidad = 0) {
 const filesResponse = await fetch(`${PRODUCTION_URL}/api/files?includeDeleted=1&limit=200`, { headers: { Cookie } });
 const { files = [] } = await filesResponse.json();
 const desde = Date.now() - HORAS * 3600 * 1000;
-const recientes = files.filter((file) => Date.parse(file.createdAt) >= desde);
+const recientes = files.filter((file) =>
+  Date.parse(file.createdAt) >= desde &&
+  !file.deletedAt &&
+  !file.supersededByFileId
+);
 
 console.log(`=== Propuestas de sección nueva · últimas ${HORAS} h ===`);
 let total = 0;
@@ -62,7 +66,8 @@ for (const file of recientes) {
     console.log(`\n${file.originalName}: no se pudo leer la revisión (${reviewResponse.status}).`);
     continue;
   }
-  const { unmappedCandidates = [] } = await reviewResponse.json();
+  const review = await reviewResponse.json();
+  const unmappedCandidates = (review.unmappedCandidates ?? []).filter((candidate) => candidate.status === "pendiente");
   if (!unmappedCandidates.length) continue;
 
   console.log(`\n--- ${file.originalName} (${file.id}) ---`);
