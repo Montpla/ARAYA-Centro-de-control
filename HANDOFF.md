@@ -274,9 +274,10 @@ exclusivamente sobre **Cloudflare Workers**:
   --file=drizzle/<archivo>.sql`. La cadena de `drizzle/meta/_journal.json`
   llega hasta `0020_notify_unmapped_field_candidate_created.sql`; no omitir
   ninguna entrada al desplegar sobre una base nueva.
-- `OPENAI_API_KEY` **sí está configurada** en este entorno de Cloudflare: la
-  extracción semántica por IA (PDF, XLS/XLSX, PPT/PPTX, DOC/DOCX, imágenes)
-  funciona en producción con el modelo `gpt-5.6-terra` vía Responses API. Las
+- `OPENAI_API_KEY` **sí está configurada** en este entorno de Cloudflare. La
+  extracción semántica normal de PDF, PPT/PPTX, DOC/DOCX e imágenes usa
+  `gpt-5.6-luna`; Terra se reserva para escalados de baja confianza. XLS/XLSX
+  reconocidos se resuelven sin IA. Las
   notas de este documento y de `OPERATIONS.md` que dicen lo contrario se
   refieren al entorno de Sites, no a este.
 - Antes de dar por buena cualquier corrección visual o de datos, verificar
@@ -2929,7 +2930,8 @@ contra ejemplos inventados. Nueve cambios publicados y desplegados en verde.
 ### Pendiente
 
 - **IA de Anthropic como respaldo de extracción**, aparcado por decisión del
-  usuario. Hoy el respaldo es OpenAI (`gpt-5.6-terra`, `lib/ai-document-extraction.ts`).
+  usuario. Hoy el respaldo es OpenAI (Luna normal y Terra sólo como escalado,
+  `lib/ai-document-extraction.ts`).
   Necesitaría `ANTHROPIC_API_KEY` en Cloudflare. Conviene no venderlo como
   solución a documentos ilegibles: eso casi siempre es un problema de lectura,
   no de interpretación.
@@ -3311,3 +3313,35 @@ los expedientes eternamente pendientes.
   Vinext), `npm run lint -- --quiet` sin errores y `git diff --check` sin errores.
   El grafo `codebase-memory-mcp` quedó reindexado y persistido para el siguiente
   LLM. Todavía no se ha hecho push ni deploy de este bloque.
+
+## Arquitectura híbrida y control de gasto de IA (22/08/2026)
+
+- Los lectores deterministas siguen siendo la primera opción y no consumen IA.
+  Los Excel reconocidos, CSV, JSON, XML y formatos con lector propio ya no se
+  vuelven a mandar al modelo como “complemento”. Dentro de un ZIP sólo pasan a
+  lectura asistida los documentos narrativos o visuales.
+- La lectura documental normal usa `gpt-5.6-luna`, detalle visual bajo,
+  `service_tier: default`, máximo dos iteraciones, 16 llamadas de herramienta y
+  8.000 tokens de salida. Terra sólo se ejecuta si Luna devuelve baja confianza,
+  contradicción, ambigüedad o no consigue una salida en un documento bien
+  clasificado; el escalado usa detalle alto y límites superiores acotados.
+- ARAYA Asistente responde primero con el motor interno cuando la consulta ya
+  encaja en los datos vivos. Las demás preguntas usan Luna. Sólo un administrador
+  ve el interruptor **Análisis avanzado**, que usa Terra de forma expresa.
+- Se fuerza tarifa estándar en Responses API y se conserva la clave de caché de
+  prompt. Cada recorrido registra tokens de entrada, caché, escritura de caché,
+  salida y coste estimado; no se guardan preguntas ni respuestas del chat.
+- La Sala operativa incorpora una pestaña **Uso de IA** sólo para administradores:
+  separa procesos Luna, Terra y deterministas, muestra tokens/coste y permite
+  fijar presupuesto mensual. `0` mantiene la medición sin bloquear. Al 80% y al
+  100% se genera una notificación idempotente para administradores. Alcanzado el
+  límite se detiene la IA, pero los lectores deterministas continúan.
+- La deduplicación SHA-256 existente sigue evitando reanalizar archivos
+  idénticos. No se cambió `CURRENT_INGESTION_VERSION`, para no reprocesar de forma
+  masiva los históricos únicamente por este ajuste económico.
+- Nueva migración: `drizzle/0027_confused_rage.sql`; añade columnas económicas a
+  `ingestion_agent_runs`, la tabla privada `assistant_ai_runs` y el ajuste global
+  `ai_usage_settings`.
+- Pruebas añadidas para tarifa Luna/Terra, caché, escalado selectivo, Excel sin IA,
+  ZIP narrativo y aviso presupuestario. Antes de publicar, ejecutar el conjunto
+  completo y aplicar la migración D1.

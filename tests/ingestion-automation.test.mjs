@@ -34,7 +34,7 @@ test("MPP y DWG tienen conversión programada, idempotente y enlazada al origina
   assert.match(dwgScript, /derivedFromFileId/);
 });
 
-test("los ZIP se abren con límites y sus documentos internos pasan a lectura asistida", async () => {
+test("los ZIP se abren con límites y sólo sus documentos narrativos pasan a lectura asistida", async () => {
   const [reader, ingestion, route] = await Promise.all([
     read("lib/xlsx-reader.ts"),
     read("lib/ingestion.ts"),
@@ -43,7 +43,8 @@ test("los ZIP se abren con límites y sus documentos internos pasan a lectura as
   assert.match(reader, /maxCompressionRatio/);
   assert.match(reader, /maxTotalUncompressedBytes/);
   assert.match(ingestion, /export async function archiveDocumentsForAI/);
-  assert.match(route, /for \(const document of aiDocuments\)/);
+  assert.match(route, /const documentosNarrativos = aiDocuments\.filter/);
+  assert.match(route, /for \(const document of documentosNarrativos\)/);
 });
 
 test("el lector queda versionado y reprocesa históricos en lotes acotados", async () => {

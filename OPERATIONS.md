@@ -78,13 +78,14 @@ Reglas operativas:
 - CSV, JSON, XML de Project, XLS/XLSX y las tablas de DOCX/PPTX/PDF se leen por
   lectores directos cuando su estructura es reconocible. La lectura asistida
   completa huecos narrativos o visuales sin pisar el dato directo.
-- PDF, XLS/XLSX, PPT/PPTX, DOC/DOCX e imágenes pueden usar
-  `OPENAI_API_KEY` para interpretación semántica. El Worker vigente sí conserva
-  esa clave como secreto.
+- PDF, PPT/PPTX, DOC/DOCX e imágenes pueden usar `OPENAI_API_KEY` para
+  interpretación semántica. XLS/XLSX se mantienen en lectores deterministas:
+  una hoja ya reconocida no se vuelve a enviar a un modelo.
 - Actualizado el 13/08/2026: en el entorno de Cloudflare Workers vigente
   (ver `HANDOFF.md`, "Aviso importante: plataforma de despliegue vigente")
-  `OPENAI_API_KEY` SÍ está configurada y la extracción semántica funciona en
-  producción con `gpt-5.6-terra`. La nota anterior sobre la clave ausente en
+  `OPENAI_API_KEY` SÍ está configurada. La extracción normal usa
+  `gpt-5.6-luna`; `gpt-5.6-terra` queda reservado para baja confianza,
+  contradicciones o el modo avanzado del administrador. La nota anterior sobre la clave ausente en
   "Sites" describía un entorno distinto que no es el que se usa actualmente.
 - ZIP se abre dentro de límites de seguridad y procesa cada documento interno.
   MPP se convierte automáticamente a XML de Project cada 15 minutos. DWG genera
@@ -291,11 +292,15 @@ logs; sólo nombres de clave, estados y metadatos.
 - Las escrituras críticas de publicación y baja/restauración usan batches
   atómicos acotados. Las recomputaciones son set-based, una publicación admite
   como máximo 250 cambios y ningún listado debe ejecutar una consulta por fila.
-- El agente documental usa como máximo cuatro iteraciones y doce herramientas
-  por documento. Los formatos conocidos siguen el lector determinista; la IA
+- La migración `0027_confused_rage.sql` añade el registro económico del
+  asistente y de la ingesta, además del presupuesto mensual administrable.
+- El agente documental normal usa como máximo dos iteraciones y dieciséis
+  herramientas por documento; el escalado excepcional a Terra admite tres
+  iteraciones. Los formatos conocidos siguen el lector determinista; la IA
   se usa para documentos narrativos, imágenes o huecos no cubiertos. Cada
   recorrido registra modelo, versión de prompt, herramientas, validación,
-  tokens y resultado, pero no guarda razonamiento privado ni duplica el
+  tokens, coste estimado y resultado, pero no guarda preguntas, respuestas,
+  razonamiento privado ni duplica el
   contenido del archivo. `OPENAI_API_KEY` continúa siendo un Secret del Worker.
 - Una publicación correcta actualiza la plantilla de esa familia documental.
   Borrar o restaurar un archivo no se resuelve por la plantilla: el ciclo

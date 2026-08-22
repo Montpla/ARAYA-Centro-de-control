@@ -2790,6 +2790,38 @@ button {
   font-weight: 800;
 }
 
+.agent-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 14px 8px;
+  padding: 9px 10px;
+  border: 1px solid #e1d7c4;
+  border-radius: 10px;
+  background: #f7f1e7;
+  cursor: pointer;
+}
+
+.agent-mode-toggle input {
+  accent-color: var(--orange);
+}
+
+.agent-mode-toggle span,
+.agent-mode-toggle strong,
+.agent-mode-toggle small {
+  display: block;
+}
+
+.agent-mode-toggle strong {
+  font-size: 8px;
+}
+
+.agent-mode-toggle small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 7px;
+}
+
 .agent-input {
   display: flex;
   align-items: flex-end;
@@ -9658,6 +9690,10 @@ button.financial-detail-row:focus-visible {
   .control-action-detail {
     position: static;
   }
+
+  .ai-budget-form {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 480px) {
@@ -13368,6 +13404,50 @@ button.financial-detail-row:focus-visible {
 .discovered-sections .quality-list ul {
   margin: 0.35rem 0 0;
   padding-left: 1.1rem;
+}
+
+.ai-budget-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 360px) auto;
+  align-items: end;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: white;
+}
+
+.ai-budget-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ai-budget-form input,
+.ai-budget-form button {
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: white;
+  font: inherit;
+}
+
+.ai-budget-form button {
+  color: white;
+  background: var(--navy);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.ai-budget-form > small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  line-height: 1.5;
 }
 
 .upload-status-only {

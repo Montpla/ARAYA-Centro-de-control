@@ -40,6 +40,23 @@ export type ControlRoomSnapshot = {
     role: string;
     financeAccess: boolean;
   };
+  aiUsage: {
+    month: string;
+    documentRuns: number;
+    assistantRuns: number;
+    deterministicRuns: number;
+    lunaRuns: number;
+    terraRuns: number;
+    inputTokens: number;
+    cachedInputTokens: number;
+    cacheWriteInputTokens: number;
+    outputTokens: number;
+    estimatedCostUsdMicros: number;
+    monthlyBudgetUsdMicros: number;
+    remainingBudgetUsdMicros: number | null;
+    budgetPercent: number | null;
+    blocked: boolean;
+  } | null;
   assignees: Array<{
     email: string;
     displayName: string;
@@ -176,7 +193,8 @@ type ControlTab =
   | "planning"
   | "reconciliations"
   | "reports"
-  | "actions";
+  | "actions"
+  | "aiUsage";
 
 const tabLabels: Array<{ id: ControlTab; label: string }> = [
   { id: "quality", label: "Calidad y cobertura" },
@@ -185,6 +203,7 @@ const tabLabels: Array<{ id: ControlTab; label: string }> = [
   { id: "reconciliations", label: "Observaciones" },
   { id: "reports", label: "Informes" },
   { id: "actions", label: "Acciones" },
+  { id: "aiUsage", label: "Uso de IA" },
 ];
 
 const statusLabels: Record<string, string> = {
@@ -224,6 +243,20 @@ function percent(value: number | null) {
   return value === null ? "Pendiente" : `${value.toLocaleString("es-ES", { maximumFractionDigits: 2 })}%`;
 }
 
+function aiMoney(micros: number | null) {
+  if (micros === null) return "Sin límite";
+  return (micros / 1_000_000).toLocaleString("es-ES", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+function tokenCount(value: number) {
+  return value.toLocaleString("es-ES");
+}
+
 function areaName(area: string) {
   return areaLabels[area as keyof typeof areaLabels] ?? area;
 }
@@ -255,6 +288,7 @@ export function ControlRoomPanel({
   const [message, setMessage] = useState("");
   const [selectedActionId, setSelectedActionId] = useState("");
   const [comment, setComment] = useState("");
+  const [budgetDraft, setBudgetDraft] = useState("");
   const [actionForm, setActionForm] = useState({
     title: "",
     description: "",
@@ -375,7 +409,7 @@ export function ControlRoomPanel({
       </div>
 
       <div className="control-room-tabs" role="tablist" aria-label="Áreas del control operativo">
-        {tabLabels.map((item) => (
+        {tabLabels.filter((item) => item.id !== "aiUsage" || snapshot.currentUser.role === "admin").map((item) => (
           <button
             key={item.id}
             type="button"
@@ -510,6 +544,52 @@ export function ControlRoomPanel({
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {tab === "aiUsage" && snapshot.currentUser.role === "admin" && snapshot.aiUsage && (
+        <div className="control-room-body">
+          <div className="control-room-metrics">
+            <article><span>Coste estimado del mes</span><strong>{aiMoney(snapshot.aiUsage.estimatedCostUsdMicros)}</strong><small>{snapshot.aiUsage.month}</small></article>
+            <article><span>Procesos Luna</span><strong>{snapshot.aiUsage.lunaRuns}</strong><small>Modo eficiente</small></article>
+            <article><span>Escalados Terra</span><strong>{snapshot.aiUsage.terraRuns}</strong><small>Sólo casos complejos</small></article>
+            <article><span>Resueltos sin IA</span><strong>{snapshot.aiUsage.deterministicRuns}</strong><small>Coste de modelo: 0 USD</small></article>
+          </div>
+          <div className={`control-room-callout ${snapshot.aiUsage.blocked ? "warning" : ""}`}>
+            <div>
+              <span>CONTROL DE CONSUMO</span>
+              <h3>{snapshot.aiUsage.blocked ? "Límite mensual alcanzado" : "Uso medido por cada respuesta y documento"}</h3>
+              <p>
+                Entrada {tokenCount(snapshot.aiUsage.inputTokens)} tokens · caché {tokenCount(snapshot.aiUsage.cachedInputTokens)} · salida {tokenCount(snapshot.aiUsage.outputTokens)}.
+                {snapshot.aiUsage.monthlyBudgetUsdMicros > 0
+                  ? ` Presupuesto ${aiMoney(snapshot.aiUsage.monthlyBudgetUsdMicros)} · disponible ${aiMoney(snapshot.aiUsage.remainingBudgetUsdMicros)}.`
+                  : " No hay un límite mensual configurado."}
+              </p>
+            </div>
+          </div>
+          <form className="ai-budget-form" onSubmit={async (event) => {
+            event.preventDefault();
+            const currentBudget = snapshot.aiUsage!.monthlyBudgetUsdMicros / 1_000_000;
+            const budgetUsd = budgetDraft.trim() === "" ? currentBudget : Number(budgetDraft);
+            const saved = await mutate({ operation: "set_ai_budget", budgetUsd });
+            if (saved) setBudgetDraft("");
+          }}>
+            <label>
+              Presupuesto mensual máximo (USD)
+              <input
+                type="number"
+                min="0"
+                max="100000"
+                step="1"
+                value={budgetDraft}
+                placeholder={String(snapshot.aiUsage.monthlyBudgetUsdMicros / 1_000_000)}
+                onChange={(event) => setBudgetDraft(event.target.value)}
+              />
+            </label>
+            <button type="submit" disabled={working || readOnly}>Guardar límite</button>
+            <small>Usa 0 para vigilar el consumo sin bloquear. Al alcanzar el límite, los lectores internos siguen funcionando.</small>
+          </form>
+          {message && <div className="control-room-message" role="status">{message}</div>}
         </div>
       )}
 

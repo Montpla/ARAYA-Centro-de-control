@@ -49,6 +49,7 @@ import {
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import { scheduleNotificationDispatch } from "../../../lib/notification-dispatch";
 import { materializeSpatialLiveData } from "../../../lib/spatial-live-data";
+import { getAiUsageSnapshot, setAiMonthlyBudget } from "../../../lib/ai-usage";
 
 const REPORT_TYPES = new Set(["global", "obra_seguridad", "finanzas", "ventas"]);
 const ACTION_STATUSES = new Set(["open", "in_progress", "blocked", "completed"]);
@@ -328,6 +329,7 @@ async function controlRoomPayload(auth: ControlRoomUser) {
   const dossierScore = documentTotals.total
     ? Math.round((documentTotals.approved / documentTotals.total) * 100)
     : null;
+  const aiUsage = auth.role === "admin" ? await getAiUsageSnapshot() : null;
 
   return {
     generatedAt: new Date().toISOString(),
@@ -336,6 +338,7 @@ async function controlRoomPayload(auth: ControlRoomUser) {
       role: auth.role,
       financeAccess: auth.financeAccess,
     },
+    aiUsage,
     assignees: assigneeRows.map((row) => ({
       email: row.email,
       displayName: row.displayName || row.email,
@@ -412,6 +415,26 @@ export async function POST(request: Request) {
   }
   const db = getDb();
   const now = new Date().toISOString();
+
+  if (operation === "set_ai_budget") {
+    if (auth.role !== "admin") {
+      return Response.json({ error: "Sólo un administrador puede cambiar el presupuesto de IA." }, { status: 403 });
+    }
+    const budgetUsd = Number(payload.budgetUsd);
+    if (!Number.isFinite(budgetUsd) || budgetUsd < 0 || budgetUsd > 100_000) {
+      return Response.json({ error: "Indica un presupuesto mensual válido entre 0 y 100.000 USD." }, { status: 400 });
+    }
+    await setAiMonthlyBudget({
+      monthlyBudgetUsdMicros: Math.round(budgetUsd * 1_000_000),
+      updatedByEmail: auth.email,
+      updatedByName: auth.displayName,
+    });
+    return Response.json({
+      message: budgetUsd === 0
+        ? "Límite mensual desactivado. El consumo seguirá siendo visible."
+        : `Presupuesto mensual de IA fijado en ${budgetUsd.toLocaleString("es-ES", { style: "currency", currency: "USD" })}.`,
+    });
+  }
 
   if (operation === "create_action") {
     const existing = await db

@@ -7886,7 +7886,17 @@ function SourcesView({
   );
 }
 
-function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClose: () => void; currency: CurrencyCode }) {
+function AgentPanel({
+  expanded,
+  onClose,
+  currency,
+  canUseAdvanced,
+}: {
+  expanded: boolean;
+  onClose: () => void;
+  currency: CurrencyCode;
+  canUseAdvanced: boolean;
+}) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: "welcome",
@@ -7899,6 +7909,7 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
   const [loading, setLoading] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [advanced, setAdvanced] = useState(false);
 
   async function ask(text: string) {
     const trimmed = text.trim();
@@ -7910,7 +7921,7 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed, currency }),
+        body: JSON.stringify({ question: trimmed, currency, advanced: canUseAdvanced && advanced }),
       });
       const payload = (await response.json()) as { answer?: string; error?: string; mode?: string };
       setMessages((current) => [
@@ -8000,7 +8011,7 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
           <div className={`message ${message.role}`} key={message.id}>
             <div>{message.text}</div>
             {message.role === "assistant" && (
-              <small>{message.mode === "openai-tools" ? "IA + herramientas" : message.mode === "file-registry" ? "Registro documental" : "Motor de datos de fuentes"}</small>
+              <small>{message.mode === "openai-terra" ? "Análisis avanzado · Terra" : message.mode === "openai-luna" ? "Asistente eficiente · Luna" : message.mode === "file-registry" ? "Registro documental" : "Motor de datos de fuentes"}</small>
             )}
           </div>
         ))}
@@ -8036,11 +8047,17 @@ function AgentPanel({ expanded, onClose, currency }: { expanded: boolean; onClos
           </div>
         )}
       </div>
+      {canUseAdvanced && (
+        <label className="agent-mode-toggle">
+          <input type="checkbox" checked={advanced} onChange={(event) => setAdvanced(event.target.checked)} />
+          <span><strong>Análisis avanzado</strong><small>Usa Terra sólo para consultas complejas y tiene mayor coste.</small></span>
+        </label>
+      )}
       <form className="agent-input" onSubmit={submit}>
         <textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Pregunta por cualquier dato del corte…" rows={2} />
         <button type="submit" disabled={loading || !question.trim()} aria-label="Enviar pregunta">↑</button>
       </form>
-      <div className="agent-foot">Cada respuesta consulta la versión viva. Los datos estructurados fiables se sincronizan; cualquier lectura ambigua queda visible para revisión.</div>
+      <div className="agent-foot">El modo normal usa primero datos internos y Luna. Terra sólo interviene al activar análisis avanzado o ante una lectura documental dudosa.</div>
     </aside>
   );
 }
@@ -9950,7 +9967,7 @@ export function DashboardClient({
     if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => online ? setModal("supplier") : setNotice("Modo sin conexión · no se pueden crear registros.")} currency={currency} canAccessFinance={currentUser.financeAccess} />;
     if (view === "metricas") return currentUser.financeAccess ? <MetricsView metrics={metrics} onAdd={() => online ? setModal("metric") : setNotice("Modo sin conexión · no se pueden crear registros.")} currency={currency} latestFinanceEvent={liveSync.latestEvent} /> : <FinanceLockedView />;
     if (view === "fuentes") return <SourcesView onUpload={() => requestUpload()} canAccessFinance={currentUser.financeAccess} currency={currency} currentUser={profileUser} />;
-    return <AgentPanel expanded onClose={() => navigate("resumen")} currency={currency} />;
+    return <AgentPanel expanded onClose={() => navigate("resumen")} currency={currency} canUseAdvanced={currentUser.role === "admin"} />;
   }
 
   if (!deviceSecurityReady) return <DeviceBootScreen />;
@@ -10402,7 +10419,7 @@ export function DashboardClient({
         </AppErrorBoundary>
       )}
 
-      {activeProjectId === "araya" && agentOpen && view !== "agente" && <AgentPanel expanded={false} onClose={() => setAgentOpen(false)} currency={currency} />}
+      {activeProjectId === "araya" && agentOpen && view !== "agente" && <AgentPanel expanded={false} onClose={() => setAgentOpen(false)} currency={currency} canUseAdvanced={currentUser.role === "admin"} />}
 
       {activeProjectId === "araya" && modal && (
         <RecordModal

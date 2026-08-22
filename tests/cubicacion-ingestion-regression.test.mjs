@@ -10,8 +10,9 @@ const [filesRoute, reviewRoute, prompt, reprocessWorkflow, reprocessScript] = aw
   readFile("scripts/reprocesar.mjs", "utf8"),
 ]);
 
-test("un Excel complejo complementa la lectura directa con IA sin pisarla", () => {
-  assert.match(filesRoute, /\["ppt", "pptx", "doc", "docx", "pdf", "xls", "xlsx"/);
+test("un Excel conocido se resuelve con el lector directo sin gastar IA", () => {
+  assert.match(filesRoute, /new Set\(\["ppt", "pptx", "doc", "docx", "pdf", "jpg", "jpeg", "png"\]\)/);
+  assert.doesNotMatch(filesRoute, /extensionesNarrativas[^;]+"xls"/);
   assert.match(filesRoute, /deterministicExtraction\.expectedBuildingCodes/);
   assert.match(filesRoute, /missingExpectedBuildingCodes/);
 });

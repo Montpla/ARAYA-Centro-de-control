@@ -6,17 +6,24 @@ import {
   type LiveDataValue,
 } from "./live-data";
 import type { DocumentTemplateHint, IngestionAgentTrace } from "./ingestion-agent";
+import {
+  addAiTokenUsage,
+  emptyAiTokenUsage,
+  estimateOpenAiCostUsdMicros,
+  readOpenAiTokenUsage,
+} from "./ai-cost";
 
 type KnownArea = { id: string; label: string };
 
 const OPENAI_API_BASE = "https://api.openai.com/v1";
-const EXTRACTION_MODEL = "gpt-5.6-terra";
+export const INGESTION_PRIMARY_MODEL = "gpt-5.6-luna";
+export const INGESTION_ESCALATION_MODEL = "gpt-5.6-terra";
 const PROMPT_VERSION = "araya-ingestion-agent-2026-08-20-v1";
 const SAFETY_IDENTIFIER = "araya_document_ingestion_service";
 // Complex financial workbooks often require several independent lookups against
 // the live schema. Keep the loop bounded, but leave enough room for that fan-out.
-const MAX_AGENT_ITERATIONS = 6;
-const MAX_AGENT_TOOL_CALLS = 32;
+const PRIMARY_AGENT_ITERATIONS = 2;
+const PRIMARY_AGENT_TOOL_CALLS = 16;
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -174,7 +181,7 @@ RESPUESTA
 - unmapped_candidates es un campo obligatorio del esquema: si no encontraste ningún dato huérfano, devuélvelo como lista vacía en vez de omitirlo.
 `.trim();
 
-type ExtractionInput = {
+export type ExtractionInput = {
   bytes: ArrayBuffer;
   fileName: string;
   mimeType: string;
@@ -187,6 +194,11 @@ type ExtractionInput = {
   knownAreas?: readonly KnownArea[];
   schemaReference?: Record<string, unknown>;
   templateHints?: readonly DocumentTemplateHint[];
+  model?: typeof INGESTION_PRIMARY_MODEL | typeof INGESTION_ESCALATION_MODEL;
+  maxAgentIterations?: number;
+  maxAgentToolCalls?: number;
+  maxOutputTokens?: number;
+  imageDetail?: "low" | "high" | "auto";
 };
 
 type UnmappedCandidate = {
@@ -198,7 +210,7 @@ type UnmappedCandidate = {
   evidence: string;
 };
 
-type ExtractionResult = {
+export type ExtractionResult = {
   updates: LiveDataUpdate[];
   updateConfidences: number[];
   summary: string;
@@ -210,7 +222,10 @@ type ExtractionResult = {
   agentTrace: IngestionAgentTrace[];
   agentIterations: number;
   inputTokens: number;
+  cachedInputTokens: number;
+  cacheWriteInputTokens: number;
   outputTokens: number;
+  estimatedCostUsdMicros: number;
 };
 
 type ModelUpdate = {
@@ -239,21 +254,43 @@ class OpenAIOperationalError extends Error {
   }
 }
 
-function emptyResult(summary: string, warnings: string[] = []): ExtractionResult {
+function emptyResult(
+  summary: string,
+  warnings: string[] = [],
+  model = INGESTION_PRIMARY_MODEL,
+): ExtractionResult {
   return {
     updates: [],
     updateConfidences: [],
     summary,
     warnings,
     confidence: 0,
-    model: EXTRACTION_MODEL,
+    model,
     promptVersion: PROMPT_VERSION,
     unmappedCandidates: [],
     agentTrace: [],
     agentIterations: 0,
     inputTokens: 0,
+    cachedInputTokens: 0,
+    cacheWriteInputTokens: 0,
     outputTokens: 0,
+    estimatedCostUsdMicros: 0,
   };
+}
+
+export function shouldEscalateDocumentExtraction(
+  result: ExtractionResult,
+  context: { classificationConfidence?: number; hasDeterministicUpdates?: boolean } = {},
+) {
+  if (result.model !== INGESTION_PRIMARY_MODEL || context.hasDeterministicUpdates) return false;
+  const diagnostic = `${result.summary} ${result.warnings.join(" ")}`.toLowerCase();
+  if (/no tiene saldo|clave.+no es v[aá]lida|falta una clave|no est[aá] configurada|no se pudo conectar|respuesta.+no se pudo leer|respondi[oó] con estado|supera el l[ií]mite de seguridad|supera el l[ií]mite de extracci[oó]n|formato no admite/.test(diagnostic)) {
+    return false;
+  }
+  if (/contradic|discrep|ilegible|ambig|incomplet|no cuadra/.test(diagnostic)) return true;
+  if (result.updates.length === 0) return (context.classificationConfidence ?? 0) >= 0.75;
+  if (result.confidence > 0 && result.confidence < 0.72) return true;
+  return result.updateConfidences.some((confidence) => confidence > 0 && confidence < 0.65);
 }
 
 export function canAutomaticallyPublishExtraction(input: {
@@ -790,14 +827,6 @@ function executeIngestionAgentTool(
   return { ok: false, output: { error: "Herramienta no autorizada." }, summary: "Herramienta desconocida" };
 }
 
-function responseUsage(payload: Record<string, unknown>) {
-  const usage = isRecord(payload.usage) ? payload.usage : {};
-  return {
-    input: typeof usage.input_tokens === "number" ? Math.max(0, Math.round(usage.input_tokens)) : 0,
-    output: typeof usage.output_tokens === "number" ? Math.max(0, Math.round(usage.output_tokens)) : 0,
-  };
-}
-
 function modelUpdates(payload: Record<string, unknown>) {
   if (!Array.isArray(payload.updates)) return [];
   return payload.updates.filter((candidate): candidate is ModelUpdate => {
@@ -976,13 +1005,16 @@ function validateModelOutput(
     summary,
     warnings,
     confidence,
-    model: responseModel || EXTRACTION_MODEL,
+    model: responseModel || input.model || INGESTION_PRIMARY_MODEL,
     promptVersion: PROMPT_VERSION,
     unmappedCandidates,
     agentTrace: [],
     agentIterations: 0,
     inputTokens: 0,
+    cachedInputTokens: 0,
+    cacheWriteInputTokens: 0,
     outputTokens: 0,
+    estimatedCostUsdMicros: 0,
   };
 }
 
@@ -1062,6 +1094,23 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
   }
 
   const extension = normalizeExtension(input.extension);
+  const model = input.model === INGESTION_ESCALATION_MODEL
+    ? INGESTION_ESCALATION_MODEL
+    : INGESTION_PRIMARY_MODEL;
+  const maxAgentIterations = Math.max(
+    1,
+    Math.min(4, Math.round(input.maxAgentIterations ?? PRIMARY_AGENT_ITERATIONS)),
+  );
+  const maxAgentToolCalls = Math.max(
+    1,
+    Math.min(32, Math.round(input.maxAgentToolCalls ?? PRIMARY_AGENT_TOOL_CALLS)),
+  );
+  const maxOutputTokens = Math.max(
+    1_000,
+    Math.min(20_000, Math.round(
+      input.maxOutputTokens ?? (model === INGESTION_ESCALATION_MODEL ? 12_000 : 8_000),
+    )),
+  );
   if (UNSUPPORTED_EXTENSIONS.has(extension)) {
     return emptyResult("El archivo se conserva, pero este formato requiere un conversor especializado.", [
       `La extracción IA directa no admite .${extension}; conviértelo a PDF, XLSX, PPTX o DOCX.`,
@@ -1087,7 +1136,8 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
   }
 
   let temporaryFileId = "";
-  let result = emptyResult("No se pudo completar la extracción IA.");
+  let result = emptyResult("No se pudo completar la extracción IA.", [], model);
+  let totalUsage = emptyAiTokenUsage();
   try {
     const content: Record<string, unknown>[] = [
       { type: "input_text", text: `Metadatos externos no confiables:\n${inputMetadata(input)}` },
@@ -1101,7 +1151,7 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
       content.push({
         type: "input_image",
         image_url: `data:${mimeType};base64,${bytesToBase64(input.bytes)}`,
-        detail: "high",
+        detail: input.imageDetail ?? (model === INGESTION_ESCALATION_MODEL ? "high" : "low"),
       });
     } else {
       temporaryFileId = await uploadTemporaryFile(input, extension);
@@ -1112,13 +1162,11 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
       { type: "message", role: "user", content },
     ];
     const trace: IngestionAgentTrace[] = [];
-    let totalInputTokens = 0;
-    let totalOutputTokens = 0;
     let totalToolCalls = 0;
     let finalResponse: Record<string, unknown> | null = null;
     let completedIterations = 0;
 
-    for (let iteration = 1; iteration <= MAX_AGENT_ITERATIONS; iteration += 1) {
+    for (let iteration = 1; iteration <= maxAgentIterations; iteration += 1) {
       completedIterations = iteration;
       const response = await requestOpenAIJson(`${OPENAI_API_BASE}/responses`, {
         method: "POST",
@@ -1127,7 +1175,8 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: EXTRACTION_MODEL,
+          model,
+          reasoning: { effort: "low" },
           instructions: EXTRACTION_INSTRUCTIONS,
           input: conversationInput,
           tools: INGESTION_AGENT_TOOLS,
@@ -1143,7 +1192,8 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
             },
             verbosity: "low",
           },
-          max_output_tokens: 20_000,
+          max_output_tokens: maxOutputTokens,
+          service_tier: "default",
           safety_identifier: SAFETY_IDENTIFIER,
           prompt_cache_key: PROMPT_VERSION,
           store: false,
@@ -1152,15 +1202,13 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
       if (isRecord(response.error)) {
         throw new OpenAIOperationalError(apiErrorMessage(response, 200));
       }
-      const usage = responseUsage(response);
-      totalInputTokens += usage.input;
-      totalOutputTokens += usage.output;
+      totalUsage = addAiTokenUsage(totalUsage, readOpenAiTokenUsage(response));
       const calls = responseFunctionCalls(response);
       if (!calls.length) {
         finalResponse = response;
         break;
       }
-      if (totalToolCalls + calls.length > MAX_AGENT_TOOL_CALLS) {
+      if (totalToolCalls + calls.length > maxAgentToolCalls) {
         throw new OpenAIOperationalError("El agente superó el límite de herramientas de una sola ingesta.");
       }
       totalToolCalls += calls.length;
@@ -1186,23 +1234,33 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
     }
     if (!finalResponse) {
       throw new OpenAIOperationalError(
-        `El agente no completó una salida estructurada tras ${MAX_AGENT_ITERATIONS} iteraciones.`,
+        `El agente no completó una salida estructurada tras ${maxAgentIterations} iteraciones.`,
       );
     }
     result = {
       ...validateModelOutput(
         responseOutputText(finalResponse),
         input,
-        typeof finalResponse.model === "string" ? finalResponse.model : EXTRACTION_MODEL,
+        typeof finalResponse.model === "string" ? finalResponse.model : model,
       ),
       agentTrace: trace,
       agentIterations: completedIterations,
-      inputTokens: totalInputTokens,
-      outputTokens: totalOutputTokens,
+      inputTokens: totalUsage.inputTokens,
+      cachedInputTokens: totalUsage.cachedInputTokens,
+      cacheWriteInputTokens: totalUsage.cacheWriteInputTokens,
+      outputTokens: totalUsage.outputTokens,
+      estimatedCostUsdMicros: estimateOpenAiCostUsdMicros(model, totalUsage),
     };
   } catch (error) {
     if (!(error instanceof OpenAIOperationalError)) throw error;
-    result = emptyResult("La API no pudo completar la extracción del documento.", [error.message]);
+    result = {
+      ...emptyResult("La API no pudo completar la extracción del documento.", [error.message], model),
+      inputTokens: totalUsage.inputTokens,
+      cachedInputTokens: totalUsage.cachedInputTokens,
+      cacheWriteInputTokens: totalUsage.cacheWriteInputTokens,
+      outputTokens: totalUsage.outputTokens,
+      estimatedCostUsdMicros: estimateOpenAiCostUsdMicros(model, totalUsage),
+    };
   } finally {
     if (temporaryFileId) {
       const cleanupWarning = await deleteTemporaryFile(temporaryFileId, input.apiKey);

@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "4e9a1f339ef88aa864c21f0a0b950af1a3ebec69",
-    "indexed_at": "2026-08-21T16:29:48Z",
-    "project": "araya-centro-control",
-    "nodes": 6665,
-    "edges": 10851,
-    "original_size": 9568256,
-    "compressed_size": 1053531,
-    "compression_level": 3
+    "commit": "065802fc575b83566789b94255f9c7ba67f35534",
+    "indexed_at": "2026-08-22T10:23:11Z",
+    "project": "ARAYA-Dashboard-Obra",
+    "nodes": 7411,
+    "edges": 12000,
+    "original_size": 6356992,
+    "compressed_size": 710192,
+    "compression_level": 9
 }

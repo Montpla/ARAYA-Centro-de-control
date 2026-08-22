@@ -40,6 +40,13 @@ type ControlRoomAction = {
 export function controlRoomAlertCandidates(payload: {
   planning?: PlanningSummary;
   actions?: ControlRoomAction[];
+  aiUsage?: {
+    month?: string;
+    budgetPercent?: number | null;
+    estimatedCostUsdMicros?: number;
+    monthlyBudgetUsdMicros?: number;
+    blocked?: boolean;
+  } | null;
 }): NotificationInput[] {
   const candidates: NotificationInput[] = [];
 
@@ -77,6 +84,24 @@ export function controlRoomAlertCandidates(payload: {
         ? `Vencía el ${action.dueDate} y sigue abierta. Responsable: ${action.assigneeName}.`
         : `Vencía el ${action.dueDate} y sigue abierta.`,
       view: "resumen",
+    });
+  }
+
+  const aiPercent = Number(payload.aiUsage?.budgetPercent);
+  const aiBudget = Number(payload.aiUsage?.monthlyBudgetUsdMicros);
+  if (aiBudget > 0 && Number.isFinite(aiPercent) && aiPercent >= 80) {
+    const threshold = payload.aiUsage?.blocked ? 100 : 80;
+    candidates.push({
+      kind: "ai_budget_alert",
+      area: "direccion",
+      audience: "admin",
+      subjectType: "ai_budget_month",
+      subjectId: `${payload.aiUsage?.month || "sin-mes"}:${threshold}`,
+      title: payload.aiUsage?.blocked
+        ? "Presupuesto mensual de IA alcanzado"
+        : "El consumo de IA ha superado el 80%",
+      body: `Uso estimado: ${(Number(payload.aiUsage?.estimatedCostUsdMicros) / 1_000_000).toLocaleString("es-ES", { style: "currency", currency: "USD" })} de ${(aiBudget / 1_000_000).toLocaleString("es-ES", { style: "currency", currency: "USD" })}.`,
+      view: "control",
     });
   }
 

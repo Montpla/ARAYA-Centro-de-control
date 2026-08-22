@@ -74,6 +74,16 @@ import {
 import { buildControlRoomBaseline } from "../../../lib/control-room";
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import { materializeSpatialLiveData } from "../../../lib/spatial-live-data";
+import {
+  addAiTokenUsage,
+  emptyAiTokenUsage,
+  estimateOpenAiCostUsdMicros,
+  readOpenAiTokenUsage,
+} from "../../../lib/ai-cost";
+import { getAiUsageSnapshot, recordAssistantAiRun } from "../../../lib/ai-usage";
+
+const ASSISTANT_PRIMARY_MODEL = "gpt-5.6-luna";
+const ASSISTANT_ADVANCED_MODEL = "gpt-5.6-terra";
 
 type ResponsesApiOutput = Array<{
   type: string;
@@ -640,10 +650,14 @@ async function fallbackAnswer(question: string, currency: CurrencyCode, canAcces
   return `Resumen para Dirección: avance físico ${numberForAgent(currentProjectSnapshot.overallProgress)}% frente a ${numberForAgent(currentProjectSnapshot.plannedProgress)}% planificado (${numberForAgent(currentProjectSnapshot.deviationPoints)} puntos). El cronograma registra ${numberForAgent(currentProjectSnapshot.scheduleProgress)}%. La previsión final es ${currentProjectSnapshot.forecastFinish}, con ${currentProjectSnapshot.deviationDays >= 0 ? "+" : ""}${currentProjectSnapshot.deviationDays} días frente a la línea base. El alcance es de ${currentProjectSnapshot.buildingCount} edificios y ${currentProjectSnapshot.unitCount} apartamentos.${source}`;
 }
 
+function canAnswerWithoutAi(question: string) {
+  return /archivo|adjunt|subir|cargar|calidad|fuente|inconsisten|venta|reserva|moros|cobran|seguridad|accidente|permiso|confotur|plano|implantaci|urbanismo|flujo|reprogram|fideicomiso|balance|resultado|cubic|contab|dinero|financ|paquete|infraestructura|cr[ií]tic|edificio|vivienda|apartamento|desv|retras|fecha|^\s*(resumen|estado|avance)/i.test(question);
+}
+
 export async function POST(request: Request) {
   const auth = await requireApiUser();
   if (!auth.user) return auth.response;
-  const payload = (await request.json()) as { question?: string; currency?: string };
+  const payload = (await request.json()) as { question?: string; currency?: string; advanced?: boolean };
   const question = payload.question?.trim() ?? "";
   const currency: CurrencyCode = payload.currency === "DOP" ? "DOP" : "USD";
   if (!question) return Response.json({ error: "Escribe una pregunta." }, { status: 400 });
@@ -656,45 +670,109 @@ export async function POST(request: Request) {
     });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
+  const advanced = payload.advanced === true && auth.user.role === "admin";
+  if (!advanced && canAnswerWithoutAi(question)) {
+    await recordAssistantAiRun({
+      userEmail: auth.user.email,
+      userName: auth.user.displayName,
+      mode: "deterministic",
+      status: "completed",
+      model: "deterministic",
+      turns: 0,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheWriteInputTokens: 0,
+      outputTokens: 0,
+      estimatedCostUsdMicros: 0,
+    });
     return Response.json({
       answer: await fallbackAnswer(question, currency, auth.user.financeAccess),
       mode: "source-data-engine",
       promptVersion: AGENT_PROMPT_VERSION,
+      estimatedCostUsdMicros: 0,
     });
   }
 
+  const apiKey = process.env.OPENAI_API_KEY;
+  const budget = await getAiUsageSnapshot();
+  if (!apiKey || budget.blocked) {
+    await recordAssistantAiRun({
+      userEmail: auth.user.email,
+      userName: auth.user.displayName,
+      mode: "deterministic",
+      status: budget.blocked ? "budget_blocked" : "completed",
+      model: "deterministic",
+      turns: 0,
+      inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheWriteInputTokens: 0,
+      outputTokens: 0,
+      estimatedCostUsdMicros: 0,
+    });
+    return Response.json({
+      answer: await fallbackAnswer(question, currency, auth.user.financeAccess),
+      mode: "source-data-engine",
+      promptVersion: AGENT_PROMPT_VERSION,
+      budgetBlocked: budget.blocked,
+      estimatedCostUsdMicros: 0,
+    });
+  }
+
+  const model = advanced
+    ? process.env.OPENAI_ADVANCED_MODEL || ASSISTANT_ADVANCED_MODEL
+    : process.env.OPENAI_ASSISTANT_MODEL || ASSISTANT_PRIMARY_MODEL;
+  const maxTurns = advanced ? 3 : 2;
+  const maxOutputTokens = advanced ? 2_500 : 1_400;
+  let totalUsage = emptyAiTokenUsage();
   const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
   let response = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers,
     body: JSON.stringify({
-      model: process.env.OPENAI_MODEL || "gpt-5.6-terra",
+      model,
       reasoning: { effort: "low" },
       instructions: AGENT_SYSTEM_PROMPT,
       input: `${question}\n\nMoneda de salida solicitada: ${currency}.`,
       tools,
       tool_choice: "auto",
       text: { verbosity: "low" },
+      max_output_tokens: maxOutputTokens,
+      service_tier: "default",
+      prompt_cache_key: `${AGENT_PROMPT_VERSION}:${advanced ? "advanced" : "normal"}`,
       safety_identifier: "araya-dashboard-user",
     }),
   });
 
-  for (let turn = 0; turn < 4; turn += 1) {
+  for (let turn = 0; turn < maxTurns; turn += 1) {
     if (!response.ok) {
       return Response.json({ error: "El agente no está disponible en este momento." }, { status: 502 });
     }
     const data = (await response.json()) as {
       id: string;
       output?: ResponsesApiOutput;
+      usage?: unknown;
     };
+    totalUsage = addAiTokenUsage(totalUsage, readOpenAiTokenUsage(data));
     const output = data.output ?? [];
     const calls = output.filter((item) => item.type === "function_call");
     if (!calls.length) {
+      const estimatedCostUsdMicros = estimateOpenAiCostUsdMicros(model, totalUsage);
+      await recordAssistantAiRun({
+        userEmail: auth.user.email,
+        userName: auth.user.displayName,
+        mode: advanced ? "advanced" : "normal",
+        status: "completed",
+        model,
+        turns: turn + 1,
+        ...totalUsage,
+        estimatedCostUsdMicros,
+      });
       return Response.json({
         answer: extractOutputText(output) || "No tengo ese dato registrado.",
-        mode: "openai-tools",
+        mode: advanced ? "openai-terra" : "openai-luna",
+        model,
+        usage: totalUsage,
+        estimatedCostUsdMicros,
         promptVersion: AGENT_PROMPT_VERSION,
       });
     }
@@ -703,19 +781,36 @@ export async function POST(request: Request) {
       call_id: call.call_id,
       output: JSON.stringify(await executeTool(call.name as ToolName, JSON.parse(call.arguments || "{}"), auth.user.financeAccess)),
     })));
+    if (turn + 1 >= maxTurns) break;
     response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers,
       body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-5.6-terra",
+        model,
+        reasoning: { effort: "low" },
         previous_response_id: data.id,
         instructions: AGENT_SYSTEM_PROMPT,
         input: outputs,
         tools,
         text: { verbosity: "low" },
+        max_output_tokens: maxOutputTokens,
+        service_tier: "default",
+        prompt_cache_key: `${AGENT_PROMPT_VERSION}:${advanced ? "advanced" : "normal"}`,
+        safety_identifier: "araya-dashboard-user",
       }),
     });
   }
 
+  await recordAssistantAiRun({
+    userEmail: auth.user.email,
+    userName: auth.user.displayName,
+    mode: advanced ? "advanced" : "normal",
+    status: "error",
+    model,
+    turns: maxTurns,
+    ...totalUsage,
+    estimatedCostUsdMicros: estimateOpenAiCostUsdMicros(model, totalUsage),
+    error: "Límite de iteraciones alcanzado",
+  });
   return Response.json({ error: "La consulta necesita una revisión manual." }, { status: 422 });
 }

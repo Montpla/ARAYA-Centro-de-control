@@ -110,7 +110,7 @@ test("multiformat ingestion publishes valid facts and closes isolated diagnostic
     // El lector determinista manda; la IA se ejecuta también cuando la lectura
     // de un documento narrativo fue sólo parcial, y complementa los huecos.
     /const lecturaParcial = deterministicExtraction\.updates\.length > 0 && documentoNarrativo;/,
-    /if \(\(!deterministicExtraction\.updates\.length \|\| lecturaParcial\) && aiDocuments\.length\) \{[\s\S]*?for \(const document of aiDocuments\)[\s\S]*?extractDocumentWithAI\(/,
+    /if \(documentoNarrativo && \(!deterministicExtraction\.updates\.length \|\| lecturaParcial\) && !aiBudget\.blocked\) \{[\s\S]*?for \(const document of documentosNarrativos\)[\s\S]*?extractDocumentWithAI\(/,
     /const clavesDeterministas = deterministicExtraction\.updates\.map\(\(update\) => update\.key\);/,
     // La IA no puede aportar una lista entera cuando el lector ya emite una hija
     // suya (collectionTargets vs collectionTargets\.0\.targetUsd): choca en la
@@ -779,6 +779,20 @@ test("business alerts derive idempotent, audience-safe candidates from polled st
   assert.equal(actions[0].audience, "area:obra");
   assert.equal(actions[0].subjectId, "a1:2026-01-01");
   assert.equal(actions[1].audience, "finance");
+
+  const aiBudget = alerts.controlRoomAlertCandidates({
+    aiUsage: {
+      month: "2026-08",
+      budgetPercent: 82,
+      estimatedCostUsdMicros: 41_000_000,
+      monthlyBudgetUsdMicros: 50_000_000,
+      blocked: false,
+    },
+  });
+  assert.equal(aiBudget.length, 1);
+  assert.equal(aiBudget[0].kind, "ai_budget_alert");
+  assert.equal(aiBudget[0].audience, "admin");
+  assert.equal(aiBudget[0].subjectId, "2026-08:80");
 
   // Facturas envejecidas: agregado financiero, nunca por debajo del índice 3.
   const payables = alerts.payablesAlertCandidates({

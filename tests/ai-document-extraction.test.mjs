@@ -15,6 +15,12 @@ const executableSource = source.replace(
     "reprogrammedFlowMonths",
   ];
   const isLiveDataKey = (key) => /^(projectSnapshot|monthlyPlan|buildings|urbanismAreas|urbanismReportAreas|reprogrammedFlowMonths)(?:\\.(?:[A-Za-z][A-Za-z0-9]*|\\d+))*$/.test(key);`,
+).replace(
+  /import \{[\s\S]*?\} from "\.\/ai-cost";/,
+  `const emptyAiTokenUsage = () => ({ inputTokens: 0, cachedInputTokens: 0, cacheWriteInputTokens: 0, outputTokens: 0 });
+  const addAiTokenUsage = (a, b) => ({ inputTokens: a.inputTokens + b.inputTokens, cachedInputTokens: a.cachedInputTokens + b.cachedInputTokens, cacheWriteInputTokens: a.cacheWriteInputTokens + b.cacheWriteInputTokens, outputTokens: a.outputTokens + b.outputTokens });
+  const readOpenAiTokenUsage = (payload) => ({ inputTokens: payload.usage?.input_tokens ?? 0, cachedInputTokens: payload.usage?.input_tokens_details?.cached_tokens ?? 0, cacheWriteInputTokens: 0, outputTokens: payload.usage?.output_tokens ?? 0 });
+  const estimateOpenAiCostUsdMicros = () => 0;`,
 );
 const transpiled = ts.transpileModule(executableSource, {
   compilerOptions: {
@@ -65,7 +71,7 @@ test("legacy formats return a warning without calling OpenAI", async () => {
   assert.equal(calls, 0);
   assert.deepEqual(result.updates, []);
   assert.match(result.warnings[0], /no admite \.dwg/i);
-  assert.equal(result.model, "gpt-5.6-terra");
+  assert.equal(result.model, "gpt-5.6-luna");
   assert.match(result.promptVersion, /^araya-ingestion-agent-/);
 });
 
@@ -101,7 +107,7 @@ test("image extraction uses a data URL and rejects keys outside the live contrac
     };
     return new Response(
       JSON.stringify({
-        model: "gpt-5.6-terra-2026-08-01",
+        model: "gpt-5.6-luna-2026-08-01",
         output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(output) }] }],
       }),
       { status: 200, headers: { "content-type": "application/json" } },
@@ -116,7 +122,10 @@ test("image extraction uses a data URL and rejects keys outside the live contrac
   assert.deepEqual(result.updateConfidences, [0.94]);
   assert.equal(result.confidence, 0.9);
   assert.match(result.warnings.join(" "), /clave no compatible/i);
-  assert.equal(requestBody.model, "gpt-5.6-terra");
+  assert.equal(requestBody.model, "gpt-5.6-luna");
+  assert.equal(requestBody.service_tier, "default");
+  assert.equal(requestBody.max_output_tokens, 8_000);
+  assert.equal(requestBody.input[0].content.find((part) => part.type === "input_image").detail, "low");
   assert.equal(requestBody.text.format.type, "json_schema");
   assert.equal(requestBody.text.format.strict, true);
   assert.equal(requestBody.safety_identifier, "araya_document_ingestion_service");
@@ -199,6 +208,36 @@ test("uploaded files use purpose user_data and are deleted after a Responses API
       "DELETE:https://api.openai.com/v1/files/file-temporary-123",
     ],
   );
+});
+
+test("Terra escalation is limited to uncertain, non-operational Luna readings", () => {
+  const base = {
+    updates: [],
+    updateConfidences: [],
+    summary: "No se pudo leer con claridad.",
+    warnings: ["La tabla es ilegible."],
+    confidence: 0,
+    model: "gpt-5.6-luna",
+    promptVersion: "test",
+    unmappedCandidates: [],
+    agentTrace: [],
+    agentIterations: 1,
+    inputTokens: 0,
+    cachedInputTokens: 0,
+    cacheWriteInputTokens: 0,
+    outputTokens: 0,
+    estimatedCostUsdMicros: 0,
+  };
+  assert.equal(extraction.shouldEscalateDocumentExtraction(base, { classificationConfidence: 0.9 }), true);
+  assert.equal(extraction.shouldEscalateDocumentExtraction({
+    ...base,
+    summary: "La API no tiene saldo disponible.",
+    warnings: ["Falta saldo."],
+  }, { classificationConfidence: 0.9 }), false);
+  assert.equal(extraction.shouldEscalateDocumentExtraction(base, {
+    classificationConfidence: 0.9,
+    hasDeterministicUpdates: true,
+  }), false);
 });
 
 test("the ingestion agent executes a bounded tool loop and returns an auditable trajectory", async () => {

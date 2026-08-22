@@ -49,7 +49,11 @@ import {
 import {
   canAutomaticallyPublishExtraction,
   extractDocumentWithAI,
+  INGESTION_ESCALATION_MODEL,
+  INGESTION_PRIMARY_MODEL,
+  shouldEscalateDocumentExtraction,
 } from "../../../lib/ai-document-extraction";
+import { getAiUsageSnapshot } from "../../../lib/ai-usage";
 import {
   financeProtectedAreaValues,
   financeProtectedDocumentTypeValues,
@@ -1316,7 +1320,10 @@ export async function POST(request: Request) {
   let agentIterations = 0;
   let agentTrace: Array<{ name: string; ok: boolean; iteration: number; durationMs: number; summary: string }> = [];
   let agentInputTokens = 0;
+  let agentCachedInputTokens = 0;
+  let agentCacheWriteInputTokens = 0;
   let agentOutputTokens = 0;
+  let agentEstimatedCostUsdMicros = 0;
   let agentProposedCount = 0;
   let agentPublishedCount = 0;
   try {
@@ -1362,7 +1369,10 @@ export async function POST(request: Request) {
       agentTrace: [],
       agentIterations: 0,
       inputTokens: 0,
+      cachedInputTokens: 0,
+      cacheWriteInputTokens: 0,
       outputTokens: 0,
+      estimatedCostUsdMicros: 0,
     };
     // Se lee antes de llamar a la IA (no solo para validar el contrato
     // después) porque también se le pasa como referencia de esquema: sin ver
@@ -1399,23 +1409,75 @@ export async function POST(request: Request) {
         aiDocuments = [];
       }
     }
-    const documentoNarrativo = aiDocuments.some((document) =>
-      ["ppt", "pptx", "doc", "docx", "pdf", "xls", "xlsx", "jpg", "jpeg", "png"].includes(document.extension));
+    const extensionesNarrativas = new Set(["ppt", "pptx", "doc", "docx", "pdf", "jpg", "jpeg", "png"]);
+    const documentosNarrativos = aiDocuments.filter((document) => extensionesNarrativas.has(document.extension));
+    const documentoNarrativo = documentosNarrativos.length > 0;
     const lecturaParcial = deterministicExtraction.updates.length > 0 && documentoNarrativo;
-    if ((!deterministicExtraction.updates.length || lecturaParcial) && aiDocuments.length) {
+    const aiBudget = await getAiUsageSnapshot();
+    if (documentoNarrativo && (!deterministicExtraction.updates.length || lecturaParcial) && !aiBudget.blocked) {
       const aiResults: Awaited<ReturnType<typeof extractDocumentWithAI>>[] = [];
-      for (const document of aiDocuments) {
-        aiResults.push(await extractDocumentWithAI({
+      const aiSourceCurrency: "DOP" | "USD" = sourceCurrency === "USD" ? "USD" : "DOP";
+      for (const document of documentosNarrativos) {
+        const commonInput = {
           ...document,
           area: classification.area,
           cutoff: effectiveCutoff,
-          sourceCurrency: sourceCurrency === "USD" ? "USD" : "DOP",
+          sourceCurrency: aiSourceCurrency,
           apiKey: process.env.OPENAI_API_KEY ?? "",
           currentValues: currentLiveData.values,
           knownAreas: uploadAreas,
           schemaReference: getContractRootsSnapshot(),
           templateHints,
-        }));
+        };
+        const primary = await extractDocumentWithAI({
+          ...commonInput,
+          model: INGESTION_PRIMARY_MODEL,
+          maxAgentIterations: 2,
+          maxAgentToolCalls: 16,
+          maxOutputTokens: 8_000,
+          imageDetail: "low",
+        });
+        if (shouldEscalateDocumentExtraction(primary, {
+          classificationConfidence: classification.confidence,
+          hasDeterministicUpdates: deterministicExtraction.updates.length > 0,
+        })) {
+          const advanced = await extractDocumentWithAI({
+            ...commonInput,
+            model: INGESTION_ESCALATION_MODEL,
+            maxAgentIterations: 3,
+            maxAgentToolCalls: 24,
+            maxOutputTokens: 12_000,
+            imageDetail: "high",
+          });
+          const mergedByKey = new Map(primary.updates.map((update, index) => [
+            update.key,
+            { update, confidence: primary.updateConfidences[index] ?? primary.confidence },
+          ]));
+          advanced.updates.forEach((update, index) => mergedByKey.set(update.key, {
+            update,
+            confidence: advanced.updateConfidences[index] ?? advanced.confidence,
+          }));
+          const mergedUpdates = [...mergedByKey.values()];
+          aiResults.push({
+            updates: mergedUpdates.map((entry) => entry.update),
+            updateConfidences: mergedUpdates.map((entry) => entry.confidence),
+            summary: `${primary.summary} Escalado automático: ${advanced.summary}`.trim(),
+            warnings: [...primary.warnings, ...advanced.warnings],
+            confidence: Math.max(primary.confidence, advanced.confidence),
+            model: `${INGESTION_ESCALATION_MODEL} (escalado desde ${INGESTION_PRIMARY_MODEL})`,
+            promptVersion: advanced.promptVersion,
+            unmappedCandidates: [...primary.unmappedCandidates, ...advanced.unmappedCandidates],
+            agentTrace: [...primary.agentTrace, ...advanced.agentTrace],
+            agentIterations: primary.agentIterations + advanced.agentIterations,
+            inputTokens: primary.inputTokens + advanced.inputTokens,
+            cachedInputTokens: primary.cachedInputTokens + advanced.cachedInputTokens,
+            cacheWriteInputTokens: primary.cacheWriteInputTokens + advanced.cacheWriteInputTokens,
+            outputTokens: primary.outputTokens + advanced.outputTokens,
+            estimatedCostUsdMicros: primary.estimatedCostUsdMicros + advanced.estimatedCostUsdMicros,
+          });
+        } else {
+          aiResults.push(primary);
+        }
       }
       const iaExtraction = aiResults.reduce<Awaited<ReturnType<typeof extractDocumentWithAI>>>((merged, result) => ({
         updates: [...merged.updates, ...result.updates],
@@ -1429,7 +1491,10 @@ export async function POST(request: Request) {
         agentTrace: [...merged.agentTrace, ...result.agentTrace],
         agentIterations: merged.agentIterations + result.agentIterations,
         inputTokens: merged.inputTokens + result.inputTokens,
+        cachedInputTokens: merged.cachedInputTokens + result.cachedInputTokens,
+        cacheWriteInputTokens: merged.cacheWriteInputTokens + result.cacheWriteInputTokens,
         outputTokens: merged.outputTokens + result.outputTokens,
+        estimatedCostUsdMicros: merged.estimatedCostUsdMicros + result.estimatedCostUsdMicros,
       }), {
         updates: [],
         updateConfidences: [],
@@ -1442,7 +1507,10 @@ export async function POST(request: Request) {
         agentTrace: [],
         agentIterations: 0,
         inputTokens: 0,
+        cachedInputTokens: 0,
+        cacheWriteInputTokens: 0,
         outputTokens: 0,
+        estimatedCostUsdMicros: 0,
       });
       if (!deterministicExtraction.updates.length) {
         extraction = iaExtraction;
@@ -1483,13 +1551,27 @@ export async function POST(request: Request) {
           warnings: [...deterministicExtraction.warnings, ...iaExtraction.warnings],
         };
       }
+    } else if (documentoNarrativo && (!deterministicExtraction.updates.length || lecturaParcial) && aiBudget.blocked) {
+      extraction = {
+        ...extraction,
+        summary: deterministicExtraction.updates.length
+          ? deterministicExtraction.summary
+          : "El original se conservó; el análisis IA se aplazó por el límite mensual configurado.",
+        warnings: [
+          ...extraction.warnings,
+          "Presupuesto mensual de IA alcanzado. Los lectores internos siguieron funcionando sin coste.",
+        ],
+      };
     }
     agentModel = extraction.model;
     agentPromptVersion = extraction.promptVersion;
     agentIterations = extraction.agentIterations;
     agentTrace = extraction.agentTrace;
     agentInputTokens = extraction.inputTokens;
+    agentCachedInputTokens = extraction.cachedInputTokens;
+    agentCacheWriteInputTokens = extraction.cacheWriteInputTokens;
     agentOutputTokens = extraction.outputTokens;
+    agentEstimatedCostUsdMicros = extraction.estimatedCostUsdMicros;
     // Las colecciones de partida permiten traducir a posición el nombre de una
     // entidad en cualquier lista del modelo, no sólo en las espaciales: las
     // económicas no tienen id y sólo se distinguen por su nombre. Si la
@@ -2108,7 +2190,10 @@ export async function POST(request: Request) {
         proposedCount: agentProposedCount,
         publishedCount: agentPublishedCount,
         inputTokens: agentInputTokens,
+        cachedInputTokens: agentCachedInputTokens,
+        cacheWriteInputTokens: agentCacheWriteInputTokens,
         outputTokens: agentOutputTokens,
+        estimatedCostUsdMicros: agentEstimatedCostUsdMicros,
         completedAt: new Date().toISOString(),
       }).where(eq(ingestionAgentRuns.id, agentRunId));
       await db.insert(fileActivity).values({
@@ -2220,7 +2305,10 @@ export async function POST(request: Request) {
         proposedCount: agentProposedCount,
         publishedCount: agentPublishedCount,
         inputTokens: agentInputTokens,
+        cachedInputTokens: agentCachedInputTokens,
+        cacheWriteInputTokens: agentCacheWriteInputTokens,
         outputTokens: agentOutputTokens,
+        estimatedCostUsdMicros: agentEstimatedCostUsdMicros,
         error: debugDetail,
         completedAt: new Date().toISOString(),
       }).where(eq(ingestionAgentRuns.id, agentRunId)).catch(() => undefined);

@@ -97,7 +97,10 @@ export const ingestionAgentRuns = sqliteTable(
     proposedCount: integer("proposed_count").notNull().default(0),
     publishedCount: integer("published_count").notNull().default(0),
     inputTokens: integer("input_tokens").notNull().default(0),
+    cachedInputTokens: integer("cached_input_tokens").notNull().default(0),
+    cacheWriteInputTokens: integer("cache_write_input_tokens").notNull().default(0),
     outputTokens: integer("output_tokens").notNull().default(0),
+    estimatedCostUsdMicros: integer("estimated_cost_usd_micros").notNull().default(0),
     error: text("error").notNull().default(""),
     startedAt: text("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     completedAt: text("completed_at").notNull().default(""),
@@ -108,6 +111,43 @@ export const ingestionAgentRuns = sqliteTable(
     index("ingestion_agent_runs_started_idx").on(table.startedAt),
   ],
 );
+
+// TelemetrÃ­a econÃ³mica del asistente. No conserva la pregunta ni la respuesta:
+// solamente identidad operativa, modelo, tokens y coste estimado.
+export const assistantAiRuns = sqliteTable(
+  "assistant_ai_runs",
+  {
+    id: text("id").primaryKey(),
+    userEmail: text("user_email").notNull().default(""),
+    userName: text("user_name").notNull().default(""),
+    mode: text("mode").notNull().default("normal"),
+    status: text("status").notNull().default("running"),
+    model: text("model").notNull().default(""),
+    turns: integer("turns").notNull().default(0),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    cachedInputTokens: integer("cached_input_tokens").notNull().default(0),
+    cacheWriteInputTokens: integer("cache_write_input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    estimatedCostUsdMicros: integer("estimated_cost_usd_micros").notNull().default(0),
+    error: text("error").notNull().default(""),
+    startedAt: text("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    completedAt: text("completed_at").notNull().default(""),
+  },
+  (table) => [
+    index("assistant_ai_runs_started_idx").on(table.startedAt),
+    index("assistant_ai_runs_model_idx").on(table.model),
+    index("assistant_ai_runs_user_idx").on(table.userEmail),
+  ],
+);
+
+export const aiUsageSettings = sqliteTable("ai_usage_settings", {
+  id: text("id").primaryKey().default("global"),
+  // 0 significa sin lÃ­mite. Guardamos microdÃ³lares para evitar redondeos.
+  monthlyBudgetUsdMicros: integer("monthly_budget_usd_micros").notNull().default(0),
+  updatedByEmail: text("updated_by_email").notNull().default(""),
+  updatedByName: text("updated_by_name").notNull().default(""),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
 
 export const uploadedFiles = sqliteTable(
   "uploaded_files",
