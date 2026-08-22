@@ -13,8 +13,10 @@ const OPENAI_API_BASE = "https://api.openai.com/v1";
 const EXTRACTION_MODEL = "gpt-5.6-terra";
 const PROMPT_VERSION = "araya-ingestion-agent-2026-08-20-v1";
 const SAFETY_IDENTIFIER = "araya_document_ingestion_service";
-const MAX_AGENT_ITERATIONS = 4;
-const MAX_AGENT_TOOL_CALLS = 12;
+// Complex financial workbooks often require several independent lookups against
+// the live schema. Keep the loop bounded, but leave enough room for that fan-out.
+const MAX_AGENT_ITERATIONS = 6;
+const MAX_AGENT_TOOL_CALLS = 32;
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -1159,7 +1161,7 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
         break;
       }
       if (totalToolCalls + calls.length > MAX_AGENT_TOOL_CALLS) {
-        throw new OpenAIOperationalError("El agente superÃ³ el lÃ­mite de herramientas de una sola ingesta.");
+        throw new OpenAIOperationalError("El agente superó el límite de herramientas de una sola ingesta.");
       }
       totalToolCalls += calls.length;
       if (Array.isArray(response.output)) {
@@ -1184,7 +1186,7 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
     }
     if (!finalResponse) {
       throw new OpenAIOperationalError(
-        `El agente no completÃ³ una salida estructurada tras ${MAX_AGENT_ITERATIONS} iteraciones.`,
+        `El agente no completó una salida estructurada tras ${MAX_AGENT_ITERATIONS} iteraciones.`,
       );
     }
     result = {

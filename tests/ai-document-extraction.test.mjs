@@ -273,3 +273,45 @@ test("the ingestion agent executes a bounded tool loop and returns an auditable 
   assert.equal(result.outputTokens, 80);
   assert.equal(result.updates[0].value, 22.71);
 });
+
+test("the ingestion agent accepts the lookup fan-out needed by complex workbooks", async () => {
+  let responseCalls = 0;
+  globalThis.fetch = async (url, init) => {
+    assert.equal(url, "https://api.openai.com/v1/responses");
+    responseCalls += 1;
+    if (responseCalls === 1) {
+      return new Response(JSON.stringify({
+        model: "gpt-5.6-terra",
+        output: Array.from({ length: 13 }, (_, index) => ({
+          type: "function_call",
+          call_id: `call-schema-${index}`,
+          name: "inspect_live_schema",
+          arguments: JSON.stringify({ root: "projectSnapshot" }),
+          status: "completed",
+        })),
+        usage: { input_tokens: 200, output_tokens: 40 },
+      }), { status: 200 });
+    }
+    const body = JSON.parse(init.body);
+    assert.equal(body.input.filter((item) => item.type === "function_call_output").length, 13);
+    const output = {
+      updates: [],
+      summary: "Libro contrastado sin cambios publicables.",
+      warnings: [],
+      confidence: 0.98,
+      unmapped_candidates: [],
+    };
+    return new Response(JSON.stringify({
+      model: "gpt-5.6-terra",
+      output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(output) }] }],
+      usage: { input_tokens: 250, output_tokens: 50 },
+    }), { status: 200 });
+  };
+
+  const result = await extraction.extractDocumentWithAI(input("png"));
+
+  assert.equal(responseCalls, 2);
+  assert.equal(result.agentIterations, 2);
+  assert.equal(result.agentTrace.length, 13);
+  assert.doesNotMatch(result.warnings.join(" "), /límite de herramientas/);
+});
