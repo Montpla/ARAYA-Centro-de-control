@@ -3519,3 +3519,59 @@ los expedientes eternamente pendientes.
 - Se actualizaron las cinco guías existentes y se añadió
   `guia_financiera_araya.pdf`. Referencia técnica:
   `docs/AUTOMATIZACION-FINANCIERA.md`.
+
+## Incidente de acceso, red restaurada y revisión de seguridad (22/08/2026)
+
+- El despliegue `78f4232` sigue siendo el vigente en `main` y producción. El
+  pipeline de GitHub Actions terminó correctamente, verificó el login, los datos
+  vivos, los 77 edificios, los 462 apartamentos y los documentos protegidos.
+- El fallo de arranque observado al final de la sesión **no fue una caída del
+  Worker ni un error de la aplicación**. Desde la conexión de Telefónica, el
+  dominio `araya-centro-control.grupobricket.workers.dev` resolvía a
+  `188.114.96.5` y `188.114.97.5`, pero ambas rutas agotaban el tiempo de conexión
+  en TCP 443. El resto de Internet y otros destinos de Cloudflare respondían.
+- El mismo Worker respondió correctamente a través de otra dirección de la red
+  de Cloudflare: raíz `307`, pantalla de acceso `200` y `sw.js` `200`. El
+  navegador integrado cargó finalmente la pantalla real de inicio de sesión sin
+  avisos de consola cuando se usó esa ruta comprobada.
+- El patrón coincide con los bloqueos dinámicos de direcciones compartidas de
+  Cloudflare aplicados por operadores españoles durante medidas antipiratería de
+  fútbol. Es una hipótesis técnicamente muy probable, pero no puede afirmarse que
+  esas dos IP concretas estuvieran en la lista porque las listas son dinámicas y
+  no públicas.
+- Se añadió temporalmente una entrada en el archivo `hosts` de Windows para
+  recuperar el acceso. A petición expresa del usuario se **retiró por completo**,
+  se limpió la caché DNS y se comprobó que Windows vuelve a resolver las dos IP
+  originales. No queda ninguna excepción local ni cambio de red pendiente.
+- La pantalla de servicio `public/sw.js` trata cualquier error de navegación como
+  «Sin conexión». Conviene distinguir en el futuro entre Internet desconectado,
+  servicio inaccesible desde el operador, sesión caducada y dependencia caída.
+- Mejora de continuidad recomendada, todavía no ejecutada: mantener la URL
+  actual y añadir una URL de emergencia alojada fuera de la misma red compartida
+  de Cloudflare, junto con un endpoint de salud y monitorización desde España y
+  República Dominicana. No volver a fijar una IP manual como solución permanente.
+
+### Estado de seguridad comprobado
+
+- Repositorio GitHub privado; `.dev.vars` y `.env.local` no están versionados. Las
+  claves de OpenAI, VAPID y arranque administrativo están registradas como
+  secretos de Cloudflare y no se entregan al navegador.
+- PIN protegido con `scrypt`, sal aleatoria y comparación constante. Bloqueo de
+  cuenta tras 8 intentos durante 15 minutos.
+- Sesiones con 32 bytes aleatorios, token almacenado mediante SHA-256, caducidad
+  de siete días y cookie `HttpOnly; Secure; SameSite=Lax` en producción.
+- Autorización aplicada en servidor para usuario activo, administrador, acceso
+  financiero, carga financiera y aprobación financiera. Los documentos privados
+  usan `private, no-store`, `nosniff`, `noindex` y control financiero por ruta.
+- Se revisaron 27 módulos de API. Las 17 rutas `GET` probadas sin sesión
+  respondieron `401`. Las excepciones deliberadas son el login; `/api/tv`, que
+  exige token y sólo entrega datos no financieros; y la carga automática de
+  `/api/files`, que exige un token revocable/caducable ligado a un usuario.
+- Riesgos prioritarios aún no corregidos: retirar de producción los secretos de
+  bootstrap una vez creado el administrador; añadir Cloudflare Access/MFA;
+  limitar por IP, usuario y token; añadir CSP/HSTS/`frame-ancestors` y
+  `Permissions-Policy` globales; validar `Origin`/CSRF en mutaciones; sacar el
+  token TV de la URL; limitar el Agente IA por usuario; y analizar los archivos
+  con antivirus antes de abrirlos o procesarlos.
+- La excepción temporal de red no cambió el código ni se comprometió. La copia
+  de trabajo estaba limpia antes de documentar este cierre.
