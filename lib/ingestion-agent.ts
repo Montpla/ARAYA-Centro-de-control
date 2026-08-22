@@ -35,6 +35,21 @@ export type DynamicSectionConfig = {
   series: Array<{ label: string; value: number }>;
 };
 
+export type DynamicSectionBlock = {
+  id: string;
+  title: string;
+  description: string;
+  area: string;
+  evidence: string;
+  confidence: number;
+  sourceName: string;
+  detectedAt: string;
+  values: Array<{ label: string; value: string }>;
+  visualization: DynamicVisualization;
+  unit: string;
+  series: Array<{ label: string; value: number }>;
+};
+
 export type IngestionValidation = {
   safe: boolean;
   issues: string[];
@@ -180,6 +195,48 @@ export function deriveDynamicSectionConfig(valueJson: string): DynamicSectionCon
     return { visualization: "table", unit, series: numeric };
   }
   return { visualization: "list", unit, series: numeric };
+}
+
+/** Builds the durable visual record for a newly discovered concept. */
+export function buildDynamicSectionBlock(input: {
+  id: string;
+  existingId?: string;
+  title: string;
+  description?: string;
+  area: string;
+  evidence?: string;
+  confidence?: number;
+  sourceName?: string;
+  detectedAt?: string;
+  valueJson: string;
+}): DynamicSectionBlock {
+  let values: Array<{ label: string; value: string }> = [];
+  try {
+    const parsed = JSON.parse(input.valueJson) as unknown;
+    values = valueRows(parsed).slice(0, 40).map((row) => ({
+      label: row.label.slice(0, 120),
+      value: typeof row.raw === "string"
+        ? row.raw.slice(0, 500)
+        : JSON.stringify(row.raw).slice(0, 500),
+    }));
+  } catch {
+    // Evidence remains visible and the candidate can be retried later.
+  }
+  const visual = deriveDynamicSectionConfig(input.valueJson);
+  return {
+    id: input.existingId || input.id,
+    title: input.title.slice(0, 160),
+    description: String(input.description ?? "").slice(0, 400),
+    area: input.area,
+    evidence: String(input.evidence ?? "").slice(0, 600),
+    confidence: Math.max(0, Math.min(1, Number(input.confidence) || 0)),
+    sourceName: String(input.sourceName ?? "Documento analizado").slice(0, 255),
+    detectedAt: input.detectedAt ?? new Date().toISOString(),
+    values,
+    visualization: visual.visualization,
+    unit: visual.unit,
+    series: visual.series,
+  };
 }
 
 function percentageKey(key: string) {

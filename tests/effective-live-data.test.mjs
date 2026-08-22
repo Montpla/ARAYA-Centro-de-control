@@ -161,6 +161,7 @@ async function loadContractCore() {
         detail: "Viales interiores",
         pendingFields: [],
       }],
+      discoveredSections: [],
     },
   };
   const require = (specifier) => {
@@ -176,6 +177,7 @@ async function loadContractCore() {
           "monthlyPlan",
           "buildings",
           "urbanismAreas",
+          "discoveredSections",
         ],
         materializeLiveRoot: liveData.materializeLiveRoot,
       };
@@ -766,6 +768,40 @@ test("central publication contract rejects invalid manual or reviewed domain val
   assert.match(publisher, /assertLiveDataContracts\(input\.normalized, currentLiveData\.values\)/);
   assert.match(manualRoute, /publishLiveDataUpdates\(/);
   assert.match(reviewRoute, /publishLiveDataUpdates\(/);
+});
+
+test("a legacy discovered section can gain values and visualization without changing identity", async () => {
+  const { validateLiveDataContract } = await loadContractCore();
+  const legacy = {
+    id: "stable-security-section",
+    title: "Tema",
+    description: "Resumen semanal",
+    area: "seguridad",
+    evidence: "Semana 1",
+    confidence: 0.95,
+    sourceName: "Semana 1.pptx",
+    detectedAt: "2026-08-15T10:00:00.000Z",
+    values: [],
+  };
+  const currentValues = { "discoveredSections.0": legacy };
+  const upgraded = {
+    ...legacy,
+    evidence: "Semana 2",
+    sourceName: "Semana 2.pptx",
+    detectedAt: "2026-08-22T10:00:00.000Z",
+    values: [{ label: "Valor", value: "Protección de manos y alturas" }],
+    visualization: "list",
+    unit: "",
+    series: [],
+  };
+  assert.equal(
+    validateLiveDataContract("discoveredSections.0", JSON.stringify(upgraded), currentValues).valid,
+    true,
+  );
+  assert.equal(
+    validateLiveDataContract("discoveredSections.0", JSON.stringify({ ...upgraded, id: "replacement-id" }), currentValues).valid,
+    false,
+  );
 });
 
 test("controlled live append supports repeated buildings, apartments and urbanism without gaps", async () => {

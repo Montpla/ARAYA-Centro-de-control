@@ -24,6 +24,13 @@ const APPENDABLE_ARRAY_PATHS = new Set([
   "urbanismAreas",
 ]);
 const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
+  "discoveredSections.*": {
+    // Legacy blocks did not carry visualization metadata. A later report may
+    // upgrade the same stable section without changing its identity.
+    visualization: "list",
+    unit: "",
+    series: [{ label: "", value: 0 }],
+  },
   "buildings.*": {
     mapCoordinates: {
       visual: { x: 0, y: 0 },
@@ -36,6 +43,13 @@ const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
       technical: { x: 0, y: 0, short: "" },
     },
   },
+};
+
+const EMPTY_ARRAY_ITEM_TEMPLATES: Record<string, unknown> = {
+  // Empty legacy arrays may grow when a later weekly/monthly report adds the
+  // missing detail to the same discovered concept.
+  "discoveredSections.*.values": { label: "", value: "" },
+  "discoveredSections.*.series": { label: "", value: 0 },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -250,8 +264,11 @@ function matchesContract(
   }
   if (Array.isArray(expected)) {
     if (!Array.isArray(actual) || actual.length > MAX_ARRAY_ITEMS) return false;
-    if (expected.length === 0) return actual.length === 0;
-    const template = mergedArrayTemplate(expected) ?? expected[0];
+    const emptyTemplate = EMPTY_ARRAY_ITEM_TEMPLATES[path.join(".")];
+    if (expected.length === 0 && emptyTemplate === undefined) return actual.length === 0;
+    const template = expected.length === 0
+      ? emptyTemplate
+      : mergedArrayTemplate(expected) ?? expected[0];
     return actual.every((item) => matchesContract(
       template,
       item,

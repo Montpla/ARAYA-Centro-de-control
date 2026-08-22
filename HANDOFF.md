@@ -3,6 +3,33 @@
 Actualizado: 22/08/2026
 Zona horaria del usuario: Europe/Madrid
 
+## Secciones dinámicas autónomas (22/08/2026)
+
+- Los conceptos nuevos ya no quedan relegados a un bloque provisional del
+  Centro de datos. `DynamicAreaSections` los presenta también dentro de su área:
+  Dirección, Planificación, Diseño/Implantación, Obra/Edificios, Urbanismo,
+  Compras/Proveedores, Seguridad/Legal o Finanzas según corresponda. Comercial
+  conserva su bloque protegido propio.
+- `buildDynamicSectionBlock` genera una representación duradera (`kpi`, barras,
+  línea, tabla o lista), conserva fuente/evidencia/confianza y convierte también
+  los textos primitivos en una fila visible. La identidad de una sección
+  recurrente se conserva: la siguiente semana/mes actualiza el mismo bloque.
+- El contrato vivo permite que una sección histórica vacía reciba filas y
+  metadatos visuales más tarde, pero sólo en las rutas dinámicas autorizadas.
+  Las demás matrices vacías continúan cerradas y no se amplía la superficie de
+  escritura general.
+- El estado `adaptado` se asigna después de comprobar que el dato quedó
+  publicado o ya coincidía. Si una validación lo impide, queda `pendiente` con
+  explicación y puede reintentarse; nunca vuelve a aparecer como publicado sin
+  estar visible.
+- Se materializaron en producción las dos secciones omitidas del informe de
+  Seguridad de Semana 2: **ACTOS SEGUROS** (5 registros) y **Tema** (1 registro),
+  revisión 79 y corte real 18/07/2026. Se corrigió además el corte de Semana 1
+  a 11/07/2026. El script idempotente y auditable es
+  `scripts/materialize-dynamic-sections-2026-08-22.sql`.
+- Validación local: TypeScript y build en verde, ESLint sin errores (20 avisos
+  históricos) y suite completa **352/352**.
+
 ## Entrega financiera sin bloqueos (22/08/2026)
 
 - Se separaron tres permisos: `financeUploadAccess` para entregar documentos,

@@ -36,7 +36,7 @@ import {
 import { analyzeDocument, archiveDocumentsForAI, extractStructuredUpdates } from "../../../lib/ingestion";
 import { CURRENT_INGESTION_VERSION } from "../../../lib/ingestion-version";
 import {
-  deriveDynamicSectionConfig,
+  buildDynamicSectionBlock,
   documentTemplateFingerprint,
   reconcileIngestionUpdates,
   templateMappingFromUpdates,
@@ -1653,49 +1653,24 @@ export async function POST(request: Request) {
     );
     const seccionesDescubiertas = candidatosProvisionales
       .map(({ candidato, candidateArea }, posicion) => {
-          let valores: Array<{ label: string; value: string }> = [];
-          try {
-            const contenido = JSON.parse(candidato.valueJson) as unknown;
-            if (Array.isArray(contenido)) {
-              valores = contenido.slice(0, 40).map((fila, indice) => ({
-                label: typeof fila === "object" && fila !== null && "label" in fila
-                  ? String((fila as Record<string, unknown>).label).slice(0, 120)
-                  : `Dato ${indice + 1}`,
-                value: typeof fila === "object" && fila !== null && "value" in fila
-                  ? String((fila as Record<string, unknown>).value).slice(0, 200)
-                  : String(fila).slice(0, 200),
-              }));
-            } else if (contenido && typeof contenido === "object") {
-              valores = Object.entries(contenido as Record<string, unknown>)
-                .slice(0, 40)
-                .map(([clave, valor]) => ({
-                  label: clave.slice(0, 120),
-                  value: String(valor).slice(0, 200),
-                }));
-            }
-          } catch {
-            // Sin valor estructurado queda la evidencia, que es lo que de
-            // verdad contiene el dato cuando la extracción no lo estructuró.
-          }
-          const visual = deriveDynamicSectionConfig(candidato.valueJson);
           const slot = dynamicSectionSlots[posicion];
           return {
             key: slot.key,
-            value: {
-              id: slot.existingId || `descubierto-${id}-${posicion}`,
-              title: candidato.label.slice(0, 160),
-              description: candidato.description.slice(0, 400),
+            value: buildDynamicSectionBlock({
+              id: `descubierto-${id}-${posicion}`,
+              existingId: slot.existingId,
+              title: candidato.label,
+              description: candidato.description,
               area: candidateArea,
-              evidence: candidato.evidence.slice(0, 600),
+              evidence: candidato.evidence,
               confidence: candidato.confidence,
               sourceName: candidate.name,
               detectedAt: new Date().toISOString(),
-              values: valores,
-              visualization: visual.visualization,
-              unit: visual.unit,
-              series: visual.series,
-            },
-            area: requiresFinanceAccessForArea(candidateArea) ? candidateArea : resolvedArea,
+              valueJson: candidato.valueJson,
+            }),
+            // La sección vive en el área que su propio contenido identifica,
+            // aunque el documento contenedor tenga otra clasificación.
+            area: candidateArea,
             cutoff: effectiveCutoff,
             sourceCurrency: (sourceCurrency === "USD" ? "USD" : "DOP") as "USD" | "DOP",
             sourceName: candidate.name,
@@ -1873,28 +1848,9 @@ export async function POST(request: Request) {
         }),
       );
     }
-    if (extraction.unmappedCandidates.length) {
-      // notify_unmapped_field_candidate_created (migración 0020) genera la
-      // notificación al insertar; esta ruta solo escribe la fila y programa
-      // el despacho, igual que el resto de rutas propiedad de un trigger.
-      await db.insert(unmappedFieldCandidates).values(
-        extraction.unmappedCandidates.map((candidate) => ({
-          id: crypto.randomUUID(),
-          fileId: id,
-          label: candidate.label,
-          description: candidate.description,
-          valueJson: candidate.valueJson,
-          suggestedArea: candidate.suggestedArea,
-          evidence: candidate.evidence,
-          confidence: candidate.confidence,
-          status: "adaptado",
-          reviewedByEmail: user.email,
-          reviewedByName: user.displayName,
-          reviewedAt: proposalsUpdatedAt,
-          reviewNote: "Convertido automáticamente en una sección visual trazable durante la ingesta.",
-        })),
-      ).catch(() => undefined);
-    }
+    // Cerramos únicamente los candidatos pendientes de una lectura anterior.
+    // Los nuevos se insertan después de publicar: así nunca se etiqueta como
+    // "adaptado" un bloque que el contrato vivo haya rechazado.
     await db.update(unmappedFieldCandidates).set({
       status: "superado",
       reviewedByEmail: user.email,
@@ -2121,6 +2077,37 @@ export async function POST(request: Request) {
         updatedAt: resolvedAt,
       }).where(eq(uploadedFiles.id, id));
       automaticMessage = `El archivo quedó procesado con diagnóstico. Ningún dato seguro requería modificar el Centro de Control y no queda pendiente de revisión.`;
+    }
+    if (extraction.unmappedCandidates.length) {
+      const materializedDynamicKeys = new Set([
+        ...changeSet.unchanged.map((update) => update.key),
+        ...(publicationCompleted ? autoPublishable.map((update) => update.key) : []),
+      ]);
+      // notify_unmapped_field_candidate_created (migración 0020) genera la
+      // notificación al insertar. El estado refleja el resultado real de la
+      // publicación, no solo la intención del agente.
+      await db.insert(unmappedFieldCandidates).values(
+        extraction.unmappedCandidates.map((candidate, index) => {
+          const materialized = materializedDynamicKeys.has(seccionesDescubiertas[index]?.key ?? "");
+          return {
+            id: crypto.randomUUID(),
+            fileId: id,
+            label: candidate.label,
+            description: candidate.description,
+            valueJson: candidate.valueJson,
+            suggestedArea: candidate.suggestedArea,
+            evidence: candidate.evidence,
+            confidence: candidate.confidence,
+            status: materialized ? "adaptado" : "pendiente",
+            reviewedByEmail: materialized ? user.email : "",
+            reviewedByName: materialized ? user.displayName : "",
+            reviewedAt: materialized ? proposalsUpdatedAt : "",
+            reviewNote: materialized
+              ? "Convertido automáticamente en una sección visual trazable durante la ingesta."
+              : "La sección quedó preparada para reintento automático; todavía no se ha publicado.",
+          };
+        }),
+      ).catch(() => undefined);
     }
     const templateSucceeded = publicationCompleted || unchangedCount > 0;
     const learnedUpdates = publicationCompleted ? autoPublishable : preparedUpdates;

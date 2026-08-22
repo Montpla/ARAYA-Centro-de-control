@@ -49,6 +49,36 @@ test("dynamic sections choose KPI, bars, chronology and table from their data sh
   ])).visualization, "table");
 });
 
+test("dynamic section blocks keep primitive text visible and preserve a stable identity", () => {
+  const primitive = agent.buildDynamicSectionBlock({
+    id: "new-id",
+    existingId: "stable-id",
+    title: "Tema",
+    description: "Resumen de seguridad",
+    area: "seguridad",
+    evidence: "Semana 2",
+    confidence: 0.98,
+    sourceName: "Informe semanal.pptx",
+    detectedAt: "2026-08-22T10:00:00.000Z",
+    valueJson: JSON.stringify("Protección de manos, alturas y emergencias"),
+  });
+  assert.equal(primitive.id, "stable-id");
+  assert.deepEqual(primitive.values, [{
+    label: "Valor",
+    value: "Protección de manos, alturas y emergencias",
+  }]);
+  assert.equal(primitive.visualization, "list");
+
+  const metrics = agent.buildDynamicSectionBlock({
+    id: "metrics-id",
+    title: "Indicadores",
+    area: "obra",
+    valueJson: JSON.stringify({ "TH-76": 32.5, "TH-77": 41.2 }),
+  });
+  assert.equal(metrics.visualization, "bars");
+  assert.equal(metrics.series.length, 2);
+});
+
 test("the independent reconciliation rejects invalid percentages and overlapping writes", () => {
   const valid = agent.reconcileIngestionUpdates([
     { key: "projectSnapshot.overallProgress", value: 22.71 },
@@ -97,6 +127,8 @@ test("new document concepts render through the schema-driven visual component", 
     readFile("lib/live-data-contract.ts", "utf8"),
   ]);
   assert.match(dashboard, /function DynamicDiscoveredSection/);
+  assert.match(dashboard, /function DynamicAreaSections/);
+  assert.match(dashboard, /CREADO Y ADAPTADO AUTOMÁTICAMENTE/);
   assert.match(dashboard, /visualization === "kpi"/);
   assert.match(dashboard, /visualization === "bars"/);
   assert.match(dashboard, /visualization === "line"/);

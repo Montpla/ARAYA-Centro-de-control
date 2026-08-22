@@ -63,16 +63,18 @@ test("el lector queda versionado y reprocesa históricos en lotes acotados", asy
   assert.match(workflow, /MAX_POR_EJECUCION: "5"/);
 });
 
-test("la información sin campo crea secciones provisionales con privacidad por área", async () => {
+test("la información sin campo crea secciones vivas con privacidad por área", async () => {
   const [route, liveData, dashboard] = await Promise.all([
     read("app/api/files/route.ts"),
     read("lib/live-data.ts"),
     read("app/dashboard-client.tsx"),
   ]);
   assert.match(route, /const candidatosProvisionales/);
-  assert.match(route, /requiresFinanceAccessForArea\(candidateArea\)/);
+  assert.match(route, /area: candidateArea/);
+  assert.match(route, /requiresFinanceAccessForArea\(update\.area\)/);
   assert.doesNotMatch(liveData, /financialRootSet = new Set\(\[[\s\S]*?"discoveredSections"/);
-  assert.match(dashboard, /SECCIONES PROVISIONALES/);
+  assert.match(dashboard, /SECCIONES CREADAS AUTOMÁTICAMENTE/);
+  assert.match(dashboard, /function DynamicAreaSections/);
 });
 
 test("el XLS de junio se conserva como antecedente y no puede reprocesarse", async () => {

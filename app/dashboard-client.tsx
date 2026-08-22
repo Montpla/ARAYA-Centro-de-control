@@ -2732,6 +2732,66 @@ function DynamicDiscoveredSection({
   ) : null;
 }
 
+const dynamicSectionViews: Partial<Record<View, UploadArea[]>> = {
+  resumen: ["direccion"],
+  planificacion: ["planificacion"],
+  implantacion: ["diseno"],
+  edificios: ["obra"],
+  urbanismo: ["urbanismo"],
+  control: ["seguridad", "legal"],
+  proveedores: ["compras"],
+  metricas: ["finanzas"],
+};
+
+function DynamicAreaSections({
+  view,
+  canAccessFinance,
+}: {
+  view: View;
+  canAccessFinance: boolean;
+}) {
+  const acceptedAreas = dynamicSectionViews[view] ?? [];
+  if (!acceptedAreas.length) return null;
+  const blocks = discoveredSections.filter((block) => {
+    const area = block.area as UploadArea;
+    return acceptedAreas.includes(area) && (canAccessFinance || !requiresFinanceAccessForArea(area));
+  });
+  if (!blocks.length) return null;
+
+  return (
+    <section className="panel discovered-sections dynamic-area-sections" aria-label="Secciones creadas automáticamente">
+      <div className="panel-heading">
+        <div>
+          <span className="section-kicker">CREADO Y ADAPTADO AUTOMÁTICAMENTE</span>
+          <h3>Nuevas secciones de {acceptedAreas.map((area) => areaLabels[area]).join(" y ")}</h3>
+        </div>
+        <span className="data-note">{blocks.length} sección{blocks.length === 1 ? "" : "es"} viva{blocks.length === 1 ? "" : "s"}</span>
+      </div>
+      <p className="section-copy">
+        El Centro de Control detectó información sin pantalla previa, creó el bloque en su área y reutilizará esta misma sección cuando lleguen nuevas versiones.
+      </p>
+      <div className="document-archive">
+        {blocks.map((block) => (
+          <details className="integrated-source-archive" key={block.id} open={blocks.length === 1}>
+            <summary>
+              <span>
+                <strong>{block.title}</strong>
+                <small>{block.sourceName} · actualizado {block.detectedAt ? new Date(block.detectedAt).toLocaleDateString("es-ES") : "automáticamente"}</small>
+              </span>
+              <em>{Math.round(block.confidence * 100)}%</em>
+            </summary>
+            <div className="workspace-detail-body">
+              {block.description && <p>{block.description}</p>}
+              {block.evidence && <p className="quality-note"><strong>Evidencia:</strong> {block.evidence}</p>}
+              <DynamicDiscoveredSection block={block} />
+            </div>
+          </details>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const width = 1180;
@@ -3759,15 +3819,15 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
         <section className="panel discovered-sections">
           <div className="panel-heading">
             <div>
-              <span className="section-kicker">DETECTADO AUTOMÁTICAMENTE</span>
-              <h3>{commercialDiscoveredSections.length} bloque{commercialDiscoveredSections.length === 1 ? "" : "s"} nuevo{commercialDiscoveredSections.length === 1 ? "" : "s"} en los documentos</h3>
+              <span className="section-kicker">CREADO Y ADAPTADO AUTOMÁTICAMENTE</span>
+              <h3>{commercialDiscoveredSections.length} sección{commercialDiscoveredSections.length === 1 ? "" : "es"} nueva{commercialDiscoveredSections.length === 1 ? "" : "s"} en Ventas y cobranza</h3>
             </div>
-            <span className="data-note">Sin revisar por una persona</span>
+            <span className="data-note">Publicación automática trazable</span>
           </div>
           <p className="data-note">
-            Información que venía en un documento y para la que no existía ningún campo. Se
-            publica tal cual la leyó el programa, con su origen a la vista, en vez de quedarse
-            esperando a que alguien la mire.
+            Información que venía en un documento y para la que no existía ningún campo. El
+            Centro de Control creó la sección en su área, conserva su origen y la actualizará
+            con las siguientes versiones de la misma familia documental.
           </p>
           <ul className="quality-list control-list">
             {commercialDiscoveredSections.map((bloque) => (
@@ -7741,13 +7801,13 @@ function SourcesView({
         <section className="panel discovered-sections">
           <div className="panel-heading">
             <div>
-              <span className="section-kicker">SECCIONES PROVISIONALES · TRAZABILIDAD COMPLETA</span>
-              <h3>Información nueva detectada en los documentos</h3>
+              <span className="section-kicker">SECCIONES CREADAS AUTOMÁTICAMENTE · TRAZABILIDAD COMPLETA</span>
+              <h3>Información nueva incorporada por el agente</h3>
             </div>
             <span className="data-note">{discoveredSections.length} bloque{discoveredSections.length === 1 ? "" : "s"} visible{discoveredSections.length === 1 ? "" : "s"}</span>
           </div>
           <p className="section-copy">
-            Cuando un archivo trae información para la que aún no existe una pantalla, el Centro de Control crea este bloque provisional sin perder su fuente, evidencia ni confianza. Los permisos se aplican por área.
+            Cuando un archivo trae información para la que aún no existe una pantalla, el Centro de Control crea o reutiliza una sección en su área sin perder fuente, evidencia ni confianza. Las siguientes cargas actualizan el mismo bloque y los permisos se aplican automáticamente.
           </p>
           <div className="document-archive">
             {discoveredSections.map((block) => (
@@ -10229,6 +10289,9 @@ export function DashboardClient({
             onRecover={() => navigate("resumen")}
           >
             {content()}
+            {activeProjectId === "araya" && (
+              <DynamicAreaSections view={view} canAccessFinance={currentUser.financeAccess} />
+            )}
             {activeProjectId === "araya" && (currentUser.financeAccess || !(["metricas", "comercial"] as View[]).includes(view)) && (
               <AreaWorkspaceDock
                 view={view}
