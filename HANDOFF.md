@@ -19,6 +19,18 @@ Zona horaria del usuario: Europe/Madrid
   guardaron respaldos locales en `Railway_Backup_bricket-obra_2026-08-22` y
   `Railway_Backup_MontAI-CRM_2026-08-22`, fuera de este repositorio.
 
+## Legibilidad y tabla semanal de seguridad (22/08/2026)
+
+- Se corrigieron los textos dañados `Evolución de seguridad` y la flecha entre
+  fechas, junto con los mensajes afectados de `/api/live-data`.
+- La serie semanal dejó de depender de `.compact-row` sin columnas: ahora es
+  una tabla HTML de cinco columnas, con datos a 13 px, fechas a 11 px, cifras
+  tabulares, encabezado estable y desplazamiento horizontal en móvil.
+- La suite incluye una guarda específica contra la regresión de estructura y
+  codificación. Verificación local: TypeScript, build y **353/353** pruebas.
+- El plan para elevar contraste, tamaño y acabado corporativo sin cambiar la
+  navegación está en `docs/PLAN-LEGIBILIDAD-IDENTIDAD-CORPORATIVA.md`.
+
 ## Secciones dinámicas autónomas (22/08/2026)
 
 - Los conceptos nuevos ya no quedan relegados a un bloque provisional del

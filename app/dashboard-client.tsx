@@ -4154,20 +4154,26 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
           </section>
           <section className="panel">
             <div className="panel-heading">
-              <div><span className="section-kicker">SERIE SEMANAL</span><h3>EvoluciÃ³n de seguridad</h3></div>
+              <div><span className="section-kicker">SERIE SEMANAL</span><h3>Evolución de seguridad</h3></div>
               <span className="data-note">Actividad del periodo y acumulado</span>
             </div>
-            <div className="compact-table">
-              <div className="compact-row head"><span>Semana</span><span>Horas</span><span>Observaciones</span><span>Reuniones</span><span>Inspecciones</span></div>
-              {safetyWeeklySeries.map((week) => (
-                <div className="compact-row" key={week.cutoff}>
-                  <strong>{week.week}<small>{week.startDate} â†’ {week.endDate}</small></strong>
-                  <span>{week.hoursWeek} / {week.hoursCumulative}</span>
-                  <span>{week.observationsWeek} / {week.observationsCumulative}</span>
-                  <span>{week.meetingsWeek} / {week.meetingsCumulative}</span>
-                  <span>{week.inspectionsWeek} / {week.inspectionsCumulative}</span>
-                </div>
-              ))}
+            <div className="compact-table safety-weekly-table-wrap">
+              <table className="safety-weekly-table">
+                <thead>
+                  <tr><th>Semana</th><th>Horas</th><th>Observaciones</th><th>Reuniones</th><th>Inspecciones</th></tr>
+                </thead>
+                <tbody>
+                  {safetyWeeklySeries.map((week) => (
+                    <tr key={week.cutoff}>
+                      <td className="safety-week-cell"><strong>{week.week}</strong><small>{week.startDate} → {week.endDate}</small></td>
+                      <td>{week.hoursWeek} / {week.hoursCumulative}</td>
+                      <td>{week.observationsWeek} / {week.observationsCumulative}</td>
+                      <td>{week.meetingsWeek} / {week.meetingsCumulative}</td>
+                      <td>{week.inspectionsWeek} / {week.inspectionsCumulative}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
           <section className="report-grid">

@@ -65,7 +65,7 @@ export async function GET(request: Request) {
     }, { volatile: ["refreshedAt"] });
   } catch {
     const response = Response.json({
-      error: "La fuente viva no estÃ¡ disponible temporalmente.",
+      error: "La fuente viva no está disponible temporalmente.",
       currentUser: auth.user,
       refreshedAt: new Date().toISOString(),
       refreshIntervalMs: 5_000,
@@ -92,7 +92,7 @@ export async function POST(request: Request) {
   try {
     payload = await request.json();
   } catch {
-    return Response.json({ error: "La actualizaciÃ³n no contiene un JSON vÃ¡lido." }, { status: 400 });
+    return Response.json({ error: "La actualización no contiene un JSON válido." }, { status: 400 });
   }
 
   let normalized: ReturnType<typeof normalizeLiveDataUpdates>;
@@ -105,7 +105,7 @@ export async function POST(request: Request) {
       sourceName: payload.sourceName,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "La actualizaciÃ³n no es vÃ¡lida.";
+    const message = error instanceof Error ? error.message : "La actualización no es válida.";
     return Response.json({ error: message }, { status: 400 });
   }
 
@@ -140,7 +140,7 @@ export async function POST(request: Request) {
         actorName: event.actorName,
         createdAt: event.createdAt,
       }),
-      message: `${normalized.length} datos actualizados. Todas las pantallas recibirÃ¡n la versiÃ³n ${event.id} en menos de cinco segundos.`,
+      message: `${normalized.length} datos actualizados. Todas las pantallas recibirán la versión ${event.id} en menos de cinco segundos.`,
     }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "No se pudo actualizar la fuente viva.";

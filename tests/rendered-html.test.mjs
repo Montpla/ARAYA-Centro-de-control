@@ -1113,6 +1113,21 @@ test("historical originals stay out of public assets and use authenticated R2 de
   assert.match(assetsIgnore, /data-center\/\*\*/);
 });
 
+test("the weekly safety series keeps five readable columns without broken encoding", async () => {
+  const [dashboard, css] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/globals.css", "utf8"),
+  ]);
+
+  assert.match(dashboard, /<table className="safety-weekly-table">/);
+  assert.match(dashboard, /<th>Semana<\/th><th>Horas<\/th><th>Observaciones<\/th><th>Reuniones<\/th><th>Inspecciones<\/th>/);
+  assert.match(dashboard, /Evolución de seguridad/);
+  assert.match(dashboard, /week\.startDate\} → \{week\.endDate/);
+  assert.doesNotMatch(dashboard, /EvoluciÃ|â†’/);
+  assert.match(css, /\.safety-weekly-table\s*\{[\s\S]*?min-width: 760px/);
+  assert.match(css, /\.safety-weekly-table td\s*\{[\s\S]*?font-size: 13px/);
+});
+
 test("simple uploads default to automatic publication and close every processed generation", async () => {
   const [dashboard, filesRoute, publisher] = await Promise.all([
     readFile("app/dashboard-client.tsx", "utf8"),

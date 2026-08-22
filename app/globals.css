@@ -4814,6 +4814,72 @@ button {
   font-size: 8px;
 }
 
+.safety-weekly-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fffefa;
+}
+
+.safety-weekly-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  color: #38352f;
+  font-variant-numeric: tabular-nums;
+}
+
+.safety-weekly-table th,
+.safety-weekly-table td {
+  padding: 13px 16px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.safety-weekly-table th {
+  color: #f7f5ef;
+  background: var(--navy);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.025em;
+}
+
+.safety-weekly-table td {
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.safety-weekly-table tbody tr:first-child td {
+  border-top: 0;
+}
+
+.safety-weekly-table tbody tr:hover {
+  background: #fbfaf6;
+}
+
+.safety-week-cell {
+  min-width: 210px;
+}
+
+.safety-week-cell strong,
+.safety-week-cell small {
+  display: block;
+}
+
+.safety-week-cell strong {
+  color: #28251f;
+  font-size: 13px;
+}
+
+.safety-week-cell small {
+  margin-top: 3px;
+  color: #68635b;
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.4;
+}
+
 .commercial-table .compact-row {
   grid-template-columns: 1.7fr repeat(4, 0.65fr);
 }

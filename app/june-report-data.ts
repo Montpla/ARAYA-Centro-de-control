@@ -308,8 +308,8 @@ export type SafetyWeeklyRecord = {
   openActions: number;
 };
 
-// Serie semanal separada de los KPI acumulados. Evita que una recarga tardÃ­a
-// de una semana antigua sustituya el corte mÃ¡s reciente y permite comparar
+// Serie semanal separada de los KPI acumulados. Evita que una recarga tardía
+// de una semana antigua sustituya el corte más reciente y permite comparar
 // tendencia, acumulado y actividad del periodo sin mezclar sus alcances.
 export const safetyWeeklySeries: SafetyWeeklyRecord[] = [
   { week: "S1", startDate: "2026-07-06", endDate: "2026-07-11", cutoff: "2026-07-11", eventsWeek: null, eventsCumulative: 2, personnel: 134, hoursWeek: 48, hoursCumulative: 48, observationsWeek: 5, observationsCumulative: 5, meetingsWeek: 5, meetingsCumulative: 5, inspectionsWeek: 5, inspectionsCumulative: 5, openActions: 3 },
