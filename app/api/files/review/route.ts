@@ -351,14 +351,17 @@ export async function GET(request: Request) {
       createdAt: candidate.createdAt,
     })),
     permissions: {
-      canReview: auth.user.role === "admin" && !file.deletedAt,
+      canReview: (
+        auth.user.role === "admin" ||
+        (fileRequiresFinanceAccess(file) && auth.user.financeApproveAccess)
+      ) && !file.deletedAt,
       canAccessFinance: auth.user.financeAccess,
     },
   });
 }
 
 export async function POST(request: Request) {
-  const auth = await requireApiUser({ admin: true });
+  const auth = await requireApiUser();
   if (!auth.user) return auth.response;
   let payload: {
     action?: unknown;
@@ -384,8 +387,12 @@ export async function POST(request: Request) {
   let file = await findFile(fileId);
   if (!file) return Response.json({ error: "Archivo no encontrado." }, { status: 404 });
   const db = getDb();
-  if (fileRequiresFinanceAccess(file) && !auth.user.financeAccess) {
-    return Response.json({ error: "No tienes acceso a la revisión financiera o comercial." }, { status: 403 });
+  const protectedReview = fileRequiresFinanceAccess(file);
+  if (protectedReview && !auth.user.financeApproveAccess) {
+    return Response.json({ error: "No tienes permiso para validar documentos financieros o comerciales." }, { status: 403 });
+  }
+  if (!protectedReview && auth.user.role !== "admin") {
+    return Response.json({ error: "La revisión operativa requiere permisos de administrador." }, { status: 403 });
   }
   if (file.deletedAt) {
     return Response.json({ error: "El archivo está eliminado. Restáuralo antes de revisarlo." }, { status: 410 });

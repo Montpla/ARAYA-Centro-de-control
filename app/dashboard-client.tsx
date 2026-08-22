@@ -408,6 +408,8 @@ export type DashboardUser = {
   role: "admin" | "member";
   area: UserArea;
   financeAccess: boolean;
+  financeUploadAccess: boolean;
+  financeApproveAccess: boolean;
   active: boolean;
   avatarUrl: string;
 };
@@ -448,6 +450,9 @@ type UploadedFileRecord = {
   processingStage: string;
   processingProgress: number;
   processingSummary: string;
+  processingAttempts: number;
+  nextRetryAt: string;
+  lastProcessingError: string;
   requiresReview: boolean;
   projectId: string;
   documentType: string;
@@ -475,6 +480,8 @@ type UploadedFileRecord = {
   createdAt: string;
   updatedAt: string;
   canManage: boolean;
+  isOwnUpload: boolean;
+  statusOnly: boolean;
   downloadUrl: string;
 };
 
@@ -512,7 +519,7 @@ type UploadResult = {
   error?: string;
   file?: UploadedFileRecord;
   receipt?: {
-    outcome: "published" | "unchanged" | "diagnosed" | "catalogued" | "observed";
+    outcome: "published" | "unchanged" | "diagnosed" | "catalogued" | "observed" | "already_registered" | "accepted";
     area: string;
     areaLabel: string;
     publishedCount: number;
@@ -5469,6 +5476,8 @@ function UserEditorModal({
                 ...current,
                 role: event.target.value as "admin" | "member",
                 financeAccess: event.target.value === "admin" ? true : current.financeAccess,
+                financeUploadAccess: event.target.value === "admin" ? true : current.financeUploadAccess,
+                financeApproveAccess: event.target.value === "admin" ? true : current.financeApproveAccess,
               }))}
             >
               <option value="member">Usuario</option>
@@ -5503,6 +5512,28 @@ function UserEditorModal({
             onChange={(event) => setForm((current) => ({ ...current, financeAccess: event.target.checked }))}
           />
           <span><strong>Finanzas y Ventas</strong><small>Los administradores siempre conservan este permiso combinado.</small></span>
+        </label>
+        <label className="permission-check">
+          <input
+            type="checkbox"
+            checked={form.financeUploadAccess}
+            disabled={form.role === "admin"}
+            onChange={(event) => setForm((current) => ({ ...current, financeUploadAccess: event.target.checked }))}
+          />
+          <span><strong>Entregar documentos financieros</strong><small>Sube al buzón protegido y consulta únicamente el estado de sus propias cargas.</small></span>
+        </label>
+        <label className="permission-check">
+          <input
+            type="checkbox"
+            checked={form.financeApproveAccess}
+            disabled={form.role === "admin"}
+            onChange={(event) => setForm((current) => ({
+              ...current,
+              financeApproveAccess: event.target.checked,
+              financeAccess: event.target.checked ? true : current.financeAccess,
+            }))}
+          />
+          <span><strong>Validar documentos financieros</strong><small>Resuelve excepciones sin conceder permisos administrativos generales.</small></span>
         </label>
         <label className="permission-check">
           <input
@@ -6383,6 +6414,8 @@ function UsersAdminView({
     role: "member" as "admin" | "member",
     area: "direccion" as UserArea,
     financeAccess: false,
+    financeUploadAccess: true,
+    financeApproveAccess: false,
     pin: "",
   });
 
@@ -6422,6 +6455,8 @@ function UsersAdminView({
     role: "admin" | "member";
     area: UserArea;
     financeAccess: boolean;
+    financeUploadAccess: boolean;
+    financeApproveAccess: boolean;
     active: boolean;
     updatedAt?: string;
     pin?: string;
@@ -6456,7 +6491,16 @@ function UsersAdminView({
     event.preventDefault();
     const saved = await saveUser({ ...form, active: true });
     if (saved) {
-      setForm({ email: "", displayName: "", role: "member", area: "direccion", financeAccess: false, pin: "" });
+      setForm({
+        email: "",
+        displayName: "",
+        role: "member",
+        area: "direccion",
+        financeAccess: false,
+        financeUploadAccess: true,
+        financeApproveAccess: false,
+        pin: "",
+      });
     }
   }
 
@@ -6525,7 +6569,13 @@ function UsersAdminView({
           <label>Correo de acceso<input type="email" required value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} placeholder="persona@empresa.com" /></label>
           <label>PIN inicial<input type="text" inputMode="numeric" required minLength={4} maxLength={10} pattern="\d{4,10}" value={form.pin} onChange={(event) => setForm((current) => ({ ...current, pin: event.target.value.replace(/\D/g, "") }))} placeholder="4 a 10 dígitos" /></label>
           <label>Perfil
-            <select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as "admin" | "member", financeAccess: event.target.value === "admin" ? true : current.financeAccess }))}>
+            <select value={form.role} onChange={(event) => setForm((current) => ({
+              ...current,
+              role: event.target.value as "admin" | "member",
+              financeAccess: event.target.value === "admin" ? true : current.financeAccess,
+              financeUploadAccess: event.target.value === "admin" ? true : current.financeUploadAccess,
+              financeApproveAccess: event.target.value === "admin" ? true : current.financeApproveAccess,
+            }))}>
               <option value="member">Usuario</option>
               <option value="admin">Administrador</option>
             </select>
@@ -6538,6 +6588,18 @@ function UsersAdminView({
           <label className="permission-check">
             <input type="checkbox" checked={form.financeAccess} disabled={form.role === "admin"} onChange={(event) => setForm((current) => ({ ...current, financeAccess: event.target.checked }))} />
             <span><strong>Finanzas y Ventas</strong><small>Permite consultar cifras, documentos e informes financieros, comerciales y de cobranza.</small></span>
+          </label>
+          <label className="permission-check">
+            <input type="checkbox" checked={form.financeUploadAccess} disabled={form.role === "admin"} onChange={(event) => setForm((current) => ({ ...current, financeUploadAccess: event.target.checked }))} />
+            <span><strong>Entregar documentos financieros</strong><small>Puede subir informes y ver el estado de sus propias entregas, sin consultar sus cifras.</small></span>
+          </label>
+          <label className="permission-check">
+            <input type="checkbox" checked={form.financeApproveAccess} disabled={form.role === "admin"} onChange={(event) => setForm((current) => ({
+              ...current,
+              financeApproveAccess: event.target.checked,
+              financeAccess: event.target.checked ? true : current.financeAccess,
+            }))} />
+            <span><strong>Validar documentos financieros</strong><small>Permite resolver únicamente las excepciones financieras que necesiten decisión humana.</small></span>
           </label>
           <button className="button primary" type="submit" disabled={Boolean(saving)}>Crear acceso</button>
         </form>
@@ -6612,7 +6674,13 @@ function UsersAdminView({
                     <select
                       value={user.role}
                       disabled={isSelf || saving === String(user.id)}
-                      onChange={(event) => void saveUser({ ...user, role: event.target.value as "admin" | "member", financeAccess: event.target.value === "admin" ? true : user.financeAccess })}
+                      onChange={(event) => void saveUser({
+                        ...user,
+                        role: event.target.value as "admin" | "member",
+                        financeAccess: event.target.value === "admin" ? true : user.financeAccess,
+                        financeUploadAccess: event.target.value === "admin" ? true : user.financeUploadAccess,
+                        financeApproveAccess: event.target.value === "admin" ? true : user.financeApproveAccess,
+                      })}
                     >
                       <option value="member">Usuario</option>
                       <option value="admin">Administrador</option>
@@ -6633,6 +6701,24 @@ function UsersAdminView({
                     onClick={() => void saveUser({ ...user, financeAccess: !user.financeAccess })}
                   >
                     <span>Finanzas y Ventas</span><strong>{user.financeAccess ? "Permitido" : "Bloqueado"}</strong>
+                  </button>
+                  <button
+                    className={`permission-toggle ${user.financeUploadAccess ? "granted" : ""}`}
+                    disabled={user.role === "admin" || saving === String(user.id)}
+                    onClick={() => void saveUser({ ...user, financeUploadAccess: !user.financeUploadAccess })}
+                  >
+                    <span>Entrega financiera</span><strong>{user.financeUploadAccess ? "Permitida" : "Bloqueada"}</strong>
+                  </button>
+                  <button
+                    className={`permission-toggle ${user.financeApproveAccess ? "granted" : ""}`}
+                    disabled={user.role === "admin" || saving === String(user.id)}
+                    onClick={() => void saveUser({
+                      ...user,
+                      financeApproveAccess: !user.financeApproveAccess,
+                      financeAccess: !user.financeApproveAccess ? true : user.financeAccess,
+                    })}
+                  >
+                    <span>Validación financiera</span><strong>{user.financeApproveAccess ? "Permitida" : "Bloqueada"}</strong>
                   </button>
                   <button
                     className={`permission-toggle ${user.active ? "granted" : "revoked"}`}
@@ -7023,8 +7109,8 @@ function FileReviewPanel({
                 </article>
               )) : <p>La primera decisión quedará registrada aquí.</p>}
             </section>
-            {currentUser.role !== "admin" && (
-              <p className="quality-note">Puedes consultar el expediente y el original. La aprobación corresponde al administrador autorizado.</p>
+            {currentUser.role !== "admin" && !currentUser.financeApproveAccess && (
+              <p className="quality-note">Puedes consultar el expediente y el original. La aprobación corresponde a una persona con validación financiera.</p>
             )}
           </div>
         )}
@@ -7102,7 +7188,7 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState<"pending" | "all" | "integrated" | "observed" | "deleted">("all");
+  const [filter, setFilter] = useState<"mine" | "pending" | "all" | "integrated" | "observed" | "deleted">("mine");
   const [selectedFile, setSelectedFile] = useState<UploadedFileRecord | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState("");
   const [hasMore, setHasMore] = useState(false);
@@ -7222,7 +7308,9 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
   const synchronized = summary.synchronized;
   const observed = summary.observed;
   const averageProgress = summary.averageProgress;
+  const myUploadCount = files.filter((file) => file.isOwnUpload && !file.deletedAt).length;
   const visibleFiles = useMemo(() => files.filter((file) => {
+    if (filter === "mine") return file.isOwnUpload && !file.deletedAt;
     if (filter === "deleted") return Boolean(file.deletedAt);
     if (file.deletedAt) return false;
     if (filter === "pending") return file.requiresReview;
@@ -7313,7 +7401,7 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
           <span className="section-kicker">BANDEJA DOCUMENTAL · ACTUALIZACIÓN CADA 5 S</span>
           <h3>Clasificación, contraste y publicación</h3>
         </div>
-        <span className="live-state"><span className="live-dot" /> {currentUser.role === "admin" ? "Validación habilitada" : "Consulta autorizada"}</span>
+        <span className="live-state"><span className="live-dot" /> {currentUser.role === "admin" || currentUser.financeApproveAccess ? "Validación habilitada" : "Entrega y seguimiento"}</span>
       </div>
       {summary.total > 0 && (
         <div className="processing-overview">
@@ -7324,6 +7412,7 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
         </div>
       )}
       <div className="review-filter-tabs" role="tablist" aria-label="Filtrar expedientes">
+        <button type="button" className={filter === "mine" ? "active" : ""} onClick={() => setFilter("mine")}>Mis cargas · {myUploadCount}</button>
         <button type="button" className={filter === "pending" ? "active" : ""} onClick={() => setFilter("pending")}>Por validar · {pendingReview}</button>
         <button type="button" className={filter === "integrated" ? "active" : ""} onClick={() => setFilter("integrated")}>Integrados · {synchronized}</button>
         <button type="button" className={filter === "observed" ? "active" : ""} onClick={() => setFilter("observed")}>Observados · {observed}</button>
@@ -7387,6 +7476,8 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
                                 </span>
                                 <i><b style={{ width: `${file.processingProgress}%` }} /></i>
                                 <small>{file.processingSummary}</small>
+                                {file.nextRetryAt && <small>Reintento automático previsto · {new Date(file.nextRetryAt).toLocaleTimeString("es-DO")}</small>}
+                                {file.processingAttempts > 1 && <small>{file.processingAttempts} intentos realizados sobre el mismo expediente</small>}
                               </div>
                             </div>
                             <div className="uploaded-file-owner">
@@ -7400,10 +7491,13 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
                               {file.discrepancyCount > 0 && <em>{file.discrepancyCount} discrepancias</em>}
                             </div>
                             <div className="uploaded-file-actions">
-                              {!file.deletedAt && <button type="button" className="button primary" onClick={() => setSelectedFile(file)}>
-                                {currentUser.role === "admin" && file.requiresReview ? "Revisar" : "Abrir expediente"}
+                              {!file.deletedAt && !file.statusOnly && <button type="button" className="button primary" onClick={() => setSelectedFile(file)}>
+                                {(currentUser.role === "admin" || currentUser.financeApproveAccess) && file.requiresReview ? "Revisar" : "Abrir expediente"}
                               </button>}
-                              {!file.deletedAt && <a className="button secondary" href={file.downloadUrl} data-file-title={file.originalName}>Abrir original</a>}
+                              {!file.deletedAt && !file.statusOnly && <a className="button secondary" href={file.downloadUrl} data-file-title={file.originalName}>Abrir original</a>}
+                              {file.statusOnly && (
+                                <span className="upload-status-only">Estado visible · contenido financiero protegido</span>
+                              )}
                               {derivedChildrenByParent.get(file.id)?.map((child) => (
                                 <button type="button" className="button secondary" key={child.id} onClick={() => setSelectedFile(child)}>
                                   {child.automationKind === "dwg_to_png" ? "Abrir vista del plano" : "Abrir conversión"}
@@ -7414,7 +7508,7 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
                                   Abrir fuente vigente
                                 </button>
                               )}
-                              {file.canManage && (
+                              {file.canManage && !file.statusOnly && (
                                 <button
                                   type="button"
                                   className={`button ${file.deletedAt ? "secondary" : "danger"}`}
@@ -8435,6 +8529,7 @@ function UploadModal({
   initialArea,
   initialFile,
   canAccessFinance,
+  canUploadFinance,
   online,
   onClose,
   onComplete,
@@ -8442,6 +8537,7 @@ function UploadModal({
   initialArea: UploadArea;
   initialFile: File | null;
   canAccessFinance: boolean;
+  canUploadFinance: boolean;
   online: boolean;
   onClose: () => void;
   onComplete: (message: string) => void;
@@ -8475,6 +8571,8 @@ function UploadModal({
   const deferredConversionExtension = selectedFile
     ? DEFERRED_CONVERSION_EXTENSIONS.find((extension) => selectedFile.name.toLowerCase().endsWith(`.${extension}`)) ?? ""
     : "";
+  const financeDelivery = area === "finanzas" || area === "comercial";
+  const processingAccepted = completedUpload?.receipt?.outcome === "accepted";
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -8518,20 +8616,20 @@ function UploadModal({
           <button className="close-button" type="button" onClick={finishUpload} aria-label="Cerrar">×</button>
         </div>
         {completedUpload ? (
-          <section className={`upload-receipt ${completedUpload.receipt?.requiresAction ? "requires-action" : "complete"}`} aria-live="polite">
+          <section className={`upload-receipt ${processingAccepted ? "processing" : completedUpload.receipt?.requiresAction ? "requires-action" : "complete"}`} aria-live="polite">
             <div className="upload-receipt-mark" aria-hidden="true">
-              {completedUpload.receipt?.requiresAction ? "!" : "✓"}
+              {processingAccepted ? "…" : completedUpload.receipt?.requiresAction ? "!" : "✓"}
             </div>
-            <span className="section-kicker">RECIBO DE PROCESAMIENTO</span>
-            <h3>{completedUpload.receipt?.requiresAction ? "Archivo conservado con una comprobación" : "Archivo procesado correctamente"}</h3>
+            <span className="section-kicker">{processingAccepted ? "RECIBO DE ENTREGA" : "RECIBO DE PROCESAMIENTO"}</span>
+            <h3>{processingAccepted ? "Archivo recibido correctamente" : completedUpload.receipt?.requiresAction ? "Archivo conservado con una comprobación" : "Archivo procesado correctamente"}</h3>
             <p>{completedUpload.message ?? "El original quedó registrado en el Centro de Control."}</p>
-            <div className="upload-receipt-metrics">
+            {!processingAccepted && <div className="upload-receipt-metrics">
               <span><small>Área detectada</small><strong>{completedUpload.receipt?.areaLabel ?? "Catalogada"}</strong></span>
               <span><small>Datos publicados</small><strong>{completedUpload.receipt?.publishedCount ?? 0}</strong></span>
               <span><small>Ya coincidían</small><strong>{completedUpload.receipt?.unchangedCount ?? 0}</strong></span>
               <span><small>Aislados con diagnóstico</small><strong>{completedUpload.receipt?.ignoredCount ?? 0}</strong></span>
               <span><small>Secciones nuevas</small><strong>{completedUpload.receipt?.newSectionCount ?? 0}</strong></span>
-            </div>
+            </div>}
             {Boolean(completedUpload.receipt?.warnings.length) && (
               <div className="upload-receipt-warnings">
                 <strong>Lo que el sistema encontró</strong>
@@ -8546,7 +8644,21 @@ function UploadModal({
           </section>
         ) : (
           <>
-        <p className="upload-intro">Selecciona el archivo y pulsa <strong>Subir y procesar</strong>. El sistema conserva el original, registra tu identidad y detecta el área por el contenido, además del periodo y la moneda. Cada hecho verificable actualiza cifras y gráficas solo; un concepto nuevo crea su sección y cualquier entrada incompatible queda aislada con un diagnóstico claro.</p>
+        <p className="upload-intro">Selecciona el archivo y pulsa <strong>Subir y procesar</strong>. El original se acepta primero y el análisis continúa sobre un expediente protegido. El sistema detecta el área, el periodo y la moneda; cada dato válido se publica sin que una excepción bloquee el resto.</p>
+        {canUploadFinance && (
+          <button
+            className={`finance-upload-shortcut ${financeDelivery ? "selected" : ""}`}
+            type="button"
+            onClick={() => setArea(financeDelivery ? "auto" : "finanzas")}
+          >
+            <span aria-hidden="true">{financeDelivery ? "✓" : "F"}</span>
+            <b>{financeDelivery ? "Entrega financiera seleccionada" : "Este archivo es un informe financiero"}</b>
+            <small>Se guardará en el buzón protegido. Entregarlo no permite consultar sus cifras.</small>
+          </button>
+        )}
+        {!canUploadFinance && (
+          <div className="callout warn"><strong>Entrega financiera no habilitada</strong><p>El administrador puede activar este permiso sin concederte acceso de lectura a Finanzas.</p></div>
+        )}
         <div className={`upload-dropzone ${previewUrl ? "with-preview" : ""}`}>
           <input
             type="file"
@@ -8611,6 +8723,12 @@ function UploadModal({
             <a className="button secondary" href="/api/templates?kind=cubicacion" download>Cubicación</a>
             <a className="button secondary" href="/api/templates?kind=ventas" download>Ventas</a>
             <a className="button secondary" href="/api/templates?kind=cronograma" download>Cronograma</a>
+            {canUploadFinance && <a className="button secondary" href="/api/templates?kind=cxp_categorias" download>CxP por categoría</a>}
+            {canUploadFinance && <a className="button secondary" href="/api/templates?kind=cxp_vencimientos" download>CxP por vencimiento</a>}
+            {canUploadFinance && <a className="button secondary" href="/api/templates?kind=costes" download>Costes</a>}
+            {canUploadFinance && <a className="button secondary" href="/api/templates?kind=anticipos" download>Anticipos</a>}
+            {canUploadFinance && <a className="button secondary" href="/api/templates?kind=proyeccion_financiera" download>Proyección</a>}
+            {canUploadFinance && <a className="button secondary" href="/api/templates?kind=financiacion" download>Financiación</a>}
           </div>
         </details>
         <details className="upload-advanced-options">
@@ -8623,7 +8741,11 @@ function UploadModal({
               Área de destino
               <select value={area} onChange={(event) => setArea(event.target.value as UploadArea)}>
                 {uploadAreas.map((option) => (
-                  <option key={option.id} value={option.id}>
+                  <option
+                    key={option.id}
+                    value={option.id}
+                    disabled={!canUploadFinance && requiresFinanceAccessForArea(option.id)}
+                  >
                     {option.label}{!canAccessFinance && requiresFinanceAccessForArea(option.id) ? " · contenido protegido" : ""}
                   </option>
                 ))}
@@ -8650,7 +8772,7 @@ function UploadModal({
         {error && <div className="callout warn"><strong>No se completó la carga</strong><p>{error}</p></div>}
         <div className="modal-actions">
           <button className="button secondary" type="button" onClick={onClose}>Cancelar</button>
-          <button className="button primary" type="submit" disabled={!selectedFile || saving || !online}>{saving ? "Subiendo y procesando…" : online ? "Subir y procesar" : "Esperando conexión"}</button>
+          <button className="button primary" type="submit" disabled={!selectedFile || saving || !online}>{saving ? "Entregando archivo…" : online ? "Subir documento" : "Esperando conexión"}</button>
         </div>
           </>
         )}
@@ -10296,6 +10418,7 @@ export function DashboardClient({
           initialArea={!currentUser.financeAccess && requiresFinanceAccessForArea(defaultUploadArea[view]) ? "auto" : defaultUploadArea[view]}
           initialFile={pendingUploadFile}
           canAccessFinance={currentUser.financeAccess}
+          canUploadFinance={currentUser.financeUploadAccess}
           online={online}
           onClose={() => {
             setUploadOpen(false);

@@ -3,6 +3,32 @@
 Actualizado: 22/08/2026
 Zona horaria del usuario: Europe/Madrid
 
+## Entrega financiera sin bloqueos (22/08/2026)
+
+- Se separaron tres permisos: `financeUploadAccess` para entregar documentos,
+  `financeAccess` para consultar cifras y `financeApproveAccess` para resolver
+  excepciones. Los usuarios actuales conservan sus capacidades y la entrega
+  financiera queda habilitada por defecto sin conceder lectura.
+- La carga web archiva primero el original y responde `202 accepted`; el
+  análisis continúa con `waitUntil` sobre el mismo expediente. Hay tres
+  intentos trazados (`processing_attempts`, `next_retry_at`,
+  `last_processing_error`) y una red de seguridad programada cada 15 minutos.
+- Un duplicado financiero ya no devuelve 403 al remitente: confirma que el
+  original existe sin revelar cifras. Cada persona dispone de **Mis cargas** y
+  ve el estado de sus entregas protegidas, pero no puede abrirlas ni descargarlas
+  si no tiene permiso de lectura.
+- El remitente recibe una notificación privada al terminar o cuando hace falta
+  atención. Los reintentos intermedios no generan avisos repetidos.
+- El administrador puede conceder validación financiera sin dar permisos
+  administrativos generales. La revisión operativa no financiera sigue
+  reservada al administrador.
+- El formulario incorpora un acceso rápido a **Informe financiero** y seis
+  plantillas deterministas opcionales: CxP por categoría/vencimiento, costes,
+  anticipos, proyección y financiación. PDF, Excel, PowerPoint y demás formatos
+  admitidos siguen procesándose sin obligar a usar una plantilla.
+- Migración: `drizzle/0026_uneven_wallow.sql`. Verificación local: TypeScript,
+  build y suite completa **343/343** en verde.
+
 ## Automatización documental cerrada (22/08/2026)
 
 - La clasificación inicial por nombre deja de ser un bloqueo: cuando el área
@@ -23,7 +49,7 @@ Zona horaria del usuario: Europe/Madrid
   produce hechos, el mensaje pide un escaneo nítido. XLS antiguo indica guardar
   como XLSX y ZIP cifrado identifica la contraseña y explica cómo retirarla.
 - `CURRENT_INGESTION_VERSION` pasa a `2026-08-22.1`. El workflow programado está
-  activo, dispone de sus secretos y relee lotes idempotentes cada seis horas.
+  activo, dispone de sus secretos y relee lotes idempotentes cada quince minutos.
 - Los conceptos sin campo ya se convierten automáticamente en secciones
   visuales trazables; no vuelven a crear una cola indefinida de propuestas.
 

@@ -183,6 +183,13 @@
       "when": 1787260700756,
       "tag": "0025_yellow_bullseye",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1787390564005,
+      "tag": "0026_uneven_wallow",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { getRequestExecutionContext } from "vinext/shims/request-context";
 import {
   and,
   asc,
@@ -65,6 +66,7 @@ import {
   normalizeFilePageSize,
 } from "../../../lib/file-registry-pagination";
 import { scheduleNotificationDispatch } from "../../../lib/notification-dispatch";
+import { emitMissingNotifications } from "../../../lib/notifications";
 import {
   D1JsonDatabase,
   selectLivePointValues,
@@ -88,6 +90,8 @@ export const runtime = "edge";
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const PROVISIONAL_DOCUMENT_TYPE = "clasificacion_pendiente";
 const EXTRACTION_LEASE_MS = 5 * 60 * 1_000;
+const BACKGROUND_PROCESSING_HEADER = "x-araya-background-processing";
+const BACKGROUND_PROCESSING_ATTEMPTS = 3;
 const allowedExtensions = new Set([
   "csv",
   "doc",
@@ -114,6 +118,131 @@ const inlinePreviewExtensions = new Set([
   "pdf",
   "png",
 ]);
+
+function wait(milliseconds: number) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function backgroundUploadForm(
+  source: FormData,
+  bytes: ArrayBuffer,
+  fileName: string,
+  mimeType: string,
+) {
+  const next = new FormData();
+  for (const [key, value] of source.entries()) {
+    if (key !== "file" && typeof value === "string") next.append(key, value);
+  }
+  next.set("file", new File([bytes], fileName, { type: mimeType }));
+  next.set("processNow", "true");
+  return next;
+}
+
+function scheduleBackgroundUploadProcessing(input: {
+  request: Request;
+  formData: FormData;
+  bytes: ArrayBuffer;
+  fileName: string;
+  mimeType: string;
+  fileId: string;
+  uploaderEmail: string;
+  uploaderName: string;
+}) {
+  const task = (async () => {
+    const db = getDb();
+    let lastError = "";
+    for (let attempt = 1; attempt <= BACKGROUND_PROCESSING_ATTEMPTS; attempt += 1) {
+      const attemptAt = new Date().toISOString();
+      await db.update(uploadedFiles).set({
+        processingAttempts: attempt,
+        nextRetryAt: "",
+        lastProcessingError: "",
+        updatedAt: attemptAt,
+      }).where(eq(uploadedFiles.id, input.fileId)).catch(() => undefined);
+      try {
+        const headers = new Headers({ [BACKGROUND_PROCESSING_HEADER]: "1" });
+        for (const name of ["cookie", "authorization"]) {
+          const value = input.request.headers.get(name);
+          if (value) headers.set(name, value);
+        }
+        const response = await POST(new Request(input.request.url, {
+          method: "POST",
+          headers,
+          body: backgroundUploadForm(input.formData, input.bytes, input.fileName, input.mimeType),
+        }));
+        const payload = await response.clone().json().catch(() => ({})) as {
+          error?: string;
+          receipt?: { outcome?: string };
+        };
+        const observed = payload.receipt?.outcome === "observed";
+        if (response.ok && !observed) {
+          await db.update(uploadedFiles).set({
+            nextRetryAt: "",
+            lastProcessingError: "",
+            updatedAt: new Date().toISOString(),
+          }).where(eq(uploadedFiles.id, input.fileId)).catch(() => undefined);
+          return;
+        }
+        lastError = payload.error || (observed ? "El intento terminó observado." : `Respuesta ${response.status}.`);
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : "Fallo técnico de procesamiento.";
+      }
+      if (attempt < BACKGROUND_PROCESSING_ATTEMPTS) {
+        const retryAt = new Date(Date.now() + (attempt === 1 ? 500 : 1_500)).toISOString();
+        await db.update(uploadedFiles).set({
+          nextRetryAt: retryAt,
+          lastProcessingError: lastError.slice(0, 300),
+          processingSummary: `Reintento automático ${attempt + 1} de ${BACKGROUND_PROCESSING_ATTEMPTS} programado.`,
+          updatedAt: new Date().toISOString(),
+        }).where(eq(uploadedFiles.id, input.fileId)).catch(() => undefined);
+        await wait(attempt === 1 ? 500 : 1_500);
+      }
+    }
+    await db.update(uploadedFiles).set({
+      nextRetryAt: "",
+      lastProcessingError: lastError.slice(0, 300),
+      processingSummary: "El original está protegido. Los intentos automáticos terminaron y el equipo validador ha recibido el diagnóstico.",
+      updatedAt: new Date().toISOString(),
+    }).where(eq(uploadedFiles.id, input.fileId)).catch(() => undefined);
+    await notifyUploaderOfProcessingResult({
+      fileId: input.fileId,
+      uploaderEmail: input.uploaderEmail,
+      uploaderName: input.uploaderName,
+      updatedAt: new Date().toISOString(),
+      outcome: "attention",
+    });
+    scheduleNotificationDispatch();
+  })();
+  const context = getRequestExecutionContext();
+  if (context) context.waitUntil(task);
+  else void task;
+}
+
+async function notifyUploaderOfProcessingResult(input: {
+  fileId: string;
+  uploaderEmail: string;
+  uploaderName: string;
+  updatedAt: string;
+  outcome: "completed" | "attention";
+}) {
+  const completed = input.outcome === "completed";
+  await emitMissingNotifications([{
+    kind: completed ? "own_upload_completed" : "own_upload_attention",
+    area: "direccion",
+    audience: `user:${input.uploaderEmail}`,
+    actorEmail: input.uploaderEmail,
+    actorName: input.uploaderName,
+    subjectType: "uploaded_file_result",
+    subjectId: `${input.fileId}:${input.updatedAt}`,
+    title: completed ? "Tu archivo ha terminado de procesarse" : "Tu archivo necesita una comprobación",
+    body: completed
+      ? "El expediente está sincronizado. Si contiene Finanzas, sus cifras siguen visibles únicamente para personas autorizadas."
+      : "El original está protegido y no debes volver a subirlo. El equipo validador tiene disponible el diagnóstico.",
+    view: "fuentes",
+    payload: { fileId: input.fileId, outcome: input.outcome },
+  }]).catch(() => undefined);
+  scheduleNotificationDispatch();
+}
 const canonicalMimeByExtension: Record<string, string> = {
   csv: "text/csv",
   doc: "application/msword",
@@ -290,15 +419,19 @@ function individualUpdateContractIsSafe(
 
 function publicFileRow(
   row: typeof uploadedFiles.$inferSelect,
-  user?: { email: string; role: string },
+  user?: { email: string; role: string; financeAccess?: boolean },
 ) {
+  const isOwnUpload = Boolean(user && user.email === row.uploaderEmail);
+  const statusOnly = Boolean(
+    user && !user.financeAccess && fileRequiresFinanceAccess(row) && isOwnUpload,
+  );
   return {
     id: row.id,
     originalName: row.originalName,
     area: row.area,
     areaLabel: areaLabels[row.area as keyof typeof areaLabels] ?? row.area,
     section: row.section,
-    description: row.description,
+    description: statusOnly ? "" : row.description,
     mimeType: row.mimeType,
     extension: row.extension,
     sizeBytes: row.sizeBytes,
@@ -309,17 +442,24 @@ function publicFileRow(
     version: row.version,
     declaredCutoff: row.declaredCutoff,
     classificationConfidence: row.classificationConfidence,
-    classificationReason: row.classificationReason,
+    classificationReason: statusOnly ? "Clasificado en el buzón financiero protegido." : row.classificationReason,
     processingStage: row.processingStage,
     processingProgress: row.processingProgress,
-    processingSummary: row.processingSummary,
+    processingSummary: statusOnly
+      ? row.processingProgress >= 100
+        ? "La entrega ha terminado de procesarse. Las cifras permanecen protegidas."
+        : "La entrega se está procesando en el buzón financiero protegido."
+      : row.processingSummary,
+    processingAttempts: row.processingAttempts,
+    nextRetryAt: row.nextRetryAt,
+    lastProcessingError: statusOnly ? "" : row.lastProcessingError,
     requiresReview: row.requiresReview,
     projectId: row.projectId,
     documentType: row.documentType,
     detectedPeriod: row.detectedPeriod,
     extractionMode: row.extractionMode,
     extractionConfidence: row.extractionConfidence,
-    extractionSummary: row.extractionSummary,
+    extractionSummary: statusOnly ? "" : row.extractionSummary,
     discrepancyCount: row.discrepancyCount,
     ingestionVersion: row.ingestionVersion,
     processedAt: row.processedAt,
@@ -328,7 +468,7 @@ function publicFileRow(
     reviewStatus: row.reviewStatus,
     reviewedByName: row.reviewedByName,
     reviewedAt: row.reviewedAt,
-    reviewNote: row.reviewNote,
+    reviewNote: statusOnly ? "" : row.reviewNote,
     publicationRevision: row.publicationRevision,
     publishedAt: row.publishedAt,
     deletedAt: row.deletedAt,
@@ -340,7 +480,9 @@ function publicFileRow(
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     canManage: Boolean(user && (user.role === "admin" || user.email === row.uploaderEmail)),
-    downloadUrl: `/api/files?download=${encodeURIComponent(row.id)}`,
+    isOwnUpload,
+    statusOnly,
+    downloadUrl: statusOnly ? "" : `/api/files?download=${encodeURIComponent(row.id)}`,
   };
 }
 
@@ -363,9 +505,12 @@ function fileRegistryVisibilityCondition(
 ) {
   const financeCondition = user.financeAccess
     ? sql`1 = 1`
-    : and(
-        notInArray(uploadedFiles.area, financeProtectedAreaValues()),
-        notInArray(uploadedFiles.documentType, financeProtectedDocumentTypeValues()),
+    : or(
+        and(
+          notInArray(uploadedFiles.area, financeProtectedAreaValues()),
+          notInArray(uploadedFiles.documentType, financeProtectedDocumentTypeValues()),
+        ),
+        eq(uploadedFiles.uploaderEmail, user.email),
       );
   const deletedCondition = !includeDeleted
     ? and(
@@ -386,7 +531,7 @@ function fileRegistryRowVisible(
   user: FileRegistryUser,
   includeDeleted: boolean,
 ) {
-  if (!user.financeAccess && fileRequiresFinanceAccess(row)) return false;
+  if (!user.financeAccess && fileRequiresFinanceAccess(row) && row.uploaderEmail !== user.email) return false;
   if (!row.deletedAt && (!row.supersededByFileId || includeDeleted)) return true;
   return includeDeleted && (user.role === "admin" || row.uploaderEmail === user.email);
 }
@@ -725,7 +870,9 @@ export async function POST(request: Request) {
     user = agent.user;
   } else {
     const auth = await authenticatedUser();
-    if (!auth.user) return auth.response;
+    if (!auth.user) {
+      return auth.response ?? Response.json({ error: "No autorizado." }, { status: 401 });
+    }
     user = auth.user;
   }
 
@@ -775,6 +922,7 @@ export async function POST(request: Request) {
   // original— y publica una revisión nueva encima. Sin esta señal explícita, un
   // archivo idéntico ya publicado se queda como está.
   const reprocessRequested = formData.get("reprocess") === "true";
+  const backgroundProcessing = request.headers.get(BACKGROUND_PROCESSING_HEADER) === "1";
   const reprocessFileId = String(formData.get("reprocessFileId") ?? "").trim().slice(0, 160);
   if (reprocessFileId && (!reprocessRequested || user.role !== "admin")) {
     return Response.json({
@@ -783,6 +931,12 @@ export async function POST(request: Request) {
   }
   const derivedFromFileId = String(formData.get("derivedFromFileId") ?? "").trim().slice(0, 160);
   const automationKind = String(formData.get("automationKind") ?? "").trim().slice(0, 80);
+  const deferProcessingRequested =
+    !backgroundProcessing &&
+    !reprocessRequested &&
+    !derivedFromFileId &&
+    formData.get("processNow") !== "true" &&
+    source === "dashboard";
   if (Boolean(derivedFromFileId) !== Boolean(automationKind)) {
     return Response.json({ error: "Una conversión automática debe indicar origen y tipo de automatización." }, { status: 400 });
   }
@@ -819,6 +973,11 @@ export async function POST(request: Request) {
     classification.area,
     analysis.documentType,
   );
+  if (initiallyProtectedUpload && !user.financeUploadAccess) {
+    return Response.json({
+      error: "Tu usuario puede cargar documentación general, pero no tiene habilitada la entrega financiera. Pide al administrador que active «Entregar documentos financieros».",
+    }, { status: 403 });
+  }
   const sha256 = hexDigest(await crypto.subtle.digest("SHA-256", bytes));
   const db = getDb();
 
@@ -862,7 +1021,24 @@ export async function POST(request: Request) {
     const provisionalOwnedByUser = duplicate.documentType === PROVISIONAL_DOCUMENT_TYPE &&
       duplicate.uploaderEmail.trim().toLowerCase() === user.email.trim().toLowerCase();
     if (fileRequiresFinanceAccess(duplicate) && !user.financeAccess && !provisionalOwnedByUser) {
-      return Response.json({ error: "No tienes acceso al expediente ya registrado." }, { status: 403 });
+      return Response.json({
+        duplicate: true,
+        restricted: true,
+        receipt: {
+          outcome: "already_registered",
+          area: "finanzas",
+          areaLabel: "Buzón financiero protegido",
+          publishedCount: 0,
+          unchangedCount: 0,
+          ignoredCount: 0,
+          warningCount: 0,
+          warnings: [],
+          newSectionCount: 0,
+          requiresAction: false,
+          nextAction: "No tienes que volver a subirlo. El expediente existente continúa siendo la copia válida.",
+        },
+        message: "Este mismo archivo ya estaba registrado en el buzón financiero. No se ha creado otra copia y no necesitas hacer nada.",
+      }, { status: 202 });
     }
     const canResume = duplicate.publicationRevision === null &&
       (duplicate.reviewStatus === "pendiente_extraccion" || duplicate.reviewStatus === "cambios_solicitados") &&
@@ -991,10 +1167,10 @@ export async function POST(request: Request) {
         declaredCutoff,
         classificationConfidence: classification.confidence,
         classificationReason: classification.reason,
-        processingStage: "extraccion_en_curso",
-        processingProgress: 45,
+        processingStage: deferProcessingRequested ? "recibido" : "extraccion_en_curso",
+        processingProgress: deferProcessingRequested ? 15 : 45,
         processingSummary: classification.confidence > 0
-          ? `${analysis.summary} Original archivado; interpretación en curso.`
+          ? `${analysis.summary} Original archivado; ${deferProcessingRequested ? "procesamiento en segundo plano preparado" : "interpretación en curso"}.`
           : "Original recibido. Requiere asignación de área antes de normalizar sus datos.",
         requiresReview: true,
         projectId: "araya",
@@ -1079,6 +1255,39 @@ export async function POST(request: Request) {
     actorName: user.displayName,
   }).catch(() => undefined);
   scheduleNotificationDispatch();
+
+  if (deferProcessingRequested && !resumedRow) {
+    scheduleBackgroundUploadProcessing({
+      request,
+      formData,
+      bytes,
+      fileName: candidate.name,
+      mimeType,
+      fileId: id,
+      uploaderEmail: row.uploaderEmail,
+      uploaderName: row.uploaderName,
+    });
+    return Response.json({
+      processing: true,
+      file: publicFileRow(row, user),
+      receipt: {
+        outcome: "accepted",
+        area: classification.area,
+        areaLabel: initiallyProtectedUpload
+          ? "Buzón financiero protegido"
+          : areaLabels[classification.area],
+        publishedCount: 0,
+        unchangedCount: 0,
+        ignoredCount: 0,
+        warningCount: 0,
+        warnings: [],
+        newSectionCount: 0,
+        requiresAction: false,
+        nextAction: "No tienes que esperar ni volver a subirlo. Consulta «Mis cargas» para ver el resultado.",
+      },
+      message: "Archivo recibido y protegido. El análisis continúa automáticamente en segundo plano y te avisaremos al terminar.",
+    }, { status: 202 });
+  }
 
   let resolvedArea = row.area;
   let resolvedClassificationConfidence = classification.confidence;
@@ -1923,6 +2132,13 @@ export async function POST(request: Request) {
     } catch {
       // La fila inicial durable permite responder aunque falle esta lectura auxiliar.
     }
+    await notifyUploaderOfProcessingResult({
+      fileId: currentRow.id,
+      uploaderEmail: currentRow.uploaderEmail,
+      uploaderName: currentRow.uploaderName,
+      updatedAt: currentRow.updatedAt,
+      outcome: "completed",
+    });
     if (financeProtectedUpload && !user.financeAccess) {
       return Response.json({
         restricted: true,
@@ -2085,6 +2301,15 @@ export async function POST(request: Request) {
       if (freshRow) currentRow = freshRow;
     } catch {
       // Conserva como respuesta la fila obtenida en el alta inicial.
+    }
+    if (!backgroundProcessing) {
+      await notifyUploaderOfProcessingResult({
+        fileId: currentRow.id,
+        uploaderEmail: currentRow.uploaderEmail,
+        uploaderName: currentRow.uploaderName,
+        updatedAt: currentRow.updatedAt,
+        outcome: "attention",
+      });
     }
     if (fileRequiresFinanceAccess(currentRow) && !user.financeAccess) {
       return Response.json({

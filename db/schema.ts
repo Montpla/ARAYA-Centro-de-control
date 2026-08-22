@@ -135,6 +135,9 @@ export const uploadedFiles = sqliteTable(
     processingStage: text("processing_stage").notNull().default("recibido"),
     processingProgress: integer("processing_progress").notNull().default(10),
     processingSummary: text("processing_summary").notNull().default(""),
+    processingAttempts: integer("processing_attempts").notNull().default(0),
+    nextRetryAt: text("next_retry_at").notNull().default(""),
+    lastProcessingError: text("last_processing_error").notNull().default(""),
     requiresReview: integer("requires_review", { mode: "boolean" }).notNull().default(true),
     projectId: text("project_id").notNull().default("araya"),
     documentType: text("document_type").notNull().default("documento_general"),
@@ -359,6 +362,11 @@ export const appUsers = sqliteTable(
     role: text("role").notNull().default("member"),
     area: text("area").notNull().default("direccion"),
     financeAccess: integer("finance_access", { mode: "boolean" }).notNull().default(false),
+    // Entregar un documento no concede acceso a sus cifras. Se separan las
+    // tres capacidades para que el personal pueda alimentar el buzón sin
+    // ampliar innecesariamente sus permisos de lectura o aprobación.
+    financeUploadAccess: integer("finance_upload_access", { mode: "boolean" }).notNull().default(true),
+    financeApproveAccess: integer("finance_approve_access", { mode: "boolean" }).notNull().default(false),
     active: integer("active", { mode: "boolean" }).notNull().default(true),
     avatarStorageKey: text("avatar_storage_key").notNull().default(""),
     avatarMimeType: text("avatar_mime_type").notNull().default(""),

@@ -46,6 +46,21 @@ if (!response.ok) {
   process.exit(1);
 }
 const { files = [] } = await response.json();
+const now = Date.now();
+const technicalRetryCandidate = (file) => {
+  if (file.publicationRevision !== null && file.publicationRevision !== undefined) return false;
+  const attempts = Number(file.processingAttempts || 0);
+  if (attempts >= 3) return false;
+  const updatedAt = Date.parse(file.updatedAt || file.createdAt || "");
+  const oldEnough = !Number.isFinite(updatedAt) || now - updatedAt >= 5 * 60 * 1000;
+  if (!oldEnough) return false;
+  const interrupted = ["recibido", "extraccion_en_curso"].includes(String(file.processingStage || ""));
+  const failedTransiently = attempts > 0 && Boolean(file.lastProcessingError) &&
+    ["observado", "pendiente_extraccion", "cambios_solicitados"].includes(
+      String(file.processingStage || file.reviewStatus || ""),
+    );
+  return interrupted || failedTransiently;
+};
 const candidatos = files
   .filter((file) =>
     !file.deletedAt &&
@@ -54,7 +69,7 @@ const candidatos = files
     file.processingStage !== "extraccion_en_curso" &&
     supported.has(String(file.extension).toLowerCase()) &&
     !knownSupersededNames.has(file.originalName.toLowerCase()) &&
-    String(file.ingestionVersion || "") !== currentVersion &&
+    (String(file.ingestionVersion || "") !== currentVersion || technicalRetryCandidate(file)) &&
     file.originalName.toLowerCase().includes(FILTRO))
   .sort((a, b) => Date.parse(a.processedAt || a.createdAt) - Date.parse(b.processedAt || b.createdAt));
 const objetivo = candidatos.slice(0, MAX_POR_EJECUCION);

@@ -2,9 +2,9 @@ name: Reprocesar archivos con lector nuevo
 
 on:
   schedule:
-    # Lotes pequeños cada seis horas: evita picos y termina solo cuando todos
-    # los expedientes conservan la versión vigente del pipeline.
-    - cron: "23 */6 * * *"
+    # Cada quince minutos cura lectores obsoletos y cargas interrumpidas sin
+    # duplicar el original ni superar tres reintentos técnicos.
+    - cron: "*/15 * * * *"
   workflow_dispatch:
     inputs:
       filtro:

@@ -63,8 +63,10 @@ importa que el dato entre bien y a la primera.
 Los apartamentos van en dos archivos porque cada carga admite un máximo de 250
 filas. Puedes subirlos por separado, en cualquier orden.
 
-Las cifras económicas y comerciales solo las puede subir alguien con acceso
-autorizado a Finanzas o a Ventas y cobranza.
+Las cifras económicas y comerciales las puede entregar cualquier usuario que
+tenga habilitado **Entregar documentos financieros**. Ese permiso no permite
+abrir ni consultar las cifras: el administrador concede por separado
+**Consultar Finanzas** y **Aprobar publicaciones financieras**.
 
 ## Cómo se regeneran
 

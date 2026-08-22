@@ -16,6 +16,8 @@ type UserPayload = {
   role?: string;
   area?: string;
   financeAccess?: boolean;
+  financeUploadAccess?: boolean;
+  financeApproveAccess?: boolean;
   active?: boolean;
   expectedUpdatedAt?: string;
   restore?: boolean;
@@ -50,7 +52,9 @@ function publicRow(row: typeof appUsers.$inferSelect) {
     displayName: row.displayName || row.email,
     role: row.role === "admin" ? "admin" : "member",
     area: isUserArea(row.area) ? row.area : "direccion",
-    financeAccess: row.role === "admin" || row.financeAccess,
+    financeAccess: row.role === "admin" || row.financeAccess || row.financeApproveAccess,
+    financeUploadAccess: row.role === "admin" || row.financeUploadAccess,
+    financeApproveAccess: row.role === "admin" || row.financeApproveAccess,
     active: row.active,
     avatarUrl: row.avatarStorageKey
       ? `/api/profile/avatar?user=${row.id}&v=${encodeURIComponent(row.avatarUpdatedAt)}`
@@ -70,7 +74,9 @@ function auditSnapshot(row: typeof appUsers.$inferSelect) {
     displayName: row.displayName || row.email,
     role: row.role,
     area: row.area,
-    financeAccess: row.role === "admin" || row.financeAccess,
+    financeAccess: row.role === "admin" || row.financeAccess || row.financeApproveAccess,
+    financeUploadAccess: row.role === "admin" || row.financeUploadAccess,
+    financeApproveAccess: row.role === "admin" || row.financeApproveAccess,
     active: row.active,
     deletedAt: row.deletedAt,
   };
@@ -150,7 +156,9 @@ export async function POST(request: Request) {
   }
   const role = payload.role === "admin" ? "admin" : "member";
   const area = isUserArea(String(payload.area ?? "")) ? String(payload.area) : "direccion";
-  const financeAccess = role === "admin" || Boolean(payload.financeAccess);
+  const financeAccess = role === "admin" || Boolean(payload.financeAccess) || Boolean(payload.financeApproveAccess);
+  const financeUploadAccess = role === "admin" || payload.financeUploadAccess !== false;
+  const financeApproveAccess = role === "admin" || Boolean(payload.financeApproveAccess);
   const now = new Date().toISOString();
   const db = getDb();
   const [existing] = await db.select().from(appUsers).where(eq(appUsers.email, email)).limit(1);
@@ -175,6 +183,8 @@ export async function POST(request: Request) {
         role,
         area,
         financeAccess,
+        financeUploadAccess,
+        financeApproveAccess,
         active: true,
         pinHash: hashPin(pin),
         createdByEmail: auth.user.email,
@@ -236,7 +246,9 @@ export async function PATCH(request: Request) {
       .update(appUsers)
       .set({
         active: true,
-        financeAccess: existing.role === "admin" || existing.financeAccess,
+        financeAccess: existing.role === "admin" || existing.financeAccess || existing.financeApproveAccess,
+        financeUploadAccess: existing.role === "admin" || existing.financeUploadAccess,
+        financeApproveAccess: existing.role === "admin" || existing.financeApproveAccess,
         deletedAt: "",
         deletedByEmail: "",
         notificationKind: "user_restored",
@@ -280,7 +292,9 @@ export async function PATCH(request: Request) {
   const role = payload.role === "admin" ? "admin" : "member";
   const area = isUserArea(String(payload.area ?? "")) ? String(payload.area) : "direccion";
   const active = payload.active !== false;
-  const financeAccess = role === "admin" || Boolean(payload.financeAccess);
+  const financeAccess = role === "admin" || Boolean(payload.financeAccess) || Boolean(payload.financeApproveAccess);
+  const financeUploadAccess = role === "admin" || payload.financeUploadAccess !== false;
+  const financeApproveAccess = role === "admin" || Boolean(payload.financeApproveAccess);
   const isSelf = existing.id === auth.user.id;
   if (isSelf && (email !== auth.user.email || !active || role !== "admin")) {
     return Response.json(
@@ -300,6 +314,8 @@ export async function PATCH(request: Request) {
         role,
         area,
         financeAccess,
+        financeUploadAccess,
+        financeApproveAccess,
         active,
         ...(resetPin ? { pinHash: hashPin(String(payload.pin)), failedPinAttempts: 0, pinLockedUntil: "" } : {}),
         notificationKind: "user_updated",

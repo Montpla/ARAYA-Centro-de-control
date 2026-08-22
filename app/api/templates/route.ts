@@ -1,6 +1,12 @@
 import { requireApiUser } from "../../../lib/access-control";
 
 import cronogramaTemplate from "../../../plantillas/04-curva-s-mensual.csv?raw";
+import cxpCategoriasTemplate from "../../../plantillas/09-cxp-por-categoria.csv?raw";
+import cxpVencimientosTemplate from "../../../plantillas/10-cxp-vencimientos.csv?raw";
+import costesTemplate from "../../../plantillas/11-desglose-de-coste.csv?raw";
+import anticiposTemplate from "../../../plantillas/12-anticipos.csv?raw";
+import proyeccionFinancieraTemplate from "../../../plantillas/14-proyeccion-financiera.csv?raw";
+import financiacionTemplate from "../../../plantillas/15-financiacion.csv?raw";
 import cubicacionTemplate from "../../../plantillas/16-cubicaciones.csv?raw";
 import ventasTemplate from "../../../plantillas/17-ventas-por-modelo.csv?raw";
 
@@ -18,6 +24,30 @@ const templates = {
   cronograma: {
     content: cronogramaTemplate,
     fileName: "ARAYA-plantilla-cronograma.csv",
+  },
+  cxp_categorias: {
+    content: cxpCategoriasTemplate,
+    fileName: "ARAYA-plantilla-cxp-categorias.csv",
+  },
+  cxp_vencimientos: {
+    content: cxpVencimientosTemplate,
+    fileName: "ARAYA-plantilla-cxp-vencimientos.csv",
+  },
+  costes: {
+    content: costesTemplate,
+    fileName: "ARAYA-plantilla-costes.csv",
+  },
+  anticipos: {
+    content: anticiposTemplate,
+    fileName: "ARAYA-plantilla-anticipos.csv",
+  },
+  proyeccion_financiera: {
+    content: proyeccionFinancieraTemplate,
+    fileName: "ARAYA-plantilla-proyeccion-financiera.csv",
+  },
+  financiacion: {
+    content: financiacionTemplate,
+    fileName: "ARAYA-plantilla-financiacion.csv",
   },
 } as const;
 
@@ -54,4 +84,3 @@ export async function GET(request: Request) {
     },
   });
 }
-

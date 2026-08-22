@@ -724,7 +724,8 @@ test("point two adds controlled ingestion, automatic structured publication and 
   assert.match(filesRoute, /analyzeDocument/);
   assert.match(filesRoute, /extractStructuredUpdates/);
   assert.match(filesRoute, /documentDataProposals/);
-  assert.match(reviewRoute, /requireApiUser\(\{ admin: true \}\)/);
+  assert.match(reviewRoute, /protectedReview && !auth\.user\.financeApproveAccess/);
+  assert.match(reviewRoute, /!protectedReview && auth\.user\.role !== "admin"/);
   assert.match(reviewRoute, /action === "approve"/);
   assert.match(reviewRoute, /action === "reject"/);
   assert.match(reviewRoute, /publishLiveDataUpdates/);

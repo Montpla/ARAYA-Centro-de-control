@@ -248,7 +248,9 @@ export function analyzeDocument(input: {
   const reviewReasons: string[] = [];
   if (input.classificationConfidence < 0.75) reviewReasons.push("El área sugerida necesita confirmación.");
   if (!detectedPeriod) reviewReasons.push("No se ha identificado un periodo o fecha de corte.");
-  if (input.area === "finanzas") reviewReasons.push("Las cifras financieras requieren aprobación humana.");
+  // Finanzas no implica revisión por sí sola: el contrato vivo decide dato a
+  // dato. Solo una contradicción, una moneda ambigua o una clave incompatible
+  // debe llegar al validador humano.
   if (["avance_obra", "cronograma", "urbanismo"].includes(selected.id)) {
     reviewReasons.push("Puede modificar indicadores operativos, cronograma o geometría del proyecto.");
   }

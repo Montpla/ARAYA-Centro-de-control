@@ -11,6 +11,8 @@ export type AuthorizedUser = {
   role: "admin" | "member";
   area: UserArea;
   financeAccess: boolean;
+  financeUploadAccess: boolean;
+  financeApproveAccess: boolean;
   active: boolean;
   avatarUrl: string;
 };
@@ -35,7 +37,9 @@ export function publicUser(row: typeof appUsers.$inferSelect): AuthorizedUser {
     displayName: row.displayName || row.email,
     role: row.role === "admin" ? "admin" : "member",
     area: isUserArea(row.area) ? row.area : "direccion",
-    financeAccess: row.role === "admin" || row.financeAccess,
+    financeAccess: row.role === "admin" || row.financeAccess || row.financeApproveAccess,
+    financeUploadAccess: row.role === "admin" || row.financeUploadAccess,
+    financeApproveAccess: row.role === "admin" || row.financeApproveAccess,
     active: row.active,
     avatarUrl: row.avatarStorageKey
       ? `/api/profile/avatar?user=${row.id}&v=${encodeURIComponent(row.avatarUpdatedAt)}`
@@ -52,6 +56,8 @@ export async function resolveAuthorizedUser(identity: ChatGPTUser) {
       role: "admin" as const,
       area: "direccion" as UserArea,
       financeAccess: true,
+      financeUploadAccess: true,
+      financeApproveAccess: true,
       active: true,
       avatarUrl: "",
     };
@@ -70,6 +76,8 @@ export async function resolveAuthorizedUser(identity: ChatGPTUser) {
         role: "admin",
         area: "direccion",
         financeAccess: true,
+        financeUploadAccess: true,
+        financeApproveAccess: true,
         active: true,
         createdByEmail: "bootstrap",
         lastLoginAt: new Date().toISOString(),
@@ -114,7 +122,12 @@ export async function getAuthorizedUser() {
   }
 }
 
-export async function requireApiUser(options: { admin?: boolean; finance?: boolean } = {}) {
+export async function requireApiUser(options: {
+  admin?: boolean;
+  finance?: boolean;
+  financeUpload?: boolean;
+  financeApprove?: boolean;
+} = {}) {
   const auth = await getAuthorizedUser();
   if (!auth.identity) {
     return {
@@ -140,6 +153,20 @@ export async function requireApiUser(options: { admin?: boolean; finance?: boole
   if (options.finance && !auth.user.financeAccess) {
     return {
       response: Response.json({ error: "No tienes acceso al área financiera." }, { status: 403 }),
+      identity: auth.identity,
+      user: null,
+    };
+  }
+  if (options.financeUpload && !auth.user.financeUploadAccess) {
+    return {
+      response: Response.json({ error: "No tienes habilitada la entrega de documentos financieros." }, { status: 403 }),
+      identity: auth.identity,
+      user: null,
+    };
+  }
+  if (options.financeApprove && !auth.user.financeApproveAccess) {
+    return {
+      response: Response.json({ error: "No tienes permiso para validar documentos financieros." }, { status: 403 }),
       identity: auth.identity,
       user: null,
     };
