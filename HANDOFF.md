@@ -18,8 +18,10 @@ Zona horaria del usuario: Europe/Madrid
   resultados acumulados DOP -6.364.163,55; resultado del periodo DOP
   -3.454.805,47; patrimonio neto DOP 313.098.764,79.
 - La interfaz financiera y ARAYA Asistente presentan el corte vivo y la
-  composición completa. Versión de ingesta `2026-08-22.2`, prompt
-  `araya-ingestion-agent-2026-08-22-v2`.
+  composición completa. Versión de ingesta `2026-08-22.3`, prompt
+  `araya-ingestion-agent-2026-08-22-v3`. En balances fiduciarios el agente debe
+  devolver la fotografía completa aunque algunos totales ya coincidan; el
+  servidor elimina los repetidos después de recibir todos los componentes.
 - Verificación local: TypeScript y build en verde, ESLint sin errores (20 avisos
   históricos) y suite completa **393/393**.
 

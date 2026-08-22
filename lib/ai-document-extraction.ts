@@ -18,7 +18,7 @@ type KnownArea = { id: string; label: string };
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 export const INGESTION_PRIMARY_MODEL = "gpt-5.6-luna";
 export const INGESTION_ESCALATION_MODEL = "gpt-5.6-terra";
-const PROMPT_VERSION = "araya-ingestion-agent-2026-08-22-v2";
+const PROMPT_VERSION = "araya-ingestion-agent-2026-08-22-v3";
 const SAFETY_IDENTIFIER = "araya_document_ingestion_service";
 // Complex financial workbooks often require several independent lookups against
 // the live schema. Keep the loop bounded, but leave enough room for that fan-out.
@@ -168,6 +168,7 @@ ESTADOS FINANCIEROS FIDUCIARIOS
 - En fiduciaryStatementSummary.balance usa esta correspondencia exacta: "Aporte Fideicomitente", "Aportes en dinero y especie" o equivalente explícito → contributedEquityDop; "Current Year Earnings", "Resultados acumulados" o equivalente explícito → accumulatedEquityResultDop; "Resultado del Ejercicio", "Resultado del periodo" o equivalente explícito → periodResultDop; "Total Equity" o "Patrimonio neto" → netEquityDop.
 - No confundas Current Year Earnings/Resultados acumulados con Resultado del Ejercicio/Resultado del periodo: son componentes distintos y, si ambos aparecen, publica ambos. grossEquityDop es el subtotal de aporte más resultados acumulados; si no está impreso, omítelo: el servidor lo concilia de forma determinista.
 - Publica también assetsDop, liabilitiesDop, netEquityDop y fiduciaryStatementSummary.cutoff cuando estén impresos. Si aparecen activos, pasivos y los tres componentes patrimoniales, conserva además la estructura en fiduciaryBalanceSections; no publiques solamente dos o tres totales aislados.
+- En esta familia documental devuelve siempre la fotografía completa del corte: emite todos los campos anteriores que sean legibles aunque alguno coincida con el valor vigente. No resumas la respuesta como "sin cambios" tras comparar solo los totales; el servidor se encarga de omitir los repetidos y necesita recibir también cada componente para detectar los que faltan.
 - Antes de terminar usa reconcile_numbers dos veces: Activos = Pasivos + Patrimonio neto; y Aporte + Resultados acumulados + Resultado del periodo = Patrimonio neto. Si una igualdad no cuadra, conserva las cifras literales pero deja el aviso correspondiente; no tomes un componente de otro corte para forzarla.
 
 SEGURIDAD
