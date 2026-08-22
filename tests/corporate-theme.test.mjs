@@ -54,6 +54,17 @@ test("los colores de texto corporativos cumplen contraste AA", () => {
   assert.ok(contrast("#c5c5bd", navigation) >= 4.5, "La navegación lateral debe superar AA");
 });
 
+test("el encabezado oscuro del control operativo mantiene todas sus lecturas en blanco", () => {
+  assert.match(
+    theme,
+    /\.control-room-heading h2,[\s\S]*?\.control-room-heading p,[\s\S]*?\.control-room-heading \.control-room-live strong,[\s\S]*?\.control-room-heading \.control-room-live small\s*\{[\s\S]*?color:\s*#ffffff;/,
+  );
+  assert.ok(
+    contrast("#ffffff", "#1f2927") >= 7,
+    "El texto blanco sobre el carbón del encabezado debe superar AAA",
+  );
+});
+
 test("la escala mínima de lectura y los objetivos táctiles quedan fijados", () => {
   assert.match(theme, /html,\s*\nbody\s*\{[\s\S]*?font-size:\s*15px;/);
   assert.match(theme, /@media \(max-width:\s*1100px\)[\s\S]*?font-size:\s*16px;/);

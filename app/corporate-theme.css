@@ -1013,6 +1013,16 @@ textarea:focus-visible,
   line-height: 1.5;
 }
 
+/* El encabezado operativo usa una superficie carbón: todo el contenido de
+   lectura debe conservar contraste alto sobre ella. El dorado queda reservado
+   al rótulo de sección, que ya cumple contraste. */
+.control-room-heading h2,
+.control-room-heading p,
+.control-room-heading .control-room-live strong,
+.control-room-heading .control-room-live small {
+  color: #ffffff;
+}
+
 .notification-heading > button,
 .notification-item small,
 .notification-item time,

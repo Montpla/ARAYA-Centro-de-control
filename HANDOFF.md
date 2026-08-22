@@ -3,6 +3,13 @@
 Actualizado: 22/08/2026
 Zona horaria del usuario: Europe/Madrid
 
+## Contraste del encabezado operativo (22/08/2026)
+
+- El bloque carbón de Control operativo conserva el rótulo de sección en
+  dorado, pero muestra en blanco el título, la explicación, la revisión y su
+  fecha. Una prueba de tema verifica tanto los selectores como contraste AAA.
+- Verificación puntual: 7/7 pruebas visuales y TypeScript en verde.
+
 ## Conciliación fiduciaria aislada por archivo y corte (22/08/2026)
 
 - La discrepancia de patrimonio de julio era falsa: la auditoría combinaba el
