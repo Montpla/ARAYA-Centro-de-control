@@ -28,6 +28,11 @@ Zona horaria del usuario: Europe/Madrid
   admitidos siguen procesándose sin obligar a usar una plantilla.
 - Migración: `drizzle/0026_uneven_wallow.sql`. Verificación local: TypeScript,
   build y suite completa **343/343** en verde.
+- Publicado en `github/main` con el commit **`3ca6e2d`**. Despliegue
+  **`32565157084`** y diagnóstico autenticado **`32565309088`**, ambos en verde.
+  Producción conserva 19/19 expedientes resueltos, 0 pendientes, 0 propuestas,
+  0 discrepancias, avance físico 22,71 %, cronograma 22,37 %, fin previsto
+  03/06/2027 y 26 edificios con avance publicado.
 
 ## Automatización documental cerrada (22/08/2026)
 
