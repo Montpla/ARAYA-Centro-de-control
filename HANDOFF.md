@@ -26,8 +26,13 @@ Zona horaria del usuario: Europe/Madrid
   el motor ejecuta una sola finalización sin herramientas y obliga a devolver el
   JSON ya contrastado. Evita que una lectura válida termine como "sin datos" por
   no cerrar el bucle y solo incurre en esa llamada cuando el límite se agota.
-- Verificación local: TypeScript y build en verde, ESLint sin errores (20 avisos
-  históricos) y suite completa **393/393**.
+- `BCE 07-26.pdf` se reprocesó en producción por el pipeline normal: publicó
+  cinco cambios en la revisión 80. D1 confirma las once claves vigentes del
+  expediente con corte 31/07/2026, incluidas las secciones y la composición
+  patrimonial completa. La auditoría posterior comprobó 164 puntos vivos y 29
+  archivos, y resolvió automáticamente la incidencia crítica n.º 1.
+- Verificación local/CI: TypeScript y build en verde, ESLint sin errores (20
+  avisos históricos) y suite completa **394/394**.
 
 ## Automatización operativa completa (22/08/2026)
 
