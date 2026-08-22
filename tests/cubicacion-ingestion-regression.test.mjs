@@ -44,4 +44,6 @@ test("el reproceso puede apuntar al expediente exacto sin tocar copias homónima
   assert.match(reprocessWorkflow, /file_id:/);
   assert.match(reprocessWorkflow, /FILE_ID: \$\{\{ inputs\.file_id \}\}/);
   assert.match(reprocessScript, /!FILE_ID \|\| f\.id === FILE_ID/);
+  assert.match(reprocessScript, /!f\.supersededByFileId/);
+  assert.match(reprocessScript, /form\.set\("reprocessFileId", f\.id\)/);
 });

@@ -66,6 +66,7 @@ const permitidos = FORMATOS.length ? new Set(FORMATOS) : procesables;
 const objetivo = files.filter((f) => {
   const ext = String(f.extension).toLowerCase();
   return !f.deletedAt &&
+    !f.supersededByFileId &&
     (!FILE_ID || f.id === FILE_ID) &&
     f.originalName.toLowerCase().includes(FILTRO) &&
     procesables.has(ext) &&
@@ -136,7 +137,13 @@ for (const f of objetivo) {
   // Sin reemplazo se pide reproceso: un expediente ya publicado se vuelve a
   // pasar por la ingesta actual (misma fila, revisión nueva). Con reemplazo NO
   // se pide, porque el anterior ya está retirado y ésta es un alta limpia.
-  if (!REEMPLAZAR) form.set("reprocess", "true");
+  if (!REEMPLAZAR) {
+    form.set("reprocess", "true");
+    // La misma huella puede existir en varias filas históricas. El id evita
+    // que la deduplicación reclame otra copia y deje sin releer el expediente
+    // que el operador acaba de seleccionar.
+    form.set("reprocessFileId", f.id);
+  }
   // Se conserva la clasificación original para que entre por la misma área.
   if (f.area) form.set("area", f.area);
   if (f.declaredCutoff) form.set("declaredCutoff", f.declaredCutoff);
