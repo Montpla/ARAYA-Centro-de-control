@@ -3,6 +3,40 @@
 Actualizado: 22/08/2026
 Zona horaria del usuario: Europe/Madrid
 
+## Automatización operativa completa (22/08/2026)
+
+- El Centro de datos incorpora un panel de automatización con auditoría global,
+  cierres semanales y mensuales, responsables, incidencias, reintentos seguros,
+  preferencias de avisos y estado de la última copia restaurada.
+- La auditoría diaria comprueba el contrato vivo, vuelve a ejecutar los controles
+  financieros y detecta cargas fallidas o detenidas. Solo prepara un reproceso
+  por el mismo camino protegido; nunca aprueba cifras ni salta la autoridad de
+  fuentes. Las incidencias dejan de mostrarse cuando una auditoría posterior ya
+  no reproduce el fallo.
+- Los cierres se crean con siete entregables por periodo. Un administrador puede
+  enviar recordatorios y cerrar únicamente cuando todos los obligatorios están
+  recibidos. Los usuarios sin permiso financiero reciben un resumen recalculado
+  sin revelar requisitos protegidos.
+- La carga web admite lotes de hasta 20 archivos y devuelve un recibo individual
+  por documento. La PWA instalada es destino del menú Compartir en móvil/tablet:
+  guarda temporalmente los originales en IndexedDB y abre el formulario con el
+  lote preparado.
+- Los avisos admiten áreas, solo críticos, horario silencioso en hora local,
+  envío inmediato o resumen diario/semanal. El aviso interno no desaparece si se
+  silencia el push.
+- `.github/workflows/auditoria-nocturna.yml` ejecuta comprobación, recordatorios
+  y resúmenes a las 12:17 UTC. `.github/workflows/backup-produccion.yml` exporta
+  D1, restaura en SQLite temporal, ejecuta `PRAGMA integrity_check`, conserva 30
+  días en GitHub y actualiza una sola copia `latest` en R2 para no crecer sin
+  límite.
+- El onboarding de siete pasos se guarda por usuario. La guía corporativa de
+  siete páginas se actualizó, regeneró y comprobó visualmente completa.
+- Migraciones: `drizzle/0029_happy_nova.sql` y
+  `drizzle/0030_eminent_stature.sql`. Arquitectura y operación:
+  `docs/AUTOMATIZACION-OPERATIVA.md`.
+- Verificación local: TypeScript, build y **386/386** pruebas en verde. ESLint
+  conserva únicamente los 20 avisos históricos de imágenes/navegación.
+
 ## Plataforma única confirmada (22/08/2026)
 
 - Fuente canónica: GitHub `Montpla/ARAYA-Centro-de-control` (`main`).

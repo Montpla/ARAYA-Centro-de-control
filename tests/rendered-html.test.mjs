@@ -886,13 +886,19 @@ test("tablet and mobile mode provides navigation, camera, notifications, biometr
   assert.match(routeError, /Reintentar/);
   assert.match(manifest, /"display": "standalone"/);
   assert.match(manifest, /"short_name": "Bricket Control"/);
-  assert.match(serviceWorker, /bricket-control-shell-v8/);
+  assert.match(serviceWorker, /bricket-control-shell-v9/);
   assert.match(serviceWorker, /CACHE_APP_SHELL/);
   assert.match(serviceWorker, /CLEAR_PRIVATE_CACHE/);
   assert.match(serviceWorker, /event\.request\.mode === "navigate"/);
   assert.match(serviceWorker, /url\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(serviceWorker, /isPrivateDocument[\s\S]*event\.respondWith\(fetch\(event\.request\)\)[\s\S]*return/);
   assert.match(serviceWorker, /notificationclick/);
+  assert.match(manifest, /"share_target"/);
+  assert.match(manifest, /"action": "\/share-target"/);
+  assert.match(serviceWorker, /storeSharedFiles/);
+  assert.match(serviceWorker, /bricket-share-inbox/);
+  assert.match(dashboard, /consumeSharedInboxFiles/);
+  assert.match(dashboard, /initialFiles=\{pendingUploadFiles\}/);
   // La pantalla sin conexión se recupera sola: escucha el evento `online`,
   // sondea la red y ofrece reintentar. Antes era un callejón sin salida que
   // dejaba clavado al usuario aunque volviera internet.

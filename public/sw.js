@@ -1,5 +1,5 @@
-const SHELL_CACHE = "bricket-control-shell-v8";
-const PRIVATE_CACHE = "bricket-control-private-v8";
+const SHELL_CACHE = "bricket-control-shell-v9";
+const PRIVATE_CACHE = "bricket-control-private-v9";
 const CACHE_PREFIX = "bricket-control-";
 
 // Página que se muestra cuando una navegación no llega a la red. La anterior
@@ -95,6 +95,50 @@ async function notifyOfflineReady() {
   for (const client of clients) client.postMessage({ type: "OFFLINE_READY" });
 }
 
+function openShareInbox() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("bricket-share-inbox", 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains("files")) database.createObjectStore("files", { keyPath: "id" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error("No se pudo abrir la bandeja compartida."));
+  });
+}
+
+async function storeSharedFiles(request) {
+  try {
+    const formData = await request.formData();
+    const files = formData.getAll("documents")
+      .filter((value) => value instanceof Blob && value.size > 0)
+      .slice(0, 20);
+    if (files.length) {
+      const database = await openShareInbox();
+      try {
+        await new Promise((resolve, reject) => {
+          const transaction = database.transaction("files", "readwrite");
+          const store = transaction.objectStore("files");
+          files.forEach((file, index) => store.put({
+            id: `${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`,
+            name: typeof file.name === "string" && file.name ? file.name : `documento-${index + 1}`,
+            type: file.type || "application/octet-stream",
+            lastModified: Number(file.lastModified) || Date.now(),
+            blob: file,
+          }));
+          transaction.oncomplete = () => resolve();
+          transaction.onerror = () => reject(transaction.error || new Error("No se pudieron guardar los archivos compartidos."));
+        });
+      } finally {
+        database.close();
+      }
+    }
+    return Response.redirect(new URL("/?shared=1", self.location.origin), 303);
+  } catch {
+    return Response.redirect(new URL("/?shared_error=1", self.location.origin), 303);
+  }
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then((cache) =>
@@ -166,9 +210,14 @@ self.addEventListener("message", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+
+  if (event.request.method === "POST" && url.pathname === "/share-target") {
+    event.respondWith(storeSharedFiles(event.request));
+    return;
+  }
+  if (event.request.method !== "GET") return;
 
   if (
     url.pathname.startsWith("/api/") ||

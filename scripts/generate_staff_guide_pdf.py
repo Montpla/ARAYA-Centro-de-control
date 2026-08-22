@@ -358,8 +358,8 @@ def cover_page(c: canvas.Canvas) -> None:
         c,
         [
             "Consulta avance, planos, apartamentos, proveedores, informes y documentos.",
-            "Carga evidencias desde archivos o desde la cámara del dispositivo.",
-            "Trabaja con permisos, trazabilidad y actualización cada 5 segundos.",
+            "Carga hasta 20 archivos, usa la cámara o comparte desde otra aplicación.",
+            "Trabaja con permisos, recibos, trazabilidad y actualización cada 5 segundos.",
         ],
         61,
         335,
@@ -430,7 +430,7 @@ def page_start(c: canvas.Canvas) -> None:
             "Selector ARAYA / proyecto de demostración.",
             "Moneda USD o DOP para todas las cifras económicas.",
             "Buscador global, campana de avisos y foto de usuario.",
-            "Crear informe, cargar archivo y consultar al Agente IA.",
+            "Crear informe, cargar archivos y consultar a ARAYA Asistente.",
         ],
         x2 + 15,
         y - 82,
@@ -632,12 +632,12 @@ def page_workflow(c: canvas.Canvas) -> None:
         c,
         "04 | Incorporación de información",
         "Del archivo al dato vivo",
-        "El original se guarda primero. Los datos seguros se publican; los grupos descuadrados o una fuente anterior quedan aislados con explicación, sin frenar el resto.",
+        "El original se guarda primero. Puedes enviar hasta 20 documentos; cada uno recibe su diagnóstico y un fallo no detiene al resto del lote.",
     )
 
     rounded_rect(c, MARGIN_X, 463, PAGE_W - 2 * MARGIN_X, 196, white, LINE, 13)
     steps = [
-        ("Cargar", "Archivo o Hacer foto. El original queda guardado y trazable."),
+        ("Cargar", "Selecciona hasta 20 archivos, haz una foto o comparte con Bricket Control."),
         ("Identificar", "El sistema detecta área, tipo documental, periodo, moneda y origen."),
         ("Extraer", "Lee o interpreta los datos y los contrasta con el valor vigente."),
         ("Comprobar", "Valida formato, ecuaciones financieras, moneda, corte y autoridad de la fuente."),
@@ -659,7 +659,7 @@ def page_workflow(c: canvas.Canvas) -> None:
     action_cards = [
         (
             "Abrir documentos",
-            "Los originales se abren dentro de Bricket Control. Eliminar recalcula el tablero y permite restaurar; descargar es opcional.",
+            "Los originales se abren dentro de Bricket Control. Eliminar recalcula el tablero; descargar es opcional.",
             SAGE_PALE,
             SAGE,
         ),
@@ -670,14 +670,14 @@ def page_workflow(c: canvas.Canvas) -> None:
             NAVY,
         ),
         (
-            "Gestionar acciones",
-            "Crea tareas con responsable, prioridad, vencimiento, comentarios y enlace a la sección o documento.",
+            "Cerrar el periodo",
+            "El cierre semanal o mensual muestra faltantes, responsables y vencimientos antes de permitir cerrarlo.",
             CREAM,
             GOLD,
         ),
         (
             "Recibir avisos",
-            "La campana reúne cargas, cambios y conexiones. Activa avisos una vez para recibirlos en móvil, tablet u ordenador.",
+            "Elige áreas, urgencia, horario silencioso o resumen diario/semanal. Los avisos permanecen en la app.",
             RED_PALE,
             ORANGE_DARK,
         ),
@@ -701,7 +701,7 @@ def page_workflow(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X + 16, 116, "IMPORTANTE")
     draw_wrapped(
         c,
-        "La sincronización cada 5 segundos no consume tokens. La lectura determinista tampoco. Solo los documentos que necesitan interpretación o las consultas al Asistente usan la API de IA.",
+        "La sincronización, auditoría nocturna, cierres, copias y lectura determinista no consumen tokens. Solo la interpretación necesaria o las consultas al Asistente usan IA.",
         MARGIN_X + 16,
         99,
         PAGE_W - 2 * MARGIN_X - 32,
@@ -804,8 +804,9 @@ def page_mobile_install(c: canvas.Canvas) -> None:
         [
             "Permite notificaciones desde la campana si quieres avisos del sistema.",
             "Activa biometría en Avisos y seguridad: usa Face ID, Touch ID, huella, PIN o el método seguro disponible.",
+            "Si el dispositivo ofrece Bricket Control al pulsar Compartir, selecciónalo; revisa el lote y confirma la carga.",
             "Mantén abierta la pantalla que necesites si prevés una pérdida breve de cobertura.",
-            "Sin internet puedes conservar la vista ya abierta; volver a entrar, cargar, modificar, generar informes o usar el agente requiere conexión.",
+            "Sin internet conservas la vista abierta; cargar, modificar, generar informes o usar el agente requiere conexión.",
         ],
         MARGIN_X + 17,
         292,
@@ -826,7 +827,7 @@ def page_mobile_install(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X + 15, 140, "EN EL TERRENO")
     draw_wrapped(
         c,
-        "Usa Hacer foto para capturar un parte o documento. La imagen queda preseleccionada: revisa área, fecha de corte, moneda y descripción antes de enviarla.",
+        "Tras enviar, espera el recibo: indica qué se publicó, qué ya estaba vigente y qué necesita revisión. Conserva ese recibo si solicitas soporte.",
         MARGIN_X + 15,
         121,
         PAGE_W - 2 * MARGIN_X - 30,
@@ -882,8 +883,8 @@ def page_desktop_support(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X, 436, "Si algo no funciona")
     issues = [
         ("1", "Sincronización", "Comprueba el indicador superior y tu conexión."),
-        ("2", "Datos", "Abre Calidad y cobertura y revisa la última revisión."),
-        ("3", "Documento", "Confirma que el expediente fue validado y publicado."),
+        ("2", "Automatización", "Revisa auditoría, cierre e incidencias en Centro de datos."),
+        ("3", "Documento", "Abre su recibo y confirma publicado, vigente o aislado."),
         ("4", "Permisos", "Pide al administrador revisar tu área y acceso financiero."),
         ("5", "Soporte", "Anota hora, sección, archivo y revisión antes de avisar."),
     ]

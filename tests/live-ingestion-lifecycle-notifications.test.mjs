@@ -24,6 +24,7 @@ async function loadNotificationVisibility() {
     if (specifier === "@block65/webcrypto-web-push") return { buildPushPayload: () => ({}) };
     if (specifier === "../db/schema") return schemaStub;
     if (specifier === "./live-data") return liveDataModule;
+    if (specifier === "./notification-preferences") return { preferenceAllowsPush: async () => true };
     throw new Error(`Unexpected import: ${specifier}`);
   };
   vm.runInNewContext(output, {

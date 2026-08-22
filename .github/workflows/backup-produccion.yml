@@ -1,0 +1,61 @@
+name: Copia y restauración de prueba
+
+on:
+  schedule:
+    - cron: "43 4 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: backup-produccion
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Exportar D1 de producción
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 export araya-centro-control-d1 --remote --output=araya-d1.sql --config wrangler.deploy.jsonc
+      - name: Restaurar en base temporal y comprobar integridad
+        run: |
+          test -s araya-d1.sql
+          sqlite3 restore-test.sqlite < araya-d1.sql
+          test "$(sqlite3 restore-test.sqlite 'PRAGMA integrity_check;')" = "ok"
+          sqlite3 restore-test.sqlite "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('uploaded_files','live_data_points','app_users');" | grep -q uploaded_files
+          gzip -9 araya-d1.sql
+      - name: Conservar copia versionada durante 30 días
+        uses: actions/upload-artifact@v4
+        with:
+          name: araya-d1-${{ github.run_id }}
+          path: araya-d1.sql.gz
+          retention-days: 30
+          if-no-files-found: error
+      - name: Actualizar copia protegida más reciente en R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler r2 object put araya-centro-control-files/system-backups/d1/latest.sql.gz --file araya-d1.sql.gz --remote --config wrangler.deploy.jsonc
+      - name: Verificar la copia recuperada desde R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler r2 object get araya-centro-control-files/system-backups/d1/latest.sql.gz --file recovered.sql.gz --remote --config wrangler.deploy.jsonc
+          gzip -t recovered.sql.gz
+          test "$(sha256sum araya-d1.sql.gz | cut -d' ' -f1)" = "$(sha256sum recovered.sql.gz | cut -d' ' -f1)"
+      - name: Registrar resultado en el Centro de Control
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+          BACKUP_KEY: system-backups/d1/latest.sql.gz
+        run: BACKUP_SIZE_BYTES=$(stat -c%s araya-d1.sql.gz) node scripts/registrar-backup-produccion.mjs

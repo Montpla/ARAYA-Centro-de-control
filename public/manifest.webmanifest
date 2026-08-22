@@ -10,6 +10,34 @@
   "background_color": "#f6f4ef",
   "theme_color": "#232420",
   "categories": ["business", "productivity"],
+  "share_target": {
+    "action": "/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "documents",
+          "accept": [
+            "application/pdf",
+            "text/csv",
+            ".xls",
+            ".xlsx",
+            ".doc",
+            ".docx",
+            ".ppt",
+            ".pptx",
+            ".mpp",
+            ".dwg",
+            "image/*"
+          ]
+        }
+      ]
+    }
+  },
   "icons": [
     {
       "src": "/bricket-mark-192.png",

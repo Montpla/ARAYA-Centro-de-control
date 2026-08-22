@@ -18,10 +18,11 @@ test("cada carga terminada devuelve un recibo comprensible", () => {
 });
 
 test("el recibo permanece abierto hasta que la persona lo cierre", () => {
-  assert.match(dashboard, /setCompletedUpload\(result\)/);
-  assert.match(dashboard, /RECIBO DE PROCESAMIENTO/);
+  assert.match(dashboard, /setCompletedBatch\(entries\)/);
+  assert.match(dashboard, /RECIBO DE CARGA M/);
   assert.match(dashboard, /Cerrar recibo/);
-  assert.match(dashboard, /Aislados con diagnóstico/);
+  assert.match(dashboard, /entry\.result\.receipt\.ignoredCount/);
+  assert.match(dashboard, /Cada documento conserva su propio diagn/);
 });
 
 test("las plantillas mensuales y financieras se descargan autenticadas y sin valores vigentes", () => {

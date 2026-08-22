@@ -1,0 +1,26 @@
+name: Auditoría nocturna del Centro de Control
+
+on:
+  schedule:
+    # 08:17 en República Dominicana: los resúmenes no despiertan al equipo.
+    - cron: "17 12 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: auditoria-nocturna-produccion
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Comprobar, reconciliar y avisar
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+        run: node scripts/auditar-produccion.mjs

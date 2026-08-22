@@ -1,0 +1,1 @@
+ALTER TABLE `user_automation_preferences` ADD `timezone_offset_minutes` integer DEFAULT 0 NOT NULL;

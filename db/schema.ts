@@ -738,3 +738,118 @@ export const weeklySummarySnapshots = sqliteTable(
     index("weekly_summary_snapshots_created_at_idx").on(table.createdAt),
   ],
 );
+
+export const automationRuns = sqliteTable(
+  "automation_runs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    kind: text("kind").notNull(),
+    status: text("status").notNull().default("running"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    summary: text("summary").notNull().default(""),
+    metricsJson: text("metrics_json").notNull().default("{}"),
+    actorEmail: text("actor_email").notNull().default("system"),
+    actorName: text("actor_name").notNull().default("Automatización Bricket"),
+    startedAt: text("started_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    completedAt: text("completed_at").notNull().default(""),
+  },
+  (table) => [
+    uniqueIndex("automation_runs_idempotency_idx").on(table.idempotencyKey),
+    index("automation_runs_kind_started_idx").on(table.kind, table.startedAt),
+    index("automation_runs_status_idx").on(table.status),
+  ],
+);
+
+export const automationIncidents = sqliteTable(
+  "automation_incidents",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    fingerprint: text("fingerprint").notNull(),
+    status: text("status").notNull().default("open"),
+    severity: text("severity").notNull().default("medium"),
+    area: text("area").notNull().default("direccion"),
+    title: text("title").notNull(),
+    detail: text("detail").notNull().default(""),
+    sourceFileId: text("source_file_id").notNull().default(""),
+    assigneeEmail: text("assignee_email").notNull().default(""),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    nextRetryAt: text("next_retry_at").notNull().default(""),
+    firstDetectedAt: text("first_detected_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastSeenAt: text("last_seen_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    resolvedAt: text("resolved_at").notNull().default(""),
+    resolvedByEmail: text("resolved_by_email").notNull().default(""),
+    resolution: text("resolution").notNull().default(""),
+  },
+  (table) => [
+    uniqueIndex("automation_incidents_fingerprint_idx").on(table.fingerprint),
+    index("automation_incidents_status_severity_idx").on(table.status, table.severity),
+    index("automation_incidents_source_file_idx").on(table.sourceFileId),
+    index("automation_incidents_retry_idx").on(table.status, table.nextRetryAt),
+  ],
+);
+
+export const reportingPeriods = sqliteTable(
+  "reporting_periods",
+  {
+    id: text("id").primaryKey(),
+    cadence: text("cadence").notNull(),
+    label: text("label").notNull(),
+    startDate: text("start_date").notNull(),
+    endDate: text("end_date").notNull(),
+    status: text("status").notNull().default("open"),
+    createdByEmail: text("created_by_email").notNull().default("system"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    closedAt: text("closed_at").notNull().default(""),
+    closedByEmail: text("closed_by_email").notNull().default(""),
+  },
+  (table) => [
+    index("reporting_periods_status_end_idx").on(table.status, table.endDate),
+  ],
+);
+
+export const reportingRequirements = sqliteTable(
+  "reporting_requirements",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    periodId: text("period_id").notNull(),
+    area: text("area").notNull(),
+    documentType: text("document_type").notNull(),
+    label: text("label").notNull(),
+    ownerEmail: text("owner_email").notNull().default(""),
+    dueAt: text("due_at").notNull().default(""),
+    required: integer("required", { mode: "boolean" }).notNull().default(true),
+    status: text("status").notNull().default("pending"),
+    sourceFileId: text("source_file_id").notNull().default(""),
+    fulfilledAt: text("fulfilled_at").notNull().default(""),
+    lastReminderAt: text("last_reminder_at").notNull().default(""),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("reporting_requirements_period_area_type_idx").on(
+      table.periodId,
+      table.area,
+      table.documentType,
+    ),
+    index("reporting_requirements_period_status_idx").on(table.periodId, table.status),
+    index("reporting_requirements_owner_idx").on(table.ownerEmail),
+  ],
+);
+
+export const userAutomationPreferences = sqliteTable(
+  "user_automation_preferences",
+  {
+    userEmail: text("user_email").primaryKey(),
+    notificationAreasJson: text("notification_areas_json").notNull().default("[]"),
+    criticalOnly: integer("critical_only", { mode: "boolean" }).notNull().default(false),
+    digestFrequency: text("digest_frequency").notNull().default("immediate"),
+    quietStart: text("quiet_start").notNull().default(""),
+    quietEnd: text("quiet_end").notNull().default(""),
+    timezoneOffsetMinutes: integer("timezone_offset_minutes").notNull().default(0),
+    onboardingStep: integer("onboarding_step").notNull().default(0),
+    onboardingCompletedAt: text("onboarding_completed_at").notNull().default(""),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("user_automation_preferences_digest_idx").on(table.digestFrequency),
+  ],
+);

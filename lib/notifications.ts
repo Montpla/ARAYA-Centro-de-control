@@ -11,6 +11,7 @@ import {
   financeProtectedAreaValues,
   requiresFinanceAccessForArea,
 } from "./live-data";
+import { preferenceAllowsPush } from "./notification-preferences";
 
 export type NotificationAudience =
   | "all"
@@ -462,6 +463,20 @@ async function deliverPushDelivery(deliveryId: number) {
       status: "cancelled",
       attemptCount: claimed.attemptCount,
       error: "El destinatario ya no está autorizado para este aviso.",
+    });
+    return true;
+  }
+  if (!(await preferenceAllowsPush({
+    userEmail: user.email,
+    area: event.area,
+    kind: event.kind,
+  }))) {
+    await finishDelivery({
+      id: claimed.id,
+      claimedAt: now,
+      status: "cancelled",
+      attemptCount: claimed.attemptCount,
+      error: "El aviso queda en la aplicación según las preferencias del usuario.",
     });
     return true;
   }

@@ -51,6 +51,8 @@ import {
   liveTypeABudgetSummary,
 } from "../lib/live-derivations";
 import { deriveUrbanismMapAreas } from "../lib/urbanism-map-progress";
+import { AutomationWorkspace } from "./automation-workspace";
+import { OnboardingAssistant } from "./onboarding-assistant";
 
 let buildings: DashboardBootstrapData["demo"]["buildings"] = [];
 let cubicaciones: DashboardBootstrapData["demo"]["cubicaciones"] = [];
@@ -503,7 +505,7 @@ type UploadedFileRecord = {
   mimeType: string;
   extension: string;
   sizeBytes: number;
-  source: "dashboard" | "agent";
+  source: "dashboard" | "dashboard_batch" | "mobile_share" | "agent";
   sourceCurrency: CurrencyCode;
   status: string;
   uploaderName: string;
@@ -1631,7 +1633,7 @@ async function uploadProjectFile(
     description?: string;
     declaredCutoff?: string;
     section?: string;
-    source: "dashboard" | "agent";
+    source: "dashboard" | "dashboard_batch" | "mobile_share" | "agent";
     sourceCurrency?: CurrencyCode | "auto";
   },
 ) {
@@ -1649,6 +1651,51 @@ async function uploadProjectFile(
   if (!response.ok) throw new Error(result.error ?? "No se pudo cargar el archivo.");
   window.dispatchEvent(new CustomEvent("araya-files-updated"));
   return result;
+}
+
+type SharedInboxEntry = {
+  id: string;
+  name: string;
+  type: string;
+  lastModified: number;
+  blob: Blob;
+};
+
+function openSharedInbox() {
+  return new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open("bricket-share-inbox", 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      if (!database.objectStoreNames.contains("files")) database.createObjectStore("files", { keyPath: "id" });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error ?? new Error("No se pudo abrir la bandeja compartida."));
+  });
+}
+
+async function consumeSharedInboxFiles() {
+  if (!("indexedDB" in window)) return [] as File[];
+  const database = await openSharedInbox();
+  try {
+    const entries = await new Promise<SharedInboxEntry[]>((resolve, reject) => {
+      const transaction = database.transaction("files", "readonly");
+      const request = transaction.objectStore("files").getAll();
+      request.onsuccess = () => resolve((request.result ?? []) as SharedInboxEntry[]);
+      request.onerror = () => reject(request.error ?? new Error("No se pudo leer la bandeja compartida."));
+    });
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction("files", "readwrite");
+      transaction.objectStore("files").clear();
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error("No se pudo vaciar la bandeja compartida."));
+    });
+    return entries.slice(0, 20).map((entry) => new File([entry.blob], entry.name, {
+      type: entry.type || entry.blob.type,
+      lastModified: entry.lastModified || Date.now(),
+    }));
+  } finally {
+    database.close();
+  }
 }
 
 const urbanismMapPoints: Record<string, { x: number; y: number; short: string }> = {
@@ -7972,6 +8019,7 @@ function SourcesView({
         </div>
         {canAccessFinance && <p className="quality-note">Las cifras monetarias se conservan en su moneda fuente y se presentan en {currency}. Los estados del fideicomiso no sustituyen el presupuesto ni el flujo de gestión.</p>}
       </section>
+      <AutomationWorkspace user={{ role: currentUser.role, financeAccess: currentUser.financeAccess }} />
       <CollaborativeFileRegistry currentUser={currentUser} />
       <DataHistoryPanel />
       <details className="panel integrated-source-archive">
@@ -8773,7 +8821,7 @@ function FinancialReceiptPanel({ receipt }: { receipt: FinancialProcessingReceip
 
 function UploadModal({
   initialArea,
-  initialFile,
+  initialFiles,
   canAccessFinance,
   canUploadFinance,
   online,
@@ -8781,16 +8829,18 @@ function UploadModal({
   onComplete,
 }: {
   initialArea: UploadArea;
-  initialFile: File | null;
+  initialFiles: File[];
   canAccessFinance: boolean;
   canUploadFinance: boolean;
   online: boolean;
   onClose: () => void;
   onComplete: (message: string) => void;
 }) {
-  const [selectedFile, setSelectedFile] = useState<File | null>(initialFile);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>(initialFiles);
   const [previewUrl, setPreviewUrl] = useState(() =>
-    initialFile?.type.startsWith("image/") ? URL.createObjectURL(initialFile) : "",
+    initialFiles.find((file) => file.type.startsWith("image/"))
+      ? URL.createObjectURL(initialFiles.find((file) => file.type.startsWith("image/"))!)
+      : "",
   );
   const [area, setArea] = useState<UploadArea>(initialArea);
   const [description, setDescription] = useState("");
@@ -8798,7 +8848,7 @@ function UploadModal({
   const [sourceCurrency, setSourceCurrency] = useState<CurrencyCode | "auto">("auto");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [completedUpload, setCompletedUpload] = useState<UploadResult | null>(null);
+  const [completedBatch, setCompletedBatch] = useState<Array<{ fileName: string; result?: UploadResult; error?: string }> | null>(null);
 
   useEffect(() => {
     return () => {
@@ -8806,23 +8856,26 @@ function UploadModal({
     };
   }, [previewUrl]);
 
-  function chooseFile(file: File | null) {
-    setSelectedFile(file);
-    setPreviewUrl(file?.type.startsWith("image/") ? URL.createObjectURL(file) : "");
+  function chooseFiles(files: File[]) {
+    const unique = Array.from(new Map(files.map((file) => [`${file.name}:${file.size}:${file.lastModified}`, file])).values()).slice(0, 20);
+    const preview = unique.find((file) => file.type.startsWith("image/"));
+    setSelectedFiles(unique);
+    setPreviewUrl(preview ? URL.createObjectURL(preview) : "");
     setError("");
   }
 
   // El aviso se da al elegir el archivo: quien trae un MPP/DWG sabe desde el
   // principio que el original se confirma ahora y el derivado llegará después.
-  const deferredConversionExtension = selectedFile
-    ? DEFERRED_CONVERSION_EXTENSIONS.find((extension) => selectedFile.name.toLowerCase().endsWith(`.${extension}`)) ?? ""
-    : "";
+  const deferredConversionExtension = selectedFiles
+    .map((file) => DEFERRED_CONVERSION_EXTENSIONS.find((extension) => file.name.toLowerCase().endsWith(`.${extension}`)) ?? "")
+    .find(Boolean) ?? "";
   const financeDelivery = area === "finanzas" || area === "comercial";
-  const processingAccepted = completedUpload?.receipt?.outcome === "accepted";
+  const completedUploads = completedBatch?.filter((entry) => entry.result) ?? [];
+  const failedUploads = completedBatch?.filter((entry) => entry.error) ?? [];
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!selectedFile || saving) return;
+    if (!selectedFiles.length || saving) return;
     if (!online) {
       setError("La carga queda desactivada en modo sin conexión. Conserva la foto y vuelve a intentarlo cuando recuperes internet.");
       return;
@@ -8830,15 +8883,27 @@ function UploadModal({
     setSaving(true);
     setError("");
     try {
-      const result = await uploadProjectFile(selectedFile, {
-        area,
-        description,
-        declaredCutoff,
-        section: areaLabels[area],
-        source: "dashboard",
-        sourceCurrency,
-      });
-      setCompletedUpload(result);
+      const entries: Array<{ fileName: string; result?: UploadResult; error?: string }> = [];
+      for (const file of selectedFiles) {
+        try {
+          const result = await uploadProjectFile(file, {
+            area,
+            description,
+            declaredCutoff,
+            section: areaLabels[area],
+            source: "dashboard_batch",
+            sourceCurrency,
+          });
+          entries.push({ fileName: file.name, result });
+        } catch (uploadError) {
+          entries.push({
+            fileName: file.name,
+            error: uploadError instanceof Error ? uploadError.message : "No se pudo cargar el archivo.",
+          });
+        }
+      }
+      setCompletedBatch(entries);
+      if (entries.every((entry) => entry.error)) setError("No se pudo entregar ningún archivo. Conserva los originales y vuelve a intentarlo.");
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "No se pudo cargar el archivo.");
     } finally {
@@ -8847,8 +8912,8 @@ function UploadModal({
   }
 
   function finishUpload() {
-    if (completedUpload) {
-      onComplete(completedUpload.message ?? "Archivo registrado correctamente.");
+    if (completedBatch) {
+      onComplete(`${completedUploads.length} de ${completedBatch.length} archivo(s) registrados correctamente.`);
       return;
     }
     onClose();
@@ -8861,34 +8926,29 @@ function UploadModal({
           <div><span className="section-kicker">CENTRO DE DATOS · CARGA AUTOMÁTICA</span><h3>Subir archivo al proyecto ARAYA</h3></div>
           <button className="close-button" type="button" onClick={finishUpload} aria-label="Cerrar">×</button>
         </div>
-        {completedUpload ? (
-          <section className={`upload-receipt ${processingAccepted ? "processing" : completedUpload.receipt?.requiresAction ? "requires-action" : "complete"}`} aria-live="polite">
-            <div className="upload-receipt-mark" aria-hidden="true">
-              {processingAccepted ? "…" : completedUpload.receipt?.requiresAction ? "!" : "✓"}
+        {completedBatch ? (
+          <section className={`upload-receipt ${failedUploads.length ? "requires-action" : "complete"}`} aria-live="polite">
+            <div className="upload-receipt-mark" aria-hidden="true">{failedUploads.length ? "!" : "✓"}</div>
+            <span className="section-kicker">RECIBO DE CARGA MÚLTIPLE</span>
+            <h3>{completedUploads.length} de {completedBatch.length} archivo(s) recibidos</h3>
+            <p>Cada documento conserva su propio diagnóstico. Un fallo no detiene los demás.</p>
+            <div className="batch-upload-results">
+              {completedBatch.map((entry) => (
+                <article className={entry.error ? "failed" : "success"} key={entry.fileName}>
+                  <div><strong>{entry.fileName}</strong><small>{entry.error ? "No entregado" : entry.result?.receipt?.outcome === "accepted" ? "Procesando" : "Procesado"}</small></div>
+                  <p>{entry.error || entry.result?.message || "Original conservado correctamente."}</p>
+                  {entry.result?.receipt && entry.result.receipt.outcome !== "accepted" && (
+                    <div className="batch-upload-metrics">
+                      <span>{entry.result.receipt.publishedCount ?? 0} publicados</span>
+                      <span>{entry.result.receipt.unchangedCount ?? 0} ya vigentes</span>
+                      <span>{entry.result.receipt.ignoredCount ?? 0} aislados</span>
+                    </div>
+                  )}
+                  {canAccessFinance && entry.result?.receipt?.financial && <FinancialReceiptPanel receipt={entry.result.receipt.financial} />}
+                </article>
+              ))}
             </div>
-            <span className="section-kicker">{processingAccepted ? "RECIBO DE ENTREGA" : "RECIBO DE PROCESAMIENTO"}</span>
-            <h3>{processingAccepted ? "Archivo recibido correctamente" : completedUpload.receipt?.requiresAction ? "Archivo conservado con una comprobación" : "Archivo procesado correctamente"}</h3>
-            <p>{completedUpload.message ?? "El original quedó registrado en el Centro de Control."}</p>
-            {!processingAccepted && <div className="upload-receipt-metrics">
-              <span><small>Área detectada</small><strong>{completedUpload.receipt?.areaLabel ?? "Catalogada"}</strong></span>
-              <span><small>Datos publicados</small><strong>{completedUpload.receipt?.publishedCount ?? 0}</strong></span>
-              <span><small>Ya coincidían</small><strong>{completedUpload.receipt?.unchangedCount ?? 0}</strong></span>
-              <span><small>Aislados con diagnóstico</small><strong>{completedUpload.receipt?.ignoredCount ?? 0}</strong></span>
-              <span><small>Secciones nuevas</small><strong>{completedUpload.receipt?.newSectionCount ?? 0}</strong></span>
-            </div>}
-            {Boolean(completedUpload.receipt?.warnings.length) && (
-              <div className="upload-receipt-warnings">
-                <strong>Lo que el sistema encontró</strong>
-                <ul>{completedUpload.receipt?.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
-              </div>
-            )}
-            {canAccessFinance && completedUpload.receipt?.financial && (
-              <FinancialReceiptPanel receipt={completedUpload.receipt.financial} />
-            )}
-            <div className="upload-receipt-next">
-              <strong>Siguiente paso</strong>
-              <p>{completedUpload.receipt?.nextAction ?? "No tienes que hacer nada."}</p>
-            </div>
+            <div className="upload-receipt-next"><strong>Siguiente paso</strong><p>{failedUploads.length ? "Puedes cerrar: los originales correctos seguirán procesándose. Vuelve a seleccionar únicamente los fallidos." : "No tienes que hacer nada; el Centro de Control terminará el procesamiento."}</p></div>
             <button className="button primary" type="button" onClick={finishUpload}>Cerrar recibo</button>
           </section>
         ) : (
@@ -8912,19 +8972,20 @@ function UploadModal({
           <input
             type="file"
             required
+            multiple
             accept=".xlsx,.xls,.csv,.json,.xml,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
-            onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
+            onChange={(event) => chooseFiles(Array.from(event.target.files ?? []))}
           />
           {previewUrl && (
             <div
               className="upload-image-preview"
               role="img"
-              aria-label={`Vista previa de ${selectedFile?.name ?? "la fotografía"}`}
+              aria-label={`Vista previa de ${selectedFiles[0]?.name ?? "la fotografía"}`}
               style={{ backgroundImage: `url("${previewUrl}")` }}
             />
           )}
-          <strong>{selectedFile ? selectedFile.name : "Selecciona o arrastra un archivo"}</strong>
-          <span>{selectedFile ? fileSize(selectedFile.size) : "Excel, CSV/JSON, XML, Word, PowerPoint, PDF, imágenes y ZIP se procesan al subir · MPP y DWG se convierten automáticamente · máximo 50 MB"}</span>
+          <strong>{selectedFiles.length ? selectedFiles.length === 1 ? selectedFiles[0].name : `${selectedFiles.length} archivos preparados` : "Selecciona o arrastra uno o varios archivos"}</strong>
+          <span>{selectedFiles.length ? `${selectedFiles.map((file) => file.name).slice(0, 3).join(" · ")}${selectedFiles.length > 3 ? ` · +${selectedFiles.length - 3}` : ""} · ${fileSize(selectedFiles.reduce((total, file) => total + file.size, 0))}` : "Excel, CSV/JSON, XML, Word, PowerPoint, PDF, imágenes y ZIP · hasta 20 archivos por lote · máximo 50 MB cada uno"}</span>
         </div>
         <div className="upload-source-actions" aria-label="Opciones de carga en móvil">
           <label>
@@ -8933,7 +8994,7 @@ function UploadModal({
               type="file"
               accept="image/*"
               capture="environment"
-              onChange={(event) => chooseFile(event.target.files?.[0] ?? null)}
+              onChange={(event) => chooseFiles(Array.from(event.target.files ?? []))}
             />
           </label>
           <small>Ideal para avance de obra, incidencias, albaranes y evidencias de campo.</small>
@@ -9024,7 +9085,7 @@ function UploadModal({
         {error && <div className="callout warn"><strong>No se completó la carga</strong><p>{error}</p></div>}
         <div className="modal-actions">
           <button className="button secondary" type="button" onClick={onClose}>Cancelar</button>
-          <button className="button primary" type="submit" disabled={!selectedFile || saving || !online}>{saving ? "Entregando archivo…" : online ? "Subir documento" : "Esperando conexión"}</button>
+          <button className="button primary" type="submit" disabled={!selectedFiles.length || saving || !online}>{saving ? `Entregando ${selectedFiles.length} archivo(s)…` : online ? `Subir ${selectedFiles.length || ""} documento(s)` : "Esperando conexión"}</button>
         </div>
           </>
         )}
@@ -9177,7 +9238,7 @@ export function DashboardClient({
   const [controlRoomLoading, setControlRoomLoading] = useState(true);
   const [controlRoomError, setControlRoomError] = useState("");
   const [deviceCenterOpen, setDeviceCenterOpen] = useState(false);
-  const [pendingUploadFile, setPendingUploadFile] = useState<File | null>(null);
+  const [pendingUploadFiles, setPendingUploadFiles] = useState<File[]>([]);
   const [online, setOnline] = useState(true);
   const [offlineReady, setOfflineReady] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState<DeviceNotificationPermission>("unsupported");
@@ -9416,6 +9477,41 @@ export function DashboardClient({
     const timer = window.setTimeout(() => setNotice(""), 6_000);
     return () => window.clearTimeout(timer);
   }, [notice]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const shared = url.searchParams.get("shared") === "1";
+    const sharedError = url.searchParams.get("shared_error") === "1";
+    if (!shared && !sharedError) return;
+    url.searchParams.delete("shared");
+    url.searchParams.delete("shared_error");
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    if (sharedError) {
+      const timer = window.setTimeout(
+        () => setNotice("El dispositivo no pudo preparar los documentos compartidos. Abre Bricket Control y usa Cargar archivo."),
+        0,
+      );
+      return () => window.clearTimeout(timer);
+    }
+    let active = true;
+    void consumeSharedInboxFiles()
+      .then((files) => {
+        if (!active) return;
+        if (!files.length) {
+          setNotice("No se encontraron documentos compartidos. Vuelve a compartirlos con Bricket Control.");
+          return;
+        }
+        setPendingUploadFiles(files);
+        setUploadOpen(true);
+        setNotice(`${files.length} archivo(s) recibidos desde el menú Compartir.`);
+      })
+      .catch(() => {
+        if (active) setNotice("No se pudieron recuperar los documentos compartidos en este dispositivo.");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!biometricRecord) return;
@@ -10015,12 +10111,12 @@ export function DashboardClient({
     setBiometricLocked(true);
   }
 
-  function requestUpload(file: File | null = null) {
+  function requestUpload(files: File | File[] | null = null) {
     if (!online) {
       setNotice("La carga de archivos necesita conexión. La consulta local sigue disponible.");
       return;
     }
-    setPendingUploadFile(file);
+    setPendingUploadFiles(Array.isArray(files) ? files : files ? [files] : []);
     setUploadOpen(true);
   }
 
@@ -10065,7 +10161,7 @@ export function DashboardClient({
     setWorkspaceDetail(null);
     setFileViewer(null);
     setDeviceCenterOpen(false);
-    setPendingUploadFile(null);
+    setPendingUploadFiles([]);
     setAgentOpen(projectId === "araya" && !window.matchMedia("(max-width: 1100px)").matches);
   }
 
@@ -10629,6 +10725,8 @@ export function DashboardClient({
         />
       )}
 
+      {activeProjectId === "araya" && <OnboardingAssistant role={currentUser.role} />}
+
       {deviceCenterOpen && (
         <AppErrorBoundary
           resetKey={`device-center-${deviceCenterOpen}`}
@@ -10674,17 +10772,17 @@ export function DashboardClient({
       {activeProjectId === "araya" && uploadOpen && (
         <UploadModal
           initialArea={!currentUser.financeAccess && requiresFinanceAccessForArea(defaultUploadArea[view]) ? "auto" : defaultUploadArea[view]}
-          initialFile={pendingUploadFile}
+          initialFiles={pendingUploadFiles}
           canAccessFinance={currentUser.financeAccess}
           canUploadFinance={currentUser.financeUploadAccess}
           online={online}
           onClose={() => {
             setUploadOpen(false);
-            setPendingUploadFile(null);
+            setPendingUploadFiles([]);
           }}
           onComplete={(message) => {
             setUploadOpen(false);
-            setPendingUploadFile(null);
+            setPendingUploadFiles([]);
             setNotice(message);
           }}
         />
