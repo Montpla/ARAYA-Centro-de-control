@@ -444,7 +444,7 @@ test("spatial views derive live colors and accept new mapped buildings and urban
   assert.match(palette, /return "progress-100"/);
   assert.match(dashboard, /building\.mapCoordinates\?\.\[planMode\]/);
   assert.match(dashboard, /area\.mapCoordinates\?\.\[planMode\]/);
-  assert.match(dashboard, /synchronizeSpatialSummary/);
+  assert.match(dashboard, /synchronizeDerivedDashboardState/);
   assert.match(dashboard, /Los porcentajes, estados y colores cambian/);
   assert.match(data, /mapCoordinates\?:/);
 });

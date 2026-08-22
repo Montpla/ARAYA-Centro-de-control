@@ -18,7 +18,6 @@ import {
 } from "../lib/unit-progress";
 import {
   activeBuildingsProgress,
-  averageNumeric,
   projectDateForDisplay,
 } from "../lib/progress-model";
 import {
@@ -174,7 +173,7 @@ import type {
 // DashboardClient llama a esto en cada render (no sólo al montar). Sin este
 // guard, cada actualización de estado (cada poll de 5s) volvía a pisar todas
 // las variables módulo-nivel con la instantánea estática del SSR, borrando
-// en el acto cualquier valor recién derivado por synchronizeSpatialSummary()
+// en el acto cualquier valor recién derivado por synchronizeDerivedDashboardState()
 // que reasigna la variable a un objeto nuevo (spread) en vez de mutar el
 // existente in place. Los campos mutados in place (projectSnapshot.x = y,
 // monthlyPlan[i] = {...}) sobrevivían porque seguían siendo el mismo objeto;
@@ -314,11 +313,10 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     antonelyAdvances,
     antonelyBalanceLines,
     antonelyCostAccounts,
-    // antonelyDetailTotals deliberadamente fuera: es un computedView (ver
-    // más arriba), y applyLiveValuesToTargets clona un valor base la
-    // primera vez que ve un target y lo cachea para siempre — si el target
-    // es un Proxy que recalcula solo, ese clon lo congelaría en su primer
-    // valor calculado, deshaciendo el propósito de computedView.
+    // Se sincroniza el objeto base, no el Proxy computedView. Así una
+    // publicación directa de campos hermanos llega al resumen y sus totales
+    // calculados siguen recalculándose sobre las líneas de detalle.
+    antonelyDetailTotals: baseAntonelyDetailTotals,
     antonelyFinanceSource,
     antonelyPayableCategories,
     antonelyPayableVendorsAll,
@@ -384,6 +382,9 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     sourceIds: dataAuthorityMatrix.map((item) => item.primarySourceId),
   };
   projects.araya.cutoff = projectSnapshot.declaredCutoff;
+  // La primera pintura usa exactamente las mismas derivaciones que cada
+  // revisión viva; no espera al primer sondeo de cinco segundos.
+  synchronizeDerivedDashboardState();
 }
 
 type View =
@@ -1361,7 +1362,12 @@ function operationalAlerts(
   });
 }
 
-function synchronizeSpatialSummary() {
+function synchronizeDerivedDashboardState() {
+  // Vialidad y paisajismo existen tanto en el inventario espacial como en el
+  // informe de urbanismo. Se reconcilian aquí, una sola vez por revisión, para
+  // que plano, ficha, resumen, agente y vistas auxiliares lean el mismo estado.
+  const reconciledUrbanismAreas = deriveUrbanismMapAreas(urbanismAreas, urbanismReportAreas);
+  urbanismAreas.splice(0, urbanismAreas.length, ...reconciledUrbanismAreas);
   projectSnapshot.forecastFinish = projectDateForDisplay(projectSnapshot.forecastFinish);
   buildings.forEach((building) => {
     building.forecastFinish = projectDateForDisplay(building.forecastFinish);
@@ -1407,12 +1413,13 @@ function synchronizeSpatialSummary() {
   // Ritmo de los edificios ya en marcha, al lado del global. Se recalcula solo.
   projectSnapshot.activeBuildingsProgress =
     activeBuildingsProgress(buildings) ?? projectSnapshot.overallProgress;
-  // Urbanismo: media viva de sus áreas, no a mano. Espejo del servidor. La
-  // fecha de fin, el desvío y la línea base salen del plan (projectSnapshot.*).
+  // Urbanismo general es el consolidado ponderado; las subáreas son desglose
+  // y no se promedian con el total (eso rebajaba artificialmente el KPI).
+  const generalUrbanism = urbanismAreas.find((area) => area.id === "urban-general");
   projectSnapshot.urbanismProgress =
-    averageNumeric(urbanismAreas.map((area) => area.progress)) ?? projectSnapshot.urbanismProgress;
+    generalUrbanism?.progress ?? projectSnapshot.urbanismProgress;
   projectSnapshot.urbanismPlanned =
-    averageNumeric(urbanismAreas.map((area) => area.planned)) ?? projectSnapshot.urbanismPlanned;
+    generalUrbanism?.planned ?? projectSnapshot.urbanismPlanned;
   // Los Excel de obra dejan fórmulas con valor 0 en los meses futuros. No son
   // cortes ejecutados: se limpian antes de buscar el último dato real para que
   // resumen y Curva S compartan siempre el mismo corte válido.
@@ -2986,7 +2993,7 @@ function SitePlan({
   const [planProgressFilter, setPlanProgressFilter] = useState<ProgressBandId | "all">("all");
   const allUnits = buildings.flatMap((item) => item.units);
   const blockedUnits = allUnits.filter((unit) => unit.status === "bloqueada").length;
-  const mapUrbanismAreas = deriveUrbanismMapAreas(urbanismAreas, urbanismReportAreas);
+  const mapUrbanismAreas = urbanismAreas;
   const progressLegend = progressBandDefinitions.map((band) => ({
     ...band,
     buildings: buildings.filter((building) => progressBandClass(building.progress) === band.id).length,
@@ -7743,7 +7750,7 @@ function SourcesView({
     ? [...juneDataQualityIssues, ...procurementQualityIssues, ...reprogrammedFlowQualityIssues, ...fiduciaryStatementQualityIssues]
     : juneDataQualityIssues.filter((issue) => !/presupuesto|pagar|coste|anticipo|inter[eé]s/i.test(issue.title));
   // dataAuthorityMatrix ya llega con el texto de decisión/status en vivo:
-  // synchronizeSpatialSummary() lo sincroniza centralmente para que
+  // synchronizeDerivedDashboardState() lo sincroniza centralmente para que
   // cualquier otra pantalla que lo lea también lo vea al día, no solo esta.
   const visibleAuthorityMatrix = dataAuthorityMatrix.filter((item) => {
     const source = dataSources.find((candidate) => candidate.id === item.primarySourceId);
@@ -9557,8 +9564,11 @@ export function DashboardClient({
           return;
         }
         if (liveData.healthy === false) throw new Error("Sincronización no disponible");
-        applyLiveValuesToTargets(liveData.values ?? {}, liveDataTargets);
-        synchronizeSpatialSummary();
+        applyLiveValuesToTargets(
+          liveData.values ?? {},
+          liveDataTargets,
+          synchronizeDerivedDashboardState,
+        );
         setMetrics(currentUser.financeAccess
           ? [
             ...(Array.isArray(dashboardData.metrics) ? dashboardData.metrics : []),

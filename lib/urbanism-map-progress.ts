@@ -26,8 +26,13 @@ function normalizedName(value: string) {
 
 /**
  * Une el inventario espacial del plano con el desglose del informe de
- * urbanismo. Un valor publicado directamente para el área espacial conserva
- * prioridad; el informe sólo completa el hueco que todavía está en null.
+ * urbanismo. Son porcentajes acumulados: entre dos representaciones del mismo
+ * concepto conserva el mayor avance conocido. Así, un cero de plantilla o de
+ * una ficha espacial antigua no puede ocultar un avance positivo ya publicado,
+ * mientras que una medición espacial posterior y superior sí progresa.
+ *
+ * Una corrección que reduzca un acumulado debe publicarse sobre ambas claves
+ * equivalentes; no se interpreta automáticamente como una regresión de obra.
  */
 export function deriveUrbanismMapAreas<T extends UrbanismMapArea>(
   areas: readonly T[],
@@ -38,12 +43,13 @@ export function deriveUrbanismMapAreas<T extends UrbanismMapArea>(
   );
 
   return areas.map((area) => {
-    if (area.progress !== null) return area;
     const aliases = reportAliasesByMapArea[area.id] ?? [];
     const report = aliases
       .map((alias) => reportsByName.get(alias))
       .find((candidate) => typeof candidate?.progress === "number");
     if (!report || report.progress === null) return area;
+    const spatialProgress = typeof area.progress === "number" ? area.progress : null;
+    if (spatialProgress !== null && spatialProgress >= report.progress) return area;
 
     return {
       ...area,

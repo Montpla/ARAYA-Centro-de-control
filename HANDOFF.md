@@ -3385,3 +3385,37 @@ los expedientes eternamente pendientes.
   la prioridad del dato específico y la inmutabilidad del consolidado.
 - Verificación local: TypeScript y build correctos, ESLint 0 errores y suite
   completa **363/363**.
+
+## Sincronización transaccional y urbanismo reconciliado (22/08/2026)
+
+- La captura de producción demostró que el bloque anterior no bastaba: una
+  publicación viva había dejado `progress: 0` en las fichas espaciales de
+  Vialidad y Paisajismo. Como `deriveUrbanismMapAreas()` daba prioridad a
+  cualquier número espacial, ese cero antiguo ocultaba 6,33 % y 12,24 %.
+- Los avances son acumulados. La reconciliación conserva ahora el mayor valor
+  conocido entre la ficha espacial y su desglose equivalente; un cero de
+  plantilla no vuelve a tapar un avance positivo. Una corrección descendente
+  debe publicar las dos claves equivalentes de forma expresa.
+- La reconciliación ya no vive dentro de `SitePlan`: se ejecuta en
+  `synchronizeDerivedDashboardState()` y también en
+  `materializeSpatialLiveData()`. Plano, ficha de Urbanismo, resumen, Sala
+  operativa, informes y ARAYA Asistente consumen así el mismo estado.
+- Se corrigió otro error de concepto: `urban-general` es el KPI consolidado
+  ponderado; Vialidad, Paisajismo y demás son desgloses y no se promedian con
+  él. Cliente y servidor leen el consolidado por identidad.
+- `applyLiveValuesToTargets()` prepara todas las raíces, las aplica juntas y
+  ejecuta las derivaciones en el mismo ciclo. Si una raíz o derivación falla,
+  restaura todas las raíces y vuelve a calcular los derivados desde el estado
+  anterior; ya no puede quedar una revisión visible sólo a medias.
+- La primera pintura ejecuta la misma derivación que los sondeos de cinco
+  segundos. `antonelyDetailTotals` sincroniza ahora su objeto base, no el Proxy,
+  para aceptar campos directos sin congelar los totales calculados.
+- Una nueva prueba compara todas las raíces admitidas por `LIVE_DATA_ROOTS`
+  contra sus consumidores. Toda raíz debe estar en `liveDataTargets` o declarar
+  el endpoint que la materializa (`antonelyPayableInvoiceLines` en
+  `/api/payables`); una raíz futura desconectada bloquea el despliegue.
+- Verificación local final: `npm test` **366/366** (incluye TypeScript y build),
+  ESLint 0 errores y `git diff --check` correcto.
+- La consulta D1 remota desde el equipo falló por credencial Cloudflare local
+  no autorizada (7403); no se alteró la base. La sesión de Chrome sí está
+  disponible para validar visualmente una vez desplegado desde GitHub Actions.

@@ -664,6 +664,28 @@ test("spatial target arrays remove holes and reconcile objects by stable identit
   assert.equal(target.length, 3);
 });
 
+test("live target application rolls every root back when derived synchronization fails", () => {
+  const project = { overallProgress: 10 };
+  const areas = [{ id: "urban-general", progress: 10 }];
+  const targets = { projectSnapshot: project, urbanismAreas: areas };
+  let derivedProgress = project.overallProgress;
+  let synchronizationRuns = 0;
+
+  assert.throws(() => liveData.applyLiveValuesToTargets({
+    "projectSnapshot.overallProgress": 22.71,
+    "urbanismAreas.0.progress": 21.25,
+  }, targets, () => {
+    synchronizationRuns += 1;
+    derivedProgress = project.overallProgress;
+    if (synchronizationRuns === 1) throw new Error("derived view failed");
+  }), /derived view failed/);
+
+  assert.deepEqual(project, { overallProgress: 10 });
+  assert.deepEqual(areas, [{ id: "urban-general", progress: 10 }]);
+  assert.equal(derivedProgress, 10);
+  assert.equal(synchronizationRuns, 2);
+});
+
 test("stale preparing cache revisions are rebuilt from the published winner", async () => {
   const { planStalePublicationRecovery } = await loadRecoveryCore();
   const canonical = {

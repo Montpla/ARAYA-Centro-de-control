@@ -526,7 +526,9 @@ function replaceMutable(target: unknown, next: unknown) {
 export function applyLiveValuesToTargets(
   values: LiveDataMap,
   targets: Record<string, unknown>,
+  synchronize?: () => void,
 ) {
+  const prepared: Array<{ target: object; previous: unknown; next: unknown }> = [];
   Object.entries(targets).forEach(([root, target]) => {
     if ((typeof target !== "object" && typeof target !== "function") || target === null) return;
     let baseline = liveTargetBaselines.get(target as object);
@@ -535,8 +537,24 @@ export function applyLiveValuesToTargets(
       liveTargetBaselines.set(target as object, baseline);
     }
     const next = materializeLiveRoot(root, baseline, values);
-    replaceMutable(target, next);
+    prepared.push({ target: target as object, previous: cloneValue(target), next });
   });
+
+  try {
+    prepared.forEach(({ target, next }) => replaceMutable(target, next));
+    synchronize?.();
+  } catch (error) {
+    // Ninguna revisión puede quedar aplicada a medias: si falla una
+    // derivación o una raíz, se restauran todas las raíces del ciclo y se
+    // recalculan los derivados desde ese estado anterior.
+    prepared.forEach(({ target, previous }) => replaceMutable(target, previous));
+    try {
+      synchronize?.();
+    } catch {
+      // Conserva siempre el error original, que identifica la revisión fallida.
+    }
+    throw error;
+  }
 }
 
 const liveTargetBaselines = new WeakMap<object, unknown>();

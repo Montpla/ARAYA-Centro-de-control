@@ -4,7 +4,10 @@ import {
   projectSnapshot,
   urbanismAreas as baselineUrbanismAreas,
 } from "../app/demo-data";
-import { constructionDisciplines as baselineConstructionDisciplines } from "../app/june-report-data";
+import {
+  constructionDisciplines as baselineConstructionDisciplines,
+  urbanismReportAreas as baselineUrbanismReportAreas,
+} from "../app/june-report-data";
 import {
   LiveDataMap,
   compactLiveEntities,
@@ -12,10 +15,10 @@ import {
 } from "./live-data";
 import {
   activeBuildingsProgress,
-  averageNumeric,
   projectDateForDisplay,
 } from "./progress-model";
 import { clearTrailingMonthlyActualPlaceholders } from "./monthly-plan";
+import { deriveUrbanismMapAreas } from "./urbanism-map-progress";
 import { unitOverallProgress } from "./unit-progress";
 
 export function materializeSpatialLiveData(values: LiveDataMap) {
@@ -26,9 +29,14 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
     forecastFinish: projectDateForDisplay(building.forecastFinish),
     units: compactLiveEntities(building.units),
   }));
-  const urbanismAreas = compactLiveEntities(
+  const spatialUrbanismAreas = compactLiveEntities(
     materializeLiveRoot("urbanismAreas", baselineUrbanismAreas, values),
   );
+  const urbanismReportBaseline = baselineUrbanismReportAreas.map((area) => ({ ...area }));
+  const urbanismReportAreas = compactLiveEntities(
+    materializeLiveRoot("urbanismReportAreas", urbanismReportBaseline, values),
+  );
+  const urbanismAreas = deriveUrbanismMapAreas(spatialUrbanismAreas, urbanismReportAreas);
   const snapshot = materializeLiveRoot("projectSnapshot", projectSnapshot, values);
   const monthlyPlan = materializeLiveRoot("monthlyPlan", baselineMonthlyPlan, values);
   clearTrailingMonthlyActualPlaceholders(monthlyPlan);
@@ -62,11 +70,11 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
   // Ritmo de los edificios ya en marcha, aparte del global (que reparte entre
   // los 26). Se recalcula solo con cada cambio de edificio.
   const activeProgress = activeBuildingsProgress(buildings) ?? overallProgress;
-  // Urbanismo: media viva de sus áreas, no un número a mano. La fecha de fin,
-  // el desvío y la línea base salen del plan (lib/project-xml) y viven ya en
-  // snapshot vía las claves projectSnapshot.*, así que no se recalculan aquí.
-  const urbanismProgress = averageNumeric(urbanismAreas.map((area) => area.progress)) ?? snapshot.urbanismProgress;
-  const urbanismPlanned = averageNumeric(urbanismAreas.map((area) => area.planned)) ?? snapshot.urbanismPlanned;
+  // Urbanismo general es un KPI consolidado y ponderado. Vialidad, paisajismo
+  // y el resto son desgloses: no se promedian con él porque alteraría el total.
+  const generalUrbanism = urbanismAreas.find((area) => area.id === "urban-general");
+  const urbanismProgress = generalUrbanism?.progress ?? snapshot.urbanismProgress;
+  const urbanismPlanned = generalUrbanism?.planned ?? snapshot.urbanismPlanned;
 
   return {
     buildings,

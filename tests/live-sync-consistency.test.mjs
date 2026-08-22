@@ -26,6 +26,33 @@ const COMPUTED_VIEW_SUMMARIES = [
   "supplierContactAudit",
 ];
 
+test("every accepted live-data root has a declared client or endpoint consumer", async () => {
+  const [dashboard, payablesRoute] = await Promise.all([
+    readFile("app/dashboard-client.tsx", "utf8"),
+    readFile("app/api/payables/route.ts", "utf8"),
+  ]);
+  const targetsBlock = dashboard.match(/liveDataTargets = \{([\s\S]*?)\n {2}\};/)?.[1] ?? "";
+  assert.ok(targetsBlock.length > 0, "no se pudo extraer liveDataTargets");
+  const clientRoots = new Set(
+    [...targetsBlock.matchAll(/^\s{4}([A-Za-z][A-Za-z0-9]*)(?::[^,]+)?,\s*$/gm)]
+      .map((match) => match[1]),
+  );
+  const endpointRoots = new Set(["antonelyPayableInvoiceLines"]);
+  assert.match(
+    payablesRoute,
+    /materializeLiveRoot\(\s*["']antonelyPayableInvoiceLines["']/,
+    "la excepción de facturas debe seguir materializándose en /api/payables",
+  );
+
+  const uncovered = LIVE_DATA_ROOTS.filter((root) =>
+    !clientRoots.has(root) && !endpointRoots.has(root));
+  assert.deepEqual(
+    uncovered,
+    [],
+    `raíces aceptadas sin consumidor sincronizado: ${uncovered.join(", ")}`,
+  );
+});
+
 test("el avance físico oficial de julio es 22,71% y no la media simple de edificios", () => {
   const buildingAverage = Math.round(
     (buildings.reduce((sum, building) => sum + building.progress, 0) / buildings.length) * 100,
@@ -134,11 +161,11 @@ test("computed-view summaries recompute on every read and never enter the snapsh
 
 test("dataAuthorityMatrix's live decision text is synced centrally, not only inside SourcesView's render", async () => {
   const dashboard = await readFile("app/dashboard-client.tsx", "utf8");
-  const syncFunction = dashboard.match(/function synchronizeSpatialSummary\(\) \{[\s\S]*?\r?\n}\r?\n/)?.[0] ?? "";
+  const syncFunction = dashboard.match(/function synchronizeDerivedDashboardState\(\) \{[\s\S]*?\r?\n}\r?\n/)?.[0] ?? "";
   assert.match(
     syncFunction,
     /dataAuthorityMatrix = liveDataAuthorityMatrix\(/,
-    "dataAuthorityMatrix debe reasignarse dentro de synchronizeSpatialSummary, para que cualquier pantalla que lo lea (no solo SourcesView) reciba el texto de decisión/status en vivo",
+    "dataAuthorityMatrix debe reasignarse dentro de synchronizeDerivedDashboardState, para que cualquier pantalla que lo lea (no solo SourcesView) reciba el texto de decisión/status en vivo",
   );
 });
 
@@ -165,7 +192,7 @@ test("overallProgress and plannedProgress always come from the same monthlyPlan 
     "el servidor debe retirar los ceros de fórmula futuros antes de calcular el corte",
   );
 
-  // Cliente: app/dashboard-client.tsx (synchronizeSpatialSummary)
+  // Cliente: app/dashboard-client.tsx (synchronizeDerivedDashboardState)
   assert.match(
     dashboard,
     /cutoffActual = cutoffIndex >= 0 \? monthlyPlan\[cutoffIndex\]\.actual[\s\S]{0,80}cutoffPlanned = cutoffIndex >= 0 \? monthlyPlan\[cutoffIndex\]\.planned/,
@@ -205,16 +232,37 @@ test("overallProgress and plannedProgress always come from the same monthlyPlan 
     /activeBuildingsProgress\(buildings\)/,
     "el avance de edificios en marcha del cliente sale de los edificios",
   );
-  // El % de urbanismo se deriva de sus áreas (servidor y cliente), no a mano.
+  // El % consolidado de urbanismo procede de urban-general; las subáreas no se
+  // promedian con el total porque son un desglose de ese mismo KPI.
   assert.match(
     spatialLiveData,
-    /averageNumeric\(urbanismAreas\.map\(\(area\) => area\.progress\)\)/,
-    "el urbanismo del servidor sale de la media de sus áreas",
+    /urbanismAreas\.find\(\(area\) => area\.id === "urban-general"\)/,
+    "el urbanismo del servidor sale del indicador consolidado urban-general",
   );
   assert.match(
     dashboard,
-    /averageNumeric\(urbanismAreas\.map\(\(area\) => area\.progress\)\)/,
-    "el urbanismo del cliente sale de la media de sus áreas",
+    /urbanismAreas\.find\(\(area\) => area\.id === "urban-general"\)/,
+    "el urbanismo del cliente sale del indicador consolidado urban-general",
+  );
+  assert.match(
+    spatialLiveData,
+    /deriveUrbanismMapAreas\(spatialUrbanismAreas, urbanismReportAreas\)/,
+    "servidor, agente y sala operativa deben reconciliar el plano con el informe de urbanismo",
+  );
+  assert.match(
+    dashboard,
+    /deriveUrbanismMapAreas\(urbanismAreas, urbanismReportAreas\)/,
+    "el cliente debe reconciliar el plano con el informe en la derivación central",
+  );
+  assert.match(
+    dashboard,
+    /const mapUrbanismAreas = urbanismAreas;/,
+    "el plano debe consumir el estado reconciliado, no ejecutar una derivación privada",
+  );
+  assert.match(
+    dashboard,
+    /applyLiveValuesToTargets\([\s\S]{0,180}synchronizeDerivedDashboardState[\s\S]{0,20}\);/,
+    "cada revisión debe aplicar raíces y derivados en una sola transacción cliente",
   );
 });
 

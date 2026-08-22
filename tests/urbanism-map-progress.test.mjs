@@ -27,6 +27,19 @@ test("un avance específico del área espacial tiene prioridad sobre el informe"
   assert.equal(mapped.find((area) => area.id === "urban-roads")?.progress, 9.75);
 });
 
+test("un cero espacial de plantilla no oculta un avance acumulado positivo", () => {
+  const mapped = deriveUrbanismMapAreas(
+    urbanismAreas.map((area) =>
+      area.id === "urban-roads" || area.id === "urban-landscape"
+        ? { ...area, progress: 0 }
+        : area),
+    urbanismReportAreas,
+  );
+
+  assert.equal(mapped.find((area) => area.id === "urban-roads")?.progress, 6.33);
+  assert.equal(mapped.find((area) => area.id === "urban-landscape")?.progress, 12.24);
+});
+
 test("el enlace no altera el indicador consolidado de urbanismo", () => {
   const mapped = deriveUrbanismMapAreas(urbanismAreas, urbanismReportAreas);
   assert.equal(mapped.find((area) => area.id === "urban-general")?.progress, 18.28);
