@@ -92,7 +92,7 @@ def cover(c: canvas.Canvas) -> None:
     draw_wrapped(
         c,
         "El Centro de Control puede avisarte cuando hay novedades —una revisión "
-        "nueva, un documento, un vencimiento— con un globo en el teléfono o el "
+        "nueva, un documento, una comprobación fallida, un vencimiento o una conexión— con un globo en el teléfono o el "
         "ordenador, aunque no lo tengas abierto. Esta guía dice qué hacer para "
         "empezar a recibirlos.",
         MARGIN_X,
@@ -309,6 +309,9 @@ def page_dudas(c: canvas.Canvas) -> None:
             "Los avisos no llevan cifras económicas ni nada confidencial: "
             "sólo dicen que hay novedades. El detalle se ve al entrar, con "
             "los permisos de cada persona.",
+            "Si una comprobación posterior falla, Finanzas y administración "
+            "reciben un aviso con la revisión afectada; el original sigue "
+            "guardado y no hace falta subirlo otra vez.",
             "Si dejas de querer avisos, se desactivan desde los ajustes del "
             "navegador o del teléfono, cuando quieras.",
         ],

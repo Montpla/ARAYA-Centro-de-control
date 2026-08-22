@@ -72,8 +72,8 @@ const contractRoots = buildContractRoots();
 // Expuesto para que la extracción por IA pueda mostrarle al modelo los
 // nombres de campo reales que el contrato va a exigir, en vez de dejarlo
 // adivinar sinónimos que luego se rechazan en silencio.
-export function getContractRootsSnapshot(): Record<string, unknown> {
-  return contractRoots;
+export function getContractRootsSnapshot(): LiveDataMap {
+  return contractRoots as LiveDataMap;
 }
 
 function fallbackArrayItem(path: string) {

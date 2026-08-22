@@ -155,8 +155,9 @@ def cover(c: canvas.Canvas) -> None:
     )
     draw_wrapped(
         c,
-        "Lo que el programa lee, interpreta o convierte entra automáticamente. "
-        "MPP y DWG también tienen su proceso, explicado en la página 3.",
+        "Los grupos seguros que el programa lee, interpreta o convierte entran "
+        "automáticamente. Lo dudoso queda aislado en el recibo. MPP y DWG "
+        "también tienen su proceso, explicado en la página 3.",
         MARGIN_X + 22,
         box_y + 40,
         CONTENT_W - 44,
@@ -466,8 +467,10 @@ def page_detalles(c: canvas.Canvas) -> None:
         ),
         (
             "Cifras financieras",
-            "Sólo las publica quien tenga el permiso de Finanzas. Sin él, el "
-            "archivo se guarda y el resto de sus datos entra con normalidad.",
+            "Puede entregarlas quien tenga el permiso para aportar documentos "
+            "financieros, aunque no pueda consultar Finanzas. El sistema "
+            "comprueba balance, resultados, CxP, moneda, corte y autoridad de "
+            "la fuente; publica cada grupo seguro y aísla sólo lo descuadrado.",
         ),
     ]
 
@@ -502,15 +505,17 @@ def page_detalles(c: canvas.Canvas) -> None:
     y = draw_bullets(
         c,
         [
-            "Lee el mensaje que aparece al terminar la subida. Si dice "
-            "cuántos datos se han actualizado, ya está: no hay nada más que "
-            "esperar.",
+            "Lee el recibo al terminar: indica datos publicados, aislados, "
+            "controles contables, conversiones, pantallas afectadas y la "
+            "comprobación posterior.",
             "Si es MPP o DWG, el mensaje indica que la conversión sigue en "
             "segundo plano y el plazo normal de cada formato.",
             "Mira la implantación: los colores y los porcentajes cambian en "
             "menos de cinco segundos, en todas las pantallas a la vez.",
             "Si algo no cuadra, cada cifra guarda de qué archivo salió, quién "
             "lo subió y cuándo — y una publicación se puede deshacer.",
+            "Para balances, resultados y flujo usa las plantillas del Centro de "
+            "datos: entran por lector directo y no necesitan interpretación IA.",
         ],
         MARGIN_X,
         y,

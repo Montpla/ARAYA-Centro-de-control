@@ -60,7 +60,7 @@ test("el reproceso programado cura cargas tecnicas sin crear bucles", () => {
 });
 
 test("finanzas dispone de plantillas deterministas opcionales", () => {
-  for (const kind of ["cxp_categorias", "cxp_vencimientos", "costes", "anticipos", "proyeccion_financiera", "financiacion"]) {
+  for (const kind of ["cxp_categorias", "cxp_vencimientos", "costes", "anticipos", "proyeccion_financiera", "financiacion", "balance_fideicomiso", "resultados_fideicomiso", "flujo_mensual_finanzas"]) {
     assert.match(templateRoute, new RegExp(`${kind}:`));
     assert.match(dashboard, new RegExp(`kind=${kind}`));
   }

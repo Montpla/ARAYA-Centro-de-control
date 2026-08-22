@@ -31,7 +31,7 @@ importa que el dato entre bien y a la primera.
 
 | Archivo | Para qué |
 |---|---|
-| `01-avance-edificios.csv` | Avance, previsto, desviación y fin previsto de cada edificio |
+| `01-avance-edificios-*.csv` | Avance, previsto, desviación y fin previsto de cada edificio |
 | `02-avance-apartamentos-*.csv` | Avance y fase de cada apartamento — es lo que **da color** a la implantación |
 | `03-urbanismo.csv` | Avance de cada área de urbanismo |
 | `04-curva-s-mensual.csv` | Plan mensual: previsto y ejecutado. De aquí sale el **avance físico global** |
@@ -51,6 +51,9 @@ importa que el dato entre bien y a la primera.
 | `14-proyeccion-financiera.csv` | Ingresos, costes, neto y acumulado por mes |
 | `15-financiacion.csv` | Procesos de financiación |
 | `16-cubicaciones.csv` | Cubicaciones medidas y contabilizadas |
+| `18-balance-fideicomiso.csv` | Balance, patrimonio y balance de comprobación del fideicomiso |
+| `19-resultados-fideicomiso.csv` | Estado de resultados mensual y acumulado del fideicomiso |
+| `20-flujo-mensual-finanzas.csv` | Flujo mensual reprogramado: total, Urbanismo y Edificios |
 
 **Comercial**
 
@@ -60,13 +63,25 @@ importa que el dato entre bien y a la primera.
 | `18-ventas-por-ubicacion.csv` | Ventas por ubicación |
 | `19-morosidad.csv` | Clientes e importes en mora |
 
-Los apartamentos van en dos archivos porque cada carga admite un máximo de 250
-filas. Puedes subirlos por separado, en cualquier orden.
+Los edificios y apartamentos se reparten automáticamente en tantos archivos
+como sean necesarios porque cada carga admite un máximo de 250 filas. Puedes
+subirlos por separado y en cualquier orden.
 
 Las cifras económicas y comerciales las puede entregar cualquier usuario que
 tenga habilitado **Entregar documentos financieros**. Ese permiso no permite
 abrir ni consultar las cifras: el administrador concede por separado
 **Consultar Finanzas** y **Aprobar publicaciones financieras**.
+
+Las plantillas financieras se comprueban antes de publicar. El balance debe
+cumplir `activo = pasivo + patrimonio`; el resultado debe cumplir `ingresos -
+gastos = resultado`; el balance de comprobación debe tener débitos y créditos
+iguales; y cada mes del flujo debe cumplir `total = urbanismo + edificios`.
+Si una comprobación falla, sólo se aísla el grupo afectado y el recibo explica
+la diferencia. El resto de datos seguros del mismo archivo sigue su curso.
+
+La moneda indicada al cargar el documento se conserva como origen. Las claves
+terminadas en `Dop` se guardan en pesos dominicanos y las terminadas en `Usd`
+en dólares, con la conversión y el tipo aplicado registrados en el recibo.
 
 ## Cómo se regeneran
 

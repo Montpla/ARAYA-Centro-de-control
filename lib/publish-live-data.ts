@@ -26,6 +26,7 @@ import {
   requiresFinanceAccessForDocument,
 } from "./live-data";
 import { assertLiveDataContracts } from "./live-data-contract";
+import { verifyPublishedLiveData } from "./post-publish-verification";
 
 const MAX_UPDATES = 250;
 const MAX_VALUE_SIZE = 250_000;
@@ -334,6 +335,10 @@ export async function publishLiveDataUpdates(input: {
   sourceName?: string;
   message?: string;
   reviewClosure?: LiveDataReviewClosure;
+  financialValidation?: unknown;
+  monetaryAudit?: unknown;
+  sourceAuthority?: unknown;
+  affectedViews?: string[];
 }) {
   if (!input.normalized.length) throw new Error("No hay cambios preparados para publicar.");
   assertUniqueUpdateKeys(input.normalized);
@@ -410,6 +415,18 @@ export async function publishLiveDataUpdates(input: {
   assertBoundedAtomicJson("La publicación", updatePayloadJson);
   assertBoundedAtomicJson("El conjunto de archivos", filePayloadJson);
   const updatedAt = new Date().toISOString();
+  const financialValidationJson = input.financialValidation ? JSON.stringify(input.financialValidation) : "";
+  const monetaryAuditJson = input.monetaryAudit ? JSON.stringify(input.monetaryAudit) : "";
+  const sourceAuthorityJson = input.sourceAuthority ? JSON.stringify(input.sourceAuthority) : "";
+  const affectedViewsJson = input.affectedViews ? JSON.stringify(input.affectedViews) : "";
+  for (const [label, payload] of [
+    ["La validación financiera", financialValidationJson],
+    ["La auditoría monetaria", monetaryAuditJson],
+    ["La autoridad documental", sourceAuthorityJson],
+    ["Las vistas afectadas", affectedViewsJson],
+  ] as const) {
+    if (payload) assertBoundedAtomicJson(label, payload);
+  }
   const [createdEvent] = await db
     .insert(liveDataEvents)
     .values({
@@ -419,6 +436,10 @@ export async function publishLiveDataUpdates(input: {
       cutoff: String(input.cutoff ?? input.normalized[0].cutoff).slice(0, 40),
       changeCount: input.normalized.length,
       message: String(input.message ?? `${input.normalized.length} datos actualizados en el Centro de Control.`).slice(0, 500),
+      financialValidationJson,
+      monetaryAuditJson,
+      sourceAuthorityJson,
+      affectedViewsJson,
       status: "preparing",
       actorEmail: input.actor.email,
       actorName: input.actor.displayName,
@@ -783,5 +804,19 @@ export async function publishLiveDataUpdates(input: {
     subjectType: notificationRecord.subjectType,
     subjectId: notificationRecord.subjectId,
   }).catch(() => undefined);
-  return event;
+  const verification = await verifyPublishedLiveData({
+    eventId: event.id,
+    updates: input.normalized,
+    sourceFileIds: linkedFileIds,
+    actor: input.actor,
+  }).catch((error): import("./post-publish-verification").PublicationVerification => ({
+    status: "failed",
+    revision: event.id,
+    checkedKeys: input.normalized.length,
+    visibleKeys: 0,
+    affectedViews: input.affectedViews ?? [],
+    issues: [error instanceof Error ? error.message : "La comprobación posterior no pudo ejecutarse."],
+    checkedAt: new Date().toISOString(),
+  }));
+  return { ...event, verification };
 }

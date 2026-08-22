@@ -26,6 +26,12 @@ import {
 import { requireApiUser } from "../../../lib/access-control";
 import { resolveSourceCurrency } from "../../../lib/currency";
 import {
+  canonicalizeFinancialUpdates,
+  numericBeforeAfter,
+  validateFinancialPublication,
+  type FinancialValidationResult,
+} from "../../../lib/financial-governance";
+import {
   areaLabels,
   classifyUpload,
   inferUploadAreaFromContent,
@@ -421,6 +427,16 @@ function individualUpdateContractIsSafe(
   }
 }
 
+function parseProcessingReceipt(value: string) {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function publicFileRow(
   row: typeof uploadedFiles.$inferSelect,
   user?: { email: string; role: string; financeAccess?: boolean },
@@ -454,6 +470,7 @@ function publicFileRow(
         ? "La entrega ha terminado de procesarse. Las cifras permanecen protegidas."
         : "La entrega se está procesando en el buzón financiero protegido."
       : row.processingSummary,
+    processingReceipt: statusOnly ? null : parseProcessingReceipt(row.processingReceiptJson),
     processingAttempts: row.processingAttempts,
     nextRetryAt: row.nextRetryAt,
     lastProcessingError: statusOnly ? "" : row.lastProcessingError,
@@ -1773,21 +1790,36 @@ export async function POST(request: Request) {
     // Once content has elevated a document to Finanzas or Ventas, every
     // proposal inherits that protected area. Later metadata edits cannot make
     // the persisted document public again.
-    const preparedUpdates = financeProtectedUpload
+    const preparedUpdatesBeforeCurrency = financeProtectedUpload
       ? extractedUpdates.map((update) =>
           /^buildings\./.test(update.key) && !isFinancialLiveKey(update.key)
             ? { ...update, area: "obra" }
             : { ...update, area: resolvedArea })
       : extractedUpdates;
-    const preparedUpdateConfidences = resolveNormalizedUpdateConfidences(
-      preparedUpdates,
-      extractedUpdates.map((update, index) => ({
-        key: update.key,
-        valueJson: update.valueJson,
-        confidence: extractedUpdateConfidences[index] ?? extraction.confidence,
-      })),
-      extraction.model === "deterministic" ? 1 : 0,
-    );
+    const currencyPreparation = canonicalizeFinancialUpdates(preparedUpdatesBeforeCurrency);
+    const preparedUpdates = currencyPreparation.updates;
+    const confidenceByPreparedKey = new Map(extractedUpdates.map((update, index) => [
+      update.key,
+      extractedUpdateConfidences[index] ?? extraction.confidence,
+    ]));
+    const preparedUpdateConfidences = preparedUpdates.map((update) =>
+      confidenceByPreparedKey.get(update.key) ?? (extraction.model === "deterministic" ? 1 : 0));
+    const financialValidation: FinancialValidationResult = validateFinancialPublication({
+      updates: preparedUpdates,
+      currentValues: currentLiveData.values,
+      currentPoints: currentLiveData.points,
+      baselineValues: getContractRootsSnapshot(),
+      monetaryAudit: currencyPreparation.audit,
+    });
+    if (financialValidation.warnings.length) {
+      extraction = {
+        ...extraction,
+        warnings: [
+          ...extraction.warnings,
+          ...financialValidation.warnings.map((warning) => `Control financiero: ${warning}`),
+        ],
+      };
+    }
     agentProposedCount = preparedUpdates.length;
     extractionGeneration = `ingest:${crypto.randomUUID()}`;
     const existingPoints = await selectLivePointValues(
@@ -1807,6 +1839,10 @@ export async function POST(request: Request) {
       extraction.model === "deterministic" ? 1 : 0,
     );
     const previousByKey = new Map(existingPoints.map((point) => [point.key, point.valueJson]));
+    const financialBeforeAfter = numericBeforeAfter({
+      updates: normalizedUpdates.filter((update) => isFinancialLiveKey(update.key)),
+      currentPoints: currentLiveData.points,
+    });
     const discrepancyCount = normalizedUpdates.filter((update) => previousByKey.has(update.key)).length;
     const extractionSummary = [
       analysis.summary,
@@ -1958,6 +1994,7 @@ export async function POST(request: Request) {
     const unsafeAgentKeys = new Set([
       ...agentValidation.conflictingKeys,
       ...agentValidation.invalidKeys,
+      ...financialValidation.blockingKeys,
     ]);
     // Condiciones del lote: valen para todos los datos por igual (se pidió
     // publicar solo, el área permite publicar, hay datos y contexto vivo).
@@ -1998,6 +2035,7 @@ export async function POST(request: Request) {
       : batchPreconditions
         ? normalizedUpdates.filter(updateIsAutoPublishable)
         : [];
+    let publicationVerification: Awaited<ReturnType<typeof publishLiveDataUpdates>>["verification"] | null = null;
     if (autoPublishable.length) {
       publicationStarted = true;
       const isFullBatch = autoPublishable.length === normalizedUpdates.length;
@@ -2009,6 +2047,12 @@ export async function POST(request: Request) {
         sourceFileId: id,
         sourceName: candidate.name,
         message: `${autoPublishable.length} datos estructurados publicados automáticamente desde ${candidate.name}.`,
+        financialValidation,
+        monetaryAudit: currencyPreparation.audit.filter((entry) =>
+          autoPublishable.some((update) => update.key === entry.key)),
+        sourceAuthority: financialValidation.authority.filter((decision) =>
+          autoPublishable.some((update) => update.key === decision.key)),
+        affectedViews: financialValidation.affectedViews,
         reviewClosure: {
           mode: "insert" as const,
           fileId: id,
@@ -2027,6 +2071,7 @@ export async function POST(request: Request) {
         },
       });
       publicationCompleted = true;
+      publicationVerification = publication.verification;
       agentPublishedCount = autoPublishable.length;
       automaticMessage = isFullBatch
         ? `${autoPublishable.length} datos se han actualizado automáticamente en la revisión ${publication.id}; las cifras y gráficas se refrescarán en menos de 5 segundos.`
@@ -2197,6 +2242,55 @@ export async function POST(request: Request) {
         actorName: user.displayName,
       }).catch(() => undefined);
     }
+    const financialReceipt = financeProtectedUpload ? {
+      status: financialValidation.status,
+      checks: financialValidation.checks.map((check) => ({
+        id: check.id,
+        label: check.label,
+        status: check.status,
+        actual: check.actual,
+        expected: check.expected,
+        difference: check.difference,
+        tolerance: check.tolerance,
+        message: check.message,
+      })),
+      authority: {
+        accepted: financialValidation.authority.filter((decision) =>
+          !["stale", "lower_authority"].includes(decision.status)).length,
+        isolated: financialValidation.authority.filter((decision) =>
+          ["stale", "lower_authority"].includes(decision.status)).length,
+        decisions: financialValidation.authority,
+      },
+      currency: {
+        sourceCurrency,
+        convertedFieldCount: currencyPreparation.audit.reduce((sum, entry) => sum + entry.convertedFieldCount, 0),
+        usdToDop: currencyPreparation.audit[0]?.usdToDop ?? null,
+        rateCutoff: currencyPreparation.audit[0]?.rateCutoff ?? "",
+        audit: currencyPreparation.audit,
+      },
+      affectedViews: financialValidation.affectedViews,
+      changes: financialBeforeAfter,
+      verification: publicationVerification,
+    } : null;
+    const storedReceipt = {
+      outcome: publicationCompleted
+        ? "published"
+        : unchangedCount
+          ? "unchanged"
+          : automaticallyDiscardedCount
+            ? "diagnosed"
+            : "catalogued",
+      publishedCount: agentPublishedCount,
+      unchangedCount,
+      ignoredCount: automaticallyDiscardedCount,
+      warningCount: extraction.warnings.length,
+      newSectionCount: extraction.unmappedCandidates.length,
+      financial: financialReceipt,
+      createdAt: new Date().toISOString(),
+    };
+    await db.update(uploadedFiles).set({
+      processingReceiptJson: JSON.stringify(storedReceipt),
+    }).where(eq(uploadedFiles.id, id)).catch(() => undefined);
     let currentRow = row;
     try {
       const [freshRow] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, id)).limit(1);
@@ -2222,7 +2316,9 @@ export async function POST(request: Request) {
           unchangedCount,
           ignoredCount: automaticallyDiscardedCount,
           warningCount: extraction.warnings.length,
-          warnings: extraction.warnings.slice(0, 4),
+          warnings: extraction.warnings.length
+            ? ["El análisis terminó con observaciones protegidas que puede consultar una persona autorizada de Finanzas."]
+            : [],
           newSectionCount: extraction.unmappedCandidates.length,
           requiresAction: false,
           nextAction: "No tienes que hacer nada. Las cifras quedan visibles sólo para las personas autorizadas.",
@@ -2249,6 +2345,7 @@ export async function POST(request: Request) {
           warningCount: extraction.warnings.length,
           warnings: extraction.warnings.slice(0, 4),
           newSectionCount: extraction.unmappedCandidates.length,
+          financial: financialReceipt,
           requiresAction: Boolean(currentRow.requiresReview),
           nextAction: currentRow.requiresReview
             ? "Abre el expediente para resolver la comprobación indicada."

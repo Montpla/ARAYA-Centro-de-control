@@ -3419,3 +3419,31 @@ los expedientes eternamente pendientes.
 - La consulta D1 remota desde el equipo falló por credencial Cloudflare local
   no autorizada (7403); no se alteró la base. La sesión de Chrome sí está
   disponible para validar visualmente una vez desplegado desde GitHub Actions.
+
+## Automatización financiera verificable (22/08/2026)
+
+- La carga financiera dejó de funcionar como un bloqueo único. Los controles
+  se ejecutan por grupo contable: un balance descuadrado queda aislado, mientras
+  los grupos independientes y válidos del mismo archivo pueden publicarse.
+- `lib/financial-governance.ts` normaliza cada cifra a la moneda de su clave y
+  guarda original, moneda, tipo USD/DOP, fecha y valor canónico. También compara
+  periodo y autoridad para impedir que un corte antiguo o una fuente inferior
+  sustituyan la cifra vigente.
+- Se validan balance, patrimonio, resultados mensual/acumulado, balance de
+  comprobación, balance de gestión, vencimientos, flujo reprogramado y
+  proyección financiera. La aprobación manual vuelve a ejecutar estas reglas.
+- `lib/post-publish-verification.ts` relee el estado vivo tras cada publicación
+  y exige misma revisión y mismo valor en todas las claves. Si falla, el archivo
+  pasa a observado y Finanzas/administración reciben una notificación.
+- Cada expediente conserva un recibo financiero visible con controles,
+  conversiones, autoridad, cifras antes/después, pantallas afectadas y resultado
+  de la comprobación posterior. El aportante sin acceso financiero recibe sólo
+  el estado, sin exposición de importes.
+- Se añadieron tres plantillas deterministas: balance del fideicomiso,
+  resultados y flujo mensual. El generador elimina automáticamente versiones
+  partidas antiguas de edificios/apartamentos para evitar plantillas duplicadas.
+- La migración `0028_smooth_fantastic_four.sql` añade el recibo persistente al
+  archivo y la trazabilidad financiera completa al evento vivo.
+- Se actualizaron las cinco guías existentes y se añadió
+  `guia_financiera_araya.pdf`. Referencia técnica:
+  `docs/AUTOMATIZACION-FINANCIERA.md`.

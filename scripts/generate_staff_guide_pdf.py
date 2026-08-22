@@ -379,7 +379,7 @@ def cover_page(c: canvas.Canvas) -> None:
 
     c.setFillColor(MUTED)
     c.setFont(font_name("Body"), 7.5)
-    c.drawString(44, 68, "EDICIÓN 11.08.2026")
+    c.drawString(44, 68, "EDICIÓN 22.08.2026")
     c.setFillColor(white)
     c.setFont(font_name("Body-Bold"), 7.2)
     c.drawRightString(PAGE_W - 37, 32, "USO INTERNO | ARAYA PUNTA CANA")
@@ -445,23 +445,14 @@ def page_start(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X, 440, "Mapa de navegación")
     c.setFillColor(MUTED)
     c.setFont(font_name("Body"), 8.3)
-    c.drawString(MARGIN_X, 422, "En móvil y tablet: Inicio, Plano, Apartamentos, Datos y Más.")
+    c.drawString(MARGIN_X, 422, "Los mismos cinco grupos se conservan en ordenador, móvil y tablet.")
 
     nav = [
         ("01", "Resumen ejecutivo"),
-        ("02", "Planificación"),
-        ("03", "Implantación general"),
-        ("04", "Edificios"),
-        ("05", "Apartamentos"),
-        ("06", "Urbanismo"),
-        ("07", "Ventas y cobranza"),
-        ("08", "Finanzas"),
-        ("09", "Cronología"),
-        ("10", "Proveedores"),
-        ("11", "Seguridad y permisos"),
-        ("12", "Centro de datos"),
-        ("AI", "Agente IA"),
-        ("AD", "Usuarios y accesos"),
+        ("02", "Obra · 7 subpestañas"),
+        ("03", "Finanzas · finanzas y ventas"),
+        ("04", "Datos · archivos, cronología y accesos"),
+        ("05", "Agente IA · ARAYA Asistente"),
     ]
     card_w = (PAGE_W - 2 * MARGIN_X - 12) / 2
     row_h = 34
@@ -472,7 +463,7 @@ def page_start(c: canvas.Canvas) -> None:
         x = MARGIN_X + col * (card_w + 12)
         y0 = start_y - row * 39
         rounded_rect(c, x, y0, card_w, row_h, white, LINE, 8)
-        c.setFillColor(ORANGE if code not in ("AI", "AD") else NAVY)
+        c.setFillColor(NAVY if code == "05" else ORANGE)
         c.roundRect(x + 8, y0 + 7, 28, 20, 7, fill=1, stroke=0)
         c.setFillColor(white)
         c.setFont(font_name("Body-Bold"), 7.2)
@@ -584,46 +575,11 @@ def page_management(c: canvas.Canvas) -> None:
         "Las pestañas están enlazadas con fichas, documentos, facturas, acciones e informes. Los permisos determinan lo que cada persona puede ver o modificar.",
     )
     cards = [
-        (
-            "07",
-            "Ventas y cobranza",
-            "Reservas, contratos, cobros, saldos, evolución comercial y fuentes del periodo.",
-        ),
-        (
-            "08",
-            "Finanzas",
-            "Presupuesto, costes, flujo, CxP y fideicomiso. Acceso bloqueado salvo autorización.",
-        ),
-        (
-            "09",
-            "Cronología",
-            "Hitos, documentos y actividad ordenados por fecha para reconstruir decisiones.",
-        ),
-        (
-            "10",
-            "Proveedores",
-            "Listado interactivo. Abre cada proveedor, revisa sus facturas y consulta el original.",
-        ),
-        (
-            "11",
-            "Seguridad y permisos",
-            "Incidencias, controles preventivos, licencias y vencimientos con responsable.",
-        ),
-        (
-            "12",
-            "Centro de datos",
-            "Inventario documental, estado de validación, autoridad de fuentes y trazabilidad.",
-        ),
-        (
-            "AI",
-            "Agente IA",
-            "Consulta el proyecto o clasifica una carga. No aprueba datos ni sustituye al responsable.",
-        ),
-        (
-            "AD",
-            "Usuarios y accesos",
-            "Solo administradores: altas, área, estado, foto, rol y permiso de Finanzas.",
-        ),
+        ("01", "Resumen ejecutivo", "Indicadores, alertas y prioridades de dirección con acceso al detalle."),
+        ("02", "Obra", "Planificación, implantación, edificios, apartamentos, urbanismo, proveedores y seguridad."),
+        ("03", "Finanzas", "Finanzas, fideicomiso, ventas y cobranza. Lectura y validación según permiso."),
+        ("04", "Datos", "Centro de datos, cronología, recibos de carga y usuarios y accesos."),
+        ("05", "Agente IA", "ARAYA Asistente consulta el proyecto y ayuda a clasificar archivos."),
     ]
     card_w = (PAGE_W - 2 * MARGIN_X - 14) / 2
     card_h = 98
@@ -633,7 +589,7 @@ def page_management(c: canvas.Canvas) -> None:
         row = index // 2
         x = MARGIN_X + col * (card_w + 14)
         y = start_y - row * (card_h + 11) - card_h
-        accent = NAVY if number in ("AI", "AD") else ORANGE
+        accent = NAVY if number == "05" else ORANGE
         draw_small_card(c, x, y, card_w, card_h, number, title, body, accent)
 
     rounded_rect(c, MARGIN_X, 116, PAGE_W - 2 * MARGIN_X, 82, RED_PALE, RED_PALE, 11, 0)
@@ -676,7 +632,7 @@ def page_workflow(c: canvas.Canvas) -> None:
         c,
         "04 | Incorporación de información",
         "Del archivo al dato vivo",
-        "El original se guarda primero. Todo lo que el programa lee o interpreta se publica automáticamente, sin revisión; el contrato de datos protege la integridad.",
+        "El original se guarda primero. Los datos seguros se publican; los grupos descuadrados o una fuente anterior quedan aislados con explicación, sin frenar el resto.",
     )
 
     rounded_rect(c, MARGIN_X, 463, PAGE_W - 2 * MARGIN_X, 196, white, LINE, 13)
@@ -684,8 +640,9 @@ def page_workflow(c: canvas.Canvas) -> None:
         ("Cargar", "Archivo o Hacer foto. El original queda guardado y trazable."),
         ("Identificar", "El sistema detecta área, tipo documental, periodo, moneda y origen."),
         ("Extraer", "Lee o interpreta los datos y los contrasta con el valor vigente."),
-        ("Publicar", "Todo lo que tiene evidencia entra solo, sin revisión ni espera."),
-        ("Sincronizar", "El dato nuevo actualiza cifras, gráficos, planos y avisos en menos de 5 s."),
+        ("Comprobar", "Valida formato, ecuaciones financieras, moneda, corte y autoridad de la fuente."),
+        ("Publicar", "Publica cada grupo seguro y deja un recibo con lo actualizado y lo aislado."),
+        ("Verificar", "Relee la revisión y comprueba cifras, gráficos, planos y vistas afectadas."),
     ]
     step_w = (PAGE_W - 2 * MARGIN_X - 26) / 2
     for index, (title, body) in enumerate(steps):
@@ -744,7 +701,7 @@ def page_workflow(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X + 16, 116, "IMPORTANTE")
     draw_wrapped(
         c,
-        "La sincronización cada 5 segundos no consume tokens. Solo interpretar documentos libres o consultar al Asistente usa la API de IA.",
+        "La sincronización cada 5 segundos no consume tokens. La lectura determinista tampoco. Solo los documentos que necesitan interpretación o las consultas al Asistente usan la API de IA.",
         MARGIN_X + 16,
         99,
         PAGE_W - 2 * MARGIN_X - 32,

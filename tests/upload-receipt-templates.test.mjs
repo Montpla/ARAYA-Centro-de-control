@@ -24,7 +24,7 @@ test("el recibo permanece abierto hasta que la persona lo cierre", () => {
   assert.match(dashboard, /Aislados con diagnóstico/);
 });
 
-test("las tres plantillas mensuales se descargan autenticadas y sin valores vigentes", () => {
+test("las plantillas mensuales y financieras se descargan autenticadas y sin valores vigentes", () => {
   assert.match(templateRoute, /requireApiUser\(\)/);
   assert.match(templateRoute, /cubicacionTemplate/);
   assert.match(templateRoute, /ventasTemplate/);
@@ -34,6 +34,10 @@ test("las tres plantillas mensuales se descargan autenticadas y sin valores vige
   assert.match(dashboard, /\/api\/templates\?kind=cubicacion/);
   assert.match(dashboard, /\/api\/templates\?kind=ventas/);
   assert.match(dashboard, /\/api\/templates\?kind=cronograma/);
+  for (const kind of ["balance_fideicomiso", "resultados_fideicomiso", "flujo_mensual_finanzas"]) {
+    assert.match(templateRoute, new RegExp(`${kind}:`));
+    assert.match(dashboard, new RegExp(`kind=${kind}`));
+  }
 });
 
 test("aportar un documento financiero no concede permiso de lectura", () => {

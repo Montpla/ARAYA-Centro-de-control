@@ -35,8 +35,10 @@ test("cubre los tres archivos del mes y lo que actualiza cada uno", () => {
   assert.match(generador, /cronograma/);
 });
 
-test("deja claro que entra solo, sin revisión", () => {
-  assert.match(generador, /sin revisión/i);
+test("deja claro que publica por bloques y entrega un recibo", () => {
+  assert.match(generador, /PUBLICACIÓN AUTOMÁTICA CON CONTROL/);
+  assert.match(generador, /cada bloque cuadrado entra solo/i);
+  assert.match(generador, /recibo/i);
 });
 
 test("reutiliza la identidad visual en vez de duplicarla", () => {

@@ -9,7 +9,13 @@ import {
   unmappedFieldCandidates,
 } from "../../../../db/schema";
 import { requireApiUser } from "../../../../lib/access-control";
+import { readEffectiveLiveData } from "../../../../lib/effective-live-data";
+import {
+  validateFinancialPublication,
+  type MonetaryAuditEntry,
+} from "../../../../lib/financial-governance";
 import { areaLabels, isUploadArea } from "../../../../lib/file-routing";
+import { getContractRootsSnapshot } from "../../../../lib/live-data-contract";
 import {
   LiveDataUpdate,
   isCommercialLiveKey,
@@ -162,6 +168,20 @@ function parseStoredValue(value: string | null) {
     return JSON.parse(value) as unknown;
   } catch {
     return value;
+  }
+}
+
+function storedMonetaryAudit(valueJson: string): MonetaryAuditEntry[] {
+  if (!valueJson) return [];
+  try {
+    const parsed = JSON.parse(valueJson) as {
+      financial?: { currency?: { audit?: MonetaryAuditEntry[] } };
+    };
+    return Array.isArray(parsed.financial?.currency?.audit)
+      ? parsed.financial.currency.audit
+      : [];
+  } catch {
+    return [];
   }
 }
 
@@ -788,6 +808,21 @@ export async function POST(request: Request) {
       let publicationRevision: number | null = null;
       let review: typeof fileReviews.$inferSelect | undefined;
       if (normalized.length) {
+        const currentLiveData = await readEffectiveLiveData(true);
+        const financialValidation = validateFinancialPublication({
+          updates: normalized,
+          currentValues: currentLiveData.values,
+          currentPoints: currentLiveData.points,
+          baselineValues: getContractRootsSnapshot(),
+          monetaryAudit: storedMonetaryAudit(file.processingReceiptJson),
+        });
+        if (financialValidation.blockingKeys.length) {
+          await cancel();
+          return Response.json({
+            error: "La aprobación conserva grupos financieros descuadrados, de un corte anterior o de una fuente subordinada. Corrige sólo las claves indicadas y vuelve a preparar la revisión.",
+            financialValidation,
+          }, { status: 409 });
+        }
         const event = await publishLiveDataUpdates({
           normalized,
           actor: auth.user,
@@ -796,6 +831,10 @@ export async function POST(request: Request) {
           sourceFileId: file.id,
           sourceName: file.originalName,
           message: note || `${normalized.length} cambios aprobados desde la bandeja de validación.`,
+          financialValidation,
+          monetaryAudit: financialValidation.monetaryAudit,
+          sourceAuthority: financialValidation.authority,
+          affectedViews: financialValidation.affectedViews,
           reviewClosure: {
             mode: "reservation",
             fileId: file.id,

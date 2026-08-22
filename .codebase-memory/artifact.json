@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "accdd5f993c7fdf6d66a35207641f75412c0e95c",
-    "indexed_at": "2026-08-22T12:43:37Z",
+    "commit": "706741c28ee46aaa333585a664725bbce32166ea",
+    "indexed_at": "2026-08-22T13:41:44Z",
     "project": "C-Users-Usuario1-OneDrive-Desktop-ARAYA_Transformacion_Digital-12_Dashboard_Obra",
-    "nodes": 7418,
-    "edges": 12139,
-    "original_size": 20512768,
-    "compressed_size": 2384671,
+    "nodes": 7828,
+    "edges": 12720,
+    "original_size": 21168128,
+    "compressed_size": 2462901,
     "compression_level": 3
 }

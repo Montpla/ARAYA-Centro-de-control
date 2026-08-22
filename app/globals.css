@@ -3973,6 +3973,217 @@ button {
   justify-self: end;
 }
 
+.financial-receipt-detail {
+  display: grid;
+  gap: 14px;
+  margin-top: 8px;
+  padding: 18px;
+  border: 1px solid #d8d1c4;
+  border-left: 4px solid #2f7457;
+  border-radius: 14px;
+  background: #fbfaf7;
+  color: #242622;
+}
+
+.financial-receipt-detail.has-alerts {
+  border-left-color: #bd5c3d;
+  background: #fff8f5;
+}
+
+.financial-receipt-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.financial-receipt-heading h4 {
+  margin: 4px 0 0;
+  font-family: var(--font-display);
+  font-size: 1.28rem;
+}
+
+.financial-receipt-heading > strong {
+  color: #2f7457;
+  font-size: 0.82rem;
+  text-align: right;
+}
+
+.financial-receipt-detail.has-alerts .financial-receipt-heading > strong {
+  color: #9e452f;
+}
+
+.financial-receipt-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid #ded8cc;
+  border-bottom: 1px solid #ded8cc;
+}
+
+.financial-receipt-metrics span {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-right: 1px solid #ded8cc;
+}
+
+.financial-receipt-metrics span:last-child {
+  border-right: 0;
+}
+
+.financial-receipt-metrics small,
+.financial-receipt-views > small {
+  color: #5b615b;
+  font-size: 0.75rem;
+}
+
+.financial-receipt-metrics b {
+  font-size: 1.15rem;
+}
+
+.financial-receipt-note {
+  margin: 0;
+  color: #505650;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.financial-receipt-inline-label {
+  margin-bottom: -10px;
+  color: #3f4741;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.financial-receipt-audit-list {
+  display: grid;
+  gap: 7px;
+}
+
+.financial-receipt-audit-list > div {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) auto;
+  gap: 3px 12px;
+  padding: 9px 11px;
+  border: 1px solid #ded8cc;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.financial-receipt-audit-list > div > span {
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.financial-receipt-audit-list > div > b {
+  color: #2f7457;
+  font-size: 0.76rem;
+}
+
+.financial-receipt-audit-list > div.blocked > b {
+  color: #9e452f;
+}
+
+.financial-receipt-audit-list > div > small {
+  grid-column: 1 / -1;
+  color: #5b615b;
+  line-height: 1.45;
+}
+
+.financial-receipt-views {
+  display: grid;
+  gap: 7px;
+}
+
+.financial-receipt-views > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.financial-receipt-views span {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #ece8de;
+  color: #3e4540;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.financial-receipt-changes {
+  display: grid;
+  gap: 6px;
+}
+
+.financial-receipt-changes > div {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.3fr) minmax(110px, 0.7fr) 20px minmax(110px, 0.7fr);
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid #e4dfd6;
+}
+
+.financial-receipt-changes > div > span {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+}
+
+.financial-receipt-changes small,
+.financial-receipt-changes b {
+  text-align: right;
+}
+
+.financial-receipt-changes i {
+  color: #8b8f88;
+  text-align: center;
+}
+
+.financial-receipt-alerts {
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f5e4de;
+  color: #703423;
+}
+
+.financial-receipt-alerts ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+@media (max-width: 720px) {
+  .financial-receipt-heading {
+    display: grid;
+  }
+
+  .financial-receipt-heading > strong {
+    text-align: left;
+  }
+
+  .financial-receipt-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .financial-receipt-metrics span:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .financial-receipt-changes > div {
+    grid-template-columns: 1fr auto;
+  }
+
+  .financial-receipt-changes > div > span {
+    grid-column: 1 / -1;
+  }
+
+  .financial-receipt-changes i {
+    display: none;
+  }
+}
+
 .upload-intro {
   margin: 10px 0 16px;
   color: var(--muted);

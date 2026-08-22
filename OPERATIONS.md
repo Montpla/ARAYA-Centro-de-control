@@ -44,7 +44,7 @@ Reglas operativas:
   actualización en su sección.
 - El recibo no desaparece solo: muestra publicados, ya vigentes, aislados,
   secciones nuevas, avisos y la única acción que corresponda.
-- Las plantillas de cubicación, ventas y cronograma se descargan dentro del
+- Las plantillas de cubicación, ventas, cronograma, balance, resultados y flujo financiero se descargan dentro del
   formulario de carga. No incluyen valores actuales y se rellenan únicamente
   en la columna `valor`.
 - Cada mejora que cambia `CURRENT_INGESTION_VERSION` activa el reproceso de los
@@ -72,6 +72,22 @@ Reglas operativas:
   permiso para aportar un original fiable del permiso para consultar sus cifras.
 - Un fallo real de almacenamiento, contrato transaccional o servicio externo sí
   conserva el original y pasa a `observado`; no se oculta como sincronizado.
+
+### Cierre financiero por grupos
+
+- Las cifras monetarias se normalizan a la moneda de su clave y el recibo
+  conserva el original, moneda, tipo USD/DOP, fecha y valor canónico.
+- Antes de publicar se comprueban balance, patrimonio, resultados, balance de
+  comprobación, vencimientos, flujo mensual y proyección. Un descuadre aísla
+  sólo ese grupo; los grupos independientes y válidos siguen su curso.
+- Corte y autoridad forman parte de la decisión. Una fuente anterior o de menor
+  autoridad para el mismo periodo no reemplaza la cifra vigente.
+- La aprobación manual repite los controles: no permite saltarse un descuadre.
+- Después de cada publicación se relee el estado efectivo y se comprueba la
+  misma revisión y el mismo valor en todas las vistas afectadas. Un fallo marca
+  el expediente como observado y genera aviso para Finanzas y administración.
+- El detalle técnico y el diagrama están en
+  `docs/AUTOMATIZACION-FINANCIERA.md`.
 
 ## Formatos e interpretación
 
@@ -283,10 +299,12 @@ logs; sólo nombres de clave, estados y metadatos.
   apaga los avisos en el siguiente despliegue, sin error en ninguna parte. El
   despliegue lo comprueba y falla en rojo si faltan.
 - La cadena de migraciones D1 llega hasta
-  `drizzle/0025_yellow_bullseye.sql` y debe desplegarse junto con
+  `drizzle/0028_smooth_fantastic_four.sql` y debe desplegarse junto con
   `drizzle/meta/_journal.json`. La `0024` versiona la ingesta y registra archivos
   derivados/superados; la `0025` añade `document_templates` e
-  `ingestion_agent_runs`, memoria y trazabilidad del agente documental.
+  `ingestion_agent_runs`, memoria y trazabilidad del agente documental; la
+  `0027` registra consumo y presupuesto de IA; y la `0028` conserva recibo,
+  controles financieros, moneda, autoridad, vistas afectadas y verificación.
   Aplicar el journal completo antes de desplegar el Worker que usa esas tablas.
 - Las escrituras críticas de publicación y baja/restauración usan batches
   atómicos acotados. Las recomputaciones son set-based, una publicación admite

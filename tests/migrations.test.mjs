@@ -59,8 +59,19 @@ test("the exact journal migrates an empty database with ingestion and control-ro
     "automation_kind",
     "superseded_by_file_id",
     "superseded_at",
+    "processing_receipt_json",
   ]) {
     assert.ok(uploadedColumns.includes(column), `missing uploaded_files.${column}`);
+  }
+  const eventColumns = tableColumns(database, "live_data_events");
+  for (const column of [
+    "financial_validation_json",
+    "monetary_audit_json",
+    "source_authority_json",
+    "affected_views_json",
+    "verification_json",
+  ]) {
+    assert.ok(eventColumns.includes(column), `missing live_data_events.${column}`);
   }
   database.close();
 });

@@ -1,0 +1,16 @@
+clave,valor,descripcion,valor actual
+fiduciaryStatementSummary.cutoff,,Fecha de corte (AAAA-MM-DD),30/06/2026
+fiduciaryStatementSummary.issuedAt,,Fecha de emisión (AAAA-MM-DD),20/07/2026
+fiduciaryStatementSummary.issuer,,Entidad emisora,Fiduciaria Universal
+fiduciaryStatementSummary.currency,,Moneda del estado,DOP
+fiduciaryStatementSummary.balance.assetsDop,,Balance · assetsDop,758765771.05
+fiduciaryStatementSummary.balance.liabilitiesDop,,Balance · liabilitiesDop,448317797.67
+fiduciaryStatementSummary.balance.grossEquityDop,,Balance · grossEquityDop,316577419.64
+fiduciaryStatementSummary.balance.periodResultDop,,Balance · periodResultDop,-6129446.26
+fiduciaryStatementSummary.balance.netEquityDop,,Balance · netEquityDop,310447973.38
+fiduciaryStatementSummary.balance.liquidityDop,,Balance · liquidityDop,50353287.01
+fiduciaryStatementSummary.balance.payablesDop,,Balance · payablesDop,24814585.2
+fiduciaryStatementSummary.balance.constructionInProgressDop,,Balance · constructionInProgressDop,693427995.8
+fiduciaryStatementSummary.trialBalance.debitDop,,Balance de comprobación · debitDop,311209328.75
+fiduciaryStatementSummary.trialBalance.creditDop,,Balance de comprobación · creditDop,311209328.75
+fiduciaryStatementSummary.trialBalance.differenceDop,,Balance de comprobación · differenceDop,0

@@ -18,7 +18,7 @@
 // posición en la lista: los 26 edificios no están ordenados por su código, así
 // que "buildings.14" apunta a TH-13 y no a TH-14 (ver HANDOFF.md).
 
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, unlink, writeFile } from "node:fs/promises";
 import { buildings, monthlyPlan, projectSnapshot, urbanismAreas } from "../app/demo-data.ts";
 
 const SALIDA = new URL("../plantillas/", import.meta.url);
@@ -176,9 +176,11 @@ function plantillaDeLista(archivo, titulo, raiz, lista) {
   }));
 }
 
-const [demo, junio] = await Promise.all([
+const [demo, junio, fiduciario, flujo] = await Promise.all([
   import("../app/demo-data.ts"),
   import("../app/june-report-data.ts"),
+  import("../app/fiduciary-statements-data.ts"),
+  import("../app/reprogrammed-flow-data.ts"),
 ]);
 const modelo = { ...demo, ...junio };
 
@@ -216,7 +218,51 @@ for (const [archivo, titulo, raiz] of RESTO) {
   plantillaDeLista(archivo, titulo, raiz, modelo[raiz]);
 }
 
+const resumenFiduciario = fiduciario.fiduciaryStatementSummary;
+registrar("18-balance-fideicomiso", "Balance del fideicomiso", [
+  fila("fiduciaryStatementSummary.cutoff", "Fecha de corte (AAAA-MM-DD)", resumenFiduciario.cutoff),
+  fila("fiduciaryStatementSummary.issuedAt", "Fecha de emisión (AAAA-MM-DD)", resumenFiduciario.issuedAt),
+  fila("fiduciaryStatementSummary.issuer", "Entidad emisora", resumenFiduciario.issuer),
+  fila("fiduciaryStatementSummary.currency", "Moneda del estado", resumenFiduciario.currency),
+  ...Object.entries(resumenFiduciario.balance).map(([campo, actual]) => fila(
+    `fiduciaryStatementSummary.balance.${campo}`,
+    `Balance · ${ETIQUETAS[campo] ?? campo}`,
+    actual,
+  )),
+  ...Object.entries(resumenFiduciario.trialBalance).map(([campo, actual]) => fila(
+    `fiduciaryStatementSummary.trialBalance.${campo}`,
+    `Balance de comprobación · ${ETIQUETAS[campo] ?? campo}`,
+    actual,
+  )),
+]);
+
+registrar("19-resultados-fideicomiso", "Resultados del fideicomiso", [
+  ...Object.entries(resumenFiduciario.monthlyResult).map(([campo, actual]) => fila(
+    `fiduciaryStatementSummary.monthlyResult.${campo}`,
+    `Resultado mensual · ${ETIQUETAS[campo] ?? campo}`,
+    actual,
+  )),
+  ...Object.entries(resumenFiduciario.accumulatedResult).map(([campo, actual]) => fila(
+    `fiduciaryStatementSummary.accumulatedResult.${campo}`,
+    `Resultado acumulado · ${ETIQUETAS[campo] ?? campo}`,
+    actual,
+  )),
+]);
+
+registrar("20-flujo-mensual-finanzas", "Flujo mensual financiero", flujo.reprogrammedFlowMonths.flatMap((mes, indice) => [
+  fila(`reprogrammedFlowMonths.${indice}.month`, `Mes ${indice + 1}`, mes.month),
+  fila(`reprogrammedFlowMonths.${indice}.status`, `${mes.month} · real o previsión`, mes.status),
+  fila(`reprogrammedFlowMonths.${indice}.currentDop`, `${mes.month} · total DOP`, mes.currentDop),
+  fila(`reprogrammedFlowMonths.${indice}.urbanismDop`, `${mes.month} · Urbanismo DOP`, mes.urbanismDop),
+  fila(`reprogrammedFlowMonths.${indice}.buildingsDop`, `${mes.month} · Edificios DOP`, mes.buildingsDop),
+]));
+
 await mkdir(SALIDA, { recursive: true });
+const archivosVigentes = new Set(plantillas.map((plantilla) => plantilla.archivo));
+for (const archivo of await readdir(SALIDA)) {
+  if (!/^(?:01-avance-edificios|02-avance-apartamentos)(?:-\d+de\d+)?\.csv$/.test(archivo)) continue;
+  if (!archivosVigentes.has(archivo)) await unlink(new URL(archivo, SALIDA));
+}
 for (const plantilla of plantillas) {
   await writeFile(new URL(plantilla.archivo, SALIDA), csv(plantilla.filas), "utf8");
   console.log(`${plantilla.archivo.padEnd(34)} ${String(plantilla.filas.length).padStart(3)} filas · ${plantilla.titulo}`);

@@ -431,6 +431,68 @@ type ChatMessage = {
   mode?: string;
 };
 
+type FinancialProcessingReceipt = {
+  status: "not_applicable" | "passed" | "passed_with_warnings" | "blocked";
+  checks: Array<{
+    id: string;
+    label: string;
+    status: "passed" | "warning" | "blocked";
+    actual: number | null;
+    expected: number | null;
+    difference: number | null;
+    tolerance: number | null;
+    message: string;
+  }>;
+  authority: {
+    accepted: number;
+    isolated: number;
+    decisions: Array<{ key: string; status: string; message: string }>;
+  };
+  currency: {
+    sourceCurrency: CurrencyCode;
+    convertedFieldCount: number;
+    usdToDop: number | null;
+    rateCutoff: string;
+    audit?: Array<{
+      key: string;
+      sourceCurrency: CurrencyCode;
+      canonicalCurrencies: CurrencyCode[];
+      sourceValueJson: string;
+      canonicalValueJson: string;
+      convertedFieldCount: number;
+      usdToDop: number;
+      rateCutoff: string;
+    }>;
+  };
+  affectedViews: string[];
+  changes: Array<{
+    key: string;
+    before: number | null;
+    after: number;
+    canonicalCurrency: CurrencyCode | null;
+  }>;
+  verification: {
+    status: "passed" | "failed";
+    revision: number;
+    checkedKeys: number;
+    visibleKeys: number;
+    affectedViews: string[];
+    issues: string[];
+    checkedAt: string;
+  } | null;
+};
+
+type StoredProcessingReceipt = {
+  outcome: string;
+  publishedCount: number;
+  unchangedCount: number;
+  ignoredCount: number;
+  warningCount: number;
+  newSectionCount: number;
+  financial: FinancialProcessingReceipt | null;
+  createdAt: string;
+};
+
 type UploadedFileRecord = {
   id: string;
   originalName: string;
@@ -452,6 +514,7 @@ type UploadedFileRecord = {
   processingStage: string;
   processingProgress: number;
   processingSummary: string;
+  processingReceipt: StoredProcessingReceipt | null;
   processingAttempts: number;
   nextRetryAt: string;
   lastProcessingError: string;
@@ -532,6 +595,7 @@ type UploadResult = {
     newSectionCount: number;
     requiresAction: boolean;
     nextAction: string;
+    financial?: FinancialProcessingReceipt | null;
   };
 };
 
@@ -591,6 +655,7 @@ type FileReviewDetail = {
     | "declaredCutoff"
     | "classificationReason"
     | "processingSummary"
+    | "processingReceipt"
     | "downloadUrl"
   >;
   proposals: DocumentDataProposal[];
@@ -5738,6 +5803,18 @@ const staffGuides = [
     viewerTitle: "Envío automático desde Microsoft Project · Centro de Control ARAYA.pdf",
   },
   {
+    id: "finanzas",
+    kicker: "EQUIPO FINANCIERO",
+    title: "Entregar y validar datos financieros",
+    detail:
+      "Permisos, controles contables, prioridad de fuentes, moneda, plantillas " +
+      "deterministas y lectura del recibo de publicación.",
+    pages: "3 páginas",
+    url: "/data-center/guias/guia-financiera-araya.pdf",
+    fileName: "guia-financiera-araya.pdf",
+    viewerTitle: "Guía financiera · Centro de Control ARAYA.pdf",
+  },
+  {
     id: "avisos",
     kicker: "AVISOS AL MÓVIL",
     title: "Recibir las notificaciones en el móvil y el ordenador",
@@ -6697,7 +6774,7 @@ function UsersAdminView({
           <button className="button" type="button" onClick={onOpenGuide}>Abrir guías</button>
         </div>
         <p>
-          Cinco documentos breves: la guía corporativa (navegación, permisos,
+          Seis documentos breves: la guía corporativa (navegación, permisos,
           carga documental, instalación en móvil, tablet y ordenador, cámara,
           avisos y seguridad), la de actualización mensual, con los tres
           archivos que ponen al día el panel cada mes, la de formatos, que dice
@@ -7049,6 +7126,9 @@ function FileReviewPanel({
               <p>{detail.file.extractionSummary || detail.file.processingSummary}</p>
               <small>{detail.file.classificationReason}</small>
             </div>
+            {detail.file.processingReceipt?.financial && (
+              <FinancialReceiptPanel receipt={detail.file.processingReceipt.financial} />
+            )}
             <div className="review-source-actions">
               <a className="button secondary" href={detail.file.downloadUrl} data-file-title={detail.file.originalName}>Abrir original</a>
               <span>El original es inmutable. Aprobar sólo publica los cambios visibles en esta ficha.</span>
@@ -8617,6 +8697,80 @@ function DirectionReport({
   );
 }
 
+function FinancialReceiptPanel({ receipt }: { receipt: FinancialProcessingReceipt }) {
+  const passedChecks = receipt.checks.filter((check) => check.status === "passed").length;
+  const blockedChecks = receipt.checks.filter((check) => check.status === "blocked");
+  const verificationPassed = receipt.verification?.status === "passed";
+  const formatAuditMoney = (value: number | null, currency: CurrencyCode | null) =>
+    value === null ? "Sin valor anterior" : `${currency ?? ""} ${number.format(value)}`.trim();
+  return (
+    <section className={`financial-receipt-detail ${receipt.status === "blocked" ? "has-alerts" : "is-clear"}`}>
+      <div className="financial-receipt-heading">
+        <div><span className="section-kicker">CONTROL FINANCIERO AUTOMÁTICO</span><h4>{receipt.status === "blocked" ? "Publicación parcial protegida" : "Comprobaciones contables superadas"}</h4></div>
+        <strong>{verificationPassed ? "Sincronización verificada" : receipt.verification ? "Verificación observada" : "Sin cambios publicados"}</strong>
+      </div>
+      <div className="financial-receipt-metrics">
+        <span><small>Controles cuadrados</small><b>{passedChecks}/{receipt.checks.length || 0}</b></span>
+        <span><small>Fuentes aceptadas</small><b>{receipt.authority.accepted}</b></span>
+        <span><small>Datos aislados</small><b>{receipt.authority.isolated}</b></span>
+        <span><small>Conversiones monetarias</small><b>{receipt.currency.convertedFieldCount}</b></span>
+      </div>
+      {receipt.checks.length > 0 && (
+        <div className="financial-receipt-audit-list">
+          <strong>Controles contables</strong>
+          {receipt.checks.slice(0, 8).map((check) => (
+            <div key={check.id} className={check.status}>
+              <span>{check.label}</span>
+              <b>{check.status === "passed" ? "Cuadrado" : "Revisar"}</b>
+              <small>{check.message}</small>
+            </div>
+          ))}
+          {receipt.checks.length > 8 && <small>+{receipt.checks.length - 8} controles guardados en el expediente.</small>}
+        </div>
+      )}
+      {receipt.authority.decisions.length > 0 && (
+        <div className="financial-receipt-audit-list">
+          <strong>Autoridad y periodo</strong>
+          {receipt.authority.decisions.slice(0, 8).map((decision) => (
+            <div key={decision.key} className={decision.status === "stale" || decision.status === "lower_authority" ? "blocked" : "passed"}>
+              <span>{decision.key}</span>
+              <b>{decision.status === "stale" ? "Corte anterior" : decision.status === "lower_authority" ? "Fuente subordinada" : "Aceptado"}</b>
+              <small>{decision.message}</small>
+            </div>
+          ))}
+          {receipt.authority.decisions.length > 8 && <small>+{receipt.authority.decisions.length - 8} decisiones guardadas en el expediente.</small>}
+        </div>
+      )}
+      {receipt.currency.convertedFieldCount > 0 && <strong className="financial-receipt-inline-label">Conversion monetaria</strong>}
+      {receipt.currency.convertedFieldCount > 0 && (
+        <p className="financial-receipt-note">Valores normalizados desde {receipt.currency.sourceCurrency} con 1 USD = {number.format(receipt.currency.usdToDop ?? 0)} DOP, corte {receipt.currency.rateCutoff}. El original queda guardado en la auditoría.</p>
+      )}
+      {receipt.affectedViews.length > 0 && (
+        <div className="financial-receipt-views"><small>Pantallas comprobadas</small><div>{receipt.affectedViews.map((view) => <span key={view}>{view}</span>)}</div></div>
+      )}
+      {receipt.changes.length > 0 && (
+        <div className="financial-receipt-changes">
+          <strong>Antes y después</strong>
+          {receipt.changes.map((change) => (
+            <div key={change.key}>
+              <span>{change.key}</span>
+              <small>{formatAuditMoney(change.before, change.canonicalCurrency)}</small>
+              <i aria-hidden="true">→</i>
+              <b>{formatAuditMoney(change.after, change.canonicalCurrency)}</b>
+            </div>
+          ))}
+        </div>
+      )}
+      {blockedChecks.length > 0 && (
+        <div className="financial-receipt-alerts"><strong>Entradas aisladas sin bloquear el resto</strong><ul>{blockedChecks.map((check) => <li key={check.id}>{check.message}</li>)}</ul></div>
+      )}
+      {receipt.verification?.issues.length ? (
+        <div className="financial-receipt-alerts"><strong>Comprobación transversal</strong><ul>{receipt.verification.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul></div>
+      ) : null}
+    </section>
+  );
+}
+
 function UploadModal({
   initialArea,
   initialFile,
@@ -8728,6 +8882,9 @@ function UploadModal({
                 <ul>{completedUpload.receipt?.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
               </div>
             )}
+            {canAccessFinance && completedUpload.receipt?.financial && (
+              <FinancialReceiptPanel receipt={completedUpload.receipt.financial} />
+            )}
             <div className="upload-receipt-next">
               <strong>Siguiente paso</strong>
               <p>{completedUpload.receipt?.nextAction ?? "No tienes que hacer nada."}</p>
@@ -8821,6 +8978,9 @@ function UploadModal({
             {canUploadFinance && <a className="button secondary" href="/api/templates?kind=anticipos" download>Anticipos</a>}
             {canUploadFinance && <a className="button secondary" href="/api/templates?kind=proyeccion_financiera" download>Proyección</a>}
             {canUploadFinance && <a className="button secondary" href="/api/templates?kind=financiacion" download>Financiación</a>}
+            {canUploadFinance && <a className="button secondary" href="/api/templates?kind=balance_fideicomiso" download>Balance fideicomiso</a>}
+            {canUploadFinance && <a className="button secondary" href="/api/templates?kind=resultados_fideicomiso" download>Resultados fideicomiso</a>}
+            {canUploadFinance && <a className="button secondary" href="/api/templates?kind=flujo_mensual_finanzas" download>Flujo mensual</a>}
           </div>
         </details>
         <details className="upload-advanced-options">

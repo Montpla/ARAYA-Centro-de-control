@@ -2,8 +2,9 @@
 
 Cada mes, el Centro de Control se pone al día con tres archivos: el Informe
 Ejecutivo (obra), el Excel de flujo reprogramado (finanzas) y el plan de
-Project (cronograma). No hay que tocar cifras a mano: se suben y el panel se
-actualiza solo, sin revisión. Esta guía dice qué archivo mueve qué, y cómo
+Project (cronograma). No hay que tocar cifras a mano: se suben y el panel
+publica cada bloque seguro; si detecta una diferencia la aísla en el recibo.
+Esta guía dice qué archivo mueve qué, y cómo
 comprobar en diez segundos que ha entrado.
 
 Reutiliza la identidad visual de la guía corporativa (mismos colores, fuentes y
@@ -88,7 +89,8 @@ def cover(c: canvas.Canvas) -> None:
         c,
         "Cada mes, el Centro de Control se pone al día con tres archivos. Los "
         "subes y el panel —cifras, colores, gráficas y avisos— se actualiza "
-        "solo, sin revisión ni pasos a mano. Esta guía dice cuál mueve qué.",
+        "solo. Antes de publicar comprueba formato, periodo, moneda y coherencia; "
+        "si algo no cuadra, lo explica sin frenar el resto. Esta guía dice cuál mueve qué.",
         MARGIN_X,
         PAGE_H - 312,
         CONTENT_W * 0.66,
@@ -229,8 +231,8 @@ def page_archivos(c: canvas.Canvas) -> None:
             "3",
             "Plan de Project",
             ".xml",
-            "El plan del cronograma. Guárdalo desde Project con Archivo → Guardar "
-            "como → XML (el .mpp no se puede leer; el XML sí, entero).",
+            "El plan del cronograma. XML entra directamente. También puedes "
+            "subir el .mpp: queda guardado y se convierte automáticamente a XML.",
             ["% de cronograma", "Fecha de fin", "Avance del plan por edificio"],
             118,
             NAVY,
@@ -246,12 +248,12 @@ def page_archivos(c: canvas.Canvas) -> None:
     rounded_rect(c, MARGIN_X, y - 74, CONTENT_W, 74, PALE, PALE, 12, 0)
     c.setFillColor(ORANGE_DARK)
     c.setFont(font_name("Body-Bold"), 7.4)
-    c.drawString(MARGIN_X + 18, y - 24, "SIN REVISIÓN, SIN ESPERA")
+    c.drawString(MARGIN_X + 18, y - 24, "PUBLICACIÓN AUTOMÁTICA CON CONTROL")
     draw_wrapped(
         c,
-        "No hace falta que nadie apruebe nada: en cuanto se suben, las cifras "
-        "entran solas y el panel se refresca en menos de cinco segundos, en "
-        "todas las pantallas a la vez.",
+        "Cada bloque cuadrado entra solo. Finanzas valida ecuaciones, moneda, "
+        "corte y fuente; cualquier bloque dudoso queda aislado con diagnóstico. "
+        "La revisión publicada se comprueba de nuevo en todas sus pantallas.",
         MARGIN_X + 18,
         y - 42,
         CONTENT_W - 36,
@@ -335,8 +337,9 @@ def page_comprobar(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X + 18, y - 24, "SI SÓLO TE QUEDAS CON UNA COSA")
     draw_wrapped(
         c,
-        "Subes los tres archivos del mes y ya está: el Centro de Control se "
-        "encarga del resto solo. Ni cifras a mano, ni revisiones, ni esperas.",
+        "Subes los tres archivos y lees su recibo: publicados, aislados y vistas "
+        "comprobadas. No vuelvas a subir el original si algo queda observado; "
+        "abre el diagnóstico del expediente.",
         MARGIN_X + 18,
         y - 42,
         CONTENT_W - 36,

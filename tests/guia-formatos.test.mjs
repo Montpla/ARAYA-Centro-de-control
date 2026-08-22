@@ -32,11 +32,9 @@ test("aparece en los cuatro accesos con una sola entrada", () => {
 });
 
 test("el texto del panel cuenta las guías que hay", () => {
-  // El conteo del texto debe seguir a la lista de guías: cuatro tras retirar la
-  // de carga, cinco al añadir la de actualización mensual.
-  assert.match(cliente, /Cinco documentos breves/);
-  assert.doesNotMatch(cliente, /Cuatro documentos breves/);
-  assert.doesNotMatch(cliente, /Tres documentos breves/);
+  // El conteo del texto debe seguir a la lista: se añade la guía financiera.
+  assert.match(cliente, /Seis documentos breves/);
+  assert.doesNotMatch(cliente, /Cinco documentos breves/);
 });
 
 test("la guía de carga ya no está registrada por separado", () => {
@@ -75,6 +73,13 @@ test("la guía lleva a la pantalla de avance manual con su ruta exacta", () => {
   // sigue no encuentra nada y vuelve a quedarse sin publicar el corte.
   assert.match(generador, /Usuarios \/ Actualizar porcentajes a mano/);
   assert.match(cliente, /Actualizar porcentajes a mano/);
+});
+
+test("la guía financiera describe publicación parcial y recibo", () => {
+  assert.match(generador, /permiso para aportar documentos/);
+  assert.match(generador, /financieros/);
+  assert.match(generador, /publica cada grupo seguro/);
+  assert.match(generador, /Lee el recibo/);
 });
 
 test("reutiliza la identidad visual en vez de duplicarla", () => {

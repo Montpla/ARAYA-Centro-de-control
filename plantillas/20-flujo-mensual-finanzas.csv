@@ -1,0 +1,101 @@
+clave,valor,descripcion,valor actual
+reprogrammedFlowMonths.0.month,,Mes 1,dic-25
+reprogrammedFlowMonths.0.status,,dic-25 · real o previsión,actual
+reprogrammedFlowMonths.0.currentDop,,dic-25 · total DOP,16398543.68
+reprogrammedFlowMonths.0.urbanismDop,,dic-25 · Urbanismo DOP,15407306.5
+reprogrammedFlowMonths.0.buildingsDop,,dic-25 · Edificios DOP,991237.18
+reprogrammedFlowMonths.1.month,,Mes 2,ene-26
+reprogrammedFlowMonths.1.status,,ene-26 · real o previsión,actual
+reprogrammedFlowMonths.1.currentDop,,ene-26 · total DOP,2355501.36
+reprogrammedFlowMonths.1.urbanismDop,,ene-26 · Urbanismo DOP,222844.91
+reprogrammedFlowMonths.1.buildingsDop,,ene-26 · Edificios DOP,2132656.45
+reprogrammedFlowMonths.2.month,,Mes 3,feb-26
+reprogrammedFlowMonths.2.status,,feb-26 · real o previsión,actual
+reprogrammedFlowMonths.2.currentDop,,feb-26 · total DOP,8871467.26
+reprogrammedFlowMonths.2.urbanismDop,,feb-26 · Urbanismo DOP,2449569.83
+reprogrammedFlowMonths.2.buildingsDop,,feb-26 · Edificios DOP,6421897.43
+reprogrammedFlowMonths.3.month,,Mes 4,mar-26
+reprogrammedFlowMonths.3.status,,mar-26 · real o previsión,actual
+reprogrammedFlowMonths.3.currentDop,,mar-26 · total DOP,25457547.15
+reprogrammedFlowMonths.3.urbanismDop,,mar-26 · Urbanismo DOP,1833923.43
+reprogrammedFlowMonths.3.buildingsDop,,mar-26 · Edificios DOP,23623623.72
+reprogrammedFlowMonths.4.month,,Mes 5,abr-26
+reprogrammedFlowMonths.4.status,,abr-26 · real o previsión,actual
+reprogrammedFlowMonths.4.currentDop,,abr-26 · total DOP,19895044.07
+reprogrammedFlowMonths.4.urbanismDop,,abr-26 · Urbanismo DOP,2442502.32
+reprogrammedFlowMonths.4.buildingsDop,,abr-26 · Edificios DOP,17452541.75
+reprogrammedFlowMonths.5.month,,Mes 6,may-26
+reprogrammedFlowMonths.5.status,,may-26 · real o previsión,actual
+reprogrammedFlowMonths.5.currentDop,,may-26 · total DOP,21384560.13
+reprogrammedFlowMonths.5.urbanismDop,,may-26 · Urbanismo DOP,4340947.83
+reprogrammedFlowMonths.5.buildingsDop,,may-26 · Edificios DOP,17043612.3
+reprogrammedFlowMonths.6.month,,Mes 7,jun-26
+reprogrammedFlowMonths.6.status,,jun-26 · real o previsión,actual
+reprogrammedFlowMonths.6.currentDop,,jun-26 · total DOP,28809561.44
+reprogrammedFlowMonths.6.urbanismDop,,jun-26 · Urbanismo DOP,5475884.73
+reprogrammedFlowMonths.6.buildingsDop,,jun-26 · Edificios DOP,23333676.71
+reprogrammedFlowMonths.7.month,,Mes 8,jul-26
+reprogrammedFlowMonths.7.status,,jul-26 · real o previsión,actual
+reprogrammedFlowMonths.7.currentDop,,jul-26 · total DOP,31735296.71
+reprogrammedFlowMonths.7.urbanismDop,,jul-26 · Urbanismo DOP,8125258.55
+reprogrammedFlowMonths.7.buildingsDop,,jul-26 · Edificios DOP,23610038.16
+reprogrammedFlowMonths.8.month,,Mes 9,ago-26
+reprogrammedFlowMonths.8.status,,ago-26 · real o previsión,forecast
+reprogrammedFlowMonths.8.currentDop,,ago-26 · total DOP,112256837.197579
+reprogrammedFlowMonths.8.urbanismDop,,ago-26 · Urbanismo DOP,19723431.393367
+reprogrammedFlowMonths.8.buildingsDop,,ago-26 · Edificios DOP,92533405.804211
+reprogrammedFlowMonths.9.month,,Mes 10,sep-26
+reprogrammedFlowMonths.9.status,,sep-26 · real o previsión,forecast
+reprogrammedFlowMonths.9.currentDop,,sep-26 · total DOP,113610485.38276
+reprogrammedFlowMonths.9.urbanismDop,,sep-26 · Urbanismo DOP,12864061.057318
+reprogrammedFlowMonths.9.buildingsDop,,sep-26 · Edificios DOP,100746424.325442
+reprogrammedFlowMonths.10.month,,Mes 11,oct-26
+reprogrammedFlowMonths.10.status,,oct-26 · real o previsión,forecast
+reprogrammedFlowMonths.10.currentDop,,oct-26 · total DOP,72479874.026028
+reprogrammedFlowMonths.10.urbanismDop,,oct-26 · Urbanismo DOP,30184986.256797
+reprogrammedFlowMonths.10.buildingsDop,,oct-26 · Edificios DOP,42294887.769231
+reprogrammedFlowMonths.11.month,,Mes 12,nov-26
+reprogrammedFlowMonths.11.status,,nov-26 · real o previsión,forecast
+reprogrammedFlowMonths.11.currentDop,,nov-26 · total DOP,70524549.30227
+reprogrammedFlowMonths.11.urbanismDop,,nov-26 · Urbanismo DOP,22131186.533039
+reprogrammedFlowMonths.11.buildingsDop,,nov-26 · Edificios DOP,48393362.769231
+reprogrammedFlowMonths.12.month,,Mes 13,dic-26
+reprogrammedFlowMonths.12.status,,dic-26 · real o previsión,forecast
+reprogrammedFlowMonths.12.currentDop,,dic-26 · total DOP,62499896.552771
+reprogrammedFlowMonths.12.urbanismDop,,dic-26 · Urbanismo DOP,22631604.391656
+reprogrammedFlowMonths.12.buildingsDop,,dic-26 · Edificios DOP,39868292.161115
+reprogrammedFlowMonths.13.month,,Mes 14,ene-27
+reprogrammedFlowMonths.13.status,,ene-27 · real o previsión,forecast
+reprogrammedFlowMonths.13.currentDop,,ene-27 · total DOP,33484763.279771
+reprogrammedFlowMonths.13.urbanismDop,,ene-27 · Urbanismo DOP,18550349.175156
+reprogrammedFlowMonths.13.buildingsDop,,ene-27 · Edificios DOP,14934414.104615
+reprogrammedFlowMonths.14.month,,Mes 15,feb-27
+reprogrammedFlowMonths.14.status,,feb-27 · real o previsión,forecast
+reprogrammedFlowMonths.14.currentDop,,feb-27 · total DOP,43988027.841617
+reprogrammedFlowMonths.14.urbanismDop,,feb-27 · Urbanismo DOP,14846961.018156
+reprogrammedFlowMonths.14.buildingsDop,,feb-27 · Edificios DOP,29141066.823461
+reprogrammedFlowMonths.15.month,,Mes 16,mar-27
+reprogrammedFlowMonths.15.status,,mar-27 · real o previsión,forecast
+reprogrammedFlowMonths.15.currentDop,,mar-27 · total DOP,33879669.546003
+reprogrammedFlowMonths.15.urbanismDop,,mar-27 · Urbanismo DOP,19972418.370234
+reprogrammedFlowMonths.15.buildingsDop,,mar-27 · Edificios DOP,13907251.175769
+reprogrammedFlowMonths.16.month,,Mes 17,abr-27
+reprogrammedFlowMonths.16.status,,abr-27 · real o previsión,forecast
+reprogrammedFlowMonths.16.currentDop,,abr-27 · total DOP,17315280.421154
+reprogrammedFlowMonths.16.urbanismDop,,abr-27 · Urbanismo DOP,3961494.565
+reprogrammedFlowMonths.16.buildingsDop,,abr-27 · Edificios DOP,13353785.856154
+reprogrammedFlowMonths.17.month,,Mes 18,may-27
+reprogrammedFlowMonths.17.status,,may-27 · real o previsión,forecast
+reprogrammedFlowMonths.17.currentDop,,may-27 · total DOP,13975913.525769
+reprogrammedFlowMonths.17.urbanismDop,,may-27 · Urbanismo DOP,8561974.33
+reprogrammedFlowMonths.17.buildingsDop,,may-27 · Edificios DOP,5413939.195769
+reprogrammedFlowMonths.18.month,,Mes 19,jun-27
+reprogrammedFlowMonths.18.status,,jun-27 · real o previsión,forecast
+reprogrammedFlowMonths.18.currentDop,,jun-27 · total DOP,260986.155
+reprogrammedFlowMonths.18.urbanismDop,,jun-27 · Urbanismo DOP,0
+reprogrammedFlowMonths.18.buildingsDop,,jun-27 · Edificios DOP,260986.155
+reprogrammedFlowMonths.19.month,,Mes 20,jul-27
+reprogrammedFlowMonths.19.status,,jul-27 · real o previsión,forecast
+reprogrammedFlowMonths.19.currentDop,,jul-27 · total DOP,0
+reprogrammedFlowMonths.19.urbanismDop,,jul-27 · Urbanismo DOP,0
+reprogrammedFlowMonths.19.buildingsDop,,jul-27 · Edificios DOP,0

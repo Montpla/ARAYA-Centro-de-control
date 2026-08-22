@@ -331,7 +331,8 @@ def page_despues(c: canvas.Canvas) -> None:
     draw_wrapped(
         c,
         "El mismo resultado se consigue a mano: Archivo → Guardar como → XML y "
-        "subir ese archivo al Centro de Control. El macro sólo quita ese paso.",
+        "subir ese archivo al Centro de Control. El macro sólo quita ese paso. "
+        "En ambos casos, el recibo confirma la revisión y las vistas comprobadas.",
         MARGIN_X + 18,
         y - 42,
         CONTENT_W - 36,

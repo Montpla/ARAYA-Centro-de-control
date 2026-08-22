@@ -9,6 +9,9 @@ import proyeccionFinancieraTemplate from "../../../plantillas/14-proyeccion-fina
 import financiacionTemplate from "../../../plantillas/15-financiacion.csv?raw";
 import cubicacionTemplate from "../../../plantillas/16-cubicaciones.csv?raw";
 import ventasTemplate from "../../../plantillas/17-ventas-por-modelo.csv?raw";
+import balanceFideicomisoTemplate from "../../../plantillas/18-balance-fideicomiso.csv?raw";
+import resultadosFideicomisoTemplate from "../../../plantillas/19-resultados-fideicomiso.csv?raw";
+import flujoMensualTemplate from "../../../plantillas/20-flujo-mensual-finanzas.csv?raw";
 
 export const runtime = "edge";
 
@@ -48,6 +51,18 @@ const templates = {
   financiacion: {
     content: financiacionTemplate,
     fileName: "ARAYA-plantilla-financiacion.csv",
+  },
+  balance_fideicomiso: {
+    content: balanceFideicomisoTemplate,
+    fileName: "ARAYA-plantilla-balance-fideicomiso.csv",
+  },
+  resultados_fideicomiso: {
+    content: resultadosFideicomisoTemplate,
+    fileName: "ARAYA-plantilla-resultados-fideicomiso.csv",
+  },
+  flujo_mensual_finanzas: {
+    content: flujoMensualTemplate,
+    fileName: "ARAYA-plantilla-flujo-mensual-finanzas.csv",
   },
 } as const;
 

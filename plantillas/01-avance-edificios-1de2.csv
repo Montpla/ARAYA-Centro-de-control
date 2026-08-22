@@ -1,0 +1,241 @@
+clave,valor,descripcion,valor actual
+buildings.TH-03.progress,,TH-03 · avance ejecutado (%),60.3
+buildings.TH-03.planProgress,,TH-03 · avance previsto (%),
+buildings.TH-03.deviationDays,,TH-03 · desviación (días),58
+buildings.TH-03.forecastFinish,,TH-03 · fin previsto (dd/mm/aaaa),12/11/2026
+buildings.TH-02.progress,,TH-02 · avance ejecutado (%),54.7
+buildings.TH-02.planProgress,,TH-02 · avance previsto (%),
+buildings.TH-02.deviationDays,,TH-02 · desviación (días),62
+buildings.TH-02.forecastFinish,,TH-02 · fin previsto (dd/mm/aaaa),26/11/2026
+buildings.TH-04.progress,,TH-04 · avance ejecutado (%),46.9
+buildings.TH-04.planProgress,,TH-04 · avance previsto (%),
+buildings.TH-04.deviationDays,,TH-04 · desviación (días),21
+buildings.TH-04.forecastFinish,,TH-04 · fin previsto (dd/mm/aaaa),26/11/2026
+buildings.TH-06.progress,,TH-06 · avance ejecutado (%),48
+buildings.TH-06.planProgress,,TH-06 · avance previsto (%),
+buildings.TH-06.deviationDays,,TH-06 · desviación (días),41
+buildings.TH-06.forecastFinish,,TH-06 · fin previsto (dd/mm/aaaa),26/11/2026
+buildings.TH-01.progress,,TH-01 · avance ejecutado (%),50.4
+buildings.TH-01.planProgress,,TH-01 · avance previsto (%),
+buildings.TH-01.deviationDays,,TH-01 · desviación (días),51
+buildings.TH-01.forecastFinish,,TH-01 · fin previsto (dd/mm/aaaa),26/11/2026
+buildings.TH-05.progress,,TH-05 · avance ejecutado (%),47.1
+buildings.TH-05.planProgress,,TH-05 · avance previsto (%),
+buildings.TH-05.deviationDays,,TH-05 · desviación (días),30
+buildings.TH-05.forecastFinish,,TH-05 · fin previsto (dd/mm/aaaa),26/11/2026
+buildings.TH-09.progress,,TH-09 · avance ejecutado (%),40.3
+buildings.TH-09.planProgress,,TH-09 · avance previsto (%),
+buildings.TH-09.deviationDays,,TH-09 · desviación (días),9
+buildings.TH-09.forecastFinish,,TH-09 · fin previsto (dd/mm/aaaa),26/11/2026
+buildings.TH-08.progress,,TH-08 · avance ejecutado (%),38.9
+buildings.TH-08.planProgress,,TH-08 · avance previsto (%),
+buildings.TH-08.deviationDays,,TH-08 · desviación (días),0
+buildings.TH-08.forecastFinish,,TH-08 · fin previsto (dd/mm/aaaa),26/11/2026
+buildings.TH-07.progress,,TH-07 · avance ejecutado (%),35.4
+buildings.TH-07.planProgress,,TH-07 · avance previsto (%),
+buildings.TH-07.deviationDays,,TH-07 · desviación (días),-11
+buildings.TH-07.forecastFinish,,TH-07 · fin previsto (dd/mm/aaaa),26/11/2026
+buildings.TH-12.progress,,TH-12 · avance ejecutado (%),30.5
+buildings.TH-12.planProgress,,TH-12 · avance previsto (%),
+buildings.TH-12.deviationDays,,TH-12 · desviación (días),-13
+buildings.TH-12.forecastFinish,,TH-12 · fin previsto (dd/mm/aaaa),03/12/2026
+buildings.TH-11.progress,,TH-11 · avance ejecutado (%),28.1
+buildings.TH-11.planProgress,,TH-11 · avance previsto (%),
+buildings.TH-11.deviationDays,,TH-11 · desviación (días),20
+buildings.TH-11.forecastFinish,,TH-11 · fin previsto (dd/mm/aaaa),18/01/2027
+buildings.TH-10.progress,,TH-10 · avance ejecutado (%),30.4
+buildings.TH-10.planProgress,,TH-10 · avance previsto (%),
+buildings.TH-10.deviationDays,,TH-10 · desviación (días),4
+buildings.TH-10.forecastFinish,,TH-10 · fin previsto (dd/mm/aaaa),18/01/2027
+buildings.TH-15.progress,,TH-15 · avance ejecutado (%),19.5
+buildings.TH-15.planProgress,,TH-15 · avance previsto (%),
+buildings.TH-15.deviationDays,,TH-15 · desviación (días),14
+buildings.TH-15.forecastFinish,,TH-15 · fin previsto (dd/mm/aaaa),10/02/2027
+buildings.TH-14.progress,,TH-14 · avance ejecutado (%),19.5
+buildings.TH-14.planProgress,,TH-14 · avance previsto (%),
+buildings.TH-14.deviationDays,,TH-14 · desviación (días),14
+buildings.TH-14.forecastFinish,,TH-14 · fin previsto (dd/mm/aaaa),19/02/2027
+buildings.TH-13.progress,,TH-13 · avance ejecutado (%),19.5
+buildings.TH-13.planProgress,,TH-13 · avance previsto (%),
+buildings.TH-13.deviationDays,,TH-13 · desviación (días),14
+buildings.TH-13.forecastFinish,,TH-13 · fin previsto (dd/mm/aaaa),02/03/2027
+buildings.TH-18.progress,,TH-18 · avance ejecutado (%),0
+buildings.TH-18.planProgress,,TH-18 · avance previsto (%),
+buildings.TH-18.deviationDays,,TH-18 · desviación (días),13
+buildings.TH-18.forecastFinish,,TH-18 · fin previsto (dd/mm/aaaa),10/03/2027
+buildings.TH-17.progress,,TH-17 · avance ejecutado (%),0
+buildings.TH-17.planProgress,,TH-17 · avance previsto (%),
+buildings.TH-17.deviationDays,,TH-17 · desviación (días),11
+buildings.TH-17.forecastFinish,,TH-17 · fin previsto (dd/mm/aaaa),19/03/2027
+buildings.TH-16.progress,,TH-16 · avance ejecutado (%),0
+buildings.TH-16.planProgress,,TH-16 · avance previsto (%),
+buildings.TH-16.deviationDays,,TH-16 · desviación (días),13
+buildings.TH-16.forecastFinish,,TH-16 · fin previsto (dd/mm/aaaa),30/03/2027
+buildings.TH-71.progress,,TH-71 · avance ejecutado (%),0
+buildings.TH-71.planProgress,,TH-71 · avance previsto (%),
+buildings.TH-71.deviationDays,,TH-71 · desviación (días),12
+buildings.TH-71.forecastFinish,,TH-71 · fin previsto (dd/mm/aaaa),07/04/2027
+buildings.TH-70.progress,,TH-70 · avance ejecutado (%),0
+buildings.TH-70.planProgress,,TH-70 · avance previsto (%),
+buildings.TH-70.deviationDays,,TH-70 · desviación (días),10
+buildings.TH-70.forecastFinish,,TH-70 · fin previsto (dd/mm/aaaa),16/04/2027
+buildings.TH-73.progress,,TH-73 · avance ejecutado (%),0
+buildings.TH-73.planProgress,,TH-73 · avance previsto (%),
+buildings.TH-73.deviationDays,,TH-73 · desviación (días),12
+buildings.TH-73.forecastFinish,,TH-73 · fin previsto (dd/mm/aaaa),27/04/2027
+buildings.TH-72.progress,,TH-72 · avance ejecutado (%),0
+buildings.TH-72.planProgress,,TH-72 · avance previsto (%),
+buildings.TH-72.deviationDays,,TH-72 · desviación (días),9
+buildings.TH-72.forecastFinish,,TH-72 · fin previsto (dd/mm/aaaa),05/05/2027
+buildings.TH-75.progress,,TH-75 · avance ejecutado (%),0
+buildings.TH-75.planProgress,,TH-75 · avance previsto (%),
+buildings.TH-75.deviationDays,,TH-75 · desviación (días),9
+buildings.TH-75.forecastFinish,,TH-75 · fin previsto (dd/mm/aaaa),14/05/2027
+buildings.TH-74.progress,,TH-74 · avance ejecutado (%),0
+buildings.TH-74.planProgress,,TH-74 · avance previsto (%),
+buildings.TH-74.deviationDays,,TH-74 · desviación (días),10
+buildings.TH-74.forecastFinish,,TH-74 · fin previsto (dd/mm/aaaa),24/05/2027
+buildings.TH-77.progress,,TH-77 · avance ejecutado (%),5.9
+buildings.TH-77.planProgress,,TH-77 · avance previsto (%),
+buildings.TH-77.deviationDays,,TH-77 · desviación (días),7
+buildings.TH-77.forecastFinish,,TH-77 · fin previsto (dd/mm/aaaa),01/06/2027
+buildings.TH-76.progress,,TH-76 · avance ejecutado (%),5.9
+buildings.TH-76.planProgress,,TH-76 · avance previsto (%),
+buildings.TH-76.deviationDays,,TH-76 · desviación (días),7
+buildings.TH-76.forecastFinish,,TH-76 · fin previsto (dd/mm/aaaa),07/06/2027
+buildings.TH-19.progress,,TH-19 · avance ejecutado (%),0
+buildings.TH-19.planProgress,,TH-19 · avance previsto (%),
+buildings.TH-19.deviationDays,,TH-19 · desviación (días),0
+buildings.TH-19.forecastFinish,,TH-19 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-20.progress,,TH-20 · avance ejecutado (%),0
+buildings.TH-20.planProgress,,TH-20 · avance previsto (%),
+buildings.TH-20.deviationDays,,TH-20 · desviación (días),0
+buildings.TH-20.forecastFinish,,TH-20 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-21.progress,,TH-21 · avance ejecutado (%),0
+buildings.TH-21.planProgress,,TH-21 · avance previsto (%),
+buildings.TH-21.deviationDays,,TH-21 · desviación (días),0
+buildings.TH-21.forecastFinish,,TH-21 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-22.progress,,TH-22 · avance ejecutado (%),0
+buildings.TH-22.planProgress,,TH-22 · avance previsto (%),
+buildings.TH-22.deviationDays,,TH-22 · desviación (días),0
+buildings.TH-22.forecastFinish,,TH-22 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-23.progress,,TH-23 · avance ejecutado (%),0
+buildings.TH-23.planProgress,,TH-23 · avance previsto (%),
+buildings.TH-23.deviationDays,,TH-23 · desviación (días),0
+buildings.TH-23.forecastFinish,,TH-23 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-24.progress,,TH-24 · avance ejecutado (%),0
+buildings.TH-24.planProgress,,TH-24 · avance previsto (%),
+buildings.TH-24.deviationDays,,TH-24 · desviación (días),0
+buildings.TH-24.forecastFinish,,TH-24 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-25.progress,,TH-25 · avance ejecutado (%),0
+buildings.TH-25.planProgress,,TH-25 · avance previsto (%),
+buildings.TH-25.deviationDays,,TH-25 · desviación (días),0
+buildings.TH-25.forecastFinish,,TH-25 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-26.progress,,TH-26 · avance ejecutado (%),0
+buildings.TH-26.planProgress,,TH-26 · avance previsto (%),
+buildings.TH-26.deviationDays,,TH-26 · desviación (días),0
+buildings.TH-26.forecastFinish,,TH-26 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-27.progress,,TH-27 · avance ejecutado (%),0
+buildings.TH-27.planProgress,,TH-27 · avance previsto (%),
+buildings.TH-27.deviationDays,,TH-27 · desviación (días),0
+buildings.TH-27.forecastFinish,,TH-27 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-28.progress,,TH-28 · avance ejecutado (%),0
+buildings.TH-28.planProgress,,TH-28 · avance previsto (%),
+buildings.TH-28.deviationDays,,TH-28 · desviación (días),0
+buildings.TH-28.forecastFinish,,TH-28 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-29.progress,,TH-29 · avance ejecutado (%),0
+buildings.TH-29.planProgress,,TH-29 · avance previsto (%),
+buildings.TH-29.deviationDays,,TH-29 · desviación (días),0
+buildings.TH-29.forecastFinish,,TH-29 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-30.progress,,TH-30 · avance ejecutado (%),0
+buildings.TH-30.planProgress,,TH-30 · avance previsto (%),
+buildings.TH-30.deviationDays,,TH-30 · desviación (días),0
+buildings.TH-30.forecastFinish,,TH-30 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-31.progress,,TH-31 · avance ejecutado (%),0
+buildings.TH-31.planProgress,,TH-31 · avance previsto (%),
+buildings.TH-31.deviationDays,,TH-31 · desviación (días),0
+buildings.TH-31.forecastFinish,,TH-31 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-32.progress,,TH-32 · avance ejecutado (%),0
+buildings.TH-32.planProgress,,TH-32 · avance previsto (%),
+buildings.TH-32.deviationDays,,TH-32 · desviación (días),0
+buildings.TH-32.forecastFinish,,TH-32 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-33.progress,,TH-33 · avance ejecutado (%),0
+buildings.TH-33.planProgress,,TH-33 · avance previsto (%),
+buildings.TH-33.deviationDays,,TH-33 · desviación (días),0
+buildings.TH-33.forecastFinish,,TH-33 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-34.progress,,TH-34 · avance ejecutado (%),0
+buildings.TH-34.planProgress,,TH-34 · avance previsto (%),
+buildings.TH-34.deviationDays,,TH-34 · desviación (días),0
+buildings.TH-34.forecastFinish,,TH-34 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-35.progress,,TH-35 · avance ejecutado (%),0
+buildings.TH-35.planProgress,,TH-35 · avance previsto (%),
+buildings.TH-35.deviationDays,,TH-35 · desviación (días),0
+buildings.TH-35.forecastFinish,,TH-35 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-36.progress,,TH-36 · avance ejecutado (%),0
+buildings.TH-36.planProgress,,TH-36 · avance previsto (%),
+buildings.TH-36.deviationDays,,TH-36 · desviación (días),0
+buildings.TH-36.forecastFinish,,TH-36 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-37.progress,,TH-37 · avance ejecutado (%),0
+buildings.TH-37.planProgress,,TH-37 · avance previsto (%),
+buildings.TH-37.deviationDays,,TH-37 · desviación (días),0
+buildings.TH-37.forecastFinish,,TH-37 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-38.progress,,TH-38 · avance ejecutado (%),0
+buildings.TH-38.planProgress,,TH-38 · avance previsto (%),
+buildings.TH-38.deviationDays,,TH-38 · desviación (días),0
+buildings.TH-38.forecastFinish,,TH-38 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-39.progress,,TH-39 · avance ejecutado (%),0
+buildings.TH-39.planProgress,,TH-39 · avance previsto (%),
+buildings.TH-39.deviationDays,,TH-39 · desviación (días),0
+buildings.TH-39.forecastFinish,,TH-39 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-40.progress,,TH-40 · avance ejecutado (%),0
+buildings.TH-40.planProgress,,TH-40 · avance previsto (%),
+buildings.TH-40.deviationDays,,TH-40 · desviación (días),0
+buildings.TH-40.forecastFinish,,TH-40 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-41.progress,,TH-41 · avance ejecutado (%),0
+buildings.TH-41.planProgress,,TH-41 · avance previsto (%),
+buildings.TH-41.deviationDays,,TH-41 · desviación (días),0
+buildings.TH-41.forecastFinish,,TH-41 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-42.progress,,TH-42 · avance ejecutado (%),0
+buildings.TH-42.planProgress,,TH-42 · avance previsto (%),
+buildings.TH-42.deviationDays,,TH-42 · desviación (días),0
+buildings.TH-42.forecastFinish,,TH-42 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-43.progress,,TH-43 · avance ejecutado (%),0
+buildings.TH-43.planProgress,,TH-43 · avance previsto (%),
+buildings.TH-43.deviationDays,,TH-43 · desviación (días),0
+buildings.TH-43.forecastFinish,,TH-43 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-44.progress,,TH-44 · avance ejecutado (%),0
+buildings.TH-44.planProgress,,TH-44 · avance previsto (%),
+buildings.TH-44.deviationDays,,TH-44 · desviación (días),0
+buildings.TH-44.forecastFinish,,TH-44 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-45.progress,,TH-45 · avance ejecutado (%),0
+buildings.TH-45.planProgress,,TH-45 · avance previsto (%),
+buildings.TH-45.deviationDays,,TH-45 · desviación (días),0
+buildings.TH-45.forecastFinish,,TH-45 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-46.progress,,TH-46 · avance ejecutado (%),0
+buildings.TH-46.planProgress,,TH-46 · avance previsto (%),
+buildings.TH-46.deviationDays,,TH-46 · desviación (días),0
+buildings.TH-46.forecastFinish,,TH-46 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-47.progress,,TH-47 · avance ejecutado (%),0
+buildings.TH-47.planProgress,,TH-47 · avance previsto (%),
+buildings.TH-47.deviationDays,,TH-47 · desviación (días),0
+buildings.TH-47.forecastFinish,,TH-47 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-48.progress,,TH-48 · avance ejecutado (%),0
+buildings.TH-48.planProgress,,TH-48 · avance previsto (%),
+buildings.TH-48.deviationDays,,TH-48 · desviación (días),0
+buildings.TH-48.forecastFinish,,TH-48 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-49.progress,,TH-49 · avance ejecutado (%),0
+buildings.TH-49.planProgress,,TH-49 · avance previsto (%),
+buildings.TH-49.deviationDays,,TH-49 · desviación (días),0
+buildings.TH-49.forecastFinish,,TH-49 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-50.progress,,TH-50 · avance ejecutado (%),0
+buildings.TH-50.planProgress,,TH-50 · avance previsto (%),
+buildings.TH-50.deviationDays,,TH-50 · desviación (días),0
+buildings.TH-50.forecastFinish,,TH-50 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-51.progress,,TH-51 · avance ejecutado (%),0
+buildings.TH-51.planProgress,,TH-51 · avance previsto (%),
+buildings.TH-51.deviationDays,,TH-51 · desviación (días),0
+buildings.TH-51.forecastFinish,,TH-51 · fin previsto (dd/mm/aaaa),Pendiente de programar
+buildings.TH-52.progress,,TH-52 · avance ejecutado (%),0
+buildings.TH-52.planProgress,,TH-52 · avance previsto (%),
+buildings.TH-52.deviationDays,,TH-52 · desviación (días),0
+buildings.TH-52.forecastFinish,,TH-52 · fin previsto (dd/mm/aaaa),Pendiente de programar
