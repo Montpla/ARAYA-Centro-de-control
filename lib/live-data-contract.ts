@@ -446,7 +446,7 @@ export function validateLiveDataContract(
         return {
           valid: false as const,
           reason: resolved.arrayElement.append
-            ? "el nuevo identificador ya existe o no es vÃ¡lido"
+            ? "el nuevo identificador ya existe o no es válido"
             : "un elemento existente no puede cambiar de identificador",
         };
       }

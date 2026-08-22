@@ -164,16 +164,16 @@ CURVA S Y PLANIFICACIÓN
 - No leas un valor aproximado por la altura de una línea o barra; hace falta una etiqueta, tabla o cifra explícita.
 
 SEGURIDAD
-- safetyWeeklySeries conserva una fila por reporte semanal. Distingue siempre valor de la semana y acumulado: hoursWeek/hoursCumulative, observationsWeek/observationsCumulative, meetingsWeek/meetingsCumulative e inspectionsWeek/inspectionsCumulative. eventsWeek es null si el documento sÃ³lo imprime un acumulado; nunca conviertas el acumulado de accidentes en accidentes de esa semana. Antes de publicar, lee el valor actual y devuelve la serie completa ordenada, sustituyendo sÃ³lo la fila con el mismo cutoff o aÃ±adiendo una nueva; nunca borres semanas anteriores.
+- safetyWeeklySeries conserva una fila por reporte semanal. Distingue siempre valor de la semana y acumulado: hoursWeek/hoursCumulative, observationsWeek/observationsCumulative, meetingsWeek/meetingsCumulative e inspectionsWeek/inspectionsCumulative. eventsWeek es null si el documento sólo imprime un acumulado; nunca conviertas el acumulado de accidentes en accidentes de esa semana. Antes de publicar, lee el valor actual y devuelve la serie completa ordenada, sustituyendo sólo la fila con el mismo cutoff o añadiendo una nueva; nunca borres semanas anteriores.
 - safetyMetrics es una lista de objetos {label, value, detail} con label fijo, uno por cada uno de: "Accidentes", "Personal", "Horas-persona", "Observaciones", "Reuniones", "Inspecciones", "Acciones". Usa exactamente esos labels aunque el documento use otro texto para el mismo concepto: "Total de Eventos Registrables" o el conteo de accidentes de la tabla de accidentabilidad → Accidentes; "Total de empleados" o cantidad de personal → Personal; "Horas Trabajadas del Proyecto" → Horas-persona; "Reporte de Observaciones" → Observaciones; "Reunión de Seguridad" → Reuniones; "Inspecciones" → Inspecciones; cantidad de acciones correctivas o hallazgos en seguimiento → Acciones.
 - Si la tabla ya trae una columna o fila "Total" con el valor sumado impreso, puedes usarlo tal cual: es un hecho ya escrito en el documento, no un cálculo tuyo. Si no hay un total impreso y solo hay columnas por semana (S1, S2, S3...) sin sumar, no las sumes tú: omite ese label y explica en warnings que falta un total explícito en la fuente.
 - safetyFindings es la lista de actos y condiciones inseguras identificadas (columnas "Acto Inseguro" y "Condición Insegura"). No mezcles ahí las buenas prácticas ni el seguimiento de acciones.
 
 RESPUESTA
-- Trabajas como un agente acotado, no como una respuesta de una sola pasada. Antes de terminar consulta al menos una herramienta para contrastar el esquema, una plantilla conocida o una conciliaciÃ³n numÃ©rica.
-- Usa find_document_template para comprobar si un archivo anterior de la misma familia ya publicÃ³ correctamente sus claves. Una plantilla es una pista, nunca evidencia: los valores siempre se leen del archivo actual.
-- Usa inspect_live_schema o read_current_value antes de crear una ruta. Usa reconcile_numbers para contrastar cocientes y porcentajes; no hagas cÃ¡lculos mentalmente.
-- recommend_dynamic_section sirve para elegir la representaciÃ³n de un concepto nuevo. El valor observado sigue yendo en unmapped_candidates.
+- Trabajas como un agente acotado, no como una respuesta de una sola pasada. Antes de terminar consulta al menos una herramienta para contrastar el esquema, una plantilla conocida o una conciliación numérica.
+- Usa find_document_template para comprobar si un archivo anterior de la misma familia ya publicó correctamente sus claves. Una plantilla es una pista, nunca evidencia: los valores siempre se leen del archivo actual.
+- Usa inspect_live_schema o read_current_value antes de crear una ruta. Usa reconcile_numbers para contrastar cocientes y porcentajes; no hagas cálculos mentalmente.
+- recommend_dynamic_section sirve para elegir la representación de un concepto nuevo. El valor observado sigue yendo en unmapped_candidates.
 - Detente en cuanto dispongas de evidencia suficiente y una salida completa. No repitas una herramienta con los mismos argumentos.
 - Devuelve solamente el objeto que exige el esquema JSON.
 - confidence y la confianza de cada update deben estar entre 0 y 1 y reflejar legibilidad, correspondencia de clave y fuerza de la evidencia.
@@ -534,21 +534,21 @@ const INGESTION_AGENT_TOOLS = [
   {
     type: "function",
     name: "inspect_live_schema",
-    description: "Muestra la forma autorizada de una raÃ­z del contrato vivo. Ãšsala antes de proponer claves nuevas o cuando el nombre exacto de un campo sea dudoso.",
+    description: "Muestra la forma autorizada de una raíz del contrato vivo. Úsala antes de proponer claves nuevas o cuando el nombre exacto de un campo sea dudoso.",
     strict: true,
     parameters: {
       type: "object",
       additionalProperties: false,
       required: ["root"],
       properties: {
-        root: { type: "string", description: "RaÃ­z exacta o cadena vacÃ­a para listar todas las raÃ­ces." },
+        root: { type: "string", description: "Raíz exacta o cadena vacía para listar todas las raíces." },
       },
     },
   },
   {
     type: "function",
     name: "read_current_value",
-    description: "Lee el valor vivo actual de una clave exacta para diferenciar un dato nuevo de una repeticiÃ³n y evitar sobrescribir otra entidad.",
+    description: "Lee el valor vivo actual de una clave exacta para diferenciar un dato nuevo de una repetición y evitar sobrescribir otra entidad.",
     strict: true,
     parameters: {
       type: "object",
@@ -566,13 +566,13 @@ const INGESTION_AGENT_TOOLS = [
       type: "object",
       additionalProperties: false,
       required: ["query"],
-      properties: { query: { type: "string", description: "Nombre o tipo de documento que se estÃ¡ interpretando." } },
+      properties: { query: { type: "string", description: "Nombre o tipo de documento que se está interpretando." } },
     },
   },
   {
     type: "function",
     name: "validate_candidate_updates",
-    description: "Comprueba de forma determinista nombres de raÃ­z, JSON, duplicados y porcentajes antes de que el agente emita la respuesta final.",
+    description: "Comprueba de forma determinista nombres de raíz, JSON, duplicados y porcentajes antes de que el agente emita la respuesta final.",
     strict: true,
     parameters: {
       type: "object",
@@ -598,7 +598,7 @@ const INGESTION_AGENT_TOOLS = [
   {
     type: "function",
     name: "reconcile_numbers",
-    description: "Calcula y contrasta un porcentaje declarado contra numerador/denominador. Ãšala para cubicaciones, totales ponderados, ejecuciÃ³n y desviaciones; el resultado valida, pero no crea evidencia documental.",
+    description: "Calcula y contrasta un porcentaje declarado contra numerador/denominador. Úsala para cubicaciones, totales ponderados, ejecución y desviaciones; el resultado valida, pero no crea evidencia documental.",
     strict: true,
     parameters: {
       type: "object",
@@ -615,7 +615,7 @@ const INGESTION_AGENT_TOOLS = [
   {
     type: "function",
     name: "recommend_dynamic_section",
-    description: "Elige una representaciÃ³n segura (KPI, barras, lÃ­nea, tabla o lista) para un concepto relevante que todavÃ­a no tiene pantalla propia.",
+    description: "Elige una representación segura (KPI, barras, línea, tabla o lista) para un concepto relevante que todavía no tiene pantalla propia.",
     strict: true,
     parameters: {
       type: "object",
@@ -684,7 +684,7 @@ function dynamicSectionRecommendation(valueJson: string) {
   try {
     parsed = JSON.parse(valueJson) as unknown;
   } catch {
-    return { visualization: "list", reason: "El valor no contiene JSON vÃ¡lido." };
+    return { visualization: "list", reason: "El valor no contiene JSON válido." };
   }
   const entries = Array.isArray(parsed)
     ? parsed.map((value, index) => [`Dato ${index + 1}`, value] as const)
@@ -693,20 +693,20 @@ function dynamicSectionRecommendation(valueJson: string) {
       : [["Valor", parsed] as const];
   const numeric = entries.filter(([, value]) => numberFromDisplay(value) !== null);
   if (entries.length === 1 && numeric.length === 1) {
-    return { visualization: "kpi", reason: "Un Ãºnico valor numÃ©rico." };
+    return { visualization: "kpi", reason: "Un único valor numérico." };
   }
   if (numeric.length === entries.length && entries.length >= 2) {
     const chronological = entries.every(([label]) =>
       /(?:\b20\d{2}\b|ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic|semana)/i.test(label));
     return {
       visualization: chronological ? "line" : "bars",
-      reason: chronological ? "Serie numÃ©rica cronolÃ³gica." : "ComparaciÃ³n numÃ©rica por categorÃ­a.",
+      reason: chronological ? "Serie numérica cronológica." : "Comparación numérica por categoría.",
     };
   }
   if (Array.isArray(parsed) && parsed.some((item) => isRecord(item))) {
-    return { visualization: "table", reason: "ColecciÃ³n de registros con varias columnas." };
+    return { visualization: "table", reason: "Colección de registros con varias columnas." };
   }
-  return { visualization: "list", reason: "Contenido textual o heterogÃ©neo." };
+  return { visualization: "list", reason: "Contenido textual o heterogéneo." };
 }
 
 function executeIngestionAgentTool(
@@ -718,7 +718,7 @@ function executeIngestionAgentTool(
     const parsed = JSON.parse(call.arguments) as unknown;
     if (isRecord(parsed)) args = parsed;
   } catch {
-    return { ok: false, output: { error: "Los argumentos no son JSON vÃ¡lido." }, summary: "Argumentos invÃ¡lidos" };
+    return { ok: false, output: { error: "Los argumentos no son JSON válido." }, summary: "Argumentos inválidos" };
   }
 
   if (call.name === "inspect_live_schema") {
@@ -728,12 +728,12 @@ function executeIngestionAgentTool(
       return {
         ok: true,
         output: { roots: Object.keys(source).slice(0, 100) },
-        summary: `${Object.keys(source).length} raÃ­ces listadas`,
+      summary: `${Object.keys(source).length} raíces listadas`,
       };
     }
     const value = source[root];
     return value === undefined
-      ? { ok: false, output: { error: `La raÃ­z ${root} no existe.` }, summary: "RaÃ­z desconocida" }
+      ? { ok: false, output: { error: `La raíz ${root} no existe.` }, summary: "Raíz desconocida" }
       : { ok: true, output: { root, schema: buildValueSkeleton(value, 0) }, summary: `Esquema ${root} consultado` };
   }
   if (call.name === "read_current_value") {
@@ -742,7 +742,7 @@ function executeIngestionAgentTool(
     return {
       ok: value !== undefined,
       output: value === undefined ? { found: false, key } : { found: true, key, value },
-      summary: value === undefined ? `${key || "Clave"} no publicada` : `${key} leÃ­da`,
+      summary: value === undefined ? `${key || "Clave"} no publicada` : `${key} leída`,
     };
   }
   if (call.name === "find_document_template") {
@@ -787,7 +787,7 @@ function executeIngestionAgentTool(
             errors.push({ key, reason: "Porcentaje fuera de 0-100." });
           }
         } catch {
-          errors.push({ key, reason: "value_json no es JSON vÃ¡lido." });
+          errors.push({ key, reason: "value_json no es JSON válido." });
         }
       }
     }
@@ -803,7 +803,7 @@ function executeIngestionAgentTool(
     const reported = args.reported_percentage === null ? null : Number(args.reported_percentage);
     const tolerance = Math.max(0, Math.min(5, Number(args.tolerance) || 0.05));
     if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator === 0) {
-      return { ok: false, output: { error: "Numerador o denominador invÃ¡lido." }, summary: "ConciliaciÃ³n invÃ¡lida" };
+      return { ok: false, output: { error: "Numerador o denominador inválido." }, summary: "Conciliación inválida" };
     }
     const calculated = (numerator / denominator) * 100;
     const difference = reported === null || !Number.isFinite(reported) ? null : Math.abs(calculated - reported);
@@ -817,12 +817,12 @@ function executeIngestionAgentTool(
         tolerance,
         matches,
       },
-      summary: matches === null ? "Porcentaje calculado" : matches ? "ConciliaciÃ³n correcta" : "ConciliaciÃ³n no cuadra",
+      summary: matches === null ? "Porcentaje calculado" : matches ? "Conciliación correcta" : "Conciliación no cuadra",
     };
   }
   if (call.name === "recommend_dynamic_section") {
     const recommendation = dynamicSectionRecommendation(String(args.value_json ?? "null"));
-    return { ok: true, output: recommendation, summary: `VisualizaciÃ³n ${recommendation.visualization}` };
+    return { ok: true, output: recommendation, summary: `Visualización ${recommendation.visualization}` };
   }
   return { ok: false, output: { error: "Herramienta no autorizada." }, summary: "Herramienta desconocida" };
 }

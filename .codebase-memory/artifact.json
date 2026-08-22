@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "28302ba91ac642076e47b1dcd8b98d42f146d0db",
-    "indexed_at": "2026-08-22T11:40:59Z",
-    "project": "araya-centro-control",
-    "nodes": 7402,
-    "edges": 11865,
-    "original_size": 10551296,
-    "compressed_size": 1150660,
-    "compression_level": 3
+    "commit": "8b18f99ce39df92e078b95c7d76f6623c5dd8cc1",
+    "indexed_at": "2026-08-22T12:03:52Z",
+    "project": "C-Users-Usuario1-OneDrive-Desktop-ARAYA_Transformacion_Digital-12_Dashboard_Obra",
+    "nodes": 7409,
+    "edges": 12216,
+    "original_size": 11993088,
+    "compressed_size": 1930126,
+    "compression_level": 9
 }

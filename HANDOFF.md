@@ -3341,3 +3341,30 @@ los expedientes eternamente pendientes.
 - Pruebas añadidas para tarifa Luna/Terra, caché, escalado selectivo, Excel sin IA,
   ZIP narrativo y aviso presupuestario. Antes de publicar, ejecutar el conjunto
   completo y aplicar la migración D1.
+
+## Legibilidad e identidad corporativa completas (22/08/2026)
+
+- La estructura, navegación, datos, gráficos y coordenadas del plano no cambian.
+  La identidad vive en `app/corporate-theme.css`, importado tras `globals.css`
+  desde `app/layout.tsx`, para que una sola capa gobierne toda la aplicación.
+- Paleta: hueso/marfil, grafito y naranja Bricket accesible; verde, ámbar y rojo
+  quedan reservados para estado. No se añadieron degradados, cristal ni sombras
+  pesadas. La UI usa Aptos/Segoe UI Variable y los títulos Iowan/Baskerville.
+- Base de lectura: 15 px en escritorio y 16 px en tablet/móvil. Metadatos y datos
+  suben a 12–14 px; botones principales parten de 44 px y el menú móvil de 58 px.
+  Los hotspots del plano conservan escala propia para no cambiar su geometría.
+- Se cubrieron navegación, cabecera, búsqueda, sincronización, tarjetas,
+  pestañas, tablas, cronología, archivos, formularios, revisiones, Finanzas,
+  Centro de datos, ARAYA Asistente, notificaciones, visor y Sala operativa.
+- La auditoría comparativa de `globals.css` termina con **0 reglas de 10 px o
+  menos sin override corporativo**. `tests/corporate-theme.test.mjs` protege
+  carga, contraste AA, responsive, tactilidad, fuentes y cobertura histórica.
+- `tests/text-encoding.test.mjs` recorre `app/` y `lib/`. Se corrigieron las
+  secuencias mojibake restantes en mensajes, errores y prompt de ingesta.
+- El navegador integrado no estaba conectado durante la sesión (`browsers=[]`),
+  por lo que no se sustituyó por Playwright externo. La app sí compila y responde
+  localmente; repetir capturas en 1440/1024/768/390 cuando el navegador vuelva.
+- Verificación local final: TypeScript y build Vinext correctos, ESLint 0 errores
+  (20 avisos históricos), `git diff --check` correcto y suite **360/360**.
+- Documento de criterio y ejecución:
+  `docs/PLAN-LEGIBILIDAD-IDENTIDAD-CORPORATIVA.md`.

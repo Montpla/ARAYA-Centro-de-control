@@ -1,0 +1,1694 @@
+/*
+ * ARAYA · Centro de Control — sistema visual corporativo
+ * Cargada después de globals.css: fuente única de verdad para legibilidad,
+ * contraste y acabado, sin modificar datos ni geometría del plano.
+ */
+
+/* 01. Fundamentos */
+:root {
+  --ink: #27231f;
+  --ink-soft: #403b35;
+  --muted: #625d55;
+  --muted-soft: #756f66;
+  --line: #d8d1c7;
+  --line-strong: #bdb4a8;
+  --paper: #f3f0e9;
+  --surface: #fffdf8;
+  --surface-alt: #f8f5ef;
+  --navy: #2a2b27;
+  --navy-2: #1f211e;
+  --orange: #a9472c;
+  --orange-bright: #ef5b35;
+  --orange-soft: #f5e7df;
+  --green: #35664a;
+  --green-soft: #e9f1eb;
+  --red: #963d34;
+  --red-soft: #f6e8e5;
+  --amber: #7a5a20;
+  --amber-soft: #f6eedc;
+  --focus: #ba4c2e;
+  --radius: 11px;
+  --shadow: 0 8px 24px rgba(42, 36, 29, 0.07);
+  --shadow-float: 0 18px 48px rgba(42, 36, 29, 0.16);
+  --font-ui: "Aptos", "Aptos Display", "Segoe UI Variable", "Helvetica Neue", Arial, sans-serif;
+  --font-editorial: "Iowan Old Style", "Baskerville", Georgia, "Times New Roman", serif;
+  --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+html,
+body {
+  color: var(--ink);
+  background: var(--paper);
+  font-size: 15px;
+  line-height: 1.58;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-ui);
+}
+
+button,
+input,
+select,
+textarea {
+  font-size: 14px;
+}
+
+button,
+a,
+input,
+select,
+textarea,
+[tabindex] {
+  outline-color: transparent;
+  outline-offset: 3px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid rgba(169, 71, 44, 0.32);
+  outline-offset: 3px;
+}
+
+::placeholder {
+  color: #777168;
+  opacity: 1;
+}
+
+::selection {
+  color: #201d19;
+  background: #ead5c8;
+}
+
+.section-kicker,
+.crumb,
+.nav-label,
+.project-selector > span {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.data-note,
+.section-intro,
+.plan-disclaimer,
+.governance-note,
+.quality-note {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.62;
+}
+
+.danger-text,
+.warn-text,
+.good-text {
+  font-weight: 700;
+}
+
+/* 02. Navegación, cabecera y búsqueda */
+.sidebar {
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--navy-2);
+}
+
+.brand {
+  gap: 13px;
+  padding-bottom: 22px;
+}
+
+.brand-mark {
+  border-radius: 9px;
+  background: #fff;
+}
+
+.brand strong {
+  color: #fffdf8;
+  font-family: var(--font-editorial);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.075em;
+}
+
+.brand span,
+.project-selector button small,
+.project-selector button .project-wordmark small,
+.sidebar-foot small {
+  color: #b9b8b0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.project-selector > span,
+.nav-label {
+  color: #a6a79f;
+}
+
+.project-selector button {
+  min-height: 48px;
+  border-color: rgba(255, 255, 255, 0.18);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.project-selector button strong {
+  font-size: 13px;
+}
+
+.project-menu {
+  border-color: rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: #292b27;
+  box-shadow: var(--shadow-float);
+}
+
+.sidebar nav button {
+  min-height: 46px;
+  border-radius: 8px;
+  color: #c5c5bd;
+}
+
+.sidebar nav button i {
+  color: #aaa9a1;
+  font-size: 11px;
+}
+
+.sidebar nav button span {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.sidebar nav button em,
+.sidebar nav button em.restricted {
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.sidebar nav .nav-child {
+  min-height: 42px;
+}
+
+.sidebar nav .nav-child i {
+  font-size: 10px;
+}
+
+.sidebar nav .nav-child span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sidebar nav button:hover,
+.sidebar nav button.active,
+.sidebar-nav-group.current > .nav-group-trigger {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.085);
+}
+
+.sidebar nav button.active,
+.sidebar nav .nav-child.active {
+  box-shadow: inset 3px 0 var(--orange-bright);
+}
+
+.sidebar nav button.active i,
+.sidebar-nav-group.current > .nav-group-trigger > i {
+  color: #f29a7d;
+}
+
+.sidebar-foot span {
+  color: #f3f1eb;
+  font-size: 12px;
+}
+
+.topbar {
+  min-height: 94px;
+  height: auto;
+  border-color: var(--line);
+  background: rgba(247, 244, 238, 0.98);
+  backdrop-filter: none;
+}
+
+.topbar h1 {
+  color: #201d1a;
+  font-family: var(--font-editorial);
+  font-size: clamp(28px, 2.35vw, 36px);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.035em;
+}
+
+.crumb,
+.section-kicker {
+  color: var(--orange);
+}
+
+.button {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.005em;
+  box-shadow: none;
+}
+
+.button.primary {
+  border-color: #292723;
+  background: #292723;
+}
+
+.button.secondary,
+.button.report-button {
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.button:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+.avatar,
+.header-user-avatar .avatar-button,
+.notification-button {
+  min-width: 44px;
+  width: 44px;
+  min-height: 44px;
+  height: 44px;
+  flex-basis: 44px;
+  font-size: 12px;
+}
+
+.account-control strong {
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.account-control span,
+.account-copy a {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.currency-control {
+  min-height: 48px;
+  padding: 6px 8px;
+  border-color: var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+}
+
+.currency-control > span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.currency-control button {
+  min-width: 42px;
+  min-height: 30px;
+  font-size: 12px;
+}
+
+.live-state,
+.live-sync {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.global-search {
+  max-width: 820px;
+  min-height: 52px;
+  border-color: var(--line-strong);
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: 0 2px 8px rgba(42, 36, 29, 0.035);
+}
+
+.global-search input {
+  min-height: 50px;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.global-search kbd,
+.search-results span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.search-results {
+  padding: 9px;
+  border-color: var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+}
+
+.search-results button {
+  min-height: 48px;
+}
+
+.search-results strong {
+  font-size: 14px;
+}
+
+.live-data-ribbon {
+  min-height: 50px;
+  padding: 11px 14px;
+  border-color: #b9cec0;
+  color: #2e5540;
+  background: #edf4ee;
+  font-size: 13px;
+}
+
+.live-data-ribbon strong,
+.live-data-ribbon em {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.live-data-ribbon em {
+  color: #536b5d;
+}
+
+/* 03. Contenido, tarjetas, pestañas y estados */
+.content {
+  padding-top: 26px;
+}
+
+.view-stack {
+  gap: 20px;
+}
+
+.panel,
+.stat-card,
+.metric-card,
+.supplier-card,
+.safety-card,
+.urbanism-area-card,
+.workspace-module-card,
+.control-room-metrics article,
+.timeline-event,
+.notification-item {
+  border-color: var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.panel {
+  padding: 26px;
+}
+
+.panel h2,
+.panel h3,
+.panel h4,
+.data-view-intro h2,
+.data-center-intro h2,
+.workspace-detail-header h2,
+.control-room-heading h2,
+.control-room-empty h2 {
+  color: #231f1b;
+  font-family: var(--font-editorial);
+  font-weight: 600;
+}
+
+.panel-heading h3 {
+  font-size: clamp(22px, 1.8vw, 28px);
+  line-height: 1.18;
+}
+
+.data-view-intro h2,
+.data-center-intro h2 {
+  font-size: clamp(28px, 3vw, 42px);
+  line-height: 1.08;
+}
+
+.data-view-intro p,
+.data-center-intro p,
+.project-pulse p,
+.callout p,
+.control-room-heading p,
+.control-room-empty p,
+.workspace-detail-header p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.62;
+}
+
+.stat-card,
+.metric-card,
+.supplier-card,
+.safety-card {
+  padding: 18px;
+}
+
+.stat-card > span,
+.metric-card-head span,
+.safety-card > span,
+.control-room-summary span,
+.control-room-metrics article span,
+.workspace-detail-metrics span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.055em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.stat-card strong,
+.safety-card > strong,
+.metric-card > strong,
+.control-room-summary strong,
+.control-room-metrics article strong {
+  color: #211e1a;
+  font-family: var(--font-editorial);
+  font-size: clamp(29px, 2.5vw, 38px);
+  font-weight: 600;
+  line-height: 1.08;
+}
+
+.stat-card small,
+.metric-card small,
+.safety-card > small,
+.supplier-card small,
+.control-room-summary small,
+.control-room-metrics article small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.report-tabs,
+.control-room-tabs,
+.source-tabs {
+  gap: 10px;
+}
+
+.report-tabs button,
+.control-room-tabs button,
+.source-tabs button,
+.building-tabs button {
+  min-height: 64px;
+  border-color: var(--line);
+  border-radius: 9px;
+  color: var(--ink-soft);
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.report-tabs button {
+  min-height: 82px;
+  padding: 16px 18px;
+}
+
+.report-tabs button:hover,
+.report-tabs button:focus-visible,
+.report-tabs button.active,
+.control-room-tabs button:hover,
+.control-room-tabs button:focus-visible,
+.control-room-tabs button.active,
+.source-tabs button:hover,
+.source-tabs button:focus-visible,
+.source-tabs button.active {
+  border-color: var(--line-strong);
+  color: var(--ink);
+  background: var(--surface-alt);
+  box-shadow: none;
+  transform: none;
+}
+
+.report-tabs button.active::before {
+  height: 4px;
+  background: var(--orange);
+}
+
+.report-tabs button span,
+.control-room-tabs button,
+.source-tabs button,
+.building-tabs span {
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.report-tabs button strong,
+.building-tabs strong {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.building-tabs button {
+  border-color: var(--progress-border, var(--line));
+  border-inline-start-color: var(--progress-color, var(--line));
+  background: var(--progress-soft, var(--surface));
+}
+
+.filter-row button,
+.plan-mode-switch button,
+.plan-legend button,
+.plan-quick-actions button,
+.workspace-connections button,
+.workspace-document-list button {
+  min-height: 44px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.filter-row button {
+  padding: 9px 13px;
+}
+
+.callout {
+  padding: 15px 16px;
+  border-left-width: 4px;
+}
+
+.callout strong {
+  font-size: 14px;
+}
+
+.callout p {
+  margin-top: 6px;
+}
+
+.workspace-module-card > strong,
+.workspace-document-list button strong,
+.workspace-detail-sources strong,
+.workspace-empty-source strong {
+  font-size: 14px;
+}
+
+.workspace-module-card > small,
+.workspace-document-list button span,
+.workspace-document-list button small,
+.workspace-detail-sources span,
+.workspace-detail-sources small,
+.workspace-empty-source p,
+.workspace-connections > span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.workspace-status,
+.workspace-detail-state,
+.upload-status,
+.source-status {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+/* 04. Tablas, archivos, cronología y formularios */
+.simple-table,
+.compact-table,
+.control-room-table,
+.safety-weekly-table-wrap {
+  scrollbar-color: #9e978d transparent;
+  scrollbar-width: thin;
+}
+
+.table-row,
+.compact-row,
+.financial-detail-row,
+.dynamic-section-table,
+.workspace-data-row,
+.control-room-table > button {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.table-row,
+.compact-row {
+  min-height: 50px;
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+.table-row.table-head,
+.compact-row.head,
+.control-room-table-head {
+  min-height: 42px;
+  color: #f4f2ec;
+  background: var(--navy);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+.safety-weekly-table {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.safety-weekly-table th {
+  color: #f7f4ee;
+  background: var(--navy);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.safety-weekly-table td {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.archive-pagination small,
+.archive-year > summary small,
+.archive-month > summary small,
+.integrated-source-archive > summary small,
+.upload-advanced-options > summary small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.archive-year > summary,
+.archive-month > summary,
+.integrated-source-archive > summary,
+.upload-advanced-options > summary {
+  min-height: 58px;
+}
+
+.archive-year > summary strong,
+.integrated-source-archive > summary strong {
+  font-size: 19px;
+}
+
+.archive-month > summary strong,
+.upload-advanced-options > summary strong {
+  font-size: 14px;
+}
+
+.archive-year > summary em,
+.archive-month > summary em,
+.integrated-source-archive > summary em,
+.upload-advanced-options > summary em {
+  min-width: 36px;
+  font-size: 11px;
+}
+
+.uploaded-file-list article {
+  min-height: 72px;
+}
+
+.uploaded-file-icon {
+  font-size: 11px;
+}
+
+.uploaded-file-main strong,
+.uploaded-file-owner strong {
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.uploaded-file-main span,
+.uploaded-file-main small,
+.uploaded-file-owner span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.timeline-date strong,
+.timeline-copy h4 {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.timeline-date span,
+.timeline-copy small,
+.timeline-copy p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.event-type {
+  font-size: 11px;
+}
+
+.modal,
+.data-detail-panel,
+.workspace-detail-panel,
+.device-center-panel,
+.guides-modal {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+}
+
+.modal-head h3,
+.modal .panel-heading h3 {
+  font-family: var(--font-editorial);
+  font-size: 25px;
+  font-weight: 600;
+}
+
+.modal label,
+.upload-modal label,
+.housing-controls label {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.modal input,
+.upload-modal input:not([type="file"]),
+.upload-modal select,
+.upload-modal textarea,
+.housing-controls select,
+.agent-attachment-ready select {
+  min-height: 46px;
+  border-color: var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+  font-size: 14px;
+}
+
+.upload-intro,
+.upload-dropzone span,
+.upload-receipt-metrics small,
+.upload-receipt-warnings li,
+.upload-receipt-next p,
+.upload-toast span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.upload-dropzone {
+  min-height: 150px;
+  border-color: #aaa297;
+  background: var(--surface-alt);
+}
+
+.upload-dropzone strong,
+.upload-receipt-metrics strong,
+.upload-toast strong {
+  font-size: 14px;
+}
+
+.close-button {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--ink);
+  background: var(--surface-alt);
+  font-size: 22px;
+}
+
+/* 05. Gráficos, indicadores, apartamentos y plano */
+.s-curve-heading h3 {
+  color: #201d1a;
+  font-family: var(--font-editorial);
+  font-size: clamp(28px, 3vw, 44px);
+  font-weight: 600;
+  line-height: 1.08;
+}
+
+.s-curve-heading p,
+.s-curve-reconciliation-note,
+.s-curve-insight {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.s-curve-plot {
+  border-radius: 12px;
+}
+
+.line-chart-y-axis,
+.line-chart-tick,
+.line-chart-axis,
+.line-chart-y-title,
+.line-chart-month {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.line-chart-value {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.s-curve-plot .chart-legend,
+.chart-legend,
+.s-curve-plot .chart-legend span,
+.chart-legend span {
+  font-size: 13px;
+}
+
+.s-curve-fullscreen-button,
+.file-viewer-close {
+  min-height: 46px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.plan-mode-switch button,
+.plan-legend button,
+.plan-legend-static,
+.plan-quick-actions button {
+  color: var(--ink-soft);
+  background: var(--surface);
+}
+
+.plan-data-strip span,
+.plan-quick-actions span,
+.plan-legend button small,
+.plan-disclaimer,
+.result-count,
+.inline-stats span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.plan-data-strip strong,
+.plan-quick-actions strong,
+.plan-legend button strong,
+.inline-stats strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.building-tabs button,
+.unit-card,
+.housing-card {
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.unit-card strong,
+.housing-card > strong {
+  font-size: 14px;
+}
+
+.unit-card span,
+.housing-card > span,
+.housing-card > small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.housing-card {
+  min-height: 126px;
+  padding: 14px;
+}
+
+.urbanism-area-card span,
+.urbanism-area-card small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.urbanism-area-card strong {
+  font-size: 15px;
+}
+
+/* Las etiquetas espaciales ganan contraste sin alterar coordenadas. */
+.plan-building-trigger {
+  font-size: 9.5px;
+  font-weight: 850;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+.plan-home-statuses button {
+  font-size: 8px;
+}
+
+.plan-building-picker,
+.plan-urbanism-picker {
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-float);
+}
+
+.data-detail-panel > p,
+.data-coverage strong,
+.data-coverage span {
+  font-size: 12px;
+}
+
+/* 06. Agente, centro de control, avisos y visor */
+.agent-header strong {
+  font-size: 14px;
+}
+
+.agent-header span,
+.agent-foot,
+.agent-mode-toggle small,
+.agent-attachment-ready small,
+.agent-attachment-ready > span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.agent-suggestions button,
+.agent-attachment > label,
+.agent-mode-toggle strong,
+.agent-attachment-ready strong,
+.agent-attachment-ready button {
+  min-height: 40px;
+  font-size: 12px;
+}
+
+.message,
+.agent-input textarea {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.message small {
+  font-size: 10px;
+}
+
+.agent-input textarea {
+  min-height: 44px;
+}
+
+.agent-input button {
+  width: 44px;
+  height: 44px;
+}
+
+.control-room-heading > span,
+.control-room-empty > span,
+.control-room-table-head small,
+.control-room-table > button small,
+.control-room-table > button em,
+.control-room-callout span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.control-room-live strong,
+.control-room-table > button span,
+.control-room-callout h3 {
+  font-size: 14px;
+}
+
+.control-room-live small,
+.control-room-callout p,
+.control-room-no-data {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.notification-heading > button,
+.notification-item small,
+.notification-item time,
+.notification-empty p {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.notification-item strong,
+.notification-empty strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.notification-item > b {
+  font-size: 10px;
+}
+
+.device-center-header h2,
+.notification-heading h3,
+.guides-intro h3 {
+  color: var(--ink);
+  font-family: var(--font-editorial);
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.device-center-header p,
+.device-capability-card > p,
+.device-capability-hint,
+.device-capability-heading small,
+.guides-body > small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.device-capability-heading strong,
+.guides-body > strong {
+  font-size: 14px;
+}
+
+.device-capability-heading > i,
+.device-capability-actions .button {
+  font-size: 11px;
+}
+
+.file-viewer-overlay {
+  background: #e8e4dc;
+}
+
+.file-viewer-toolbar {
+  border-color: var(--line);
+  background: rgba(255, 253, 248, 0.98);
+  box-shadow: 0 5px 18px rgba(42, 36, 29, 0.08);
+  backdrop-filter: none;
+}
+
+.file-viewer-heading span {
+  color: var(--orange);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.file-viewer-heading strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.file-viewer-frame {
+  border-color: var(--line-strong);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.file-viewer-unavailable h2 {
+  font-family: var(--font-editorial);
+  font-size: 28px;
+}
+
+.file-viewer-unavailable p,
+.file-viewer-unavailable > small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* 06b. Cobertura de legibilidad para módulos históricos */
+.project-meta,
+.progress-ring span,
+.ingestion-steps span,
+.governance-note,
+.source-meta span,
+.source-feeds,
+.governance-grid p,
+.unit-inspector p,
+.attention-item small,
+.gantt-row strong,
+.metric-card > strong small,
+.report-type-select span,
+.report-frequency span,
+.report-source-note span,
+.direction-report-toolbar span,
+.report-title-block > span,
+.report-coverage p,
+.report-actions-list span,
+.report-quality-alert p,
+.rank-list small,
+.status-matrix span,
+.balance-grid span,
+.balance-equation span,
+.collection-legend span,
+.discipline-grid span,
+.selected-report > p,
+.decision-panel > p,
+.finance-process small,
+.quality-grid p,
+.delay-chip-grid > span,
+.finance-upload-shortcut small,
+.avatar-feedback,
+.user-editor-modal label > small,
+.archived-user-directory article > small,
+.permission-toggle span,
+.building-apartment-summary span,
+.unit-section-heading span,
+.unit-section-heading small,
+.unit-accountability-grid span,
+.unit-mini-disciplines span,
+.processing-overview span,
+.history-list article > div span,
+.history-list article > small,
+.review-extraction-summary p,
+.unmapped-candidate p,
+.supplier-ledger-header p,
+.area-workspace-heading p,
+.staff-guide-card p,
+.device-gate-card p,
+.biometric-unlock-button small,
+.device-gate-error,
+.device-capability-error,
+.device-capability-note,
+.device-gate-recovery,
+.device-gate-card > a,
+.payable-document-block p,
+.workspace-document-list > p,
+.workspace-detail-section li,
+.workspace-pending-fields span,
+.review-audit article small,
+.review-audit > p,
+.review-facts small,
+.review-extraction-summary small,
+.review-source-actions span,
+.unmapped-candidate > div > small,
+.unmapped-candidate > span small,
+.unmapped-candidate-evidence,
+.supplier-ledger-summary small,
+.payable-invoice-summary small,
+.payable-supplier-name small,
+.supplier-invoice-list small,
+.payable-allocation-list small,
+.supplier-ledger-source,
+.upload-template-links p,
+.quality-list,
+.urbanism-detail > p,
+.app-recovery p,
+.access-message,
+.role-focus-card p,
+.device-gate-card > span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.52;
+}
+
+.ingestion-steps b,
+.source-meta strong,
+.picker-summary strong,
+.building-summary strong,
+.urbanism-values strong,
+.supplier-head strong,
+.metric-card h4,
+.metric-add-card strong,
+.report-meta span,
+.report-coverage strong,
+.report-actions-list b,
+.rank-list strong,
+.rank-list b,
+.pipeline span,
+.discipline-grid strong,
+.finance-process strong,
+.finance-process b,
+.projection-month > strong,
+.quality-grid strong,
+.expandable-library summary > b,
+.action-grid span,
+.finance-upload-shortcut b,
+.upload-template-links > summary,
+.access-card > span,
+.permission-check strong,
+.policy-list small,
+.user-identity small,
+.last-access,
+.delete-user-summary span,
+.delete-user-summary p,
+.archived-user-directory summary,
+.permission-toggle strong,
+.unit-discipline-list > div,
+.unit-discipline-list strong,
+.unit-accountability-grid strong,
+.unit-issues > p,
+.unit-live-note,
+.unit-issue,
+.history-list article > div strong,
+.file-preview-state span,
+.file-preview-state small,
+.file-review-header p,
+.review-facts strong,
+.review-proposals article strong,
+.review-proposals article b,
+.unmapped-candidate strong,
+.unmapped-candidate > span,
+.payable-supplier-name strong,
+.payable-supplier-row > b,
+.supplier-invoice-list b,
+.supplier-ledger-summary strong,
+.payable-invoice-summary strong,
+.supplier-invoice-list button > span:first-child strong,
+.payable-document-block strong,
+.workspace-detail-metrics strong {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.42;
+}
+
+.demo-badge,
+.authority-badge,
+.governance-status,
+.severity,
+.data-status,
+.pending-fields > span,
+.supplier-score,
+.upload-status-only,
+.uploaded-file-state small,
+.uploaded-file-state em,
+.review-proposals article > em,
+.workspace-module-card > em,
+.history-revision,
+.notification-button > b,
+.payable-aging,
+.payable-open-label,
+.safety-card.workspace-data-row em,
+.supplier-card.workspace-data-row > em,
+.timeline-event.workspace-data-row .timeline-copy em,
+.stat-card.interactive em,
+.action-grid > button.workspace-data-row em {
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.text-button,
+.architectural-note button,
+.metric-add-card small,
+.user-record-actions .button,
+.history-tabs button,
+.review-filter-tabs button,
+.draft-update-list button,
+.workspace-detail-sources a,
+.workspace-detail-sources button,
+.payable-invoice-detail .text-action,
+.control-findings button > i,
+.control-action-list > button > i,
+.control-report-list button > i {
+  min-height: 40px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.review-preparation input,
+.review-preparation select,
+.review-preparation textarea,
+.user-editor-modal select,
+.ai-budget-form input,
+.ai-budget-form select {
+  min-height: 44px;
+  font-size: 14px;
+}
+
+.review-preparation .form-grid label,
+.proposal-builder label,
+.review-note-field,
+.payable-supplier-toolbar label > span,
+.ai-budget-form label {
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.report-meta b,
+.report-delay-grid span,
+.financial-detail-row.head,
+.finance-process i,
+.projection-month > small,
+.expandable-library summary small,
+.unit-mini-disciplines.compact span,
+.draft-update-list strong,
+.draft-update-list small,
+.review-audit article > span,
+.review-audit article strong,
+.review-audit article b,
+.payable-supplier-toolbar > div span,
+.control-action-detail > span,
+.control-action-detail dt {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.report-brand-row span,
+.report-section-heading span,
+.report-section-heading small,
+.report-kpi-grid span,
+.report-safety-grid span,
+.report-kpi-grid small,
+.report-safety-grid small,
+.report-footnote,
+.report-progress-list span,
+.report-progress-list strong,
+.report-compact-list li,
+.report-urban-grid span,
+.report-quality-alert strong,
+.direction-report-footer,
+.app-recovery > span {
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.supplier-details span,
+.supplier-details strong,
+.metric-target span,
+.urbanism-values span,
+.building-summary span,
+.picker-summary span,
+.unit-inspector-grid span,
+.architectural-note span,
+.architectural-note small,
+.pending-fields i {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Elementos muy densos del plano: límite propio para no mover hotspots. */
+.plan-building-head span,
+.plan-building-head small,
+.picker-units .plan-unit span,
+.picker-units .plan-unit small,
+.plan-unit,
+.urbanism-band,
+.urbanism-core div {
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+.gantt-head,
+.chart-column small,
+.unit-card em {
+  font-size: 11px;
+}
+
+.mobile-menu-links em,
+.mobile-quick-actions small,
+.mobile-group-heading span,
+.mobile-project-switch > span,
+.mobile-project-switch small,
+.mobile-menu-links i,
+.mobile-account span,
+.plan-touch-toolbar .expand-plan-button,
+.expanded-plan-copy span,
+.expanded-plan-controls > span,
+.upload-source-actions small,
+.live-data-ribbon > span:not(.live-dot),
+.pdf-viewer-controls span,
+.file-viewer-actions > .button,
+.review-filter-tabs button,
+.review-status-banner span,
+.review-status-banner strong,
+.mobile-menu-brand span,
+.mobile-quick-actions i,
+.mobile-quick-actions strong,
+.mobile-group-heading > i,
+.mobile-account a,
+.mobile-project-switch strong,
+.mobile-menu-links span,
+.mobile-account strong {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.mobile-menu-links button,
+.mobile-project-switch button,
+.mobile-quick-actions button,
+.pdf-viewer-controls button,
+.file-viewer-actions > .button,
+.review-filter-tabs button {
+  min-height: 44px;
+}
+
+.review-status-banner span,
+.review-status-banner strong,
+.review-preparation .form-grid label,
+.proposal-builder label,
+.review-note-field,
+.payable-document-block p {
+  line-height: 1.5;
+}
+
+.review-proposals article small,
+.workspace-detail-metrics small,
+.urbanism-area-card > span,
+.urbanism-area-card > small,
+.supplier-head span,
+.delay-preview span,
+.action-grid p,
+.permission-check small,
+.review-unmapped-candidates .section-intro {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.s-curve-reconciliation-note strong,
+.report-source-note strong,
+.report-tabs span,
+.policy-list b,
+.payable-allocation-list strong,
+.payable-allocation-list b,
+.urbanism-area-card.pendiente > b,
+.supplier-logo {
+  font-size: 13px;
+}
+
+.agent-attachment-options label,
+.delay-chip-grid > button.workspace-data-row {
+  min-height: 44px;
+  font-size: 12px;
+}
+
+.access-create-card label,
+.access-user-list label {
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+/* 07. Tablet y móvil */
+@media (max-width: 1100px) {
+  html,
+  body {
+    font-size: 16px;
+  }
+
+  .topbar {
+    min-height: 84px;
+    padding: 14px 22px;
+    backdrop-filter: none;
+  }
+
+  .topbar h1 {
+    font-size: clamp(27px, 4vw, 35px);
+  }
+
+  .mobile-bottom-nav {
+    min-height: 72px;
+    border-radius: 15px;
+    background: #22241f;
+    box-shadow: 0 12px 32px rgba(28, 29, 26, 0.24);
+    backdrop-filter: none;
+  }
+
+  .mobile-bottom-nav button {
+    min-height: 58px;
+  }
+
+  .mobile-bottom-nav i {
+    font-size: 10px;
+  }
+
+  .mobile-bottom-nav span {
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .mobile-menu-sheet {
+    color: var(--ink);
+    background: var(--paper);
+    box-shadow: var(--shadow-float);
+  }
+
+  .mobile-group-heading,
+  .mobile-menu-links button,
+  .mobile-project-switch button,
+  .mobile-quick-actions button,
+  .mobile-quick-actions > .mobile-camera-action,
+  .mobile-account {
+    font-size: 14px;
+  }
+
+  .mobile-menu-links button,
+  .mobile-project-switch button,
+  .mobile-quick-actions button,
+  .mobile-quick-actions > .mobile-camera-action {
+    min-height: 52px;
+  }
+
+  .panel {
+    padding: 22px;
+  }
+
+  .report-tabs button,
+  .control-room-tabs button,
+  .source-tabs button {
+    min-height: 72px;
+  }
+
+  .housing-card,
+  .unit-card {
+    min-height: 132px;
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    padding: 13px 16px;
+  }
+
+  .topbar h1 {
+    font-size: clamp(25px, 7.5vw, 34px);
+  }
+
+  .crumb,
+  .section-kicker {
+    font-size: 11px;
+  }
+
+  .global-search,
+  .live-data-ribbon {
+    margin-right: 16px;
+    margin-left: 16px;
+  }
+
+  .global-search {
+    min-height: 56px;
+  }
+
+  .global-search input {
+    min-height: 54px;
+    font-size: 16px;
+  }
+
+  .live-data-ribbon {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 7px 10px;
+  }
+
+  .live-data-ribbon em {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .content {
+    padding: 18px 16px 32px;
+  }
+
+  .panel {
+    padding: 19px;
+  }
+
+  .panel-heading {
+    gap: 12px;
+  }
+
+  .panel-heading h3 {
+    font-size: 24px;
+  }
+
+  .data-view-intro h2,
+  .data-center-intro h2 {
+    font-size: 32px;
+  }
+
+  .report-tabs,
+  .control-room-tabs,
+  .source-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .report-tabs button {
+    min-height: 70px;
+  }
+
+  .button,
+  .filter-row button,
+  .plan-mode-switch button,
+  .plan-legend button,
+  .plan-quick-actions button,
+  .close-button {
+    min-height: 48px;
+  }
+
+  .modal,
+  .workspace-detail-panel,
+  .guides-modal {
+    border-radius: 12px;
+  }
+
+  .file-viewer-toolbar {
+    min-height: 72px;
+    gap: 10px;
+    padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+  }
+
+  .file-viewer-close {
+    min-width: 48px;
+    min-height: 48px;
+    padding-right: 10px;
+  }
+
+  .file-viewer-body {
+    padding: 8px;
+  }
+
+  .table-row,
+  .compact-row,
+  .safety-weekly-table td,
+  .safety-weekly-table th {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 420px) {
+  .topbar h1 {
+    font-size: 27px;
+  }
+
+  .currency-control {
+    padding: 4px 5px;
+  }
+
+  .currency-control button {
+    min-width: 38px;
+  }
+
+  .panel {
+    padding: 16px;
+  }
+
+  .mobile-bottom-nav {
+    right: 8px;
+    left: 8px;
+  }
+
+  .mobile-bottom-nav span {
+    font-size: 11px;
+  }
+
+  .stat-card strong,
+  .safety-card > strong,
+  .metric-card > strong {
+    font-size: 30px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

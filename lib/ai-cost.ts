@@ -12,8 +12,8 @@ type ModelPrice = {
   output: number;
 };
 
-// USD por millÃ³n de tokens. Centralizar la tarifa evita estimaciones distintas
-// entre el agente de documentos, el chat y el panel de administraciÃ³n.
+// USD por millón de tokens. Centralizar la tarifa evita estimaciones distintas
+// entre el agente de documentos, el chat y el panel de administración.
 const MODEL_PRICES: Record<"luna" | "terra", ModelPrice> = {
   luna: { input: 0.2, cachedInput: 0.02, cacheWriteInput: 0.25, output: 1.2 },
   terra: { input: 2, cachedInput: 0.2, cacheWriteInput: 2.5, output: 12 },
@@ -78,7 +78,7 @@ export function estimateOpenAiCostUsdMicros(model: string, usage: AiTokenUsage) 
     usage.cacheWriteInputTokens,
   );
   const regular = Math.max(0, usage.inputTokens - cached - cacheWrite);
-  // USD/MTok * tokens equivale a microdÃ³lares.
+  // USD/MTok * tokens equivale a microdólares.
   return Math.round(
     regular * price.input
       + cached * price.cachedInput

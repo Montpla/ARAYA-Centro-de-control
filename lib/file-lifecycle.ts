@@ -61,7 +61,7 @@ function statement(database: AtomicD1Database, sql: string, ...values: D1Bindabl
 
 function assertBoundedAtomicJson(payload: string) {
   if (new TextEncoder().encode(payload).byteLength > MAX_ATOMIC_JSON_BYTES) {
-    throw new Error("La recomputaciÃ³n supera el tamaÃ±o transaccional seguro.");
+    throw new Error("La recomputación supera el tamaño transaccional seguro.");
   }
 }
 

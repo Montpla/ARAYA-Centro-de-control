@@ -103,7 +103,7 @@ function statement(
 
 function assertBoundedAtomicJson(label: string, payload: string) {
   if (new TextEncoder().encode(payload).byteLength > MAX_ATOMIC_JSON_BYTES) {
-    throw new Error(`${label} supera el tamaÃ±o transaccional seguro.`);
+    throw new Error(`${label} supera el tamaño transaccional seguro.`);
   }
 }
 
@@ -215,9 +215,9 @@ async function recoverInterruptedPointPublications(keys: string[]) {
     const staleEventPayload = JSON.stringify([...plan.staleEventIds]);
     const recoveryGuardEventId = [...plan.staleEventIds][0];
     if (!recoveryGuardEventId) {
-      throw new Error("La recuperaciÃ³n no tiene una revisiÃ³n de guarda vÃ¡lida.");
+      throw new Error("La recuperación no tiene una revisión de guarda válida.");
     }
-    assertBoundedAtomicJson("La recuperaciÃ³n de revisiones", repairPayload);
+    assertBoundedAtomicJson("La recuperación de revisiones", repairPayload);
     const repairs: AtomicD1Statement[] = [
       statement(
         database,
@@ -407,7 +407,7 @@ export async function publishLiveDataUpdates(input: {
       expectedUpdatedAt: file?.updatedAt ?? "",
     };
   }));
-  assertBoundedAtomicJson("La publicaciÃ³n", updatePayloadJson);
+  assertBoundedAtomicJson("La publicación", updatePayloadJson);
   assertBoundedAtomicJson("El conjunto de archivos", filePayloadJson);
   const updatedAt = new Date().toISOString();
   const [createdEvent] = await db
@@ -755,7 +755,7 @@ export async function publishLiveDataUpdates(input: {
       throw new Error("La publicación no coincide con el contrato transaccional esperado.");
     }
     if (atomicStatements.length > MAX_ATOMIC_PUBLICATION_STATEMENTS) {
-      throw new Error("La publicaciÃ³n supera el presupuesto transaccional seguro.");
+      throw new Error("La publicación supera el presupuesto transaccional seguro.");
     }
     await database.batch(atomicStatements);
     event = { ...event, status: "published" };

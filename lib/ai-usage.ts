@@ -108,7 +108,7 @@ export async function getAiUsageSnapshot(now = new Date()): Promise<AiUsageSnaps
     }
   } catch {
     // Mantiene operativos los despliegues escalonados mientras D1 aplica la
-    // migraciÃ³n. Sin una lectura fiable nunca bloqueamos el procesamiento.
+    // migración. Sin una lectura fiable nunca bloqueamos el procesamiento.
   }
   return snapshot;
 }
@@ -172,6 +172,6 @@ export async function recordAssistantAiRun(input: {
       completedAt: now,
     });
   } catch {
-    // La telemetrÃ­a nunca debe impedir una respuesta al usuario.
+    // La telemetría nunca debe impedir una respuesta al usuario.
   }
 }

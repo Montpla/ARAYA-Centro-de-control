@@ -89,9 +89,37 @@ cinco columnas. Se corrigió la codificación de `Evolución` y de la flecha de
 fechas, se elevó el texto de datos a 13 px y se dejó desplazamiento horizontal
 para móvil. Una prueba automática protege esta estructura y la codificación.
 
+## Ejecución completa
+
+Los cinco bloques quedaron aplicados el 22/08/2026 mediante
+`app/corporate-theme.css`, cargado después de `app/globals.css`. Esta separación
+conserva toda la lógica histórica y concentra en un único archivo la identidad,
+la escala tipográfica, el contraste y la adaptación responsive.
+
+- Se implantaron tokens marfil, grafito, naranja Bricket y estados semánticos.
+- Navegación, cabecera, buscador, selector de moneda y cuenta comparten jerarquía.
+- Tarjetas, pestañas, tablas, formularios, modales, cargas y visor se normalizaron.
+- Curva S, leyendas, indicadores, apartamentos y controles del plano ganaron
+  lectura sin alterar datos, colores de avance ni coordenadas de edificios.
+- Tablet y móvil usan base de 16 px, controles táctiles de 44–58 px y visor
+  adaptado a pantalla completa.
+- La auditoría automática pasó de 235 selectores históricos pequeños pendientes
+  tras la primera capa a **0 reglas de 10 px o menos sin cobertura**.
+- Se eliminaron secuencias de codificación rota de `app/` y `lib/`, incluidos
+  mensajes de validación y las instrucciones internas del agente documental.
+
+Las pruebas `corporate-theme.test.mjs` verifican orden de carga, contraste AA,
+escala, tactilidad, responsive, tipografías y cobertura de reglas antiguas.
+`text-encoding.test.mjs` impide reintroducir mojibake en la interfaz o sus
+mensajes. El modo TV y los rótulos espaciales tienen excepciones controladas por
+su contexto, no quedan sometidos a una ampliación indiscriminada. Verificación
+final local: TypeScript y build Vinext correctos, ESLint con 0 errores (20 avisos
+históricos) y suite completa **360/360**.
+
 ## Criterio de cierre
 
-El trabajo estará terminado cuando ninguna función habitual requiera ampliar la
-pantalla, todos los textos de negocio cumplan la escala mínima, la interfaz pase
-contraste AA y las mismas jerarquías visuales se mantengan en ordenador, tablet
-y móvil sin cambiar el modelo de navegación existente.
+El criterio queda satisfecho por código y pruebas: los textos de negocio tienen
+cobertura corporativa, los tokens principales pasan contraste AA, las mismas
+jerarquías se mantienen en ordenador, tablet y móvil y el modelo de navegación
+existente no cambia. La revisión visual automatizada queda condicionada a que el
+navegador integrado esté disponible en la sesión de trabajo.
