@@ -298,16 +298,39 @@ export function liveDataAuthorityMatrix<T extends { id: string; decision: string
 // accumulatedResult ni trialBalance (esos sólo cambian si un futuro estado
 // de resultados o balance de comprobación los publica directamente).
 export function liveFiduciaryStatementSummary<
-  S extends { balance: { assetsDop: number; liabilitiesDop: number; netEquityDop: number } },
-  T extends { id: string; totalDop: number },
+  S extends {
+    balance: {
+      assetsDop: number;
+      liabilitiesDop: number;
+      contributedEquityDop: number;
+      accumulatedEquityResultDop: number;
+      grossEquityDop: number;
+      periodResultDop: number;
+      netEquityDop: number;
+    };
+  },
+  T extends { id: string; totalDop: number; lines?: readonly { name: string; amountDop: number }[] },
 >(summary: S, sections: readonly T[]): S {
   const totalFor = (id: string) => sections.find((section) => section.id === id)?.totalDop;
+  const equityLines = sections.find((section) => section.id === "equity")?.lines ?? [];
+  const normalized = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const equityAmount = (...tokens: string[]) => equityLines.find((line) => {
+    const name = normalized(line.name);
+    return tokens.some((token) => name.includes(token));
+  })?.amountDop;
+  const contributedEquityDop = equityAmount("aporte", "contributed capital") ?? summary.balance.contributedEquityDop;
+  const accumulatedEquityResultDop = equityAmount("acumulad", "current year earnings") ?? summary.balance.accumulatedEquityResultDop;
+  const periodResultDop = equityAmount("resultado del ejercicio", "resultado del periodo", "current period earnings") ?? summary.balance.periodResultDop;
   return {
     ...summary,
     balance: {
       ...summary.balance,
       assetsDop: totalFor("assets") ?? summary.balance.assetsDop,
       liabilitiesDop: totalFor("liabilities") ?? summary.balance.liabilitiesDop,
+      contributedEquityDop,
+      accumulatedEquityResultDop,
+      grossEquityDop: Math.round((contributedEquityDop + accumulatedEquityResultDop) * 100) / 100,
+      periodResultDop,
       netEquityDop: totalFor("equity") ?? summary.balance.netEquityDop,
     },
   };

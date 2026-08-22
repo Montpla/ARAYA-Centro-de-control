@@ -3,6 +3,26 @@
 Actualizado: 22/08/2026
 Zona horaria del usuario: Europe/Madrid
 
+## Conciliación fiduciaria aislada por archivo y corte (22/08/2026)
+
+- La discrepancia de patrimonio de julio era falsa: la auditoría combinaba el
+  patrimonio bruto de junio con un resultado parcial de julio. Los controles
+  financieros se ejecutan ahora por `sourceFileId + cutoff`, sin completar una
+  fotografía contable con valores de otro documento o periodo.
+- El modelo fiduciario distingue `contributedEquityDop`,
+  `accumulatedEquityResultDop` y `periodResultDop`. La lectura PDF y el agente de
+  ingesta conservan los tres componentes y solo materializan las secciones si
+  cuadran Activo = Pasivo + Patrimonio y la composición completa del patrimonio.
+- Para `BCE 07-26.pdf`, corte 31/07/2026, los valores fuente son: activos DOP
+  796.960.916,83; pasivos DOP 483.862.152,04; aporte DOP 322.917.733,81;
+  resultados acumulados DOP -6.364.163,55; resultado del periodo DOP
+  -3.454.805,47; patrimonio neto DOP 313.098.764,79.
+- La interfaz financiera y ARAYA Asistente presentan el corte vivo y la
+  composición completa. Versión de ingesta `2026-08-22.2`, prompt
+  `araya-ingestion-agent-2026-08-22-v2`.
+- Verificación local: TypeScript y build en verde, ESLint sin errores (20 avisos
+  históricos) y suite completa **393/393**.
+
 ## Automatización operativa completa (22/08/2026)
 
 - El Centro de datos incorpora un panel de automatización con auditoría global,

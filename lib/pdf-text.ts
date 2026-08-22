@@ -267,6 +267,165 @@ export async function readPdfText(bytes: ArrayBuffer, maxChars = 200_000): Promi
 
 export type PdfProgressRow = { code: string; value: number };
 
+export type FiduciaryBalanceLine = { name: string; amountDop: number };
+
+export type FiduciaryBalanceSection = {
+  id: "assets" | "liabilities" | "equity";
+  label: string;
+  totalDop: number;
+  lines: FiduciaryBalanceLine[];
+};
+
+export type FiduciaryBalanceSheet = {
+  cutoff: string;
+  assetsDop: number;
+  liabilitiesDop: number;
+  contributedEquityDop: number;
+  accumulatedEquityResultDop: number;
+  grossEquityDop: number;
+  periodResultDop: number;
+  netEquityDop: number;
+  liquidityDop: number | null;
+  payablesDop: number | null;
+  sections: FiduciaryBalanceSection[];
+};
+
+const ACCOUNTING_AMOUNT = String.raw`(\(?\s*[-+]?\d[\d\s.,]*\d\s*\)?)`;
+
+function accountingNumber(value: string): number | null {
+  const trimmed = value.trim();
+  const negative = /^\(/.test(trimmed) || /^-/.test(trimmed);
+  let normalized = trimmed.replace(/[()\s+]/g, "").replace(/^-/, "");
+  const comma = normalized.lastIndexOf(",");
+  const dot = normalized.lastIndexOf(".");
+  if (comma >= 0 && dot >= 0) {
+    normalized = comma > dot
+      ? normalized.replace(/\./g, "").replace(/,/g, ".")
+      : normalized.replace(/,/g, "");
+  } else if (comma >= 0) {
+    const decimals = normalized.length - comma - 1;
+    normalized = decimals === 2
+      ? `${normalized.slice(0, comma).replace(/,/g, "")}.${normalized.slice(comma + 1)}`
+      : normalized.replace(/,/g, "");
+  } else if (dot >= 0 && normalized.indexOf(".") !== dot) {
+    const decimals = normalized.length - dot - 1;
+    normalized = decimals === 2
+      ? `${normalized.slice(0, dot).replace(/\./g, "")}.${normalized.slice(dot + 1)}`
+      : normalized.replace(/\./g, "");
+  }
+  const number = Number(normalized);
+  if (!Number.isFinite(number)) return null;
+  return Math.round((negative ? -number : number) * 100) / 100;
+}
+
+function amountAfter(text: string, labels: string[]): number | null {
+  for (const label of labels) {
+    const match = new RegExp(`${label}\\s*[:\\-]?\\s*${ACCOUNTING_AMOUNT}`, "iu").exec(text);
+    if (!match) continue;
+    const value = accountingNumber(match[1]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function balanceSheetCutoff(text: string): string {
+  const match = /(?:As\s+at|Al|Corte\s+(?:al\s+)?)\s*(\d{1,2})\s+(?:de\s+)?([A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+)\s+(?:de\s+)?(\d{4})/iu.exec(text);
+  if (!match) return "";
+  const monthName = match[2].normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const months: Record<string, number> = {
+    january: 1, enero: 1, february: 2, febrero: 2, march: 3, marzo: 3,
+    april: 4, abril: 4, may: 5, mayo: 5, june: 6, junio: 6,
+    july: 7, julio: 7, august: 8, agosto: 8, september: 9, septiembre: 9,
+    october: 10, octubre: 10, november: 11, noviembre: 11,
+    december: 12, diciembre: 12,
+  };
+  const month = months[monthName];
+  if (!month) return "";
+  return `${match[3]}-${String(month).padStart(2, "0")}-${String(Number(match[1])).padStart(2, "0")}`;
+}
+
+/**
+ * Reads explicit totals from a fiduciary balance sheet without guessing
+ * account semantics. It only returns a publication when the balance equation
+ * and every equity component reconcile to the cent.
+ */
+export function findFiduciaryBalanceSheet(text: string): FiduciaryBalanceSheet | null {
+  if (!/Balance\s+Sheet|Balance\s+General|Estado\s+de\s+Situaci[oó]n/iu.test(text)) return null;
+  const assetsDop = amountAfter(text, ["Total\\s+Assets\\b", "Total\\s+Activos\\b"]);
+  const liabilitiesDop = amountAfter(text, ["Total\\s+Liabilities\\b", "Total\\s+Pasivos\\b"]);
+  const netEquityDop = amountAfter(text, ["Total\\s+Equity\\b", "Total\\s+Patrimonio(?:\\s+Neto)?\\b", "Net\\s+Assets\\b"]);
+  const contributedEquityDop = amountAfter(text, [
+    "Aporte\\s+Fideicomitente[^\\d\\r\\n]{0,80}",
+    "Aportes?\\s+en\\s+dinero(?:\\s+y\\s+especie)?[^\\d\\r\\n]{0,50}",
+    "Contributed\\s+Capital[^\\d\\r\\n]{0,50}",
+  ]);
+  const accumulatedEquityResultDop = amountAfter(text, [
+    "Current\\s+Year\\s+Earnings\\b",
+    "Resultados?\\s+Acumulados?\\b",
+  ]);
+  const periodResultDop = amountAfter(text, [
+    "Resultado\\s+del\\s+(?:Ejercicio|Per[ií]odo)\\b",
+    "Current\\s+Period\\s+Earnings\\b",
+  ]);
+  if (
+    assetsDop === null || liabilitiesDop === null || netEquityDop === null ||
+    contributedEquityDop === null || accumulatedEquityResultDop === null || periodResultDop === null
+  ) return null;
+
+  const grossEquityDop = Math.round((contributedEquityDop + accumulatedEquityResultDop) * 100) / 100;
+  const balanceDifference = Math.round((assetsDop - liabilitiesDop - netEquityDop) * 100) / 100;
+  const equityDifference = Math.round((grossEquityDop + periodResultDop - netEquityDop) * 100) / 100;
+  if (Math.abs(balanceDifference) > 0.05 || Math.abs(equityDifference) > 0.05) return null;
+
+  const liquidityDop = amountAfter(text, ["Total\\s+Bank\\b", "Total\\s+Disponibilidades\\b"]);
+  const currentAssetsDop = amountAfter(text, ["Total\\s+Current\\s+Assets\\b", "Total\\s+Activos\\s+Corrientes\\b"]);
+  const nonCurrentAssetsDop = amountAfter(text, ["Total\\s+Non[-\\s]?current\\s+Assets\\b", "Total\\s+Activos\\s+No\\s+Corrientes\\b"]);
+  const currentLiabilitiesDop = amountAfter(text, ["Total\\s+Current\\s+Liabilities\\b", "Total\\s+Pasivos\\s+Corrientes\\b"]);
+  const payablesDop = amountAfter(text, ["Cuentas\\s+por\\s+Pagar\\s+Comerciales\\b"]);
+  const assetLines = [
+    liquidityDop === null ? null : { name: "Disponibilidades bancarias", amountDop: liquidityDop },
+    currentAssetsDop === null ? null : { name: "Otros activos corrientes", amountDop: currentAssetsDop },
+    nonCurrentAssetsDop === null ? null : { name: "Activos no corrientes", amountDop: nonCurrentAssetsDop },
+  ].filter((line): line is FiduciaryBalanceLine => line !== null);
+
+  return {
+    cutoff: balanceSheetCutoff(text),
+    assetsDop,
+    liabilitiesDop,
+    contributedEquityDop,
+    accumulatedEquityResultDop,
+    grossEquityDop,
+    periodResultDop,
+    netEquityDop,
+    liquidityDop,
+    payablesDop,
+    sections: [
+      {
+        id: "assets",
+        label: "Activos",
+        totalDop: assetsDop,
+        lines: assetLines.length ? assetLines : [{ name: "Total activos", amountDop: assetsDop }],
+      },
+      {
+        id: "liabilities",
+        label: "Pasivos",
+        totalDop: liabilitiesDop,
+        lines: [{ name: "Pasivos corrientes", amountDop: currentLiabilitiesDop ?? liabilitiesDop }],
+      },
+      {
+        id: "equity",
+        label: "Patrimonio neto",
+        totalDop: netEquityDop,
+        lines: [
+          { name: "Aporte fideicomitente", amountDop: contributedEquityDop },
+          { name: "Resultados acumulados", amountDop: accumulatedEquityResultDop },
+          { name: "Resultado del ejercicio", amountDop: periodResultDop },
+        ],
+      },
+    ],
+  };
+}
+
 /** Caracteres máximos entre el nombre del edificio y su porcentaje. */
 const LIMITE_HUECO = 40;
 

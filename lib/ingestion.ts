@@ -2,7 +2,7 @@ import { LiveDataUpdate, LiveDataValue, isLiveDataKey } from "./live-data";
 import { buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml } from "./project-xml";
 import { readXlsxSheets, readZipEntries, rowsToRecords } from "./xlsx-reader";
 import { readOfficeTables, readPptxSlideShapes } from "./ooxml-tables";
-import { findBuildingProgress, readPdfText } from "./pdf-text";
+import { findBuildingProgress, findFiduciaryBalanceSheet, readPdfText } from "./pdf-text";
 import {
   PHASE_WEIGHTS,
   buildingProgressFromPhases,
@@ -1322,13 +1322,35 @@ export async function extractStructuredUpdates(
     }
 
     const compromisos = extractIfcCommitments(lectura.text, defaults);
+    const balanceFiduciario = findFiduciaryBalanceSheet(lectura.text);
+    const corteFiduciario = balanceFiduciario?.cutoff || defaults.cutoff;
+    const datosFiduciarios: LiveDataUpdate[] = balanceFiduciario ? [
+      { key: "fiduciaryStatementSummary.cutoff", value: corteFiduciario, area: "finanzas", cutoff: corteFiduciario, sourceCurrency: "DOP", sourceName: defaults.sourceName },
+      { key: "fiduciaryStatementSummary.balance.assetsDop", value: balanceFiduciario.assetsDop, area: "finanzas", cutoff: corteFiduciario, sourceCurrency: "DOP", sourceName: defaults.sourceName },
+      { key: "fiduciaryStatementSummary.balance.liabilitiesDop", value: balanceFiduciario.liabilitiesDop, area: "finanzas", cutoff: corteFiduciario, sourceCurrency: "DOP", sourceName: defaults.sourceName },
+      { key: "fiduciaryStatementSummary.balance.contributedEquityDop", value: balanceFiduciario.contributedEquityDop, area: "finanzas", cutoff: corteFiduciario, sourceCurrency: "DOP", sourceName: defaults.sourceName },
+      { key: "fiduciaryStatementSummary.balance.accumulatedEquityResultDop", value: balanceFiduciario.accumulatedEquityResultDop, area: "finanzas", cutoff: corteFiduciario, sourceCurrency: "DOP", sourceName: defaults.sourceName },
+      { key: "fiduciaryStatementSummary.balance.grossEquityDop", value: balanceFiduciario.grossEquityDop, area: "finanzas", cutoff: corteFiduciario, sourceCurrency: "DOP", sourceName: defaults.sourceName },
+      { key: "fiduciaryStatementSummary.balance.periodResultDop", value: balanceFiduciario.periodResultDop, area: "finanzas", cutoff: corteFiduciario, sourceCurrency: "DOP", sourceName: defaults.sourceName },
+      { key: "fiduciaryStatementSummary.balance.netEquityDop", value: balanceFiduciario.netEquityDop, area: "finanzas", cutoff: corteFiduciario, sourceCurrency: "DOP", sourceName: defaults.sourceName },
+      ...(balanceFiduciario.liquidityDop === null ? [] : [
+        { key: "fiduciaryStatementSummary.balance.liquidityDop", value: balanceFiduciario.liquidityDop, area: "finanzas", cutoff: corteFiduciario, sourceCurrency: "DOP" as const, sourceName: defaults.sourceName },
+      ]),
+      ...(balanceFiduciario.payablesDop === null ? [] : [
+        { key: "fiduciaryStatementSummary.balance.payablesDop", value: balanceFiduciario.payablesDop, area: "finanzas", cutoff: corteFiduciario, sourceCurrency: "DOP" as const, sourceName: defaults.sourceName },
+      ]),
+      { key: "fiduciaryBalanceSections", value: balanceFiduciario.sections, area: "finanzas", cutoff: corteFiduciario, sourceCurrency: "DOP", sourceName: defaults.sourceName },
+    ] : [];
     const filas = findBuildingProgress(lectura.text, defaults.knownBuildingTokens);
     if (!filas.length) {
-      if (compromisos.length) {
-        const grupos = compromisos[0].value;
+      if (compromisos.length || datosFiduciarios.length) {
+        const grupos = compromisos[0]?.value;
         return {
-          updates: compromisos,
-          summary: `Matriz de obligaciones IFC actualizada (${Array.isArray(grupos) ? grupos.length : 0} bloques).`,
+          updates: [...datosFiduciarios, ...compromisos],
+          summary: [
+            datosFiduciarios.length ? `Balance fiduciario al ${corteFiduciario} leído y cuadrado con ${datosFiduciarios.length} datos vivos.` : "",
+            compromisos.length ? `Matriz de obligaciones IFC actualizada (${Array.isArray(grupos) ? grupos.length : 0} bloques).` : "",
+          ].filter(Boolean).join(" "),
           warnings: [],
         };
       }
@@ -1343,6 +1365,7 @@ export async function extractStructuredUpdates(
 
     return {
       updates: [
+        ...datosFiduciarios,
         ...filas.map((fila) => ({
           key: `buildings.${fila.code}.progress`,
           value: fila.value,
@@ -1353,7 +1376,8 @@ export async function extractStructuredUpdates(
         })),
         ...compromisos,
       ],
-      summary: `${filas.length} edificios actualizados desde el texto del PDF.`,
+      summary: `${filas.length} edificios actualizados desde el texto del PDF.` +
+        (datosFiduciarios.length ? ` Balance fiduciario al ${corteFiduciario} leído y cuadrado.` : ""),
       warnings: [],
     };
   }

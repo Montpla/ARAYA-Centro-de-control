@@ -6,4 +6,4 @@
  * El reproceso programado compara esta marca con la que conserva cada
  * expediente y vuelve a leer sólo los que quedaron atrás.
  */
-export const CURRENT_INGESTION_VERSION = "2026-08-22.1";
+export const CURRENT_INGESTION_VERSION = "2026-08-22.2";

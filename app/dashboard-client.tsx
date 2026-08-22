@@ -4982,6 +4982,9 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
   const financePeriodLabel = latestFinanceCutoffMatch
     ? `${uploadArchiveMonthNames[Number(latestFinanceCutoffMatch[2]) - 1]?.toUpperCase() ?? juneReport.published} ${latestFinanceCutoffMatch[1]}`
     : juneReport.published.toUpperCase();
+  const fiduciaryCutoffLabel = /^\d{4}-\d{2}-\d{2}$/.test(fiduciaryStatementSummary.cutoff)
+    ? formatReportDate(fiduciaryStatementSummary.cutoff)
+    : fiduciaryStatementSummary.cutoff;
   return (
     <div className="view-stack">
       <section className="data-view-intro">
@@ -5292,7 +5295,7 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
           <article className="panel">
             <div className="panel-heading">
               <div>
-                <span className="section-kicker">FIDUCIARIA UNIVERSAL · CORTE 30/06/2026</span>
+                <span className="section-kicker">FIDUCIARIA UNIVERSAL · CORTE {fiduciaryCutoffLabel.toUpperCase()}</span>
                 <h3>Estados financieros oficiales del fideicomiso</h3>
               </div>
               <span className="source-status validada">OFICIAL</span>
@@ -5311,7 +5314,13 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
               <i>+</i>
               <span>Patrimonio neto<strong>{rd(fiduciaryStatementSummary.balance.netEquityDop)}</strong></span>
             </div>
-            <p className="quality-note">Estado emitido el {fiduciaryStatementSummary.issuedAt}. El balance cuadra exactamente y el resultado del periodo se incorpora al patrimonio neto.</p>
+            <div className="budget-summary-grid fiduciary-results-grid">
+              <span><small>Aporte fideicomitente</small><strong>{rd(fiduciaryStatementSummary.balance.contributedEquityDop)}</strong></span>
+              <span><small>Resultados acumulados</small><strong>{rd(fiduciaryStatementSummary.balance.accumulatedEquityResultDop)}</strong></span>
+              <span><small>Resultado del ejercicio</small><strong>{rd(fiduciaryStatementSummary.balance.periodResultDop)}</strong></span>
+              <span><small>Patrimonio neto</small><strong>{rd(fiduciaryStatementSummary.balance.netEquityDop)}</strong></span>
+            </div>
+            <p className="quality-note">Balance general al {fiduciaryCutoffLabel}. Activos = pasivos + patrimonio neto, y el patrimonio coincide con la suma de todas sus partidas.</p>
           </article>
 
           <article className="panel">

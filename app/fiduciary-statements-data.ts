@@ -6,6 +6,8 @@ export const fiduciaryStatementSummary = {
   balance: {
     assetsDop: 758765771.05,
     liabilitiesDop: 448317797.67,
+    contributedEquityDop: 323303678.01,
+    accumulatedEquityResultDop: -6726258.37,
     grossEquityDop: 316577419.64,
     periodResultDop: -6129446.26,
     netEquityDop: 310447973.38,
@@ -120,4 +122,3 @@ export const fiduciaryStatementQualityIssues = [
     detail: "Fiduciaria declara DOP 50.353.287,01 y el control interno DOP 48.234.289,30. Se mantiene abierta la diferencia de DOP 2.118.997,71.",
   },
 ] as const;
-

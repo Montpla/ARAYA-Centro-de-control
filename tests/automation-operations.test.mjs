@@ -32,6 +32,9 @@ test("el auditor es idempotente, repara cargas seguras y no salta controles fina
   assert.match(center, /runOperationalAudit/);
   assert.match(center, /validateLiveDataContract/);
   assert.match(center, /validateFinancialPublication/);
+  assert.match(center, /financialGroups/);
+  assert.match(center, /baselineValues:\s*\{\}/);
+  assert.match(center, /sourceFileId \|\| point\.sourceName/);
   assert.match(center, /ingestionVersion:\s*""/);
   assert.match(center, /onConflictDoUpdate/);
   assert.match(route, /auth\.user\.role !== "admin"/);

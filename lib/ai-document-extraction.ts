@@ -18,7 +18,7 @@ type KnownArea = { id: string; label: string };
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 export const INGESTION_PRIMARY_MODEL = "gpt-5.6-luna";
 export const INGESTION_ESCALATION_MODEL = "gpt-5.6-terra";
-const PROMPT_VERSION = "araya-ingestion-agent-2026-08-20-v1";
+const PROMPT_VERSION = "araya-ingestion-agent-2026-08-22-v2";
 const SAFETY_IDENTIFIER = "araya_document_ingestion_service";
 // Complex financial workbooks often require several independent lookups against
 // the live schema. Keep the loop bounded, but leave enough room for that fan-out.
@@ -162,6 +162,13 @@ CURVA S Y PLANIFICACIÓN
 - reprogrammedFlowMonths representa meses del flujo reprogramado. No mezcles importes financieros con porcentajes de avance físico.
 - Solo emite una serie completa cuando la tabla o gráfica contiene todos sus periodos y valores de forma legible. Para puntos parciales, no adivines la posición del array.
 - No leas un valor aproximado por la altura de una línea o barra; hace falta una etiqueta, tabla o cifra explícita.
+
+ESTADOS FINANCIEROS FIDUCIARIOS
+- Un balance de comprobación o estado de situación debe publicarse como una fotografía indivisible del mismo archivo y fecha de corte. Nunca completes una composición patrimonial con cifras vigentes de otro archivo, otro mes o el ejemplo del esquema.
+- En fiduciaryStatementSummary.balance usa esta correspondencia exacta: "Aporte Fideicomitente", "Aportes en dinero y especie" o equivalente explícito → contributedEquityDop; "Current Year Earnings", "Resultados acumulados" o equivalente explícito → accumulatedEquityResultDop; "Resultado del Ejercicio", "Resultado del periodo" o equivalente explícito → periodResultDop; "Total Equity" o "Patrimonio neto" → netEquityDop.
+- No confundas Current Year Earnings/Resultados acumulados con Resultado del Ejercicio/Resultado del periodo: son componentes distintos y, si ambos aparecen, publica ambos. grossEquityDop es el subtotal de aporte más resultados acumulados; si no está impreso, omítelo: el servidor lo concilia de forma determinista.
+- Publica también assetsDop, liabilitiesDop, netEquityDop y fiduciaryStatementSummary.cutoff cuando estén impresos. Si aparecen activos, pasivos y los tres componentes patrimoniales, conserva además la estructura en fiduciaryBalanceSections; no publiques solamente dos o tres totales aislados.
+- Antes de terminar usa reconcile_numbers dos veces: Activos = Pasivos + Patrimonio neto; y Aporte + Resultados acumulados + Resultado del periodo = Patrimonio neto. Si una igualdad no cuadra, conserva las cifras literales pero deja el aviso correspondiente; no tomes un componente de otro corte para forzarla.
 
 SEGURIDAD
 - safetyWeeklySeries conserva una fila por reporte semanal. Distingue siempre valor de la semana y acumulado: hoursWeek/hoursCumulative, observationsWeek/observationsCumulative, meetingsWeek/meetingsCumulative e inspectionsWeek/inspectionsCumulative. eventsWeek es null si el documento sólo imprime un acumulado; nunca conviertas el acumulado de accidentes en accidentes de esa semana. Antes de publicar, lee el valor actual y devuelve la serie completa ordenada, sustituyendo sólo la fila con el mismo cutoff o añadiendo una nueva; nunca borres semanas anteriores.
@@ -858,6 +865,109 @@ function modelUnmappedCandidates(payload: Record<string, unknown>) {
   });
 }
 
+type AcceptedModelUpdate = {
+  update: LiveDataUpdate;
+  valueJson: string;
+  confidence: number;
+};
+
+function completeFiduciaryBalanceSnapshot(
+  accepted: Map<string, AcceptedModelUpdate>,
+  warnings: string[],
+) {
+  const balanceRoot = accepted.get("fiduciaryStatementSummary.balance");
+  const statementRoot = accepted.get("fiduciaryStatementSummary");
+  const balanceValue = isRecord(balanceRoot?.update.value)
+    ? balanceRoot.update.value
+    : isRecord(statementRoot?.update.value) && isRecord(statementRoot.update.value.balance)
+      ? statementRoot.update.value.balance
+      : null;
+  const readNumber = (field: string) => {
+    const child = accepted.get(`fiduciaryStatementSummary.balance.${field}`)?.update.value;
+    if (typeof child === "number" && Number.isFinite(child)) return child;
+    const nested = balanceValue?.[field];
+    return typeof nested === "number" && Number.isFinite(nested) ? nested : null;
+  };
+  const sourceEntries = [
+    "assetsDop",
+    "liabilitiesDop",
+    "contributedEquityDop",
+    "accumulatedEquityResultDop",
+    "periodResultDop",
+    "netEquityDop",
+  ].map((field) => accepted.get(`fiduciaryStatementSummary.balance.${field}`))
+    .filter((entry): entry is AcceptedModelUpdate => Boolean(entry));
+  const reference = sourceEntries[0] ?? balanceRoot ?? statementRoot;
+  if (!reference) return;
+
+  const contributed = readNumber("contributedEquityDop");
+  const accumulated = readNumber("accumulatedEquityResultDop");
+  if (contributed !== null && accumulated !== null) {
+    const gross = Math.round((contributed + accumulated) * 100) / 100;
+    const grossKey = "fiduciaryStatementSummary.balance.grossEquityDop";
+    if (!accepted.has(grossKey)) {
+      const confidence = sourceEntries.length
+        ? Math.min(...sourceEntries.map((entry) => entry.confidence))
+        : reference.confidence;
+      accepted.set(grossKey, {
+        valueJson: JSON.stringify(gross),
+        confidence,
+        update: { ...reference.update, key: grossKey, value: gross },
+      });
+    }
+  }
+
+  const assets = readNumber("assetsDop");
+  const liabilities = readNumber("liabilitiesDop");
+  const period = readNumber("periodResultDop");
+  const net = readNumber("netEquityDop");
+  if ([assets, liabilities, contributed, accumulated, period, net].some((value) => value === null)) return;
+
+  const balanceDifference = Math.abs(assets! - liabilities! - net!);
+  const equityDifference = Math.abs(contributed! + accumulated! + period! - net!);
+  if (balanceDifference > 0.05 || equityDifference > 0.05) {
+    addWarning(
+      warnings,
+      "El estado fiduciario conserva sus importes literales, pero no se materializó la composición porque sus ecuaciones no concilian en el mismo corte.",
+    );
+    return;
+  }
+
+  const sectionsKey = "fiduciaryBalanceSections";
+  const sections: LiveDataValue = [
+    {
+      id: "assets",
+      label: "Activos",
+      totalDop: assets!,
+      lines: [{ name: "Total Activos", amountDop: assets! }],
+    },
+    {
+      id: "liabilities",
+      label: "Pasivos",
+      totalDop: liabilities!,
+      lines: [{ name: "Total Pasivos", amountDop: liabilities! }],
+    },
+    {
+      id: "equity",
+      label: "Patrimonio neto",
+      totalDop: net!,
+      lines: [
+        { name: "Aporte Fideicomitente", amountDop: contributed! },
+        { name: "Resultados acumulados", amountDop: accumulated! },
+        { name: "Resultado del periodo", amountDop: period! },
+      ],
+    },
+  ];
+  const confidence = sourceEntries.length
+    ? Math.min(...sourceEntries.map((entry) => entry.confidence))
+    : reference.confidence;
+  accepted.set(sectionsKey, {
+    valueJson: JSON.stringify(sections),
+    confidence,
+    update: { ...reference.update, key: sectionsKey, value: sections },
+  });
+}
+
 function validateModelOutput(
   outputText: string,
   input: ExtractionInput,
@@ -957,6 +1067,8 @@ function validateModelOutput(
       },
     });
   });
+
+  completeFiduciaryBalanceSnapshot(accepted, warnings);
 
   const acceptedValues = [...accepted.values()];
   const updates = acceptedValues.map(({ update }) => update);

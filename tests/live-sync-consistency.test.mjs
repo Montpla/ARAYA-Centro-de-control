@@ -4,7 +4,7 @@ import test from "node:test";
 
 import { buildings, monthlyPlan, overallProgressNow, projectSnapshot } from "../app/demo-data.ts";
 import { safetyWeeklySeries } from "../app/june-report-data.ts";
-import { liveJuneReportFinance } from "../lib/live-derivations.ts";
+import { liveFiduciaryStatementSummary, liveJuneReportFinance } from "../lib/live-derivations.ts";
 import { LIVE_DATA_ROOTS } from "../lib/live-data.ts";
 import { clearTrailingMonthlyActualPlaceholders } from "../lib/monthly-plan.ts";
 
@@ -119,6 +119,38 @@ test("el resumen financiero sigue las cuentas del último periodo", () => {
   assert.equal(derived.finance.juneExecutedDop, 100);
   assert.equal(derived.finance.executedDop, 500);
   assert.equal(derived.finance.remainingDop, 500);
+});
+
+test("el resumen fiduciario hereda las tres partidas patrimoniales del mismo balance", () => {
+  const summary = {
+    balance: {
+      assetsDop: 1,
+      liabilitiesDop: 1,
+      contributedEquityDop: 1,
+      accumulatedEquityResultDop: 0,
+      grossEquityDop: 1,
+      periodResultDop: 0,
+      netEquityDop: 0,
+    },
+  };
+  const derived = liveFiduciaryStatementSummary(summary, [
+    { id: "assets", totalDop: 796_960_916.83, lines: [] },
+    { id: "liabilities", totalDop: 483_862_152.04, lines: [] },
+    {
+      id: "equity",
+      totalDop: 313_098_764.79,
+      lines: [
+        { name: "Aporte fideicomitente", amountDop: 322_917_733.81 },
+        { name: "Resultados acumulados", amountDop: -6_364_163.55 },
+        { name: "Resultado del ejercicio", amountDop: -3_454_805.47 },
+      ],
+    },
+  ]);
+  assert.equal(derived.balance.contributedEquityDop, 322_917_733.81);
+  assert.equal(derived.balance.accumulatedEquityResultDop, -6_364_163.55);
+  assert.equal(derived.balance.grossEquityDop, 316_553_570.26);
+  assert.equal(derived.balance.periodResultDop, -3_454_805.47);
+  assert.equal(derived.balance.netEquityDop, 313_098_764.79);
 });
 
 test("seguridad conserva una serie semanal viva y ordenada", () => {

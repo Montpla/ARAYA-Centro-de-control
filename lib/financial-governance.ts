@@ -343,6 +343,8 @@ function fiduciaryChecks(summary: unknown, updates: FinancialUpdateLike[]) {
     const assets = numberAt(summary, ["balance", "assetsDop"]);
     const liabilities = numberAt(summary, ["balance", "liabilitiesDop"]);
     const equity = numberAt(summary, ["balance", "netEquityDop"]);
+    const contributedEquity = numberAt(summary, ["balance", "contributedEquityDop"]);
+    const accumulatedEquityResult = numberAt(summary, ["balance", "accumulatedEquityResultDop"]);
     const grossEquity = numberAt(summary, ["balance", "grossEquityDop"]);
     const periodResult = numberAt(summary, ["balance", "periodResultDop"]);
     const balanceCheck = arithmeticCheck({
@@ -357,7 +359,11 @@ function fiduciaryChecks(summary: unknown, updates: FinancialUpdateLike[]) {
       id: "fiduciary-equity-rollforward",
       label: "Composición del patrimonio fiduciario",
       actual: equity,
-      expected: grossEquity !== null && periodResult !== null ? grossEquity + periodResult : null,
+      expected: contributedEquity !== null && accumulatedEquityResult !== null && periodResult !== null
+        ? contributedEquity + accumulatedEquityResult + periodResult
+        : grossEquity !== null && periodResult !== null
+          ? grossEquity + periodResult
+          : null,
       keys: balanceKeys,
       message: "El patrimonio neto no coincide con patrimonio bruto más resultado del periodo.",
     });

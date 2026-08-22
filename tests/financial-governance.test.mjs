@@ -59,6 +59,8 @@ const fiduciaryBaseline = {
   balance: {
     assetsDop: 150,
     liabilitiesDop: 80,
+    contributedEquityDop: 60,
+    accumulatedEquityResultDop: 5,
     grossEquityDop: 65,
     periodResultDop: 5,
     netEquityDop: 70,
@@ -96,6 +98,45 @@ test("publica un balance cuadrado con controles contables aprobados", () => {
   assert.equal(result.status, "passed");
   assert.equal(result.blockingKeys.length, 0);
   assert.ok(result.checks.every((check) => check.status === "passed"));
+});
+
+test("el patrimonio de julio suma aportes, acumulados y resultado del ejercicio", () => {
+  const updates = [
+    update("fiduciaryStatementSummary.balance.assetsDop", 796_960_916.83, { cutoff: "2026-07-31", sourceFileId: "bce-jul", sourceName: "BCE 07-26.pdf" }),
+    update("fiduciaryStatementSummary.balance.liabilitiesDop", 483_862_152.04, { cutoff: "2026-07-31", sourceFileId: "bce-jul", sourceName: "BCE 07-26.pdf" }),
+    update("fiduciaryStatementSummary.balance.contributedEquityDop", 322_917_733.81, { cutoff: "2026-07-31", sourceFileId: "bce-jul", sourceName: "BCE 07-26.pdf" }),
+    update("fiduciaryStatementSummary.balance.accumulatedEquityResultDop", -6_364_163.55, { cutoff: "2026-07-31", sourceFileId: "bce-jul", sourceName: "BCE 07-26.pdf" }),
+    update("fiduciaryStatementSummary.balance.grossEquityDop", 316_553_570.26, { cutoff: "2026-07-31", sourceFileId: "bce-jul", sourceName: "BCE 07-26.pdf" }),
+    update("fiduciaryStatementSummary.balance.periodResultDop", -3_454_805.47, { cutoff: "2026-07-31", sourceFileId: "bce-jul", sourceName: "BCE 07-26.pdf" }),
+    update("fiduciaryStatementSummary.balance.netEquityDop", 313_098_764.79, { cutoff: "2026-07-31", sourceFileId: "bce-jul", sourceName: "BCE 07-26.pdf" }),
+  ];
+  const result = finance.validateFinancialPublication({
+    updates,
+    currentValues: {},
+    currentPoints: [],
+    baselineValues: { fiduciaryStatementSummary: fiduciaryBaseline },
+  });
+  assert.equal(result.status, "passed");
+  assert.ok(result.checks.some((check) => check.id === "fiduciary-balance-equation" && check.status === "passed"));
+  assert.ok(result.checks.some((check) => check.id === "fiduciary-equity-rollforward" && check.status === "passed"));
+});
+
+test("una auditoría no completa julio con componentes históricos de junio", () => {
+  const updates = [
+    update("fiduciaryStatementSummary.balance.assetsDop", 796_960_916.83, { cutoff: "2026-07-31", sourceFileId: "bce-jul" }),
+    update("fiduciaryStatementSummary.balance.liabilitiesDop", 483_862_152.04, { cutoff: "2026-07-31", sourceFileId: "bce-jul" }),
+    update("fiduciaryStatementSummary.balance.periodResultDop", -6_364_163.55, { cutoff: "2026-07-31", sourceFileId: "bce-jul" }),
+    update("fiduciaryStatementSummary.balance.netEquityDop", 313_098_764.79, { cutoff: "2026-07-31", sourceFileId: "bce-jul" }),
+  ];
+  const result = finance.validateFinancialPublication({
+    updates,
+    currentValues: {},
+    currentPoints: [],
+    baselineValues: {},
+  });
+  assert.equal(result.status, "passed");
+  assert.ok(result.checks.some((check) => check.id === "fiduciary-balance-equation" && check.status === "passed"));
+  assert.ok(!result.checks.some((check) => check.id === "fiduciary-equity-rollforward"));
 });
 
 test("aísla sólo el grupo financiero descuadrado y deja intacto otro grupo válido", () => {

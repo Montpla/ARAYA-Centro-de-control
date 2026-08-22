@@ -29,7 +29,7 @@ async function compilar(ruta, requerir) {
   return compiled.exports;
 }
 
-async function cargarIngestion() {
+async function cargarIngestion(pdfReader = pdfText) {
   const ooxml = await compilar("../lib/ooxml-tables.ts", (especificador) => {
     if (especificador === "./xlsx-reader") return xlsxReader;
     throw new Error(`Import inesperado: ${especificador}`);
@@ -39,7 +39,7 @@ async function cargarIngestion() {
     if (especificador === "./project-xml") return projectXml;
     if (especificador === "./xlsx-reader") return xlsxReader;
     if (especificador === "./ooxml-tables") return ooxml;
-    if (especificador === "./pdf-text") return pdfText;
+    if (especificador === "./pdf-text") return pdfReader;
     if (especificador === "./progress-model") return progressModel;
     throw new Error(`Import inesperado: ${especificador}`);
   });
@@ -57,6 +57,24 @@ const defaults = {
   sourceName: "corte.zip",
   knownBuildingTokens: new Set(["14", "7", "3"]),
 };
+
+const BALANCE_FIDUCIARIO_JULIO = `
+Balance Sheet
+Fideicomiso Irrevocable de Desarrollo Inmobiliario y Administración Araya
+As at 31 July 2026
+Total Bank 30,155,312.43
+Total Current Assets 12,584,610.05
+Total Non-current Assets 754,220,994.35
+Total Assets 796,960,916.83
+Total Current Liabilities 483,862,152.04
+Total Liabilities 483,862,152.04
+Net Assets 313,098,764.79
+Equity
+Aporte Fideicomitente AFI Universal 322,917,733.81
+Current Year Earnings (6,364,163.55)
+Resultado del Ejercicio (3,454,805.47)
+Total Equity 313,098,764.79
+`;
 
 // --- Comprimidos -------------------------------------------------------------
 
@@ -151,6 +169,44 @@ test("un informe en PDF actualiza los edificios que nombra", async () => {
   assert.equal(resultado.updates.length, 2, "TH-14 y TH-07; la zona común no es un edificio");
   const th14 = resultado.updates.find((update) => update.key === "buildings.TH-14.progress");
   assert.equal(th14.value, 62.5);
+});
+
+test("el balance fiduciario de julio lee todas las partidas y cuadra al centavo", () => {
+  const balance = pdfText.findFiduciaryBalanceSheet(BALANCE_FIDUCIARIO_JULIO);
+  assert.ok(balance);
+  assert.equal(balance.cutoff, "2026-07-31");
+  assert.equal(balance.assetsDop, 796_960_916.83);
+  assert.equal(balance.liabilitiesDop, 483_862_152.04);
+  assert.equal(balance.contributedEquityDop, 322_917_733.81);
+  assert.equal(balance.accumulatedEquityResultDop, -6_364_163.55);
+  assert.equal(balance.periodResultDop, -3_454_805.47);
+  assert.equal(balance.grossEquityDop, 316_553_570.26);
+  assert.equal(balance.netEquityDop, 313_098_764.79);
+});
+
+test("un PDF fiduciario publica resumen y secciones desde el mismo corte", async () => {
+  const ingestion = await cargarIngestion({
+    ...pdfText,
+    readPdfText: async () => ({ text: BALANCE_FIDUCIARIO_JULIO, streams: 1, scanned: false }),
+  });
+  const resultado = await ingestion.extractStructuredUpdates(new ArrayBuffer(8), "pdf", defaults);
+  const byKey = new Map(resultado.updates.map((update) => [update.key, update]));
+  assert.equal(byKey.get("fiduciaryStatementSummary.balance.periodResultDop")?.value, -3_454_805.47);
+  assert.equal(byKey.get("fiduciaryStatementSummary.balance.accumulatedEquityResultDop")?.value, -6_364_163.55);
+  assert.equal(byKey.get("fiduciaryBalanceSections")?.cutoff, "2026-07-31");
+  assert.equal(byKey.get("fiduciaryBalanceSections")?.area, "finanzas");
+  assert.match(resultado.summary, /cuadrado/i);
+});
+
+test("un patrimonio incompleto o descuadrado no se publica como lectura determinista", () => {
+  assert.equal(
+    pdfText.findFiduciaryBalanceSheet(BALANCE_FIDUCIARIO_JULIO.replace("Resultado del Ejercicio (3,454,805.47)", "")),
+    null,
+  );
+  assert.equal(
+    pdfText.findFiduciaryBalanceSheet(BALANCE_FIDUCIARIO_JULIO.replace("Total Equity 313,098,764.79", "Total Equity 300,000,000.00")),
+    null,
+  );
 });
 
 test("el escaneo lo dice y deja paso a la lectura asistida", async () => {

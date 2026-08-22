@@ -13,8 +13,10 @@ const executableSource = source.replace(
     "urbanismAreas",
     "urbanismReportAreas",
     "reprogrammedFlowMonths",
+    "fiduciaryStatementSummary",
+    "fiduciaryBalanceSections",
   ];
-  const isLiveDataKey = (key) => /^(projectSnapshot|monthlyPlan|buildings|urbanismAreas|urbanismReportAreas|reprogrammedFlowMonths)(?:\\.(?:[A-Za-z][A-Za-z0-9]*|\\d+))*$/.test(key);`,
+  const isLiveDataKey = (key) => /^(projectSnapshot|monthlyPlan|buildings|urbanismAreas|urbanismReportAreas|reprogrammedFlowMonths|fiduciaryStatementSummary|fiduciaryBalanceSections)(?:\\.(?:[A-Za-z][A-Za-z0-9]*|\\d+))*$/.test(key);`,
 ).replace(
   /import \{[\s\S]*?\} from "\.\/ai-cost";/,
   `const emptyAiTokenUsage = () => ({ inputTokens: 0, cachedInputTokens: 0, cacheWriteInputTokens: 0, outputTokens: 0 });
@@ -130,6 +132,69 @@ test("image extraction uses a data URL and rejects keys outside the live contrac
   assert.equal(requestBody.text.format.strict, true);
   assert.equal(requestBody.safety_identifier, "araya_document_ingestion_service");
   assert.match(requestBody.input[0].content[2].image_url, /^data:image\/png;base64,/);
+});
+
+test("a fiduciary balance is completed and reconciled only with components from the same extraction", async () => {
+  const values = {
+    assetsDop: 796960916.83,
+    liabilitiesDop: 483862152.04,
+    contributedEquityDop: 322917733.81,
+    accumulatedEquityResultDop: -6364163.55,
+    periodResultDop: -3454805.47,
+    netEquityDop: 313098764.79,
+  };
+  globalThis.fetch = async (url, init) => {
+    assert.equal(url, "https://api.openai.com/v1/responses");
+    const body = JSON.parse(init.body);
+    assert.match(body.instructions, /ESTADOS FINANCIEROS FIDUCIARIOS/);
+    assert.match(body.instructions, /accumulatedEquityResultDop/);
+    const updates = Object.entries(values).map(([field, value]) => ({
+      key: `fiduciaryStatementSummary.balance.${field}`,
+      value_json: JSON.stringify(value),
+      area: "finanzas",
+      cutoff: "2026-07-31",
+      source_currency: "DOP",
+      confidence: 0.98,
+      evidence: `BCE julio, ${field}`,
+    }));
+    updates.push({
+      key: "fiduciaryStatementSummary.cutoff",
+      value_json: JSON.stringify("2026-07-31"),
+      area: "finanzas",
+      cutoff: "2026-07-31",
+      source_currency: "DOP",
+      confidence: 0.99,
+      evidence: "BCE julio, encabezado al 31 de julio de 2026",
+    });
+    return new Response(JSON.stringify({
+      model: "gpt-5.6-luna-2026-08-01",
+      output: [{
+        type: "message",
+        content: [{
+          type: "output_text",
+          text: JSON.stringify({
+            updates,
+            summary: "Balance fiduciario de julio leído.",
+            warnings: [],
+            confidence: 0.98,
+            unmapped_candidates: [],
+          }),
+        }],
+      }],
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+
+  const result = await extraction.extractDocumentWithAI(input("png"));
+  const byKey = new Map(result.updates.map((update) => [update.key, update.value]));
+
+  assert.equal(byKey.get("fiduciaryStatementSummary.balance.grossEquityDop"), 316553570.26);
+  assert.equal(byKey.get("fiduciaryStatementSummary.balance.periodResultDop"), -3454805.47);
+  assert.deepEqual(byKey.get("fiduciaryBalanceSections")[2].lines, [
+    { name: "Aporte Fideicomitente", amountDop: 322917733.81 },
+    { name: "Resultados acumulados", amountDop: -6364163.55 },
+    { name: "Resultado del periodo", amountDop: -3454805.47 },
+  ]);
+  assert.equal(result.warnings.length, 0);
 });
 
 test("todo lo que trae evidencia y confianza positiva se publica solo, sin revisión", () => {

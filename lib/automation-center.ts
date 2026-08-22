@@ -15,7 +15,7 @@ import type { AuthorizedUser } from "./access-control";
 import { readEffectiveLiveData } from "./effective-live-data";
 import { validateFinancialPublication, type FinancialUpdateLike } from "./financial-governance";
 import { requiresFinanceAccessForArea } from "./live-data";
-import { getContractRootsSnapshot, validateLiveDataContract } from "./live-data-contract";
+import { validateLiveDataContract } from "./live-data-contract";
 import { emitMissingNotifications, notificationVisibleToUser, type NotificationInput } from "./notifications";
 import { scheduleNotificationDispatch } from "./notification-dispatch";
 
@@ -297,29 +297,45 @@ export async function runOperationalAudit(input: {
     });
   }
 
-  const financialUpdates: FinancialUpdateLike[] = snapshot.points.map((point) => ({
-    key: point.key,
-    valueJson: point.valueJson,
-    valueType: point.valueType,
-    area: point.area,
-    cutoff: point.cutoff,
-    sourceCurrency: point.sourceCurrency === "USD" ? "USD" : "DOP",
-    sourceFileId: point.sourceFileId,
-    sourceName: point.sourceName,
-  }));
-  const finance = validateFinancialPublication({
-    updates: financialUpdates,
-    currentValues: snapshot.values,
-    currentPoints: snapshot.points,
-    baselineValues: getContractRootsSnapshot(),
-  });
-  finance.checks.filter((check) => check.status === "blocked").forEach((check) => candidates.push({
-    fingerprint: `audit:finance:${check.id}`,
-    severity: "critical",
-    area: "finanzas",
-    title: `Control financiero pendiente · ${check.label}`,
-    detail: check.message,
-  }));
+  // Cada ecuación financiera se audita dentro de UNA fuente y UN corte. Unir
+  // campos de junio con campos de julio puede fabricar un descuadre que no
+  // existe en ninguno de los dos estados, justo lo que ocurrió con el
+  // patrimonio fiduciario de julio. Los grupos incompletos no se completan con
+  // el histórico: esperan a que el lector publique todas sus partidas.
+  const financialGroups = new Map<string, FinancialUpdateLike[]>();
+  for (const point of snapshot.points) {
+    const update: FinancialUpdateLike = {
+      key: point.key,
+      valueJson: point.valueJson,
+      valueType: point.valueType,
+      area: point.area,
+      cutoff: point.cutoff,
+      sourceCurrency: point.sourceCurrency === "USD" ? "USD" : "DOP",
+      sourceFileId: point.sourceFileId,
+      sourceName: point.sourceName,
+    };
+    const groupKey = `${point.sourceFileId || point.sourceName || "legacy"}::${point.cutoff || "sin-corte"}`;
+    const group = financialGroups.get(groupKey) ?? [];
+    group.push(update);
+    financialGroups.set(groupKey, group);
+  }
+  for (const [groupKey, updates] of financialGroups) {
+    const finance = validateFinancialPublication({
+      updates,
+      currentValues: {},
+      currentPoints: snapshot.points.filter((point) =>
+        `${point.sourceFileId || point.sourceName || "legacy"}::${point.cutoff || "sin-corte"}` === groupKey),
+      baselineValues: {},
+    });
+    finance.checks.filter((check) => check.status === "blocked").forEach((check) => candidates.push({
+      fingerprint: `audit:finance:${check.id}:${groupKey}`,
+      severity: "critical",
+      area: "finanzas",
+      title: `Control financiero pendiente · ${check.label}`,
+      detail: check.message,
+      sourceFileId: updates[0]?.sourceFileId || "",
+    }));
+  }
 
   for (const file of files) {
     if (["integrado", "rechazado", "historico"].includes(file.status)) continue;
