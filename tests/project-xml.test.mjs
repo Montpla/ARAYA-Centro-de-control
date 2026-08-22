@@ -93,21 +93,15 @@ test("no adivina un edificio donde no lo hay", () => {
   assert.equal(buildingCodeFromTaskName("Hormigonado 3er nivel"), "");
 });
 
-test("promedia las tareas de un mismo edificio", () => {
-  const resultado = extractProjectXmlUpdates(planDeObra, edificiosReales);
-  const th14 = resultado.updates.find((update) => update.key === "buildings.TH-14.progress");
-  assert.ok(th14, "TH-14 debe actualizarse");
-  assert.equal(th14.value, 50, "media de 60 y 40");
-  const th03 = resultado.updates.find((update) => update.key === "buildings.TH-03.progress");
-  assert.equal(th03.value, 85);
-});
-
-test("deja fuera las tareas que no nombran ningún edificio y lo dice", () => {
+test("el plan de Project NO publica avance por edificio ni avance físico", () => {
+  // NORMA: el porcentaje de una tarea del MPP es avance de CRONOGRAMA, no obra
+  // ejecutada medida. Publicar buildings.*.progress desde el plan movía el
+  // avance físico del panel (media de los edificios), que por gobernanza sale
+  // del Excel/informe de obra. El MPP no debe emitir ninguna clave de edificio.
   const resultado = extractProjectXmlUpdates(planDeObra, edificiosReales);
   const edificios = resultado.updates.filter((u) => u.key.startsWith("buildings."));
-  assert.equal(edificios.length, 2, "sólo TH-14 y TH-03");
-  assert.ok(resultado.warnings.some((aviso) => /no cuelgan de ningún edificio/.test(aviso)));
-  assert.match(resultado.summary, /2 edificios actualizados/);
+  assert.equal(edificios.length, 0, "el plan no publica ninguna clave buildings.*");
+  assert.match(resultado.summary, /no el avance físico/);
 });
 
 test("el avance del cronograma sale del propio plan, no de un número a mano", () => {
@@ -132,10 +126,10 @@ test("la fecha de fin del proyecto sale de la tarea más tardía del plan", () =
   assert.equal(fin.value, "30/09/2026");
 });
 
-test("un edificio que no existe no se da de alta desde una tarea", () => {
+test("ninguna tarea da de alta claves de edificio, exista o no el código", () => {
   const plan = planDeObra.replace("TH-14 Estructura", "TH-99 Estructura");
   const resultado = extractProjectXmlUpdates(plan, edificiosReales);
-  assert.ok(!resultado.updates.some((update) => update.key.includes("TH-99")));
+  assert.ok(!resultado.updates.some((update) => update.key.startsWith("buildings.")));
 });
 
 test("un XML que no es de Project se rechaza con una indicación útil", () => {
@@ -144,9 +138,9 @@ test("un XML que no es de Project se rechaza con una indicación útil", () => {
   assert.ok(resultado.warnings.length > 0);
 });
 
-test("atribuye a un edificio las tareas que cuelgan de él sin nombrarlo", () => {
-  // Un plan real se organiza por capítulos y las tareas de detalle no repiten
-  // el nombre del edificio: cuelgan de él. Deben contar igualmente.
+test("el avance de cronograma pondera las tareas por duración", () => {
+  // El % de cronograma es la media de TODAS las hojas ponderada por duración.
+  // No se publica ninguna clave de edificio (el avance físico sale del Excel).
   const plan = `<?xml version="1.0"?>
 <Project xmlns="http://schemas.microsoft.com/project"><Tasks>
   <Task><Name>Edificio 3</Name><PercentComplete>0</PercentComplete><OutlineLevel>1</OutlineLevel><Summary>1</Summary></Task>
@@ -154,14 +148,15 @@ test("atribuye a un edificio las tareas que cuelgan de él sin nombrarlo", () =>
   <Task><Name>Remates</Name><PercentComplete>0</PercentComplete><Duration>PT20H0M0S</Duration><OutlineLevel>2</OutlineLevel><Summary>0</Summary></Task>
 </Tasks></Project>`;
   const r = extractProjectXmlUpdates(plan, new Set(["3"]));
-  const th03 = r.updates.find((u) => u.key === "buildings.TH-03.progress");
+  const crono = r.updates.find((u) => u.key === "projectSnapshot.scheduleProgress");
   // Ponderado por duración: 80·300 + 0·20 sobre 320 = 75, no la media simple 40.
-  assert.equal(th03.value, 75);
+  assert.equal(crono.value, 75);
+  assert.ok(!r.updates.some((u) => u.key.startsWith("buildings.")), "no publica edificios");
 });
 
-test("los porcentajes se acotan al rango razonable", () => {
+test("los porcentajes se acotan al rango razonable en el cronograma", () => {
   const plan = planDeObra.replace("<PercentComplete>60</PercentComplete>", "<PercentComplete>140</PercentComplete>");
   const resultado = extractProjectXmlUpdates(plan, edificiosReales);
-  const th14 = resultado.updates.find((update) => update.key === "buildings.TH-14.progress");
-  assert.equal(th14.value, 70, "140 se acota a 100, media con 40");
+  const crono = resultado.updates.find((update) => update.key === "projectSnapshot.scheduleProgress");
+  assert.ok(crono.value <= 100, "un 140 no puede empujar el cronograma por encima de 100");
 });

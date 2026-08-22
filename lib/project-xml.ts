@@ -212,21 +212,20 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
     acumulado.set(edificio, previo);
   }
 
-  const updates: Array<{ key: string; value: number | string }> = [...acumulado.entries()]
-    .filter(([, { peso }]) => peso > 0)
-    .map(([codigo, { suma, peso }]) => ({
-      key: `buildings.${codigo}.progress`,
-      value: Math.round((suma / peso) * 100) / 100,
-    }))
-    .sort((izquierda, derecha) => izquierda.key.localeCompare(derecha.key));
+  // NORMA (importante): el plan de Project NO publica el avance por edificio ni,
+  // por tanto, el avance FÍSICO global. El porcentaje de una tarea del MPP es
+  // avance de CRONOGRAMA (según fechas planificadas), no obra ejecutada medida;
+  // mezclarlos movía el "avance físico" del panel, que por gobernanza sale del
+  // Excel/informe de obra. El MPP aporta sólo lo suyo: avance de cronograma,
+  // fechas y camino crítico. Se cuentan los edificios reconocidos únicamente
+  // para el resumen y los avisos.
+  const edificiosReconocidos = [...acumulado.entries()].filter(([, { peso }]) => peso > 0).length;
 
-  // Nº de edificios actualizados, antes de añadir el dato de cronograma: el
-  // aviso y el resumen cuentan edificios, no el % global del plan.
-  const edificioUpdates = updates.length;
+  const updates: Array<{ key: string; value: number | string }> = [];
 
-  // El avance del cronograma sale del propio plan, no de un número a mano: se
-  // publica junto a los edificios para que el KPI "Cronograma MPP" se actualice
-  // solo con cada plan que se suba.
+  // El avance del cronograma sale del propio plan, no de un número a mano: así
+  // el KPI "Cronograma MPP" se actualiza solo con cada plan que se suba. Es un
+  // concepto distinto del avance físico y no lo sustituye.
   if (cronoPeso > 0) {
     updates.push({
       key: "projectSnapshot.scheduleProgress",
@@ -245,20 +244,18 @@ export function extractProjectXmlUpdates(text: string, conocidos?: Set<string>):
   }
 
   const warnings: string[] = [];
-  if (!edificioUpdates) {
+  if (!cronoPeso) {
     warnings.push(
-      `Se leyeron ${tareas.length} tareas, pero ninguna cuelga de un edificio reconocible (se esperan nombres tipo "TH-14" o "Edificio 14").`,
+      `Se leyeron ${tareas.length} tareas, pero ninguna tiene avance para calcular el cronograma.`,
     );
-  } else if (sinEdificio) {
-    warnings.push(`${sinEdificio} de ${leaves} tareas de detalle no cuelgan de ningún edificio y se han dejado fuera.`);
   }
 
   return {
     updates,
     taskCount: tareas.length,
     warnings,
-    summary: edificioUpdates
-      ? `${edificioUpdates} edificios actualizados desde ${tareas.length} tareas del plan de Project, ponderadas por duración.`
-      : `Plan de Project leído (${tareas.length} tareas), sin avances aplicables.`,
+    summary: cronoPeso > 0
+      ? `Cronograma leído de ${tareas.length} tareas del plan de Project (${edificiosReconocidos} edificios reconocidos); se publica el avance de cronograma y la previsión de fin, no el avance físico.`
+      : `Plan de Project leído (${tareas.length} tareas), sin avance de cronograma aplicable.`,
   };
 }

@@ -200,10 +200,12 @@ test("las plantillas generadas sólo contienen claves que el modelo admite", asy
   }
 });
 
-test("un plan de Project en XML actualiza los edificios que nombra", async () => {
+test("un plan de Project en XML publica el cronograma, no el avance físico", async () => {
   // El recorrido que antes se rompía: el corte mensual llegaba en .mpp y se
-  // archivaba sin leer. Guardado como XML desde Project, sus tareas mueven el
-  // avance de los edificios sin intervención.
+  // archivaba sin leer. Guardado como XML desde Project, sus tareas ya mueven el
+  // % de cronograma sin intervención. NORMA: el plan NO toca el avance por
+  // edificio ni el avance físico (ése sale del Excel/informe de obra); el % de
+  // una tarea del MPP es avance de cronograma, no obra ejecutada medida.
   const ingestion = await loadIngestion();
   const plan = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -217,23 +219,11 @@ test("un plan de Project en XML actualiza los edificios que nombra", async () =>
     ...defaults,
     knownBuildingTokens: new Set(["14"]),
   });
-  // Además del edificio, el plan publica el % de cronograma del propio plan.
+  // El plan publica el % de cronograma del propio plan y NADA de edificios.
   const edificios = extraccion.updates.filter((u) => u.key.startsWith("buildings."));
-  assert.equal(edificios.length, 1);
-  assert.equal(edificios[0].key, "buildings.TH-14.progress");
-  assert.equal(edificios[0].value, 60);
+  assert.equal(edificios.length, 0, "el plan no publica ninguna clave de edificio");
   assert.ok(
     extraccion.updates.some((u) => u.key === "projectSnapshot.scheduleProgress"),
-    "el plan también actualiza el % de cronograma",
+    "el plan actualiza el % de cronograma",
   );
-
-  const resolveSpatialIdentityUpdates = await loadResolver();
-  const [resuelta] = resolveSpatialIdentityUpdates(edificios, {});
-  assert.equal(resuelta.key, "buildings.13.progress", "TH-14 vive en la posición 13");
-
-  const resultado = liveData.materializeLiveRoot("buildings", demoData.buildings, {
-    [resuelta.key]: resuelta.value,
-  });
-  assert.equal(resultado[13].shortName, "14");
-  assert.equal(resultado[13].progress, 60);
 });
