@@ -309,11 +309,11 @@ test("database migrations cover records, file registry, source currency and live
 });
 
 test("collaborative uploads use authenticated identity, R2 storage and duplicate detection", async () => {
-  const [route, dashboard, routing, hosting] = await Promise.all([
+  const [route, dashboard, routing, wrangler] = await Promise.all([
     readFile("app/api/files/route.ts", "utf8"),
     readFile("app/dashboard-client.tsx", "utf8"),
     readFile("lib/file-routing.ts", "utf8"),
-    readFile(".openai/hosting.json", "utf8"),
+    readFile("wrangler.deploy.jsonc", "utf8"),
   ]);
   assert.match(route, /requireApiUser/);
   assert.match(route, /crypto\.subtle\.digest\("SHA-256"/);
@@ -324,7 +324,8 @@ test("collaborative uploads use authenticated identity, R2 storage and duplicate
   assert.match(dashboard, /uploadProjectFile/);
   assert.match(dashboard, /ACTUALIZACIÓN CADA 5 S/);
   assert.match(routing, /Clasificación automática/);
-  assert.equal(JSON.parse(hosting).r2, "FILES");
+  assert.match(wrangler, /"binding": "FILES"/);
+  assert.match(wrangler, /"bucket_name": "araya-centro-control-files"/);
 });
 
 test("dashboard requires verified membership and provides administrator-managed access", async () => {
@@ -1081,12 +1082,12 @@ test("the in-app document viewer renders PDFs with PDF.js and downloads only on 
 });
 
 test("historical originals stay out of public assets and use authenticated R2 delivery", async () => {
-  const [viteConfig, proxy, protectedRoute, accessRules, sitesPlugin, assetsIgnore] = await Promise.all([
+  const [viteConfig, proxy, protectedRoute, accessRules, deployScript, assetsIgnore] = await Promise.all([
     readFile("vite.config.ts", "utf8"),
     readFile("proxy.ts", "utf8"),
     readFile("app/data-center/[...path]/route.ts", "utf8"),
     readFile("lib/document-access.ts", "utf8"),
-    readFile("build/sites-vite-plugin.ts", "utf8"),
+    readFile("scripts/deploy.mjs", "utf8"),
     readFile("public/.assetsignore", "utf8"),
   ]);
 
@@ -1106,8 +1107,9 @@ test("historical originals stay out of public assets and use authenticated R2 de
   assert.match(protectedRoute, /X-Robots-Tag", "noindex, noarchive, nosnippet"/);
   assert.match(accessRules, /financeOnlyDocuments/);
   assert.match(accessRules, /fideicomiso\|balance\|resultados/);
-  assert.match(sitesPlugin, /privateDocumentOutput/);
-  assert.match(sitesPlugin, /rm\(privateDocumentOutput, \{ recursive: true, force: true \}\)/);
+  assert.match(deployScript, /sync-historical-documents\.mjs/);
+  assert.match(deployScript, /const WRANGLER_CONFIG = "wrangler\.deploy\.jsonc"/);
+  assert.match(deployScript, /wrangler deploy --config \$\{WRANGLER_CONFIG\}/);
   assert.match(assetsIgnore, /data-center\/\*\*/);
 });
 

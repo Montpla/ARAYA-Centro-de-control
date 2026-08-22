@@ -3,6 +3,22 @@
 Actualizado: 22/08/2026
 Zona horaria del usuario: Europe/Madrid
 
+## Plataforma única confirmada (22/08/2026)
+
+- Fuente canónica: GitHub `Montpla/ARAYA-Centro-de-control` (`main`).
+- Producción única: `https://araya-centro-control.grupobricket.workers.dev`.
+- Sites queda cerrado al propietario, sin dominio personalizado y desconectado
+  del repositorio. Railway y el antiguo dominio corporativo quedan fuera del
+  proyecto y no deben reactivarse.
+- La configuración vive en `wrangler.deploy.jsonc`. Se eliminaron
+  `.openai/hosting.json` y el plugin de empaquetado de Sites para que otra sesión
+  o LLM no vuelva a publicar allí por accidente.
+- Auditoría Railway del 22/08/2026: `bricket-obra-produccion`,
+  `charismatic-respect` y `selfless-enthusiasm` están eliminados. No queda
+  ningún proyecto activo en la cuenta. Antes del borrado se verificaron y
+  guardaron respaldos locales en `Railway_Backup_bricket-obra_2026-08-22` y
+  `Railway_Backup_MontAI-CRM_2026-08-22`, fuera de este repositorio.
+
 ## Secciones dinámicas autónomas (22/08/2026)
 
 - Los conceptos nuevos ya no quedan relegados a un bloque provisional del
@@ -278,16 +294,9 @@ La sección fechada del 19/08/2026 explica cada una con su historia.
 
 ## Aviso importante: plataforma de despliegue vigente (leer antes que nada)
 
-Añadido el 13/08/2026. El resto de este documento (secciones "Proyecto y
-publicación", "Publicación con Sites" y varias notas sobre `OPENAI_API_KEY`
-"no configurada") describe una vía de despliegue por **Sites de OpenAI**
-(`.openai/hosting.json`, dominio `www.proyectosgrupobricket.com`, corte DNS
-pendiente en Nominalia). Esa vía no se ha tocado ni verificado en las
-sesiones recientes — su último commit real es del inicio del proyecto. **No
-asumir que sigue siendo la vía activa.**
-
-Las sesiones recientes, incluida esta, despliegan y verifican
-exclusivamente sobre **Cloudflare Workers**:
+La única plataforma de ejecución es **Cloudflare Workers**. GitHub es la fuente
+canónica y su workflow publica en Cloudflare. No existe una vía alternativa de
+despliegue dentro de este repositorio:
 
 - URL de producción verificada en este cierre, con sesión real de navegador:
   `https://araya-centro-control.grupobricket.workers.dev`.
@@ -317,32 +326,20 @@ exclusivamente sobre **Cloudflare Workers**:
   un `grep` del bundle puede dar un falso positivo o negativo si no se
   distingue el JSON de hidratación (invisible al usuario) del DOM realmente
   renderizado.
-- Si en algún momento hay que decidir entre reactivar Sites o seguir solo con
-  Cloudflare, preguntar al usuario en vez de asumir — puede que Sites siga
-  siendo relevante para otro propósito no documentado aquí.
+- No volver a crear configuración, remoto ni workflow de Sites o Railway.
 
 ## Proyecto y publicación
 
 - Proyecto: Centro de Control ARAYA — Grupo Bricket.
 - Directorio local:
   `C:\Users\Usuario1\OneDrive\Desktop\ARAYA_Transformacion_Digital\12_Dashboard_Obra`
-- Producción técnica vigente mientras se completa el DNS:
-  `https://araya-centro-control.enriquemontesplaza.chatgpt.site`
-- URL corporativa reservada en Sites:
-  `https://www.proyectosgrupobricket.com/` (pendiente del corte DNS de Nominalia).
-- Proyecto de Sites:
-  `appgprj_6a68f2b048e48191840a253b2285feb7`
-- Versión que estaba publicada al iniciar este cierre: 51. El número vigente y
-  su SHA deben consultarse siempre en Sites; no asumir que los cambios locales
-  descritos en este documento ya están en producción hasta completar commit,
-  despliegue y prueba de humo. El agente permanece como `ARAYA Asistente`.
-- Acceso de infraestructura: `public` desde el 11/08/2026. La URL puede abrirse
-  sin figurar en una lista externa de invitados, pero el contenido continúa
-  protegido por inicio de sesión y por la tabla interna `app_users`.
-- Rama y remoto de publicación: rama `main`, remoto `sites`.
-- El dominio personalizado `www.proyectosgrupobricket.com` ya está vinculado al
-  proyecto de Sites, pero no quedará activo hasta sustituir el CNAME de Railway
-  y publicar los dos TXT de validación indicados al final de este documento.
+- Producción: `https://araya-centro-control.grupobricket.workers.dev`.
+- Repositorio: `https://github.com/Montpla/ARAYA-Centro-de-control`, rama
+  `main`, remoto local `origin`.
+- Cada push a `main` ejecuta `.github/workflows/deploy.yml`, valida el proyecto
+  y despliega a Cloudflare. El agente permanece como `ARAYA Asistente`.
+- El contenido continúa protegido por inicio de sesión, `app_users` y permisos
+  server-side.
 
 ## Estado funcional
 
@@ -767,7 +764,7 @@ Todos los puntos deben continuar abriendo sus fichas correctas.
   procesamiento del archivo e historial persistente de datos vivos.
 - `drizzle/0006_legal_the_liberteens.sql`: metadatos persistentes de la
   fotografía de cada usuario.
-- `.openai/hosting.json`: identificador de Sites y bindings lógicos.
+- `wrangler.deploy.jsonc`: bindings y configuración de producción en Cloudflare.
 
 ## Validación
 
@@ -1201,34 +1198,6 @@ día hay que rotar `DEPLOY_VERIFY_PIN` (cambia el PIN del administrador
 usado para las pruebas), actualizar también este secreto o la verificación
 autenticada empezará a fallar en cada push — no es un fallo del código, es
 la credencial desactualizada.
-
-### Vía anterior (Sites de OpenAI, inactiva)
-
-Lo que sigue describe la publicación por Sites de OpenAI, la vía original
-del proyecto antes de migrar a Cloudflare Workers. Se conserva como
-referencia histórica; no se ha usado ni verificado en las sesiones
-recientes (ver "Aviso importante: plataforma de despliegue vigente" al
-principio de este documento).
-
-Cuando haya cambios de producto:
-
-1. Ejecutar `npm test`.
-2. Confirmar que no se incluyen cambios ajenos ni `tmp/`.
-3. Crear un commit específico.
-4. Obtener una credencial temporal de escritura de Sites.
-5. Empujar `HEAD` a `sites/main` sin guardar el token.
-6. Empaquetar `dist/`, `.openai/hosting.json` y `drizzle/`. Si el archivo supera
-   el tiempo de transferencia, guardar la versión sin `archive` para que Sites
-   compile el commit ya empujado; no retirar originales descargables para
-   reducir peso.
-7. Guardar una nueva versión de Sites con el SHA exacto.
-8. Desplegar la versión guardada. Sites ya está en modo de infraestructura
-   `public`; la aplicación continúa cerrada por inicio de sesión, `app_users` y
-   permisos server-side.
-9. Esperar a `status: succeeded`.
-10. Probar primero la URL técnica
-    `https://araya-centro-control.enriquemontesplaza.chatgpt.site`. El dominio
-    corporativo sólo puede declararse activo después de validar el DNS y SSL.
 
 Nunca registrar credenciales, tokens ni enlaces con autenticación incrustada.
 
@@ -1814,9 +1783,9 @@ originales en la versión 51.
   facturas y fuentes como informes financieros pasan por el visor común.
 - Los 23 originales históricos (50.646.816 bytes) están sembrados y
   verificados en R2 `FILES`; ninguno forma parte del paquete estático público.
-  `build/sites-vite-plugin.ts` elimina `dist/client/data-center` en cada build
-  y `public/.assetsignore` mantiene una segunda exclusión. No retirar estas dos
-  barreras aunque los originales auditables continúen en el árbol fuente.
+  `scripts/deploy.mjs` los sincroniza con R2 y `public/.assetsignore` impide que
+  entren como activos públicos. No retirar esta barrera aunque los originales
+  auditables continúen en el árbol fuente.
 - Cloudflare conserva `assets.run_worker_first` selectivo para
   `/data-center/*`. `proxy.ts` y la ruta dinámica
   `app/data-center/[...path]/route.ts` exigen identidad ChatGPT, usuario activo
@@ -1896,21 +1865,9 @@ en Nominalia.
   D1: una publicación admite como máximo 250 cambios, los batches atómicos se
   agrupan en un número acotado de sentencias y los listados nunca hacen una
   consulta por fila. La migración vigente más reciente es la `0016`.
-- La extracción IA necesita `OPENAI_API_KEY` en Sites. A 11/08/2026 esa variable
-  todavía no existe: sin ella se mantiene el archivo y funciona la extracción
-  determinista, pero los documentos libres e imágenes quedan pendientes. No
-  afirmar que la ingesta multiformato está operativa hasta cargar este secreto y
-  desplegar de nuevo.
-- Sites tiene reservado `www.proyectosgrupobricket.com`, pero el DNS público
-  todavía apunta por CNAME a `pzkhj9zd.up.railway.app`. Para activar el Centro de
-  Control hay que cambiar el CNAME de `www.proyectosgrupobricket.com` a
-  `custom-domains.chatgpt.site.` y crear los TXT
-  de validación: `_openai-site-verification.www.proyectosgrupobricket.com` =
-  `openai-site-verification=ReIYEqnjHes6RI0bLxmvNyvX_4zHPvwez1eDmc6Z2WE` y
-  `_cf-custom-hostname.www.proyectosgrupobricket.com` =
-  `fafd06b2-640d-4bba-8c7b-36b7151c87bd`.
-  No tocar el apex hasta resolver y probar el `www`; la aplicación anterior
-  seguirá sirviéndose hasta ese corte.
+- La extracción IA utiliza `OPENAI_API_KEY` en Cloudflare. La ingesta
+  determinista continúa funcionando sin IA y los formatos libres se escalan al
+  modelo configurado cuando corresponde.
 
 ## Reversión de autoridad de la Curva S y bug de escala de extracción
 
@@ -2183,9 +2140,9 @@ tablets, y también como aplicación en ordenador Windows y Mac", además de un
 sitio donde el personal aprenda a usar el programa.
 
 **Bug crítico encontrado y corregido**: `scripts/generate_staff_guide_pdf.py`
-tenía `APP_URL = "https://www.proyectosgrupobricket.com/"` — un dominio
-antiguo, ya no vigente (ver "Aviso importante: plataforma de despliegue
-vigente"). Esa constante alimenta los 3 códigos QR/enlaces del PDF (portada,
+tenía configurado el antiguo dominio corporativo, ya no vigente (ver "Aviso
+importante: plataforma de despliegue vigente"). Esa constante alimenta los 3
+códigos QR/enlaces del PDF (portada,
 instalación móvil, instalación escritorio). Cualquiera que escaneara el QR
 llegaba a un dominio que ya no sirve esta aplicación. Corregido a
 `https://araya-centro-control.grupobricket.workers.dev/`, la URL real del

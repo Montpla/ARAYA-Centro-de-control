@@ -7,7 +7,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const host =
     requestHeaders.get("x-forwarded-host") ??
     requestHeaders.get("host") ??
-    "www.proyectosgrupobricket.com";
+    "araya-centro-control.grupobricket.workers.dev";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? "https";
   const imageUrl = new URL("/og.png", `${protocol}://${host}`).toString();
   const description =
@@ -64,4 +64,3 @@ export default function RootLayout({
     </html>
   );
 }
-

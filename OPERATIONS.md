@@ -272,9 +272,8 @@ logs; sólo nombres de clave, estados y metadatos.
 > **Aviso (18/08/2026).** La plataforma vigente es **Cloudflare Workers**:
 > `https://araya-centro-control.grupobricket.workers.dev`, con `npm run deploy`
 > (typecheck, build, pruebas, `wrangler deploy` y verificación real contra
-> producción). Los puntos de más abajo que hablan de Sites, del dominio
-> corporativo y de la URL `chatgpt.site` describen una vía que no se ha tocado
-> ni verificado desde el inicio del proyecto: **no asumir que sigue activa**.
+> producción). Sites, Railway y el antiguo dominio corporativo están expresamente
+> descartados: no usarlos ni reactivarlos.
 > La cadena de migraciones tampoco acaba en la `0016`; ver `HANDOFF.md`.
 
 - **Las tres claves de notificación (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`,
@@ -310,7 +309,7 @@ logs; sólo nombres de clave, estados y metadatos.
 - Producción vigente:
   `https://araya-centro-control.grupobricket.workers.dev`. Fuente canónica:
   GitHub `Montpla/ARAYA-Centro-de-control`. El dominio corporativo (punto 7)
-  está descartado por ahora; no cambiar DNS ni reactivar Sites.
+  queda fuera del proyecto; no cambiar DNS ni reactivar Sites o Railway.
 
 ## Continuidad
 
@@ -318,5 +317,5 @@ El estado técnico, las fuentes incorporadas, las decisiones de diseño y la
 última publicación se mantienen en `HANDOFF.md`. Cualquier LLM que continúe el
 trabajo debe leer primero `HANDOFF.md` —empezando por su aviso de plataforma y
 por la sección fechada más reciente, donde están las trampas que ya costaron un
-fallo—, después `AGENTS.md` si existe y esta guía. `.openai/hosting.json`
-pertenece a la vía de Sites y sólo es relevante si se decide reactivarla.
+fallo—, después `AGENTS.md` si existe y esta guía. La fuente es GitHub y la
+plataforma de ejecución es Cloudflare Workers; no existe configuración de Sites.

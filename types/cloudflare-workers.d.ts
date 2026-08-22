@@ -7,7 +7,7 @@ interface D1Database {
 }
 
 declare module "cloudflare:workers" {
-  // Bindings are supplied by the Sites runtime. Individual routes narrow the
+  // Bindings are supplied by the Cloudflare Workers runtime. Individual routes narrow the
   // non-database binding they use before reading or writing it.
   export const env: {
     DB: D1Database;
