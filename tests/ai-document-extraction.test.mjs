@@ -378,6 +378,73 @@ test("the ingestion agent executes a bounded tool loop and returns an auditable 
   assert.equal(result.updates[0].value, 22.71);
 });
 
+test("an exhausted tool loop is forced to emit one final structured response without more tools", async () => {
+  const requestBodies = [];
+  globalThis.fetch = async (url, init) => {
+    assert.equal(url, "https://api.openai.com/v1/responses");
+    const body = JSON.parse(init.body);
+    requestBodies.push(body);
+    if (requestBodies.length <= 2) {
+      return new Response(JSON.stringify({
+        model: "gpt-5.6-luna",
+        output: [{
+          type: "function_call",
+          call_id: `call-${requestBodies.length}`,
+          name: requestBodies.length === 1 ? "inspect_live_schema" : "reconcile_numbers",
+          arguments: requestBodies.length === 1
+            ? JSON.stringify({ root: "fiduciaryStatementSummary" })
+            : JSON.stringify({ values: [796960916.83, -483862152.04, -313098764.79] }),
+          status: "completed",
+        }],
+        usage: { input_tokens: 100, output_tokens: 20 },
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify({
+      model: "gpt-5.6-luna",
+      output: [{
+        type: "message",
+        content: [{
+          type: "output_text",
+          text: JSON.stringify({
+            updates: [{
+              key: "fiduciaryStatementSummary.balance.netEquityDop",
+              value_json: "313098764.79",
+              area: "finanzas",
+              cutoff: "2026-07-31",
+              source_currency: "DOP",
+              confidence: 0.98,
+              evidence: "BCE julio, Total Equity",
+            }],
+            summary: "Cierre estructurado completado.",
+            warnings: [],
+            confidence: 0.98,
+            unmapped_candidates: [],
+          }),
+        }],
+      }],
+      usage: { input_tokens: 120, output_tokens: 40 },
+    }), { status: 200 });
+  };
+
+  const result = await extraction.extractDocumentWithAI({
+    ...input("png"),
+    maxAgentIterations: 2,
+  });
+
+  assert.equal(requestBodies.length, 3);
+  assert.equal(requestBodies[2].tools, undefined);
+  assert.equal(requestBodies[2].tool_choice, undefined);
+  assert.match(requestBodies[2].instructions, /FINALIZACIÓN OBLIGATORIA/);
+  assert.equal(result.agentIterations, 3);
+  assert.deepEqual(result.agentTrace.map((item) => item.name), [
+    "inspect_live_schema",
+    "reconcile_numbers",
+  ]);
+  assert.equal(result.updates[0].value, 313098764.79);
+  assert.equal(result.inputTokens, 320);
+  assert.equal(result.outputTokens, 80);
+});
+
 test("the ingestion agent accepts the lookup fan-out needed by complex workbooks", async () => {
   let responseCalls = 0;
   globalThis.fetch = async (url, init) => {

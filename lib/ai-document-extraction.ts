@@ -18,7 +18,7 @@ type KnownArea = { id: string; label: string };
 const OPENAI_API_BASE = "https://api.openai.com/v1";
 export const INGESTION_PRIMARY_MODEL = "gpt-5.6-luna";
 export const INGESTION_ESCALATION_MODEL = "gpt-5.6-terra";
-const PROMPT_VERSION = "araya-ingestion-agent-2026-08-22-v3";
+const PROMPT_VERSION = "araya-ingestion-agent-2026-08-22-v4";
 const SAFETY_IDENTIFIER = "araya_document_ingestion_service";
 // Complex financial workbooks often require several independent lookups against
 // the live schema. Keep the loop bounded, but leave enough room for that fan-out.
@@ -1346,9 +1346,51 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
       }
     }
     if (!finalResponse) {
-      throw new OpenAIOperationalError(
-        `El agente no completó una salida estructurada tras ${maxAgentIterations} iteraciones.`,
-      );
+      // Algunos documentos complejos provocan que el modelo utilice una
+      // herramienta distinta en cada ronda y alcance el límite sin emitir el
+      // JSON final, aunque ya haya leído y conciliado los datos. Cerramos con
+      // una única llamada sin herramientas: no puede abrir otro bucle y debe
+      // transformar el contexto acumulado en la salida estructurada. Esta
+      // finalización sólo se paga cuando se agota el bucle normal.
+      const response = await requestOpenAIJson(`${OPENAI_API_BASE}/responses`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${input.apiKey.trim()}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          reasoning: { effort: "low" },
+          instructions: `${EXTRACTION_INSTRUCTIONS}\n\nFINALIZACIÓN OBLIGATORIA\n- No solicites ni invoques más herramientas. Devuelve ahora el objeto JSON final con todos los hechos ya leídos y contrastados.`,
+          input: conversationInput,
+          text: {
+            format: {
+              type: "json_schema",
+              name: "araya_live_data_extraction",
+              description: "Hechos documentales conservadores para el contrato vivo de ARAYA.",
+              strict: true,
+              schema: EXTRACTION_SCHEMA,
+            },
+            verbosity: "low",
+          },
+          max_output_tokens: maxOutputTokens,
+          service_tier: "default",
+          safety_identifier: SAFETY_IDENTIFIER,
+          prompt_cache_key: `${PROMPT_VERSION}-final`,
+          store: false,
+        }),
+      });
+      if (isRecord(response.error)) {
+        throw new OpenAIOperationalError(apiErrorMessage(response, 200));
+      }
+      totalUsage = addAiTokenUsage(totalUsage, readOpenAiTokenUsage(response));
+      if (!responseOutputText(response)) {
+        throw new OpenAIOperationalError(
+          `El agente no completó una salida estructurada tras ${maxAgentIterations} iteraciones y su cierre obligatorio.`,
+        );
+      }
+      finalResponse = response;
+      completedIterations += 1;
     }
     result = {
       ...validateModelOutput(
