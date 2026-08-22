@@ -102,6 +102,30 @@ test("un ZIP con una relación de compresión desproporcionada se rechaza", asyn
   );
 });
 
+test("un ZIP con contraseña explica cómo corregirlo", async () => {
+  const original = new Uint8Array(await leerFixture("corte-mensual.zip"));
+  const encrypted = original.slice();
+  let centralOffset = -1;
+  for (let index = 0; index <= encrypted.length - 4; index += 1) {
+    if (
+      encrypted[index] === 0x50 &&
+      encrypted[index + 1] === 0x4b &&
+      encrypted[index + 2] === 0x01 &&
+      encrypted[index + 3] === 0x02
+    ) {
+      centralOffset = index;
+      break;
+    }
+  }
+  assert.ok(centralOffset >= 0, "el fixture no contiene directorio central");
+  encrypted[centralOffset + 8] |= 0x01;
+
+  await assert.rejects(
+    xlsxReader.readZipEntries(encrypted.buffer, () => true),
+    /contraseña.*sin contraseña/is,
+  );
+});
+
 // --- PDF ---------------------------------------------------------------------
 
 test("se recupera el texto de un PDF con texto digital", async () => {

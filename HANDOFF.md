@@ -1,7 +1,31 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 21/08/2026
+Actualizado: 22/08/2026
 Zona horaria del usuario: Europe/Madrid
+
+## Automatización documental cerrada (22/08/2026)
+
+- La clasificación inicial por nombre deja de ser un bloqueo: cuando el área
+  llega en automático o pendiente, `inferUploadAreaFromContent` vota con el
+  tipo documental, las raíces vivas extraídas y las áreas sugeridas. Una
+  selección expresa se conserva y cualquier señal financiera sigue elevando
+  la privacidad.
+- Cualquier usuario activo puede aportar un original de Finanzas o Ventas. La
+  carga no concede lectura: el documento, sus cifras, el expediente y los
+  avisos continúan protegidos, pero el agente puede procesarlos y el cargador
+  recibe un resultado sin importes.
+- La carga ya no termina en un aviso fugaz: presenta un recibo persistente con
+  área, datos publicados, coincidencias, entradas aisladas, secciones nuevas,
+  advertencias y siguiente paso. Se cierra de forma explícita.
+- El propio formulario ofrece plantillas autenticadas de cubicación, ventas y
+  cronograma. Se entregan sin valores vigentes y sólo hay que rellenar `valor`.
+- PDF escaneado usa la lectura visual asistida cuando está disponible. Si no
+  produce hechos, el mensaje pide un escaneo nítido. XLS antiguo indica guardar
+  como XLSX y ZIP cifrado identifica la contraseña y explica cómo retirarla.
+- `CURRENT_INGESTION_VERSION` pasa a `2026-08-22.1`. El workflow programado está
+  activo, dispone de sus secretos y relee lotes idempotentes cada seis horas.
+- Los conceptos sin campo ya se convierten automáticamente en secciones
+  visuales trazables; no vuelven a crear una cola indefinida de propuestas.
 
 ## Auditoria integral y saneamiento de produccion (21/08/2026)
 

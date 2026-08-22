@@ -511,6 +511,19 @@ type UploadResult = {
   message?: string;
   error?: string;
   file?: UploadedFileRecord;
+  receipt?: {
+    outcome: "published" | "unchanged" | "diagnosed" | "catalogued" | "observed";
+    area: string;
+    areaLabel: string;
+    publishedCount: number;
+    unchangedCount: number;
+    ignoredCount: number;
+    warningCount: number;
+    warnings: string[];
+    newSectionCount: number;
+    requiresAction: boolean;
+    nextAction: string;
+  };
 };
 
 type DocumentDataProposal = {
@@ -6911,7 +6924,7 @@ function FileReviewPanel({
                   <small>{detail.unmappedCandidates.length} sin campo todavía</small>
                 </div>
                 <p className="section-intro">
-                  Datos relevantes que este documento trae pero que no encajan en ningún campo existente del Centro de Control. No se publican solos; hace falta construir su sección correspondiente.
+                  Datos relevantes que no encajaban en un campo existente. El agente ya los incorporó como secciones provisionales con fuente y evidencia; un administrador puede modelarlos después como campos permanentes sin frenar esta carga.
                 </p>
                 {detail.unmappedCandidates.map((candidate) => (
                   <article key={candidate.id} className="unmapped-candidate">
@@ -8443,6 +8456,7 @@ function UploadModal({
   const [sourceCurrency, setSourceCurrency] = useState<CurrencyCode | "auto">("auto");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [completedUpload, setCompletedUpload] = useState<UploadResult | null>(null);
 
   useEffect(() => {
     return () => {
@@ -8480,7 +8494,7 @@ function UploadModal({
         source: "dashboard",
         sourceCurrency,
       });
-      onComplete(result.message ?? "Archivo registrado correctamente.");
+      setCompletedUpload(result);
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "No se pudo cargar el archivo.");
     } finally {
@@ -8488,14 +8502,51 @@ function UploadModal({
     }
   }
 
+  function finishUpload() {
+    if (completedUpload) {
+      onComplete(completedUpload.message ?? "Archivo registrado correctamente.");
+      return;
+    }
+    onClose();
+  }
+
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+    <div className="modal-backdrop" role="presentation" onMouseDown={finishUpload}>
       <form className="modal upload-modal" role="dialog" aria-modal="true" onSubmit={submit} onMouseDown={(event) => event.stopPropagation()}>
         <div className="panel-heading">
           <div><span className="section-kicker">CENTRO DE DATOS · CARGA AUTOMÁTICA</span><h3>Subir archivo al proyecto ARAYA</h3></div>
-          <button className="close-button" type="button" onClick={onClose} aria-label="Cerrar">×</button>
+          <button className="close-button" type="button" onClick={finishUpload} aria-label="Cerrar">×</button>
         </div>
-        <p className="upload-intro">Selecciona el archivo y pulsa <strong>Subir y procesar</strong>. El sistema conserva el original, registra tu identidad y detecta automáticamente el área, el periodo y la moneda. Si los datos extraídos tienen alta confianza y encajan en un campo conocido de tu área, actualizan cifras y gráficas solos; el resto queda claramente señalado para revisión.</p>
+        {completedUpload ? (
+          <section className={`upload-receipt ${completedUpload.receipt?.requiresAction ? "requires-action" : "complete"}`} aria-live="polite">
+            <div className="upload-receipt-mark" aria-hidden="true">
+              {completedUpload.receipt?.requiresAction ? "!" : "✓"}
+            </div>
+            <span className="section-kicker">RECIBO DE PROCESAMIENTO</span>
+            <h3>{completedUpload.receipt?.requiresAction ? "Archivo conservado con una comprobación" : "Archivo procesado correctamente"}</h3>
+            <p>{completedUpload.message ?? "El original quedó registrado en el Centro de Control."}</p>
+            <div className="upload-receipt-metrics">
+              <span><small>Área detectada</small><strong>{completedUpload.receipt?.areaLabel ?? "Catalogada"}</strong></span>
+              <span><small>Datos publicados</small><strong>{completedUpload.receipt?.publishedCount ?? 0}</strong></span>
+              <span><small>Ya coincidían</small><strong>{completedUpload.receipt?.unchangedCount ?? 0}</strong></span>
+              <span><small>Aislados con diagnóstico</small><strong>{completedUpload.receipt?.ignoredCount ?? 0}</strong></span>
+              <span><small>Secciones nuevas</small><strong>{completedUpload.receipt?.newSectionCount ?? 0}</strong></span>
+            </div>
+            {Boolean(completedUpload.receipt?.warnings.length) && (
+              <div className="upload-receipt-warnings">
+                <strong>Lo que el sistema encontró</strong>
+                <ul>{completedUpload.receipt?.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+              </div>
+            )}
+            <div className="upload-receipt-next">
+              <strong>Siguiente paso</strong>
+              <p>{completedUpload.receipt?.nextAction ?? "No tienes que hacer nada."}</p>
+            </div>
+            <button className="button primary" type="button" onClick={finishUpload}>Cerrar recibo</button>
+          </section>
+        ) : (
+          <>
+        <p className="upload-intro">Selecciona el archivo y pulsa <strong>Subir y procesar</strong>. El sistema conserva el original, registra tu identidad y detecta el área por el contenido, además del periodo y la moneda. Cada hecho verificable actualiza cifras y gráficas solo; un concepto nuevo crea su sección y cualquier entrada incompatible queda aislada con un diagnóstico claro.</p>
         <div className={`upload-dropzone ${previewUrl ? "with-preview" : ""}`}>
           <input
             type="file"
@@ -8553,6 +8604,15 @@ function UploadModal({
           </div>
         )}
         {!online && <div className="callout warn"><strong>Modo sin conexión</strong><p>Puedes consultar datos, pero las nuevas cargas se reactivarán cuando vuelva internet.</p></div>}
+        <details className="upload-template-links">
+          <summary>Descargar una plantilla mensual</summary>
+          <p>Úsalas cuando quieras una entrada completamente determinista. Rellena sólo la columna <b>valor</b> y vuelve a subir el CSV.</p>
+          <div>
+            <a className="button secondary" href="/api/templates?kind=cubicacion" download>Cubicación</a>
+            <a className="button secondary" href="/api/templates?kind=ventas" download>Ventas</a>
+            <a className="button secondary" href="/api/templates?kind=cronograma" download>Cronograma</a>
+          </div>
+        </details>
         <details className="upload-advanced-options">
           <summary>
             <span><strong>Opciones avanzadas</strong><small>Normalmente no necesitas rellenarlas</small></span>
@@ -8562,9 +8622,11 @@ function UploadModal({
             <label>
               Área de destino
               <select value={area} onChange={(event) => setArea(event.target.value as UploadArea)}>
-                {uploadAreas
-                  .filter((option) => canAccessFinance || !requiresFinanceAccessForArea(option.id))
-                  .map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                {uploadAreas.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}{!canAccessFinance && requiresFinanceAccessForArea(option.id) ? " · contenido protegido" : ""}
+                  </option>
+                ))}
               </select>
             </label>
             <label>
@@ -8590,6 +8652,8 @@ function UploadModal({
           <button className="button secondary" type="button" onClick={onClose}>Cancelar</button>
           <button className="button primary" type="submit" disabled={!selectedFile || saving || !online}>{saving ? "Subiendo y procesando…" : online ? "Subir y procesar" : "Esperando conexión"}</button>
         </div>
+          </>
+        )}
       </form>
     </div>
   );

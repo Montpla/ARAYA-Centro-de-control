@@ -3848,6 +3848,95 @@ button {
   margin-bottom: 0;
 }
 
+.upload-receipt {
+  display: grid;
+  gap: 16px;
+  padding: 26px 2px 2px;
+}
+
+.upload-receipt-mark {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: #2f6b50;
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.upload-receipt.requires-action .upload-receipt-mark {
+  background: #a5652a;
+}
+
+.upload-receipt h3,
+.upload-receipt p {
+  margin: 0;
+}
+
+.upload-receipt > p {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.upload-receipt-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.upload-receipt-metrics span {
+  min-height: 82px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  padding: 12px;
+  border-right: 1px solid var(--line);
+  background: #fbfaf7;
+}
+
+.upload-receipt-metrics span:last-child {
+  border-right: 0;
+}
+
+.upload-receipt-metrics small,
+.upload-receipt-warnings li,
+.upload-receipt-next p {
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.upload-receipt-metrics strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.upload-receipt-warnings,
+.upload-receipt-next {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #f5f2ea;
+}
+
+.upload-receipt-warnings ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.upload-receipt-next p {
+  margin-top: 5px;
+}
+
+.upload-receipt > .button {
+  justify-self: end;
+}
+
 .upload-intro {
   margin: 10px 0 16px;
   color: var(--muted);
@@ -5894,6 +5983,34 @@ button.financial-detail-row:focus-visible {
 .upload-advanced-options {
   margin-top: 12px;
   background: #fff;
+}
+
+.upload-template-links {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #dcd6c9;
+  border-radius: 13px;
+  background: #f8f4e9;
+}
+
+.upload-template-links > summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.upload-template-links p {
+  margin: 10px 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.upload-template-links > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .upload-advanced-options .form-grid {
@@ -8213,6 +8330,25 @@ button.financial-detail-row:focus-visible {
 
   .upload-modal {
     max-height: calc(94dvh - env(safe-area-inset-top));
+  }
+
+  .upload-receipt-metrics {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .upload-receipt-metrics span {
+    min-height: 70px;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .upload-receipt-metrics span:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .upload-receipt-metrics span:last-child {
+    grid-column: 1 / -1;
+    border-bottom: 0;
   }
 
   .upload-dropzone {

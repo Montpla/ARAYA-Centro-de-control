@@ -24,7 +24,14 @@ import {
 } from "../../../db/schema";
 import { requireApiUser } from "../../../lib/access-control";
 import { resolveSourceCurrency } from "../../../lib/currency";
-import { areaLabels, classifyUpload, isUploadArea, safeFileName, uploadAreas } from "../../../lib/file-routing";
+import {
+  areaLabels,
+  classifyUpload,
+  inferUploadAreaFromContent,
+  isUploadArea,
+  safeFileName,
+  uploadAreas,
+} from "../../../lib/file-routing";
 import { analyzeDocument, archiveDocumentsForAI, extractStructuredUpdates } from "../../../lib/ingestion";
 import { CURRENT_INGESTION_VERSION } from "../../../lib/ingestion-version";
 import {
@@ -792,9 +799,6 @@ export async function POST(request: Request) {
     description,
     declaredArea: String(formData.get("area") ?? "auto"),
   });
-  if (requiresFinanceAccessForArea(classification.area) && !user.financeAccess) {
-    return Response.json({ error: "No tienes permiso para cargar documentos financieros o comerciales." }, { status: 403 });
-  }
   const safeName = safeFileName(candidate.name);
   const bytes = await candidate.arrayBuffer();
   const analysis = analyzeDocument({
@@ -815,9 +819,6 @@ export async function POST(request: Request) {
     classification.area,
     analysis.documentType,
   );
-  if (initiallyProtectedUpload && !user.financeAccess) {
-    return Response.json({ error: "El contenido detectado requiere acceso financiero y comercial." }, { status: 403 });
-  }
   const sha256 = hexDigest(await crypto.subtle.digest("SHA-256", bytes));
   const db = getDb();
 
@@ -1080,6 +1081,8 @@ export async function POST(request: Request) {
   scheduleNotificationDispatch();
 
   let resolvedArea = row.area;
+  let resolvedClassificationConfidence = classification.confidence;
+  let resolvedClassificationReason = classification.reason;
   let resolvedDocumentType = row.documentType === PROVISIONAL_DOCUMENT_TYPE
     ? analysis.documentType
     : row.documentType;
@@ -1331,6 +1334,17 @@ export async function POST(request: Request) {
     // visible en Centro de datos. Su área conserva la misma privacidad que el
     // resto del sistema; el servicio puede incorporarlo aunque el cargador no
     // tenga permiso de lectura sobre la pantalla financiera resultante.
+    const contentClassification = inferUploadAreaFromContent({
+      initialArea: classification.area,
+      initialConfidence: classification.confidence,
+      documentType: analysis.documentType,
+      updateKeys: extraction.updates.map((update) => update.key),
+      suggestedAreas: extraction.unmappedCandidates.map((candidate) => candidate.suggestedArea),
+    });
+    resolvedArea = contentClassification.area;
+    resolvedClassificationConfidence = contentClassification.confidence;
+    resolvedClassificationReason = contentClassification.reason;
+
     const candidatosProvisionales = extraction.unmappedCandidates
       .map((candidato) => {
         const suggested = candidato.suggestedArea.trim().toLowerCase();
@@ -1415,7 +1429,12 @@ export async function POST(request: Request) {
       ? normalizeIngestedUpdatesResilient(
           ingestionCandidates.map(({ update }) => update),
           {
-            area: classification.area,
+            // La segunda clasificación ya conoce el contenido real. Usar aquí
+            // el área inicial volvería a marcar como `sin_clasificar` las
+            // actualizaciones de un archivo con nombre neutro y bloquearía su
+            // publicación, aunque el lector hubiese identificado Obra,
+            // Seguridad, Compras, etc. con certeza.
+            area: resolvedArea,
             cutoff: effectiveCutoff,
             sourceFileId: id,
             sourceName: candidate.name,
@@ -1602,11 +1621,11 @@ export async function POST(request: Request) {
         area: resolvedArea,
         documentType: resolvedDocumentType,
         classificationConfidence: financeProtectedUpload
-          ? Math.max(classification.confidence, extraction.confidence)
-          : classification.confidence,
+          ? Math.max(resolvedClassificationConfidence, extraction.confidence)
+          : resolvedClassificationConfidence,
         classificationReason: financeProtectedUpload && !initiallyProtectedUpload
-          ? `${classification.reason} El contenido extraído elevó el expediente a acceso financiero/comercial.`
-          : classification.reason,
+          ? `${resolvedClassificationReason} El contenido extraído elevó el expediente a acceso financiero/comercial.`
+          : resolvedClassificationReason,
         status: normalizedUpdates.length ? "pendiente_revision" : "integrado",
         processingStage: normalizedUpdates.length ? "contraste" : "sincronizado",
         processingProgress: normalizedUpdates.length ? 75 : 100,
@@ -1907,18 +1926,54 @@ export async function POST(request: Request) {
     if (financeProtectedUpload && !user.financeAccess) {
       return Response.json({
         restricted: true,
-        message: "El contenido se ha archivado y dirigido a Finanzas/Ventas. Solo las personas autorizadas pueden verlo o publicar sus datos.",
+        receipt: {
+          outcome: publicationCompleted ? "published" : unchangedCount ? "unchanged" : "catalogued",
+          area: resolvedArea,
+          areaLabel: "Área financiera/comercial protegida",
+          publishedCount: agentPublishedCount,
+          unchangedCount,
+          ignoredCount: automaticallyDiscardedCount,
+          warningCount: extraction.warnings.length,
+          warnings: extraction.warnings.slice(0, 4),
+          newSectionCount: extraction.unmappedCandidates.length,
+          requiresAction: false,
+          nextAction: "No tienes que hacer nada. Las cifras quedan visibles sólo para las personas autorizadas.",
+        },
+        message: "El contenido se ha archivado y procesado en Finanzas/Ventas. Solo las personas autorizadas pueden consultar sus cifras o abrir el expediente.",
       }, { status: 202 });
     }
     return Response.json(
       {
         file: publicFileRow(currentRow, user),
+        receipt: {
+          outcome: publicationCompleted
+            ? "published"
+            : unchangedCount
+              ? "unchanged"
+              : automaticallyDiscardedCount
+                ? "diagnosed"
+                : "catalogued",
+          area: resolvedArea,
+          areaLabel: areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea,
+          publishedCount: agentPublishedCount,
+          unchangedCount,
+          ignoredCount: automaticallyDiscardedCount,
+          warningCount: extraction.warnings.length,
+          warnings: extraction.warnings.slice(0, 4),
+          newSectionCount: extraction.unmappedCandidates.length,
+          requiresAction: Boolean(currentRow.requiresReview),
+          nextAction: currentRow.requiresReview
+            ? "Abre el expediente para resolver la comprobación indicada."
+            : publicationCompleted
+              ? "No tienes que hacer nada: el Centro de Control ya está sincronizado."
+              : "El original quedó archivado y los valores vigentes se conservaron.",
+        },
         message: automaticMessage || (normalizedUpdates.length
           ? `Archivo registrado en ${areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea}. Se han preparado ${normalizedUpdates.length} cambios para revisión.`
           : nothingExtractedMessage(
               areaLabels[resolvedArea as keyof typeof areaLabels] ?? resolvedArea,
               extension,
-              extraction.warnings,
+              [extraction.summary, ...extraction.warnings],
             )),
         ...(debugRequested && user.financeAccess ? {
           diagnostic: {
@@ -2034,11 +2089,37 @@ export async function POST(request: Request) {
     if (fileRequiresFinanceAccess(currentRow) && !user.financeAccess) {
       return Response.json({
         restricted: true,
+        receipt: {
+          outcome: "observed",
+          area: "protegida",
+          areaLabel: "Área financiera/comercial protegida",
+          publishedCount: 0,
+          unchangedCount: 0,
+          ignoredCount: 0,
+          warningCount: 1,
+          warnings: ["El equipo autorizado recibirá el diagnóstico del procesamiento."],
+          newSectionCount: 0,
+          requiresAction: false,
+          nextAction: "No vuelvas a subir otra copia; el original ya está conservado.",
+        },
         message: "El original está archivado de forma confidencial y queda pendiente de revisión por una persona autorizada.",
       }, { status: 202 });
     }
     return Response.json({
       file: publicFileRow(currentRow, user),
+      receipt: {
+        outcome: "observed",
+        area: currentRow.area,
+        areaLabel: areaLabels[currentRow.area as keyof typeof areaLabels] ?? currentRow.area,
+        publishedCount: publicationCompleted ? agentPublishedCount : 0,
+        unchangedCount: 0,
+        ignoredCount: 0,
+        warningCount: 1,
+        warnings: [processingSummary],
+        newSectionCount: 0,
+        requiresAction: true,
+        nextAction: "Abre el expediente observado; el original ya está guardado y no debes subir otra copia.",
+      },
       message: processingSummary,
       ...(debugRequested && user.financeAccess ? { debug: debugDetail } : {}),
     }, { status: 201 });

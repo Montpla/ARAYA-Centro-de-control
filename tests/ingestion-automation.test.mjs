@@ -59,7 +59,7 @@ test("el lector queda versionado y reprocesa históricos en lotes acotados", asy
   assert.match(script, /form\.set\("reprocess", "true"\)/);
   assert.match(script, /form\.set\("reprocessFileId", file\.id\)/);
   assert.match(route, /eq\(uploadedFiles\.id, reprocessFileId\)/);
-  assert.match(workflow, /MAX_POR_EJECUCION: "3"/);
+  assert.match(workflow, /MAX_POR_EJECUCION: "5"/);
 });
 
 test("la información sin campo crea secciones provisionales con privacidad por área", async () => {

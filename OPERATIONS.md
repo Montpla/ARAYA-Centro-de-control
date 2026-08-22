@@ -18,6 +18,39 @@
 El refresco de cinco segundos consulta D1 y no usa tokens. Sólo la interpretación
 semántica de un documento o una consulta al asistente usa la API de IA.
 
+### Flujo automático definitivo
+
+```text
+[Carga o cámara]
+      -> [Original privado e idempotente]
+      -> [Lectores deterministas]
+      -> [IA sólo completa huecos]
+      -> [Área inferida por contenido]
+      -> [Contrato + contraste dato a dato]
+      -> [Publicación + gráficas + mapas]
+      -> [Recibo visible + aviso + historial]
+                    |
+                    +-> dato incompatible: [diagnóstico aislado, sin bloquear]
+                    +-> fallo real: [original conservado + acción concreta]
+```
+
+Reglas operativas:
+
+- No es obligatorio elegir área ni renombrar el archivo. El nombre sólo sirve
+  como primera pista; los datos que encuentran los lectores deciden el destino
+  cuando la selección estaba en automático.
+- Subir un documento protegido no concede acceso a Finanzas. La persona que lo
+  aporta ve únicamente un recibo sin cifras y el equipo autorizado recibe la
+  actualización en su sección.
+- El recibo no desaparece solo: muestra publicados, ya vigentes, aislados,
+  secciones nuevas, avisos y la única acción que corresponda.
+- Las plantillas de cubicación, ventas y cronograma se descargan dentro del
+  formulario de carga. No incluyen valores actuales y se rellenan únicamente
+  en la columna `valor`.
+- Cada mejora que cambia `CURRENT_INGESTION_VERSION` activa el reproceso de los
+  expedientes anteriores en lotes pequeños. Reprocesar no duplica el original
+  ni permite que un corte viejo sustituya otro más reciente.
+
 ### Cierre automático de cada carga
 
 - La publicación automática es el comportamiento predeterminado aunque una

@@ -28,6 +28,16 @@ export function nothingExtractedMessage(
   if (DEFERRED_CONVERSION_EXTENSIONS.has(extension)) {
     return `${base}. La vista automática del .${extension} queda programada y se enlazará a este original cuando termine. En un DWG, la conversión genera una imagen navegable para móvil/tableta y lectura visual, normalmente en menos de una hora.`;
   }
+  const warningText = warnings.join(" ").toLowerCase();
+  if (extension === "xls") {
+    return `${base}, pero el libro antiguo no produjo datos verificables. Ábrelo en Excel o LibreOffice y guárdalo como .xlsx; después vuelve a subir esa copia moderna.`;
+  }
+  if (extension === "zip" && /contraseña|cifrad|proteg/.test(warningText)) {
+    return `${base}, pero el comprimido está protegido. Descomprímelo, elimina la contraseña y vuelve a subir el ZIP o sus documentos internos.`;
+  }
+  if (extension === "pdf" && /escane|imagen|ocr/.test(warningText)) {
+    return `${base}, pero el escaneo no produjo datos verificables. Sube una copia más nítida o vuelve a escanearlo con las páginas rectas y completas.`;
+  }
   const detalle = warnings
     .map((warning) => warning.trim())
     .filter(Boolean)

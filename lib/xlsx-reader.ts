@@ -57,6 +57,12 @@ export async function readZipEntries(
   if (bytes.byteLength < 22) throw new Error("El archivo ZIP está incompleto.");
   const view = new DataView(bytes);
   const all = new Uint8Array(bytes);
+  const compoundFileSignature = [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1];
+  if (compoundFileSignature.every((byte, index) => all[index] === byte)) {
+    throw new Error(
+      "El archivo usa un contenedor antiguo o cifrado. Ábrelo, quita la contraseña y guárdalo de nuevo como .xlsx, .docx o .pptx.",
+    );
+  }
   // El fin del directorio central está al final, tras un comentario de longitud
   // variable, así que se busca su firma hacia atrás.
   let endOffset = -1;
@@ -77,6 +83,7 @@ export async function readZipEntries(
   for (let index = 0; index < entryCount; index += 1) {
     if (pointer < 0 || pointer + 46 > all.length) throw new Error("El directorio del ZIP está dañado.");
     if (readUint32(view, pointer) !== 0x02014b50) break;
+    const flags = readUint16(view, pointer + 8);
     const method = readUint16(view, pointer + 10);
     const compressedSize = readUint32(view, pointer + 20);
     const uncompressedSize = readUint32(view, pointer + 24);
@@ -89,6 +96,11 @@ export async function readZipEntries(
     if (!wanted(name)) continue;
 
     if (entries.length >= maxSelectedEntries) throw new Error("El ZIP contiene demasiados documentos procesables.");
+    if ((flags & 0x0001) !== 0 || method === 99) {
+      throw new Error(
+        `La entrada ${name} está protegida con contraseña. Descomprime el ZIP y vuelve a subir sus archivos sin contraseña.`,
+      );
+    }
     if (uncompressedSize > maxEntryUncompressedBytes) throw new Error(`La entrada ${name} supera el tamaño permitido.`);
     selectedUncompressedBytes += uncompressedSize;
     if (selectedUncompressedBytes > maxTotalUncompressedBytes) {

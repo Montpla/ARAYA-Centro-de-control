@@ -122,6 +122,134 @@ export function classifyUpload(input: {
   };
 }
 
+const contentRootAreas: Record<string, Exclude<ClassifiedArea, "sin_clasificar">> = {
+  buildings: "obra",
+  constructionDisciplines: "obra",
+  structuralDelay: "obra",
+  workPackages: "obra",
+  projectCertifications: "obra",
+  monthlyPlan: "planificacion",
+  timeline: "planificacion",
+  urbanismAreas: "urbanismo",
+  urbanismReportAreas: "urbanismo",
+  delayedUrbanismStarts: "urbanismo",
+  safetyMetrics: "seguridad",
+  safetyFindings: "seguridad",
+  safetyFindingTracking: "seguridad",
+  safetyWeeklySeries: "seguridad",
+  permits: "legal",
+  supplierComparisons: "compras",
+  supplierDirectory: "compras",
+  procurementMonthlySchedule: "compras",
+  procurementPackages: "compras",
+  arrearsBreakdown: "comercial",
+  collectionTargets: "comercial",
+  commercialPartners: "comercial",
+  salesLocations: "comercial",
+  salesModels: "comercial",
+  advances: "finanzas",
+  antonelyAdvances: "finanzas",
+  antonelyBalanceLines: "finanzas",
+  antonelyCostAccounts: "finanzas",
+  antonelyDetailTotals: "finanzas",
+  antonelyFinanceSource: "finanzas",
+  antonelyPayableCategories: "finanzas",
+  antonelyPayableInvoiceLines: "finanzas",
+  antonelyPayableVendorsAll: "finanzas",
+  costBreakdown: "finanzas",
+  cubicaciones: "finanzas",
+  cubicacionCaratula: "finanzas",
+  cxpAging: "finanzas",
+  cxpCategories: "finanzas",
+  financialProjection: "finanzas",
+  financingProcesses: "finanzas",
+  fiduciaryBalanceSections: "finanzas",
+  fiduciaryManagementReconciliation: "finanzas",
+  fiduciaryStatementQualityIssues: "finanzas",
+  fiduciaryStatementSummary: "finanzas",
+  ifcComplianceGroups: "finanzas",
+  ifcComplianceTracking: "finanzas",
+  monthlyDeviationLines: "finanzas",
+  payablesReconciliation: "finanzas",
+  reprogrammedFlowAudit: "finanzas",
+  reprogrammedFlowMonths: "finanzas",
+  reprogrammedFlowQualityIssues: "finanzas",
+  reprogrammedFlowScopes: "finanzas",
+  typeABudgetChapters: "finanzas",
+};
+
+const contentDocumentAreas: Record<string, Exclude<ClassifiedArea, "sin_clasificar">> = {
+  avance_obra: "obra",
+  cronograma: "planificacion",
+  ventas_cobranza: "comercial",
+  estado_financiero: "finanzas",
+  proveedores_compras: "compras",
+  plano_diseno: "diseno",
+  urbanismo: "urbanismo",
+};
+
+/**
+ * Segunda clasificación, basada en lo que los lectores encontraron de verdad.
+ * Una selección expresa del usuario se conserva; el contenido corrige sólo la
+ * clasificación automática o pendiente. Finanzas y Comercial también pasan
+ * después por la frontera de privacidad del servidor.
+ */
+export function inferUploadAreaFromContent(input: {
+  initialArea: ClassifiedArea;
+  initialConfidence: number;
+  documentType: string;
+  updateKeys: string[];
+  suggestedAreas?: string[];
+}) {
+  if (input.initialArea !== "sin_clasificar" && input.initialConfidence >= 1) {
+    return {
+      area: input.initialArea,
+      confidence: input.initialConfidence,
+      reason: "Área indicada expresamente por el usuario.",
+      changed: false,
+    } as const;
+  }
+
+  const votes = new Map<Exclude<ClassifiedArea, "sin_clasificar">, number>();
+  const addVote = (area: Exclude<ClassifiedArea, "sin_clasificar">, weight: number) =>
+    votes.set(area, (votes.get(area) ?? 0) + weight);
+
+  const documentArea = contentDocumentAreas[input.documentType];
+  if (documentArea) addVote(documentArea, 4);
+  for (const key of input.updateKeys) {
+    const area = contentRootAreas[key.split(".", 1)[0]];
+    if (area) addVote(area, 3);
+  }
+  for (const suggestedArea of input.suggestedAreas ?? []) {
+    const normalizedArea = suggestedArea.trim().toLowerCase();
+    if (isUploadArea(normalizedArea) && normalizedArea !== "auto" && normalizedArea !== "sin_clasificar") {
+      addVote(normalizedArea, 2);
+    }
+  }
+  if (input.initialArea !== "sin_clasificar") addVote(input.initialArea, 1);
+
+  const ranked = [...votes.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const best = ranked[0];
+  if (!best || (ranked[1] && ranked[1][1] === best[1])) {
+    return {
+      area: input.initialArea,
+      confidence: input.initialConfidence,
+      reason: best
+        ? "El contenido mezcla varias áreas con el mismo peso; se conserva la clasificación inicial."
+        : "El contenido no aporta señales suficientes para cambiar el área.",
+      changed: false,
+    } as const;
+  }
+
+  const [area, score] = best;
+  return {
+    area,
+    confidence: Math.min(0.99, 0.91 + Math.max(0, score - 3) * 0.01),
+    reason: `Clasificación automática por contenido: el lector encontró ${score} punto${score === 1 ? "" : "s"} de evidencia de ${areaLabels[area]}.`,
+    changed: area !== input.initialArea,
+  } as const;
+}
+
 export function safeFileName(fileName: string) {
   const lastSegment = fileName.split(/[\\/]/).pop() || "archivo";
   const dot = lastSegment.lastIndexOf(".");

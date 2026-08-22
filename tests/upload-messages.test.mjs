@@ -53,3 +53,25 @@ test("sin avisos el mensaje sigue siendo legible", () => {
   assert.match(mensaje, /Archivo registrado en Finanzas/);
   assert.doesNotMatch(mensaje, /\s{2,}/);
 });
+
+test("un XLS antiguo indica la conversión exacta", () => {
+  const mensaje = nothingExtractedMessage("Obra", "xls", []);
+  assert.match(mensaje, /\.xlsx/);
+  assert.match(mensaje, /Excel o LibreOffice/);
+});
+
+test("un ZIP cifrado no se confunde con un fallo genérico", () => {
+  const mensaje = nothingExtractedMessage("Obra", "zip", [
+    "La entrada informe.xlsx está protegida con contraseña.",
+  ]);
+  assert.match(mensaje, /elimina la contraseña/i);
+  assert.match(mensaje, /documentos internos/i);
+});
+
+test("un PDF escaneado pide una copia legible", () => {
+  const mensaje = nothingExtractedMessage("Obra", "pdf", [
+    "El PDF parece un escaneo sin texto extraíble.",
+  ]);
+  assert.match(mensaje, /más nítida/i);
+  assert.match(mensaje, /páginas rectas/i);
+});
