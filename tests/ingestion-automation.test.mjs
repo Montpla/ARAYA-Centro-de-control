@@ -24,8 +24,12 @@ test("MPP y DWG tienen conversión programada, idempotente y enlazada al origina
     read(".github/workflows/convertir-dwg.yml"),
   ]);
   assert.match(mppWorkflow, /cron: "\*\/15 \* \* \* \*"/);
+  assert.match(mppWorkflow, /--retry 4 --retry-all-errors/);
   assert.match(mppScript, /derivedFromFileId/);
   assert.match(mppScript, /mpp_to_xml/);
+  assert.match(mppScript, /HTTP_MAX_INTENTOS = 4/);
+  assert.match(mppScript, /el servidor devolvió una respuesta vacía/);
+  assert.match(mppScript, /solicitarJson\(/);
   assert.match(dwgWorkflow, /libredwg\/libredwg\/releases\/download\/0\.14/i);
   assert.match(dwgWorkflow, /62ebb73b984f865960f20ed26619ea5f8789d5e3fd088fa40a2598384da81275/);
   assert.match(dwgWorkflow, /actions\/cache@v5/);

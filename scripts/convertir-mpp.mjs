@@ -21,6 +21,67 @@ const APLICAR = process.env.APLICAR === "1";
 const FILTRO = (process.env.FILTRO ?? "").toLowerCase();
 const MPXJ_CP = process.env.MPXJ_CP ?? "";
 const MAX_POR_EJECUCION = Math.max(1, Math.min(10, Number(process.env.MAX_POR_EJECUCION ?? 5) || 5));
+const HTTP_MAX_INTENTOS = 4;
+const HTTP_TIMEOUT_MS = 20_000;
+
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const estadoTransitorio = (status) => status === 408 || status === 425 || status === 429 || status >= 500;
+
+function errorHttp(etiqueta, status, detalle = "") {
+  const sufijo = detalle.trim() ? ` · ${detalle.trim().slice(0, 240)}` : "";
+  const error = new Error(`${etiqueta}: HTTP ${status}${sufijo}`);
+  error.retryable = estadoTransitorio(status);
+  return error;
+}
+
+async function conReintentos(etiqueta, operacion) {
+  let ultimoError;
+  let intentosRealizados = 0;
+  for (let intento = 1; intento <= HTTP_MAX_INTENTOS; intento += 1) {
+    intentosRealizados = intento;
+    try {
+      return await operacion();
+    } catch (error) {
+      ultimoError = error;
+      if (error?.retryable === false || intento === HTTP_MAX_INTENTOS) break;
+      const demora = 750 * (2 ** (intento - 1));
+      console.warn(`⚠ ${etiqueta}: ${error?.message ?? error}. Reintento ${intento + 1}/${HTTP_MAX_INTENTOS} en ${demora} ms.`);
+      await esperar(demora);
+    }
+  }
+  throw new Error(`${etiqueta}: fallo tras ${intentosRealizados} intento(s). ${ultimoError?.message ?? ultimoError}`, { cause: ultimoError });
+}
+
+async function solicitar(etiqueta, url, init = {}, aceptar = (response) => response.ok) {
+  return conReintentos(etiqueta, async () => {
+    const opciones = typeof init === "function" ? init() : init;
+    const response = await fetch(url, {
+      ...opciones,
+      signal: opciones.signal ?? AbortSignal.timeout(HTTP_TIMEOUT_MS),
+    });
+    if (aceptar(response)) return response;
+    const detalle = await response.text().catch(() => "");
+    throw errorHttp(etiqueta, response.status, detalle);
+  });
+}
+
+async function solicitarJson(etiqueta, url, init = {}) {
+  return conReintentos(etiqueta, async () => {
+    const opciones = typeof init === "function" ? init() : init;
+    const response = await fetch(url, {
+      ...opciones,
+      signal: opciones.signal ?? AbortSignal.timeout(HTTP_TIMEOUT_MS),
+    });
+    const texto = await response.text();
+    if (!response.ok) throw errorHttp(etiqueta, response.status, texto);
+    if (!texto.trim()) throw new Error(`${etiqueta}: el servidor devolvió una respuesta vacía`);
+    try {
+      return JSON.parse(texto);
+    } catch (cause) {
+      throw new Error(`${etiqueta}: el servidor devolvió JSON incompleto o inválido`, { cause });
+    }
+  });
+}
 
 const email = process.env.DEPLOY_VERIFY_EMAIL;
 const pin = process.env.DEPLOY_VERIFY_PIN;
@@ -33,11 +94,11 @@ if (!MPXJ_CP) {
   process.exit(1);
 }
 
-const login = await fetch(`${PRODUCTION_URL}/api/auth/login`, {
+const login = await solicitar("Inicio de sesión", `${PRODUCTION_URL}/api/auth/login`, {
   method: "POST",
   body: new URLSearchParams({ email, pin }),
   redirect: "manual",
-});
+}, (response) => response.status >= 200 && response.status < 400);
 const cookieMatch = login.headers.get("set-cookie")?.match(/araya_session=([^;]+)/);
 if (!cookieMatch) {
   console.error("✖ El login no devolvió cookie de sesión.");
@@ -45,8 +106,11 @@ if (!cookieMatch) {
 }
 const Cookie = `araya_session=${cookieMatch[1]}`;
 
-const filesResponse = await fetch(`${PRODUCTION_URL}/api/files?limit=200`, { headers: { Cookie } });
-const { files = [] } = await filesResponse.json();
+const { files = [] } = await solicitarJson(
+  "Consulta de archivos",
+  `${PRODUCTION_URL}/api/files?limit=200`,
+  { headers: { Cookie } },
+);
 const activos = files.filter((f) => !f.deletedAt);
 const candidatos = activos.filter((f) =>
   !f.deletedAt &&
@@ -79,9 +143,15 @@ function nombreXml(original) {
 }
 
 for (const f of objetivo) {
-  const descarga = await fetch(`${PRODUCTION_URL}/api/files?download=${encodeURIComponent(f.id)}`, { headers: { Cookie } });
-  if (!descarga.ok) {
-    console.error(`✖ ${f.originalName}: no se pudo descargar (${descarga.status}).`);
+  let descarga;
+  try {
+    descarga = await solicitar(
+      `Descarga de ${f.originalName}`,
+      `${PRODUCTION_URL}/api/files?download=${encodeURIComponent(f.id)}`,
+      { headers: { Cookie } },
+    );
+  } catch (error) {
+    console.error(`✖ ${f.originalName}: no se pudo descargar. ${error.message}`);
     continue;
   }
   const bytes = Buffer.from(await descarga.arrayBuffer());
