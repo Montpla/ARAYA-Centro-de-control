@@ -24,7 +24,9 @@ test("MPP y DWG tienen conversión programada, idempotente y enlazada al origina
     read(".github/workflows/convertir-dwg.yml"),
   ]);
   assert.match(mppWorkflow, /cron: "\*\/15 \* \* \* \*"/);
-  assert.match(mppWorkflow, /--retry 4 --retry-all-errors/);
+  assert.match(mppWorkflow, /cache-dependency-path: scripts\/mpxj-pom\.xml/);
+  assert.match(mppWorkflow, /maven-dependency-plugin:3\.11\.0:build-classpath/);
+  assert.match(mppWorkflow, /después de 3 intentos/);
   assert.match(mppScript, /derivedFromFileId/);
   assert.match(mppScript, /mpp_to_xml/);
   assert.match(mppScript, /HTTP_MAX_INTENTOS = 4/);
