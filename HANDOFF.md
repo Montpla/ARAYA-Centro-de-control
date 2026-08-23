@@ -1,7 +1,55 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 22/08/2026
+Actualizado: 23/08/2026
 Zona horaria del usuario: Europe/Madrid
+
+## Cierre GitHub: conversor MPP estabilizado (23/08/2026)
+
+Esta sección es el estado canónico más reciente y sustituye las referencias
+anteriores que presenten `78f4232` o `d87a6e1` como último commit vigente.
+
+- Fuente única: repositorio privado GitHub
+  `Montpla/ARAYA-Centro-de-control`. Producción continúa en
+  `https://araya-centro-control.grupobricket.workers.dev`. No usar Sites,
+  Railway ni `proyectosgrupobricket.com`.
+- Último commit funcional entregado: **`d53adfd`** en `main` y
+  `codex/agente-ingesta-araya`. Este cierre documental se publica después con
+  `[skip ci]`, sin desplegar otra versión de la aplicación.
+- La ejecución programada **`32619780760`** falló al consultar
+  `/api/files?limit=200`: el servidor devolvió transitoriamente un cuerpo vacío
+  y `response.json()` produjo `Unexpected end of JSON input`. No falló la
+  conversión del MPP ni se perdió un documento. La siguiente ejecución
+  **`32621233236`** terminó correctamente y confirmó 2 MPP candidatos y 0
+  pendientes.
+- El commit **`6d53544`** protege el acceso HTTP del conversor con cuatro
+  intentos, espera exponencial, tiempo máximo de 20 segundos, comprobación de
+  estado y detección explícita de JSON vacío/incompleto. Login, consulta y
+  descarga usan ese recorrido. La ejecución manual **`32621961414`** terminó
+  correctamente.
+- La ejecución programada posterior **`32625315522`** encontró otra avería
+  independiente: Maven Central no resolvió el prefijo del complemento
+  `dependency` y devolvió `NoPluginFoundForPrefixException`. Tampoco llegó a
+  leer ni alterar ningún MPP.
+- El commit **`d53adfd`** elimina esa resolución dinámica. MPXJ queda fijado en
+  `13.12.0` y `maven-dependency-plugin` en `3.11.0` mediante
+  `scripts/mpxj-pom.xml`; el workflow invoca el objetivo completamente
+  cualificado, guarda el repositorio Maven en caché, repite el paso completo
+  hasta tres veces y limita el trabajo a 12 minutos.
+- Validación final real: ejecución **`32626307861`** en verde, 29 segundos,
+  caché Maven guardada, 2 MPP candidatos y **0 pendientes**. Pruebas focalizadas
+  `tests/ingestion-automation.test.mjs`: 6/6; TypeScript y ESLint focalizado en
+  verde. No hay cambios locales sin guardar.
+- Archivos principales de este cierre:
+  `.github/workflows/convertir-mpp.yml`, `scripts/convertir-mpp.mjs`,
+  `scripts/mpxj-pom.xml` y `tests/ingestion-automation.test.mjs`.
+- No se añadieron credenciales al repositorio. El workflow continúa leyendo
+  `DEPLOY_VERIFY_EMAIL` y `DEPLOY_VERIFY_PIN` exclusivamente desde GitHub
+  Secrets. No imprimir ni copiar esos valores en documentación o registros.
+
+Para continuar en otro LLM: clonar o actualizar `main`, leer primero este
+`HANDOFF.md`, comprobar que `git status` esté limpio y revisar el último run de
+`convertir-mpp.yml`. No es necesario reprocesar los dos MPP actuales mientras
+el workflow siga mostrando 0 pendientes.
 
 ## Contraste del encabezado operativo (22/08/2026)
 
