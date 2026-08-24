@@ -9401,18 +9401,6 @@ export function DashboardClient({
   }, []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const stored = window.localStorage.getItem("bricket-agent-open-v1");
-      if (stored === "true") setAgentOpen(true);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("bricket-agent-open-v1", agentOpen ? "true" : "false");
-  }, [agentOpen]);
-
-  useEffect(() => {
     let active = true;
     void (async () => {
       await Promise.resolve();
@@ -9530,12 +9518,6 @@ export function DashboardClient({
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [biometricRecord]);
-
-  useEffect(() => {
-    if (!window.matchMedia("(max-width: 760px)").matches) return;
-    const timer = window.setTimeout(() => setAgentOpen(false), 0);
-    return () => window.clearTimeout(timer);
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -10162,7 +10144,7 @@ export function DashboardClient({
     setFileViewer(null);
     setDeviceCenterOpen(false);
     setPendingUploadFiles([]);
-    setAgentOpen(projectId === "araya" && !window.matchMedia("(max-width: 1100px)").matches);
+    setAgentOpen(false);
   }
 
   function openFileInViewer(event: ReactMouseEvent<HTMLDivElement>) {
