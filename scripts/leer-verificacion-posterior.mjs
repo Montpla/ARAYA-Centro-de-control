@@ -20,7 +20,7 @@ if (!REVISION) {
 const { stdout } = await run("npx", [
   "wrangler", "d1", "execute", "araya-centro-control-d1",
   "--remote", "--config", "wrangler.deploy.jsonc", "--json",
-  "--command", `SELECT id, revision, verification_json FROM live_data_events WHERE id = ${Number(REVISION)};`,
+  "--command", `SELECT id, source_name, verification_json FROM live_data_events WHERE id = ${Number(REVISION)};`,
 ], { maxBuffer: 16 * 1024 * 1024 });
 
 const parsed = JSON.parse(stdout);
