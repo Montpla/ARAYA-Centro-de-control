@@ -1,0 +1,23 @@
+name: Diagnosticar avisos push en vivo
+
+# Sólo lectura: por qué los avisos push "en vivo" nunca llegan aunque la
+# prueba manual de servidor (/api/push/test) sí funciona. Revisa
+# suscripciones activas, preferencias por usuario y el resultado real de
+# las últimas entregas intentadas.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  diagnosticar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Diagnosticar push
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/diagnosticar-push.mjs
