@@ -1,0 +1,30 @@
+name: Leer verificación posterior de una revisión
+
+# Consulta de sólo lectura contra D1 remoto: el detalle de por qué una
+# revisión quedó "verificacion_posterior_fallida", sin tocar ningún dato.
+# El JSON de verificación nunca contiene cifras (sólo claves y estado).
+
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: "Id de live_data_events a inspeccionar"
+        required: true
+        type: string
+
+jobs:
+  leer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Leer verificación posterior
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          REVISION: ${{ inputs.revision }}
+        run: node scripts/leer-verificacion-posterior.mjs
