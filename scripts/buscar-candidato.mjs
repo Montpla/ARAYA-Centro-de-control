@@ -18,7 +18,7 @@ const { stdout } = await run("npx", [
   "wrangler", "d1", "execute", "araya-centro-control-d1",
   "--remote", "--config", "wrangler.deploy.jsonc", "--json",
   "--command",
-  `SELECT id, file_id, label, description, suggested_area, evidence, confidence, status, review_note, created_at FROM unmapped_field_candidates WHERE lower(label) LIKE '%${FRAGMENTO}%';`,
+  `SELECT id, file_id, label, description, suggested_area, evidence, confidence, status, review_note, created_at, value_json FROM unmapped_field_candidates WHERE lower(label) LIKE '%${FRAGMENTO}%';`,
 ], { maxBuffer: 16 * 1024 * 1024 });
 
 const parsed = JSON.parse(stdout);
@@ -33,4 +33,5 @@ for (const fila of rows) {
   console.log(`evidencia: ${fila.evidence}`);
   console.log(`nota de revisión: ${fila.review_note || "(ninguna)"}`);
   console.log(`creado: ${fila.created_at}`);
+  console.log(`valor: ${fila.value_json}`);
 }

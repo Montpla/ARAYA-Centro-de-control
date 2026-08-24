@@ -1,0 +1,22 @@
+name: Ver puntos discoveredSections en D1
+
+# Sólo lectura: vuelca directamente de D1 las filas live_data_points cuya
+# clave empieza por "discoveredSections." — para depurar por qué /api/live-data
+# no siempre refleja todas las que se insertaron.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  ver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Ver puntos
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/ver-discovered-points.mjs
