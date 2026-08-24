@@ -1,0 +1,58 @@
+name: Reponer clave raíz discoveredSections con contenido completo
+
+# Aplica, y sólo aplica, scripts/reponer-raiz-discoveredsections-2026-08-24.sql
+# contra D1 remoto. Corrección de un único fin: el primer intento de
+# corregir la visibilidad de las secciones descubiertas borró una fila de
+# live_data_points, tabla que el panel no lee para esto — la fila que
+# realmente tapaba todo sigue en live_data_history. Este script NO borra
+# nada; añade una fila nueva y más reciente para la misma clave raíz, con
+# el contenido completo y correcto de las 6 secciones ya publicadas.
+# Ninguna cifra del Centro de Control cambia.
+#
+# Nunca se dispara solo. Requiere escribir "aplicar" para confirmar que va
+# contra la base real. Reutiliza los secretos que ya usa deploy.yml.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Escribe "aplicar" para confirmar que va contra la base real'
+        required: true
+        type: string
+
+concurrency:
+  group: reponer-raiz-discoveredsections
+  cancel-in-progress: false
+
+jobs:
+  reponer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Comprobar confirmación
+        env:
+          CONFIRMAR: ${{ inputs.confirmar }}
+        run: |
+          if [ "$CONFIRMAR" != "aplicar" ]; then
+            echo "::error::Confirmación incorrecta. Escribe exactamente: aplicar"
+            exit 1
+          fi
+          echo "Se aplicará scripts/reponer-raiz-discoveredsections-2026-08-24.sql"
+
+      - run: npm ci
+
+      - name: Aplicar script en D1 remoto
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 execute araya-centro-control-d1 \
+            --remote \
+            --file="scripts/reponer-raiz-discoveredsections-2026-08-24.sql" \
+            --config wrangler.deploy.jsonc
