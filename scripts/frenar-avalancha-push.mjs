@@ -45,16 +45,31 @@ if (!APLICAR) {
   process.exit(0);
 }
 
+const now = new Date().toISOString();
 const resultado = await query(`
   UPDATE notification_deliveries
   SET status = 'cancelled',
       last_error = 'Aviso atrasado del historial: no se envía con retraso tras corregir el reparto.',
       claimed_at = '',
-      updated_at = '${new Date().toISOString()}'
+      updated_at = '${now}'
   WHERE id IN (
     SELECT d.id FROM notification_deliveries d
     JOIN notification_events e ON e.id = d.notification_id
     WHERE d.status IN ('pending', 'retry') AND e.created_at < '${CORTE}'
   );
 `);
-console.log("Aplicado.", JSON.stringify(resultado));
+console.log("Entregas canceladas.", JSON.stringify(resultado));
+
+// Sin esto, los eventos antiguos que todavía no habían llegado a generar
+// entregas (fanout_status "pending", sólo hasta 2 por cada sondeo) seguirían
+// creando entregas nuevas más adelante, y la avalancha volvería a asomar poco
+// a poco en vez de quedar frenada de una vez.
+const resultadoFanout = await query(`
+  UPDATE notification_events
+  SET fanout_status = 'ready',
+      fanout_claimed_at = '',
+      fanout_at = '${now}',
+      fanout_error = ''
+  WHERE created_at < '${CORTE}' AND fanout_status != 'ready';
+`);
+console.log("Eventos antiguos marcados como ya repartidos (sin generar entregas nuevas).", JSON.stringify(resultadoFanout));
