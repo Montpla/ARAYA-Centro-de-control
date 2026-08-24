@@ -42,6 +42,24 @@ test("cada revisión publicada se relee y verifica en todas sus vistas", () => {
   }
 });
 
+test("reconocer una verificación posterior fallida nunca publica ni toca datos vivos", () => {
+  // acknowledge_verification cierra el aviso de un expediente que quedó
+  // "verificacion_posterior_fallida" (otra fuente con más autoridad ya tenía
+  // esas claves y las conservó) sin publicar nada ni alterar ninguna cifra:
+  // sólo cambia el estado de revisión del propio archivo, con un motivo
+  // auditable, y exige que venga justo de ese estado.
+  const branch = reviewRoute.slice(
+    reviewRoute.indexOf("isAcknowledgeVerification) {"),
+    reviewRoute.indexOf("const action = payload.action as ReviewAction;"),
+  );
+  assert.match(branch, /reviewStatus !== "verificacion_posterior_fallida"/);
+  assert.match(branch, /if \(!note\)/);
+  assert.match(branch, /requiresReview: false/);
+  assert.match(branch, /reviewStatus: "aprobado"/);
+  assert.doesNotMatch(branch, /publishLiveDataUpdates/);
+  assert.doesNotMatch(branch, /documentDataProposals/);
+});
+
 test("el recibo financiero explica controles, conversiones, cambios y comprobación final", () => {
   assert.match(dashboard, /FinancialReceiptPanel/);
   assert.match(dashboard, /Controles contables/);

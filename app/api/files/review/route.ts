@@ -400,10 +400,10 @@ export async function POST(request: Request) {
     return Response.json({ error: "La revisión no contiene un JSON válido." }, { status: 400 });
   }
   const fileId = String(payload.fileId ?? "").trim().slice(0, 80);
-  if (!fileId || !isReviewAction(payload.action)) {
-    return Response.json({ error: "Indica un archivo y una acción prepare, approve, observe, reject o reopen." }, { status: 400 });
+  const isAcknowledgeVerification = payload.action === "acknowledge_verification";
+  if (!fileId || (!isReviewAction(payload.action) && !isAcknowledgeVerification)) {
+    return Response.json({ error: "Indica un archivo y una acción prepare, approve, observe, reject, reopen o acknowledge_verification." }, { status: 400 });
   }
-  const action = payload.action;
   let file = await findFile(fileId);
   if (!file) return Response.json({ error: "Archivo no encontrado." }, { status: 404 });
   const db = getDb();
@@ -414,6 +414,48 @@ export async function POST(request: Request) {
   if (!protectedReview && auth.user.role !== "admin") {
     return Response.json({ error: "La revisión operativa requiere permisos de administrador." }, { status: 403 });
   }
+  // acknowledge_verification es un caso aparte y deliberadamente fuera de la
+  // máquina de estados de revisión (prepare/approve/observe/reject/reopen):
+  // "verificacion_posterior_fallida" lo pone verifyPublishedLiveData() después
+  // de publicar, cuando la comprobación transversal detecta que otra fuente
+  // con más autoridad ya tenía esas claves y las conservó (no un dato corrupto).
+  // Esta acción sólo cierra el aviso —nunca publica, nunca toca datos vivos ni
+  // propuestas— y exige un motivo para dejar rastro auditable de por qué se
+  // cerró sin cambiar ninguna cifra.
+  if (isAcknowledgeVerification) {
+    if (file.reviewStatus === "aprobado") {
+      return Response.json({ ok: true, alreadyDone: true, review: { reviewStatus: file.reviewStatus } });
+    }
+    if (file.reviewStatus !== "verificacion_posterior_fallida") {
+      return Response.json({ error: "Sólo se puede reconocer un expediente en verificación posterior fallida." }, { status: 409 });
+    }
+    const note = String(payload.note ?? "").trim().slice(0, 1_000);
+    if (!note) return Response.json({ error: "Escribe el motivo para conservar una decisión auditable." }, { status: 400 });
+    const acknowledgedAt = new Date().toISOString();
+    const [updated] = await db.update(uploadedFiles).set({
+      requiresReview: false,
+      reviewStatus: "aprobado",
+      processingSummary: `Comprobación posterior reconocida sin cambiar ningún dato vivo: ${note}`,
+      updatedAt: acknowledgedAt,
+    }).where(and(
+      eq(uploadedFiles.id, file.id),
+      eq(uploadedFiles.reviewStatus, "verificacion_posterior_fallida"),
+    )).returning();
+    if (!updated) {
+      return Response.json({ error: "El expediente cambió mientras se procesaba; vuelve a intentarlo." }, { status: 409 });
+    }
+    await db.insert(fileActivity).values({
+      fileId: file.id,
+      eventType: "verificacion_reconocida",
+      message: note.slice(0, 500),
+      actorEmail: auth.user.email,
+      actorName: auth.user.displayName,
+    }).catch(() => undefined);
+    return Response.json({ ok: true, review: { reviewStatus: "aprobado" } });
+  }
+  // acknowledge_verification ya devolvió antes; a partir de aquí sólo llega
+  // una de las acciones de REVIEW_ACTIONS (isReviewAction ya lo comprobó).
+  const action = payload.action as ReviewAction;
   if (file.deletedAt) {
     return Response.json({ error: "El archivo está eliminado. Restáuralo antes de revisarlo." }, { status: 410 });
   }
