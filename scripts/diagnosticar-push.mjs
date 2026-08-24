@@ -43,11 +43,12 @@ for (const p of prefs) {
 
 console.log("\n=== Últimos 15 eventos de notificación y sus entregas ===");
 const events = await query(
-  "SELECT id, kind, area, audience, title, created_at FROM notification_events ORDER BY id DESC LIMIT 15;"
+  "SELECT id, kind, area, audience, title, created_at, fanout_status, fanout_error, fanout_claimed_at, fanout_at FROM notification_events ORDER BY id DESC LIMIT 15;"
 );
 for (const e of events) {
   console.log(`\n--- evento ${e.id} · ${e.kind} · área ${e.area} · audiencia ${e.audience} · ${e.created_at} ---`);
   console.log(`    título: ${e.title}`);
+  console.log(`    reparto: ${e.fanout_status} · reclamado: ${e.fanout_claimed_at || "(nunca)"} · listo: ${e.fanout_at || "(nunca)"} · error: ${e.fanout_error || "(ninguno)"}`);
   const deliveries = await query(
     `SELECT status, last_error, attempt_count FROM notification_deliveries WHERE notification_id = ${Number(e.id)};`
   );
