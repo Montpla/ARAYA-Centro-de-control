@@ -1,0 +1,30 @@
+name: Buscar candidato de sección nueva por etiqueta
+
+# Sólo lectura: busca en unmapped_field_candidates (D1) por un fragmento de
+# la etiqueta, sin filtrar por estado. Sirve para encontrar candidatos que ya
+# no están "pendiente" (adaptados, descartados) y por tanto no aparecen en
+# ver-propuestas.mjs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      fragmento:
+        description: "Fragmento (minúsculas) que debe contener la etiqueta"
+        required: true
+        type: string
+
+jobs:
+  buscar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - name: Buscar candidato
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          FRAGMENTO: ${{ inputs.fragmento }}
+        run: node scripts/buscar-candidato.mjs
