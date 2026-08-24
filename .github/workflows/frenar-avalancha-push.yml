@@ -1,0 +1,38 @@
+name: Frenar avalancha de avisos push atrasados
+
+# El arreglo del reparto de avisos (PR #104) desatascó de golpe todo el
+# atraso acumulado desde siempre por el bug: ahora se están entregando como
+# push en vivo, uno tras otro, avisos de hace días o semanas. Cancela sólo
+# las entregas TODAVÍA pendientes de eventos anteriores al despliegue de la
+# corrección -- no borra ningún evento ni entrega del historial, sólo deja
+# de enviar como "en vivo" algo que ya no lo es. Simula por defecto.
+
+on:
+  workflow_dispatch:
+    inputs:
+      aplicar:
+        description: "Aplicar de verdad (1) o sólo contar (0)"
+        required: false
+        default: "0"
+        type: string
+      corte:
+        description: "Cancelar entregas pendientes de eventos anteriores a esta fecha ISO"
+        required: false
+        default: "2026-08-24T14:29:53.000Z"
+        type: string
+
+jobs:
+  frenar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Frenar avalancha
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          APLICAR: ${{ inputs.aplicar }}
+          CORTE: ${{ inputs.corte }}
+        run: node scripts/frenar-avalancha-push.mjs
