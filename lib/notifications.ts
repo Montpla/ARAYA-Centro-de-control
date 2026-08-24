@@ -277,29 +277,37 @@ async function ensureNotificationFanout(eventId: number) {
   if (!claimed) return event;
 
   try {
-    await db
-      .insert(notificationDeliveries)
-      .select(db
-        .select({
-          notificationId: sql<number>`${claimed.id}`.as("notification_id"),
-          subscriptionId: pushSubscriptions.id,
-          status: sql<string>`'pending'`.as("status"),
-          attemptCount: sql<number>`0`.as("attempt_count"),
-          nextAttemptAt: sql<string>`''`.as("next_attempt_at"),
-          claimedAt: sql<string>`''`.as("claimed_at"),
-          deliveredAt: sql<string>`''`.as("delivered_at"),
-          lastError: sql<string>`''`.as("last_error"),
-          createdAt: sql<string>`${now}`.as("created_at"),
-          updatedAt: sql<string>`${now}`.as("updated_at"),
-        })
-        .from(pushSubscriptions)
-        .where(eq(pushSubscriptions.active, true)))
-      .onConflictDoNothing({
-        target: [
-          notificationDeliveries.notificationId,
-          notificationDeliveries.subscriptionId,
-        ],
-      });
+    // insert(table).select(subquery) exige que las columnas seleccionadas
+    // coincidan exactamente (nombre y orden) con TODAS las columnas de la
+    // tabla, incluida la clave autoincremental "id" — que aquí no se puede
+    // fijar a mano. Seleccionar los IDs primero e insertarlos con .values()
+    // evita esa comprobación y deja que SQLite asigne "id" solo.
+    const activeSubscriptions = await db
+      .select({ id: pushSubscriptions.id })
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.active, true));
+    if (activeSubscriptions.length) {
+      await db
+        .insert(notificationDeliveries)
+        .values(activeSubscriptions.map((subscription) => ({
+          notificationId: claimed.id,
+          subscriptionId: subscription.id,
+          status: "pending" as const,
+          attemptCount: 0,
+          nextAttemptAt: "",
+          claimedAt: "",
+          deliveredAt: "",
+          lastError: "",
+          createdAt: now,
+          updatedAt: now,
+        })))
+        .onConflictDoNothing({
+          target: [
+            notificationDeliveries.notificationId,
+            notificationDeliveries.subscriptionId,
+          ],
+        });
+    }
     const [ready] = await db
       .update(notificationEvents)
       .set({
