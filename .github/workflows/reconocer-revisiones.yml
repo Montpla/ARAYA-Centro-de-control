@@ -1,0 +1,36 @@
+name: Reconocer expedientes en revisión sin tocar datos
+
+# Cierra el aviso de "requiere revisión" de expedientes cuya única causa es
+# una verificación posterior fallida ya diagnosticada (otra fuente con más
+# autoridad conservó esas claves): no publica ni cambia ningún dato del panel,
+# sólo el estado de revisión del propio archivo. Simula por defecto.
+
+on:
+  workflow_dispatch:
+    inputs:
+      filtro:
+        description: "Texto que debe contener el nombre del expediente (vacío = todos)"
+        required: false
+        default: ""
+        type: string
+      aplicar:
+        description: "Aplicar de verdad (1) o sólo simular (0)"
+        required: false
+        default: "0"
+        type: string
+
+jobs:
+  reconocer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Reconocer expedientes
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+          FILTRO: ${{ inputs.filtro }}
+          APLICAR: ${{ inputs.aplicar }}
+        run: node scripts/reconocer-revisiones.mjs
