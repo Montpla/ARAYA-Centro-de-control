@@ -8102,12 +8102,10 @@ function AgentPanel({
   expanded,
   onClose,
   currency,
-  canUseAdvanced,
 }: {
   expanded: boolean;
   onClose: () => void;
   currency: CurrencyCode;
-  canUseAdvanced: boolean;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -8121,7 +8119,6 @@ function AgentPanel({
   const [loading, setLoading] = useState(false);
   const [attachment, setAttachment] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [advanced, setAdvanced] = useState(false);
 
   async function ask(text: string) {
     const trimmed = text.trim();
@@ -8133,7 +8130,7 @@ function AgentPanel({
       const response = await fetch("/api/agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmed, currency, advanced: canUseAdvanced && advanced }),
+        body: JSON.stringify({ question: trimmed, currency }),
       });
       const payload = (await response.json()) as { answer?: string; error?: string; mode?: string };
       setMessages((current) => [
@@ -8259,17 +8256,11 @@ function AgentPanel({
           </div>
         )}
       </div>
-      {canUseAdvanced && (
-        <label className="agent-mode-toggle">
-          <input type="checkbox" checked={advanced} onChange={(event) => setAdvanced(event.target.checked)} />
-          <span><strong>Análisis avanzado</strong><small>Usa Terra sólo para consultas complejas y tiene mayor coste.</small></span>
-        </label>
-      )}
       <form className="agent-input" onSubmit={submit}>
         <textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="Pregunta por cualquier dato del corte…" rows={2} />
         <button type="submit" disabled={loading || !question.trim()} aria-label="Enviar pregunta">↑</button>
       </form>
-      <div className="agent-foot">El modo normal usa primero datos internos y Luna. Terra sólo interviene al activar análisis avanzado o ante una lectura documental dudosa.</div>
+      <div className="agent-foot">El asistente usa primero datos internos y Luna, el modelo eficiente. No hay opción de forzar un modelo más costoso desde el chat.</div>
     </aside>
   );
 }
@@ -10310,7 +10301,7 @@ export function DashboardClient({
     if (view === "proveedores") return <SuppliersView suppliers={supplierRows} onAdd={() => online ? setModal("supplier") : setNotice("Modo sin conexión · no se pueden crear registros.")} currency={currency} canAccessFinance={currentUser.financeAccess} />;
     if (view === "metricas") return currentUser.financeAccess ? <MetricsView metrics={metrics} onAdd={() => online ? setModal("metric") : setNotice("Modo sin conexión · no se pueden crear registros.")} currency={currency} latestFinanceEvent={liveSync.latestEvent} /> : <FinanceLockedView />;
     if (view === "fuentes") return <SourcesView onUpload={() => requestUpload()} canAccessFinance={currentUser.financeAccess} currency={currency} currentUser={profileUser} />;
-    return <AgentPanel expanded onClose={() => navigate("resumen")} currency={currency} canUseAdvanced={currentUser.role === "admin"} />;
+    return <AgentPanel expanded onClose={() => navigate("resumen")} currency={currency} />;
   }
 
   if (!deviceSecurityReady) return <DeviceBootScreen />;
@@ -10767,7 +10758,7 @@ export function DashboardClient({
         </AppErrorBoundary>
       )}
 
-      {activeProjectId === "araya" && agentOpen && view !== "agente" && <AgentPanel expanded={false} onClose={() => setAgentOpen(false)} currency={currency} canUseAdvanced={currentUser.role === "admin"} />}
+      {activeProjectId === "araya" && agentOpen && view !== "agente" && <AgentPanel expanded={false} onClose={() => setAgentOpen(false)} currency={currency} />}
 
       {activeProjectId === "araya" && modal && (
         <RecordModal

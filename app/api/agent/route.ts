@@ -83,7 +83,6 @@ import {
 import { getAiUsageSnapshot, recordAssistantAiRun } from "../../../lib/ai-usage";
 
 const ASSISTANT_PRIMARY_MODEL = "gpt-5.6-luna";
-const ASSISTANT_ADVANCED_MODEL = "gpt-5.6-terra";
 
 type ResponsesApiOutput = Array<{
   type: string;
@@ -657,7 +656,7 @@ function canAnswerWithoutAi(question: string) {
 export async function POST(request: Request) {
   const auth = await requireApiUser();
   if (!auth.user) return auth.response;
-  const payload = (await request.json()) as { question?: string; currency?: string; advanced?: boolean };
+  const payload = (await request.json()) as { question?: string; currency?: string };
   const question = payload.question?.trim() ?? "";
   const currency: CurrencyCode = payload.currency === "DOP" ? "DOP" : "USD";
   if (!question) return Response.json({ error: "Escribe una pregunta." }, { status: 400 });
@@ -670,8 +669,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const advanced = payload.advanced === true && auth.user.role === "admin";
-  if (!advanced && canAnswerWithoutAi(question)) {
+  if (canAnswerWithoutAi(question)) {
     await recordAssistantAiRun({
       userEmail: auth.user.email,
       userName: auth.user.displayName,
@@ -718,11 +716,13 @@ export async function POST(request: Request) {
     });
   }
 
-  const model = advanced
-    ? process.env.OPENAI_ADVANCED_MODEL || ASSISTANT_ADVANCED_MODEL
-    : process.env.OPENAI_ASSISTANT_MODEL || ASSISTANT_PRIMARY_MODEL;
-  const maxTurns = advanced ? 3 : 2;
-  const maxOutputTokens = advanced ? 2_500 : 1_400;
+  // El asistente siempre usa Luna: no hay forma de forzar el modelo avanzado
+  // (más costoso) desde el chat. La única vía a Terra es la escalada
+  // automática de la lectura documental (lib/ai-document-extraction.ts) ante
+  // baja confianza o contradicción, que es un mecanismo distinto y no manual.
+  const model = process.env.OPENAI_ASSISTANT_MODEL || ASSISTANT_PRIMARY_MODEL;
+  const maxTurns = 2;
+  const maxOutputTokens = 1_400;
   let totalUsage = emptyAiTokenUsage();
   const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
   let response = await fetch("https://api.openai.com/v1/responses", {
@@ -738,7 +738,7 @@ export async function POST(request: Request) {
       text: { verbosity: "low" },
       max_output_tokens: maxOutputTokens,
       service_tier: "default",
-      prompt_cache_key: `${AGENT_PROMPT_VERSION}:${advanced ? "advanced" : "normal"}`,
+      prompt_cache_key: `${AGENT_PROMPT_VERSION}:normal`,
       safety_identifier: "araya-dashboard-user",
     }),
   });
@@ -760,7 +760,7 @@ export async function POST(request: Request) {
       await recordAssistantAiRun({
         userEmail: auth.user.email,
         userName: auth.user.displayName,
-        mode: advanced ? "advanced" : "normal",
+        mode: "normal",
         status: "completed",
         model,
         turns: turn + 1,
@@ -769,7 +769,7 @@ export async function POST(request: Request) {
       });
       return Response.json({
         answer: extractOutputText(output) || "No tengo ese dato registrado.",
-        mode: advanced ? "openai-terra" : "openai-luna",
+        mode: "openai-luna",
         model,
         usage: totalUsage,
         estimatedCostUsdMicros,
@@ -795,7 +795,7 @@ export async function POST(request: Request) {
         text: { verbosity: "low" },
         max_output_tokens: maxOutputTokens,
         service_tier: "default",
-        prompt_cache_key: `${AGENT_PROMPT_VERSION}:${advanced ? "advanced" : "normal"}`,
+        prompt_cache_key: `${AGENT_PROMPT_VERSION}:normal`,
         safety_identifier: "araya-dashboard-user",
       }),
     });
@@ -804,7 +804,7 @@ export async function POST(request: Request) {
   await recordAssistantAiRun({
     userEmail: auth.user.email,
     userName: auth.user.displayName,
-    mode: advanced ? "advanced" : "normal",
+    mode: "normal",
     status: "error",
     model,
     turns: maxTurns,

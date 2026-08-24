@@ -10,11 +10,11 @@ const [agent, files, controlApi, controlPanel, schema] = await Promise.all([
   readFile("db/schema.ts", "utf8"),
 ]);
 
-test("ARAYA Assistant uses Luna normally and Terra only in admin advanced mode", () => {
+test("ARAYA Assistant always uses Luna; there is no manual switch to a costlier model", () => {
   assert.match(agent, /ASSISTANT_PRIMARY_MODEL = "gpt-5\.6-luna"/);
-  assert.match(agent, /ASSISTANT_ADVANCED_MODEL = "gpt-5\.6-terra"/);
-  assert.match(agent, /payload\.advanced === true && auth\.user\.role === "admin"/);
-  assert.match(agent, /const maxTurns = advanced \? 3 : 2/);
+  assert.doesNotMatch(agent, /ASSISTANT_ADVANCED_MODEL/);
+  assert.doesNotMatch(agent, /payload\.advanced/);
+  assert.match(agent, /const maxTurns = 2;/);
   assert.match(agent, /service_tier: "default"/);
   assert.match(agent, /if \(turn \+ 1 >= maxTurns\) break/);
   assert.doesNotMatch(agent, /process\.env\.OPENAI_MODEL/);
