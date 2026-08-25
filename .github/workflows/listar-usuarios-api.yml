@@ -1,0 +1,22 @@
+name: Listar usuarios via API
+
+# Lista los usuarios exactamente como los ve la propia aplicación
+# (GET /api/admin/users), para comparar con la lectura directa por wrangler
+# y descartar una discrepancia entre ambas vías.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  listar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Listar usuarios
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+        run: node scripts/listar-usuarios-api.mjs
