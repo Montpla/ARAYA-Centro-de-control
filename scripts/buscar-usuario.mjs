@@ -17,17 +17,19 @@ const { stdout } = await run("npx", [
   "wrangler", "d1", "execute", "araya-centro-control-d1",
   "--remote", "--config", "wrangler.deploy.jsonc", "--json",
   "--command",
-  `SELECT id, email, display_name, role, active, deleted_at, deleted_by_email, created_at, updated_at FROM app_users WHERE lower(email) = '${CORREO}';`,
+  `SELECT id, email, hex(email) AS email_hex, length(email) AS email_len, display_name, role, active, deleted_at, deleted_by_email, created_at, updated_at FROM app_users WHERE lower(email) = '${CORREO}' OR email LIKE '%celis%' OR email LIKE '%grupobak%';`,
 ], { maxBuffer: 16 * 1024 * 1024 });
 
 const parsed = JSON.parse(stdout);
 const rows = parsed?.[0]?.results ?? [];
-console.log(`=== ${rows.length} fila(s) para "${CORREO}" ===`);
+console.log(`=== ${rows.length} fila(s) para "${CORREO}" (búsqueda ampliada) ===`);
 for (const fila of rows) {
   console.log(`\n· id: ${fila.id}`);
-  console.log(`  email guardado: "${fila.email}"`);
+  console.log(`  email guardado: "${fila.email}" (longitud ${fila.email_len})`);
+  console.log(`  email en hex: ${fila.email_hex}`);
   console.log(`  nombre: ${fila.display_name}`);
   console.log(`  rol: ${fila.role} · activo: ${fila.active ? "sí" : "no"}`);
   console.log(`  eliminado: ${fila.deleted_at || "no"}${fila.deleted_by_email ? " · por " + fila.deleted_by_email : ""}`);
   console.log(`  creado: ${fila.created_at} · actualizado: ${fila.updated_at}`);
 }
+console.log(`\nesperado en hex: ${Buffer.from(CORREO, "utf8").toString("hex")}`);
