@@ -8,6 +8,14 @@ import { promisify } from "node:util";
 
 const run = promisify(execFile);
 
+const { stdout: horaStdout } = await run("npx", [
+  "wrangler", "d1", "execute", "araya-centro-control-d1",
+  "--remote", "--config", "wrangler.deploy.jsonc", "--json",
+  "--command", "SELECT datetime('now') AS ahora;",
+], { maxBuffer: 16 * 1024 * 1024 });
+const ahora = JSON.parse(horaStdout)?.[0]?.results?.[0]?.ahora;
+console.log(`Hora del servidor (UTC): ${ahora}\n`);
+
 const { stdout } = await run("npx", [
   "wrangler", "d1", "execute", "araya-centro-control-d1",
   "--remote", "--config", "wrangler.deploy.jsonc", "--json",
@@ -16,16 +24,15 @@ const { stdout } = await run("npx", [
           processing_stage, processing_progress, processing_summary,
           processing_attempts, next_retry_at, last_processing_error,
           requires_review, review_status, document_type, uploader_email,
-          uploader_name, created_at, updated_at
+          uploader_name, created_at, updated_at, deleted_at
    FROM uploaded_files
-   WHERE deleted_at = ''
    ORDER BY created_at DESC
    LIMIT 5;`,
 ], { maxBuffer: 16 * 1024 * 1024 });
 
 const parsed = JSON.parse(stdout);
 const rows = parsed?.[0]?.results ?? [];
-console.log(`=== ${rows.length} archivo(s) más reciente(s) ===`);
+console.log(`=== ${rows.length} archivo(s) más reciente(s) (incluidos eliminados) ===`);
 for (const f of rows) {
   console.log(`\n· id: ${f.id}`);
   console.log(`  nombre: ${f.original_name} (${f.area}${f.section ? "/" + f.section : ""}, ${f.size_bytes} bytes)`);
@@ -37,4 +44,5 @@ for (const f of rows) {
   if (f.processing_summary) console.log(`  resumen: ${f.processing_summary}`);
   console.log(`  tipo detectado: ${f.document_type}`);
   console.log(`  creado: ${f.created_at} · actualizado: ${f.updated_at}`);
+  if (f.deleted_at) console.log(`  ELIMINADO: ${f.deleted_at}`);
 }
