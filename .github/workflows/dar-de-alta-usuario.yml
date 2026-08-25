@@ -1,0 +1,24 @@
+name: Dar de alta a Francisco Celis
+
+# Da de alta a Francisco Celis (f.celis@grupobak.com) directamente contra
+# /api/admin/users, con los datos rellenados en el formulario "Autorizar una
+# persona": el rechazo "correo ya existe" visto en el navegador era un falso
+# positivo (la base no tenía ninguna fila para ese correo). Autorizado
+# explícitamente por el usuario.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  alta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Dar de alta
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+        run: node scripts/dar-de-alta-usuario.mjs
