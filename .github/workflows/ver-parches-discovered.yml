@@ -1,0 +1,22 @@
+name: Ver parches de discoveredSections
+
+# Sólo lectura: busca claves "discoveredSections.*" (parches por elemento)
+# en live_data_history, para confirmar si alguno sigue activo y desalinea
+# la reconstrucción del contrato para la clave raíz "discoveredSections".
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  consultar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Consultar parches
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/ver-parches-discovered.mjs
