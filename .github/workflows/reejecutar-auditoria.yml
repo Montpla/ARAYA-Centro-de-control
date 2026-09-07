@@ -1,0 +1,23 @@
+name: Reejecutar solo la comprobación de auditoría
+
+# Vuelve a correr únicamente la acción "run_audit" (contrato vivo, controles
+# financieros, archivos atascados) contra producción, sin las acciones de
+# envío de la auditoría nocturna (recordatorios/resúmenes) -- para confirmar
+# de inmediato si una corrección quita una incidencia, sin esperar al cron.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  reauditar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Reejecutar auditoría
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+        run: node scripts/reejecutar-auditoria.mjs
