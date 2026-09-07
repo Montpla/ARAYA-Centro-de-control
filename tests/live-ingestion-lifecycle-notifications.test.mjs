@@ -215,7 +215,7 @@ test("upload quarantine, idempotent resume and automatic runtime contracts fail 
     /const earlierGap = [\s\S]*?\.some\(\(item\) => item == null\)/,
     /typeof expected === ["']number["'][\s\S]*?typeof actual === ["']number["']/,
     /const optionalFields = OPTIONAL_OBJECT_FIELDS\[path\.join\(["']\.\s*["']\)\] \?\? \{\}/,
-    /!expectedKeys\.every\(\(key\) => Object\.hasOwn\(actual, key\)\)/,
+    /!expectedKeys\.every\(\(key\) => Object\.hasOwn\(actual, key\) \|\| Object\.hasOwn\(optionalFields, key\)\)/,
     /PERCENT_FIELD[\s\S]*?actual < 0 \|\| actual > 100/,
     /DATE_FIELD[\s\S]*?validIsoDate/,
     /export function assertLiveDataContract/,

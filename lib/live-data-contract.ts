@@ -280,7 +280,13 @@ function matchesContract(
   const expectedKeys = Object.keys(expected);
   const actualKeys = Object.keys(actual);
   const optionalFields = OPTIONAL_OBJECT_FIELDS[path.join(".")] ?? {};
-  if (!expectedKeys.every((key) => Object.hasOwn(actual, key))) return false;
+  // Una plantilla fusionada (mergedArrayTemplate) hereda las claves de TODOS
+  // los elementos del array, así que un campo opcional (p. ej. "visualization"
+  // en discoveredSections.*, que los bloques legacy nunca llevaron) puede
+  // acabar exigido aquí solo porque otro elemento del mismo array sí lo tiene.
+  // Sin esta excepción, esos elementos legacy siempre fallaban el contrato de
+  // su propio dato ya publicado.
+  if (!expectedKeys.every((key) => Object.hasOwn(actual, key) || Object.hasOwn(optionalFields, key))) return false;
   return actualKeys.every((key) => {
     if (FORBIDDEN_SEGMENTS.has(key)) return false;
     const expectedValue = Object.hasOwn(expected, key) ? expected[key] : optionalFields[key];
