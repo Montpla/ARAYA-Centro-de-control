@@ -103,6 +103,22 @@ test("el primer bloque descubierto se acepta sobre la lista vacía", async () =>
   assert.doesNotMatch(contrato, /path === "discoveredSections\.\*"/);
 });
 
+test("un bloque descubierto legacy no falla el contrato por un campo opcional que sólo tienen otros elementos", async () => {
+  // Fallo real detectado por la auditoría nocturna (incidencia abierta desde
+  // el 24 de agosto, "Dato vivo incompatible · discoveredSections"): al
+  // validar el array completo, mergedArrayTemplate fusiona las claves de
+  // TODOS sus elementos, así que un campo opcional como "visualization"
+  // -- que los bloques legacy nunca llevaron (ver OPTIONAL_OBJECT_FIELDS
+  // más arriba) -- acababa exigido en todos los elementos solo porque otro
+  // elemento del mismo array sí lo tenía. La comprobación de claves que le
+  // faltan a un elemento debe eximir las declaradas opcionales para su ruta.
+  const contrato = await readFile("lib/live-data-contract.ts", "utf8");
+  assert.match(
+    contrato,
+    /expectedKeys\.every\(\(key\) => Object\.hasOwn\(actual, key\) \|\| Object\.hasOwn\(optionalFields, key\)\)/,
+  );
+});
+
 // Certificaciones del proyecto y carátula de cubicación: las propuestas que se
 // modelaron en su sitio propio en vez de dejarlas como bloque genérico.
 
