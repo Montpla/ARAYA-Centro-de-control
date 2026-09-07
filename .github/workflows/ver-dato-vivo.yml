@@ -1,0 +1,27 @@
+name: Ver dato vivo por clave
+
+# Sólo lectura: muestra el valor efectivo y el historial reciente de una
+# clave del modelo vivo (live_data_points / live_data_history), pasada
+# como input "key". No modifica nada.
+
+on:
+  workflow_dispatch:
+    inputs:
+      key:
+        description: "Clave del modelo vivo a inspeccionar (p. ej. discoveredSections)"
+        required: true
+
+jobs:
+  consultar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Consultar dato vivo
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          KEY: ${{ inputs.key }}
+        run: node scripts/ver-dato-vivo.mjs
