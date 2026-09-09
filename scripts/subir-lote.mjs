@@ -6,6 +6,9 @@
 // propio clasificador de la app decida el área -- no se fuerza nada a mano.
 //
 // Uso: DIRECTORIO=scratch-uploads/... node scripts/subir-lote.mjs
+// REPROCESO=true reintenta la extracción sobre el mismo expediente ya
+// registrado (mismo sha256), para cuando una lectura de IA falló y quiere
+// repetirse con los mismos bytes -- no crea un expediente nuevo.
 
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
@@ -55,6 +58,7 @@ for (const nombre of nombres) {
   form.append("area", "auto");
   form.append("source", "agent");
   form.append("processNow", "true");
+  if (process.env.REPROCESO === "true") form.append("reprocess", "true");
 
   console.log(`→ Subiendo "${nombre}" (${bytes.length} bytes)...`);
   const response = await fetch(`${PRODUCTION_URL}/api/files`, {
