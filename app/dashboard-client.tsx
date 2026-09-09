@@ -4154,6 +4154,14 @@ function CommercialView({ currency }: { currency: CurrencyCode }) {
 function UrbanismView() {
   const [selectedArea, setSelectedArea] = useState<UrbanismArea>(urbanismAreas[0]);
   const [selectedReportArea, setSelectedReportArea] = useState<(typeof urbanismReportAreas)[number]>(urbanismReportAreas[0]);
+  // Antes era un "72,76%" fijo en el código: no se movía aunque el avance por
+  // especialidad de abajo sí lo hiciera con cada corte, y las dos cifras
+  // acababan sin coincidir. Se calcula del mismo array que pinta la tarjeta de
+  // abajo para que ambas lean siempre el mismo dato.
+  const topReportArea = urbanismReportAreas.reduce(
+    (mayor, area) => (area.progress > mayor.progress ? area : mayor),
+    urbanismReportAreas[0],
+  );
   return (
     <div className="view-stack">
       <section className="data-view-intro">
@@ -4163,7 +4171,7 @@ function UrbanismView() {
       <section className="stat-grid wide">
         <StatCard eyebrow="Medición físico-financiera" value={`${number.format(projectSnapshot.urbanismProgress)}%`} detail={`Plan ${number.format(projectSnapshot.urbanismPlanned)}% · Excel`} tone="good" />
         <StatCard eyebrow="Actividades terminadas" value="4%" detail="16 de 315 · informe de obra" tone="warn" />
-        <StatCard eyebrow="Mayor avance" value="72,76%" detail="Movimiento de tierra" />
+        <StatCard eyebrow="Mayor avance" value={`${number.format(topReportArea.progress)}%`} detail={topReportArea.name} />
         <StatCard eyebrow="Arranques demorados" value={`${delayedUrbanismStarts.length}`} detail="10 a 70 días de retraso" tone="danger" />
       </section>
       <section className="report-grid">
