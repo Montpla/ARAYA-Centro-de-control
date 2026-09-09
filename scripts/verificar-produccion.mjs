@@ -35,18 +35,17 @@ console.log("plannedProgress:", v["projectSnapshot.plannedProgress"]);
 console.log("scheduleProgress (MPP):", v["projectSnapshot.scheduleProgress"]);
 console.log("forecastFinish (MPP):", v["projectSnapshot.forecastFinish"]);
 
-console.log("\n--- Edificios tocados por el .mpp (muestra) ---");
-const buildingKeys = Object.keys(v).filter((k) => /^buildings\.TH-\d+\.progress$/.test(k)).slice(0, 5);
-for (const k of buildingKeys) console.log(`  ${k}: ${v[k]}`);
+console.log("\n--- Claves de edificios publicadas (todas) ---");
+const buildingKeys = Object.keys(v).filter((k) => k.startsWith("buildings."));
+console.log(`  ${buildingKeys.length} clave(s) buildings.* en total`);
+for (const k of buildingKeys.slice(0, 12)) console.log(`  ${k}: ${JSON.stringify(v[k])}`);
 
 console.log("\n--- Seguridad (Semana 2) ---");
 console.log(JSON.stringify(v.safetyMetrics, null, 2)?.slice(0, 800));
 
 console.log("\n=== /api/control-room (lo que realmente ve el panel) ===");
 const cr = await fetch(`${PRODUCTION_URL}/api/control-room`, { headers: { Cookie } }).then((r) => r.json());
-console.log("overallProgress (derivado):", cr.projectSnapshot?.overallProgress);
-console.log("plannedProgress (derivado):", cr.projectSnapshot?.plannedProgress);
-console.log("deviationPoints:", cr.projectSnapshot?.deviationPoints);
-console.log("scheduleProgress (derivado):", cr.projectSnapshot?.scheduleProgress);
-const cutoff = (cr.monthlyPlan ?? []).map((m, i) => ({ i, ...m })).filter((m) => m.actual !== null).slice(-3);
-console.log("últimos meses con actual no nulo:", JSON.stringify(cutoff));
+console.log("planning:", JSON.stringify(cr.planning, null, 2));
+console.log("spatial:", JSON.stringify(cr.spatial, null, 2));
+console.log("cutoff:", cr.cutoff);
+console.log("live:", JSON.stringify(cr.live, null, 2));
