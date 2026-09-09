@@ -128,11 +128,21 @@ function normalizedCutoff(row: Pick<PublishedLiveDataRow, "cutoff" | "eventCutof
  * old weekly report used to overwrite Safety week 4 simply because its event
  * id was larger. The source cutoff is the primary ordering key; publication
  * order only resolves corrections of the same period (or legacy undated rows).
+ *
+ * Cutoff ordering only applies when BOTH rows declare one. A one-off
+ * correction with no reporting period (the manual-entry screen, a
+ * direct /api/live-data patch) isn't "older" than any dated root just
+ * because an empty cutoff sorts below a real date — it isn't tied to any
+ * period at all. Comparing it by cutoff let an old whole-array publish
+ * (with a real cutoff) permanently outrank a newer, undated correction on
+ * one of its fields: the write persisted but never appeared in the live
+ * snapshot, exactly the class of silent-discard bug this project keeps
+ * running into (found 09/09/2026 correcting urbanismReportAreas).
  */
 function compareEffectiveRevision(left: PublishedLiveDataRow, right: PublishedLiveDataRow) {
   const leftCutoff = normalizedCutoff(left);
   const rightCutoff = normalizedCutoff(right);
-  if (leftCutoff !== rightCutoff) return leftCutoff > rightCutoff ? 1 : -1;
+  if (leftCutoff && rightCutoff && leftCutoff !== rightCutoff) return leftCutoff > rightCutoff ? 1 : -1;
   if (left.eventId !== right.eventId) return left.eventId > right.eventId ? 1 : -1;
   if (left.historyId !== right.historyId) return left.historyId > right.historyId ? 1 : -1;
   return 0;
