@@ -1,0 +1,23 @@
+name: Leer urbanismo actual
+
+# Consulta de sólo lectura contra D1 remoto: confirma el índice y el valor
+# vigentes de cada disciplina de urbanismo antes de corregir uno de ellos.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  leer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Leer urbanismReportAreas
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/leer-urbanismo-actual.mjs
