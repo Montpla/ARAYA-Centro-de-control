@@ -157,6 +157,19 @@ construir(SALIDA / "cubicacion-caratula-acumulado.xlsx", [
     ["", "", 300, "", "", "", "", 42, 0.14],
 ])
 
+# Curva S del Excel maestro de obra: "PLAN OPERATIVO" y "EJECUTADO REAL"
+# acumulados, con una fecha de corte mensual (serie de Excel, dias desde el
+# 30/12/1899) encima de cada columna. jun-25 es el mes 0 del calendario de
+# monthlyPlan (ver planCurveMonths en app/demo-data.ts); los dos ultimos meses
+# de "EJECUTADO REAL" son ceros de formula para meses que aun no ocurren, tal
+# como los entrega Excel.
+construir(SALIDA / "curva-s.xlsx", [
+    ["ARAYA"],
+    [None, 45809, 45839, 45870, 45901, 45931, 45962],
+    ["PLAN OPERATIVO", 0, 0.05, 0.10, 0.15, 0.20, 0.25],
+    ["EJECUTADO REAL", 0, 0.04, 0.09, 0.13, 0, 0],
+])
+
 
 # --- Word y PowerPoint -------------------------------------------------------
 # Comparten envoltorio con Excel (ZIP con XML), asi que sus tablas se leen con

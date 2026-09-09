@@ -251,6 +251,34 @@ test("un archivo que no es una hoja de cálculo se rechaza con una indicación",
   assert.match(resultado.warnings[0], /\.xlsx/);
 });
 
+test("la Curva S del Excel maestro actualiza el plan y lo ejecutado mes a mes", async () => {
+  // jun-25 es el mes 0 del calendario de monthlyPlan; los dos ultimos meses de
+  // "EJECUTADO REAL" en el fixture son ceros de formula (aun no ocurrieron) y
+  // se publican tal cual, igual que hace Excel.
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("curva-s.xlsx"),
+    "xlsx",
+    defaults,
+  );
+  assert.equal(resultado.warnings.length, 0, resultado.warnings.join(" · "));
+  const porClave = new Map(resultado.updates.map((update) => [update.key, update.value]));
+  assert.equal(porClave.get("monthlyPlan.0.planned"), 0);
+  assert.equal(porClave.get("monthlyPlan.0.actual"), 0);
+  assert.equal(porClave.get("monthlyPlan.1.planned"), 5);
+  assert.equal(porClave.get("monthlyPlan.1.actual"), 4);
+  assert.equal(porClave.get("monthlyPlan.3.planned"), 15);
+  assert.equal(porClave.get("monthlyPlan.3.actual"), 13);
+  assert.equal(porClave.get("monthlyPlan.5.planned"), 25);
+  assert.equal(porClave.get("monthlyPlan.5.actual"), 0);
+  assert.equal(resultado.updates.length, 12);
+  assert.match(resultado.summary, /Curva S actualizada: 6 meses/);
+  assert.equal(
+    resultado.updates.find((update) => update.key === "monthlyPlan.1.planned").area,
+    "obra",
+  );
+});
+
 test("un edificio que no existe no entra desde una tabla", async () => {
   const ingestion = await loadIngestion();
   const resultado = await ingestion.extractStructuredUpdates(
