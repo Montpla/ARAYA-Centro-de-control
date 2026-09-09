@@ -1382,6 +1382,11 @@ export async function extractStructuredUpdates(
     // Los edificios que existen ahora mismo, para no dar de alta uno inventado
     // a partir de una tarea mal rotulada del plan.
     knownBuildingTokens?: Set<string>;
+    // El avance de urbanismo por disciplina ya publicado. Un plan de Project
+    // parcial (p. ej. "Urbanismo fase I") solo debe adelantar una disciplina,
+    // nunca retrasarla con una cifra de alcance menor: ver
+    // extractProjectXmlUpdates.
+    currentUrbanismReportAreas?: ReadonlyArray<{ name: string; progress: number }>;
   },
 ): Promise<StructuredExtraction> {
   if (!["csv", "json", "xml", "xlsx", "docx", "pptx", "zip", "pdf"].includes(extension)) {
@@ -1767,7 +1772,12 @@ export async function extractStructuredUpdates(
         warnings: ["Sólo se interpretan los XML guardados desde Project con Archivo → Guardar como → XML."],
       };
     }
-    const plan = extractProjectXmlUpdates(text, defaults.knownBuildingTokens, defaults.sourceName);
+    const plan = extractProjectXmlUpdates(
+      text,
+      defaults.knownBuildingTokens,
+      defaults.sourceName,
+      defaults.currentUrbanismReportAreas,
+    );
     return {
       updates: plan.updates.map((update) => ({
         key: update.key,

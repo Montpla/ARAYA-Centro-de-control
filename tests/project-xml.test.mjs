@@ -186,3 +186,65 @@ test("los porcentajes se acotan al rango razonable", () => {
   const th14 = resultado.updates.find((update) => update.key === "buildings.TH-14.progress");
   assert.equal(th14.value, 70, "140 se acota a 100, media con 40");
 });
+
+// Reproduce el archivo real "Urbanismo fase I": un capítulo de urbanismo con
+// disciplinas como tareas resumen, sin ningún edificio TH-xx colgando de ellas.
+const planUrbanismo = `<?xml version="1.0"?>
+<Project xmlns="http://schemas.microsoft.com/project"><Tasks>
+  <Task><Name>ARAYA-PTA CANA (URBANISMO)</Name><PercentComplete>8</PercentComplete><OutlineLevel>1</OutlineLevel><Summary>1</Summary></Task>
+  <Task><Name>MOVIMIENTO DE TIERRA</Name><PercentComplete>71</PercentComplete><OutlineLevel>2</OutlineLevel><Summary>1</Summary></Task>
+  <Task><Name>ELECTRIFICACION</Name><PercentComplete>8</PercentComplete><OutlineLevel>2</OutlineLevel><Summary>1</Summary></Task>
+  <Task><Name>INSTALACIONES DE GAS</Name><PercentComplete>0</PercentComplete><OutlineLevel>2</OutlineLevel><Summary>1</Summary></Task>
+</Tasks></Project>`;
+
+// El orden vivo NO coincide con el del código fuente: se reprodujo así en
+// producción tras un reemplazo completo del array desde otro archivo. El
+// índice 3 -no el que tendría en app/june-report-data.ts- es el real.
+const urbanismoVivo = [
+  { name: "MOVIMIENTO DE TIERRA", progress: 72.76 },
+  { name: "HIDROSANITARIAS", progress: 5 },
+  { name: "SISTEMA ESPECIALES", progress: 0 },
+  { name: "INFRAESTRUCTURA ELECTRICA", progress: 0 },
+  { name: "INSTALACIONES TELECOMUNICACIONES", progress: 0 },
+  { name: "INSTALACIONES DE GAS", progress: 0 },
+  { name: "VIALIDAD", progress: 0 },
+  { name: "PAISAJISMO", progress: 0 },
+  { name: "OBRAS EXTERIORES", progress: 0 },
+];
+
+test("reconoce una disciplina de urbanismo aunque el plan y urbanismReportAreas usen nombres distintos", () => {
+  const resultado = extractProjectXmlUpdates(planUrbanismo, undefined, "", urbanismoVivo);
+  const electrica = resultado.updates.find((u) => u.key === "urbanismReportAreas.INFRAESTRUCTURA ELECTRICA.progress");
+  assert.ok(electrica, "ELECTRIFICACION del plan debe casar con INFRAESTRUCTURA ELECTRICA");
+  assert.equal(electrica.value, 8);
+  assert.match(resultado.summary, /1 disciplina de urbanismo actualizada/);
+});
+
+test("usa el nombre exacto que ya tiene la disciplina en producción, no una posición calculada a mano", () => {
+  // Con el orden vivo real, INFRAESTRUCTURA ELECTRICA está en el índice 3, no
+  // en el 5: la clave debe nombrarla, nunca usar un índice numérico fijo, que
+  // es justo el fallo que mandó el 8% a "Instalaciones de gas" en producción.
+  const resultado = extractProjectXmlUpdates(planUrbanismo, undefined, "", urbanismoVivo);
+  assert.ok(!resultado.updates.some((u) => u.key === "urbanismReportAreas.5.progress"));
+  assert.ok(!resultado.updates.some((u) => u.key.startsWith("urbanismReportAreas.INSTALACIONES DE GAS")));
+});
+
+test("una disciplina sólo avanza: un valor menor o igual al vigente no se publica", () => {
+  // MOVIMIENTO DE TIERRA trae 71% en el archivo pero ya hay 72.76% publicado
+  // (de otra fuente con más alcance); no debe retroceder.
+  const resultado = extractProjectXmlUpdates(planUrbanismo, undefined, "", urbanismoVivo);
+  assert.ok(!resultado.updates.some((u) => u.key.startsWith("urbanismReportAreas.MOVIMIENTO DE TIERRA")));
+});
+
+test("un 0% de disciplina se trata como sin dato, no borra lo ya publicado", () => {
+  const conGasYaAvanzado = urbanismoVivo.map((area) =>
+    area.name === "INSTALACIONES DE GAS" ? { ...area, progress: 40 } : area,
+  );
+  const resultado = extractProjectXmlUpdates(planUrbanismo, undefined, "", conGasYaAvanzado);
+  assert.ok(!resultado.updates.some((u) => u.key.startsWith("urbanismReportAreas.INSTALACIONES DE GAS")));
+});
+
+test("sin currentUrbanismReportAreas no se calcula ninguna disciplina", () => {
+  const resultado = extractProjectXmlUpdates(planUrbanismo);
+  assert.ok(!resultado.updates.some((u) => u.key.startsWith("urbanismReportAreas.")));
+});

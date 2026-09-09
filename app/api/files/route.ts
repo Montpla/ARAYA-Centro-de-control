@@ -65,10 +65,12 @@ import {
   financeProtectedDocumentTypeValues,
   isCommercialLiveKey,
   isFinancialLiveKey,
+  materializeLiveRoot,
   namingToken,
   requiresFinanceAccessForArea,
   requiresFinanceAccessForDocument,
 } from "../../../lib/live-data";
+import { urbanismReportAreas } from "../../../app/june-report-data";
 import {
   decodeFileRegistryCursor,
   encodeFileRegistryCursor,
@@ -1372,6 +1374,12 @@ export async function POST(request: Request) {
       fingerprint: templateIdentity.fingerprint,
       status: "running",
     });
+    // Se lee antes de extraer (y no solo para validar el contrato después)
+    // porque el lector de planes de Project necesita el avance de urbanismo
+    // ya publicado: un plan parcial (p. ej. "Urbanismo fase I") solo debe
+    // adelantar una disciplina, nunca retrasarla con una cifra de alcance
+    // menor. Ver extractProjectXmlUpdates.
+    const currentLiveData = await readEffectiveLiveData(true);
     const deterministicExtraction = await extractStructuredUpdates(bytes, extension, {
       area: classification.area,
       cutoff: effectiveCutoff,
@@ -1381,6 +1389,11 @@ export async function POST(request: Request) {
       // plan rotulada "TH-99" daría de alta un edificio fantasma en la
       // implantación; con ella, simplemente se deja fuera y se avisa.
       knownBuildingTokens: knownBuildingTokens(),
+      currentUrbanismReportAreas: materializeLiveRoot(
+        "urbanismReportAreas",
+        urbanismReportAreas,
+        currentLiveData.values,
+      ),
     });
     let extraction: Awaited<ReturnType<typeof extractDocumentWithAI>> = {
       ...deterministicExtraction,
@@ -1397,12 +1410,11 @@ export async function POST(request: Request) {
       outputTokens: 0,
       estimatedCostUsdMicros: 0,
     };
-    // Se lee antes de llamar a la IA (no solo para validar el contrato
-    // después) porque también se le pasa como referencia de esquema: sin ver
-    // los nombres de campo reales ya existentes, el modelo inventaba claves
-    // plausibles pero distintas (p. ej. "physicalProgressExecuted" en vez de
+    // currentLiveData ya se leyó antes de extraer (ver arriba); también se le
+    // pasa a la IA como referencia de esquema: sin ver los nombres de campo
+    // reales ya existentes, el modelo inventaba claves plausibles pero
+    // distintas (p. ej. "physicalProgressExecuted" en vez de
     // "overallProgress"), y el contrato las rechazaba en silencio.
-    const currentLiveData = await readEffectiveLiveData(true);
     // Un informe en PowerPoint, Word o PDF es narrativo: un lector propio saca
     // sus cifras con fiabilidad, pero un mismo documento puede traer varias
     // áreas y ningún lector las cubre todas (el Informe Ejecutivo lleva ventas,
