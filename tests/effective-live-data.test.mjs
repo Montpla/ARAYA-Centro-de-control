@@ -126,6 +126,7 @@ async function loadContractCore() {
       ],
       monthlyPlan: [
         { month: "jun 26", planned: 21.24, actual: 18.23 },
+        { month: "ago 26", planned: 40.78, actual: null },
       ],
       buildings: [{
         id: "edificio-1",
@@ -790,6 +791,22 @@ test("central publication contract rejects invalid manual or reviewed domain val
   assert.match(publisher, /assertLiveDataContracts\(input\.normalized, currentLiveData\.values\)/);
   assert.match(manualRoute, /publishLiveDataUpdates\(/);
   assert.match(reviewRoute, /publishLiveDataUpdates\(/);
+});
+
+test("un mes de la Curva S sin ejecutado todavía admite su primer avance real", async () => {
+  // Antes de esta prueba, publicar "monthlyPlan.<mes>.actual" para un mes que
+  // aún no tenía avance (null en la fila de ese mes) se rechazaba siempre,
+  // aunque el mismo mes aceptara su "planned" (siempre numérico) o el mismo
+  // cambio publicado como el array monthlyPlan completo: expectedAtPath
+  // resolvía el tipo esperado indexando directamente en esa fila, así que el
+  // null literal de un mes sin corte todavía se exigía para siempre. Este es
+  // justo el caso real de la Curva S: el mes de agosto no tiene "actual"
+  // hasta que se sube el Excel del corte de agosto.
+  const { validateLiveDataContract } = await loadContractCore();
+  assert.equal(validateLiveDataContract("monthlyPlan.1.actual", "27.9").valid, true);
+  assert.equal(validateLiveDataContract("monthlyPlan.1.actual", "101").valid, false);
+  assert.equal(validateLiveDataContract("monthlyPlan.1.actual", '"27.9"').valid, false);
+  assert.equal(validateLiveDataContract("monthlyPlan.1.planned", "45.58").valid, true);
 });
 
 test("a legacy discovered section can gain values and visualization without changing identity", async () => {
