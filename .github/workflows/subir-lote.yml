@@ -1,0 +1,29 @@
+name: Subir lote de archivos
+
+# Sube todos los archivos de un directorio a producción por la misma ruta que
+# usaría una persona desde el navegador (POST /api/files), con el propio
+# clasificador de la app decidiendo el área. El directorio de entrada vive en
+# la rama que se pase como "ref" al disparar el workflow -- normalmente una
+# rama de trabajo, nunca archivos permanentes en main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      directorio:
+        description: "Ruta del directorio con los archivos a subir"
+        required: true
+
+jobs:
+  subir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Subir archivos
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+          DIRECTORIO: ${{ inputs.directorio }}
+        run: node scripts/subir-lote.mjs
