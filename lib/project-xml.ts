@@ -1,3 +1,5 @@
+import { namingToken } from "./live-data.ts";
+
 /**
  * Lector del XML de Microsoft Project (MSPDI).
  *
@@ -126,6 +128,52 @@ function numeroDeCodigo(codigo: string) {
   return codigo.replace(/^TH-/i, "").replace(/^0+(?=\d)/, "");
 }
 
+/**
+ * Alias normalizados (namingToken) que identifican una disciplina de
+ * urbanismo dentro del nombre de una tarea resumen del plan.
+ *
+ * El mismo plan real nombra una disciplina de formas distintas según quién lo
+ * escribió ("Electrificación" en un archivo, "Infraestructura eléctrica" en
+ * `urbanismReportAreas`) o con una errata propia del archivo ("Obras
+ * exterioes"). Se listan explícitamente, sin normalizar por coincidencia
+ * parcial: una coincidencia parcial emparejaría "Movimiento de tierra" de un
+ * edificio concreto con la disciplina general del urbanismo, el mismo tipo de
+ * error que costó meses detectar en buildingCodeFromTaskName.
+ */
+const URBANISM_DISCIPLINE_ALIASES: string[][] = [
+  ["movimientodetierra"],
+  ["hidrosanitarias", "hidrosanitaria"],
+  ["paisajismo"],
+  ["vialidad"],
+  ["sistemasespeciales", "sistemaespeciales"],
+  ["infraestructuraelectrica", "electrificacion", "electrica"],
+  ["telecomunicaciones", "instalacionestelecomunicaciones"],
+  ["gas", "instalacionesdegas"],
+  ["obrasexteriores", "obrasexterioes"],
+];
+
+/**
+ * Busca a qué disciplina viva (`urbanismReportAreas`, ya materializado con lo
+ * publicado hasta ahora) corresponde una tarea resumen del plan, comparando
+ * ambos nombres contra el mismo grupo de alias.
+ *
+ * Devuelve la posición dentro de `currentUrbanismReportAreas` -no un nombre
+ * canónico propio- para que la clave que se publique use el nombre EXACTO que
+ * ya tiene esa disciplina en producción: así, quien la traduzca de nuevo a
+ * posición (resolveSpatialIdentityUpdates) encuentra la misma entidad sin
+ * depender de qué orden tenga el array vivo en ese momento.
+ */
+function matchUrbanismDiscipline(
+  tarea: ProjectTask,
+  currentUrbanismReportAreas: ReadonlyArray<{ name: string; progress: number }>,
+): number {
+  if (buildingCodeFromTaskName(tarea.name)) return -1;
+  const normalizado = namingToken(tarea.name);
+  const grupo = URBANISM_DISCIPLINE_ALIASES.find((aliases) => aliases.includes(normalizado));
+  if (!grupo) return -1;
+  return currentUrbanismReportAreas.findIndex((area) => grupo.includes(namingToken(area.name)));
+}
+
 export type ProjectXmlExtraction = {
   // El avance es numérico; la fecha de fin se publica como ISO YYYY-MM-DD.
   updates: Array<{ key: string; value: number | string }>;
@@ -155,6 +203,7 @@ export function extractProjectXmlUpdates(
   text: string,
   conocidos?: Set<string>,
   sourceName = "",
+  currentUrbanismReportAreas?: ReadonlyArray<{ name: string; progress: number }>,
 ): ProjectXmlExtraction {
   const tareas = readProjectTasks(text);
   if (!tareas.length) {
@@ -228,6 +277,37 @@ export function extractProjectXmlUpdates(
   // aviso y el resumen cuentan edificios, no el % global del plan.
   const edificioUpdates = updates.length;
 
+  // Avance de urbanismo por disciplina: un capítulo del plan puede ser la
+  // única fuente de una disciplina completa (p. ej. un archivo dedicado sólo
+  // a "Urbanismo fase I"), así que esto se calcula SIEMPRE, incluso cuando
+  // permiteDatosGlobales sea falso -esa comprobación protege el % global del
+  // plan maestro, no el avance de cada disciplina por separado.
+  //
+  // Regla acordada con el usuario tras el incidente del 09/09: una disciplina
+  // sólo avanza, nunca retrocede. Un plan parcial trae su propio alcance --
+  // casi siempre menor que el ya publicado por otra fuente--, y su 0% no es
+  // "sin obra" sino "esta tarea no se rastrea en este archivo"; publicarlo
+  // borraría un avance real con un cero que no significa nada. Por eso sólo
+  // se admite cuando el valor nuevo es mayor que cero Y mayor que el vigente.
+  const disciplinaUpdates: Array<{ key: string; value: number }> = [];
+  if (currentUrbanismReportAreas?.length) {
+    const vistos = new Set<number>();
+    for (const tarea of tareas) {
+      if (!tarea.summary || tarea.percentComplete === null) continue;
+      const index = matchUrbanismDiscipline(tarea, currentUrbanismReportAreas);
+      if (index < 0 || vistos.has(index)) continue;
+      const nuevo = Math.max(0, Math.min(100, tarea.percentComplete));
+      const vigente = currentUrbanismReportAreas[index].progress;
+      if (nuevo <= 0 || nuevo <= vigente) continue;
+      vistos.add(index);
+      disciplinaUpdates.push({
+        key: `urbanismReportAreas.${currentUrbanismReportAreas[index].name}.progress`,
+        value: nuevo,
+      });
+    }
+  }
+  updates.push(...disciplinaUpdates);
+
   // Un MPP parcial (urbanismo, flujo o una fase aislada) puede tener su propio
   // 5%, fecha final y cientos de tareas, pero esos valores NO son los del plan
   // maestro de ARAYA. El error del 20/08 vino exactamente de un archivo llamado
@@ -284,12 +364,24 @@ export function extractProjectXmlUpdates(
     warnings.push(`${sinEdificio} de ${leaves} tareas de detalle no cuelgan de ningún edificio y se han dejado fuera.`);
   }
 
+  const resumenPartes: string[] = [];
+  if (edificioUpdates) {
+    resumenPartes.push(
+      `${edificioUpdates} edificios actualizados desde ${tareas.length} tareas del plan de Project, ponderadas por duración.`,
+    );
+  }
+  if (disciplinaUpdates.length) {
+    resumenPartes.push(
+      `${disciplinaUpdates.length} disciplina${disciplinaUpdates.length === 1 ? "" : "s"} de urbanismo actualizada${disciplinaUpdates.length === 1 ? "" : "s"}.`,
+    );
+  }
+
   return {
     updates,
     taskCount: tareas.length,
     warnings,
-    summary: edificioUpdates
-      ? `${edificioUpdates} edificios actualizados desde ${tareas.length} tareas del plan de Project, ponderadas por duración.`
+    summary: resumenPartes.length
+      ? resumenPartes.join(" ")
       : `Plan de Project leído (${tareas.length} tareas), sin avances aplicables.`,
   };
 }
