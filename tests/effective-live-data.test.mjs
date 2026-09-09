@@ -584,6 +584,39 @@ test("a newer child remains an intentional patch over an older complete root", a
   assert.equal(materialized.status, "en curso");
 });
 
+test("an undated correction over a dated root is not discarded as stale", async () => {
+  // Un parche puntual sin periodo declarado (la pantalla de avance manual, o
+  // un POST directo a /api/live-data sin "cutoff") no es "más viejo" que una
+  // raíz completa con fecha sólo porque una cadena vacía ordene por debajo de
+  // cualquier fecha real -no pertenece a ningún periodo, así que el cutoff no
+  // debería decidir nada aquí. Comparado por cutoff, la raíz vieja con fecha
+  // ganaba a la corrección nueva sin fecha: el dato se persistía en
+  // live_data_points pero desaparecía del snapshot vivo sin ningún aviso (el
+  // fallo real que corrigió esto, visto el 09/09/2026 con urbanismReportAreas).
+  const { deriveEffectiveLiveDataSnapshot } = await loadCore();
+  const olderRootWithCutoff = row({
+    historyId: 50,
+    eventId: 50,
+    key: "projectSnapshot",
+    cutoff: "2026-07-31",
+    eventCutoff: "2026-07-31",
+    valueJson: JSON.stringify({ overallProgress: 20, status: "en curso" }),
+  });
+  const newerUndatedChild = row({
+    historyId: 103,
+    eventId: 103,
+    key: "projectSnapshot.overallProgress",
+    cutoff: "",
+    eventCutoff: "",
+    valueJson: "72.76",
+  });
+
+  const snapshot = deriveEffectiveLiveDataSnapshot([newerUndatedChild, olderRootWithCutoff], true);
+  const materialized = liveData.materializeLiveRoot("projectSnapshot", {}, snapshot.values);
+  assert.equal(materialized.overallProgress, 72.76);
+  assert.equal(materialized.status, "en curso");
+});
+
 test("delete and restore re-evaluate root-child recency deterministically", async () => {
   const { deriveEffectiveLiveDataSnapshot } = await loadCore();
   const olderChild = row({
