@@ -41,3 +41,12 @@ for (const k of buildingKeys) console.log(`  ${k}: ${v[k]}`);
 
 console.log("\n--- Seguridad (Semana 2) ---");
 console.log(JSON.stringify(v.safetyMetrics, null, 2)?.slice(0, 800));
+
+console.log("\n=== /api/control-room (lo que realmente ve el panel) ===");
+const cr = await fetch(`${PRODUCTION_URL}/api/control-room`, { headers: { Cookie } }).then((r) => r.json());
+console.log("overallProgress (derivado):", cr.projectSnapshot?.overallProgress);
+console.log("plannedProgress (derivado):", cr.projectSnapshot?.plannedProgress);
+console.log("deviationPoints:", cr.projectSnapshot?.deviationPoints);
+console.log("scheduleProgress (derivado):", cr.projectSnapshot?.scheduleProgress);
+const cutoff = (cr.monthlyPlan ?? []).map((m, i) => ({ i, ...m })).filter((m) => m.actual !== null).slice(-3);
+console.log("últimos meses con actual no nulo:", JSON.stringify(cutoff));
