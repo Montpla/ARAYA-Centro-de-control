@@ -189,7 +189,7 @@ function expectedAtPath(rootName: string, root: unknown, segments: string[]) {
       arrayElement = { items: currentArray, index, append };
       current = append
         ? currentArray.find((item) => item != null) ?? fallbackArrayItem(fullNormalizedPath.join("."))
-        : currentArray[index];
+        : rowTemplateWithNullableSiblings(currentArray, index);
       if (current === undefined) return null;
       normalizedSegments.push("*");
       fullNormalizedPath.push("*");
@@ -217,9 +217,10 @@ function expectedAtPath(rootName: string, root: unknown, segments: string[]) {
 // the row at that exact index happened to have — a nullable progress field
 // like "the actual for jul-26" could never move from null to a real number
 // through a whole-array publish, which is exactly the case a monthly Curva S
-// update needs. Only ever constructed by mergedArrayTemplate below and only
-// ever consumed by matchesContract's own recursion, so it can never collide
-// with real extracted data.
+// update needs. Constructed by mergedArrayTemplate below (whole-array publish)
+// and by rowTemplateWithNullableSiblings (single-element publish); only ever
+// consumed by matchesContract's own recursion, so it can never collide with
+// real extracted data.
 class NullableTemplate {
   constructor(public readonly example: unknown) {}
 }
@@ -243,6 +244,33 @@ function mergedArrayTemplate(expected: unknown[]): unknown {
     merged[key] = nonNullExample === undefined
       ? null
       : sawNull ? new NullableTemplate(nonNullExample) : nonNullExample;
+  }
+  return merged;
+}
+
+// La misma necesidad que mergedArrayTemplate, pero para publicar un único
+// elemento del array (p. ej. "monthlyPlan.14.actual") en vez del array
+// entero. expectedAtPath resuelve ese elemento indexando directamente en el
+// array de referencia, así que sin esto el campo hereda el null literal de
+// esa fila -el mes de corte, que todavía no tenía "actual"- y ningún dato
+// nuevo podía publicarse ahí nunca, aunque el mismo mes sí aceptara su
+// "planned" (siempre numérico) o aceptara el mismo cambio a través de un
+// publish del array completo. Sólo sustituye campos que son null en esta
+// fila y no lo son en alguna fila hermana; el resto de la fila no cambia.
+function rowTemplateWithNullableSiblings(items: unknown[], index: number): unknown {
+  const row = items[index];
+  if (!isRecord(row)) return row;
+  const merged: Record<string, unknown> = { ...row };
+  for (const [key, value] of Object.entries(row)) {
+    if (value !== null) continue;
+    for (const sibling of items) {
+      if (!isRecord(sibling)) continue;
+      const siblingValue = sibling[key];
+      if (siblingValue !== null && siblingValue !== undefined) {
+        merged[key] = new NullableTemplate(siblingValue);
+        break;
+      }
+    }
   }
   return merged;
 }
