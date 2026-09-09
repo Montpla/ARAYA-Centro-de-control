@@ -88,6 +88,7 @@ import { publicationKeyConflict } from "../../../lib/live-data-publication-recov
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-upsert";
 import { nothingExtractedMessage } from "../../../lib/upload-messages";
+import { triggerMppConversion } from "../../../lib/mpp-conversion-trigger";
 import { readUploadAgentToken, resolveUploadAgentToken } from "../../../lib/upload-agent-auth";
 import {
   proposalPointerWasCommitted,
@@ -1276,6 +1277,11 @@ export async function POST(request: Request) {
     actorName: user.displayName,
   }).catch(() => undefined);
   scheduleNotificationDispatch();
+  // El .mpp no se lee dentro del Worker: pide la conversión ahora mismo al
+  // runner de GitHub en vez de esperar al siguiente tick del cron (ver
+  // triggerMppConversion). Sin GITHUB_ACTIONS_TOKEN configurado, no hace
+  // nada y el cron programado sigue siendo la única vía, como hasta ahora.
+  if (extension === "mpp") triggerMppConversion();
 
   if (deferProcessingRequested && !resumedRow) {
     scheduleBackgroundUploadProcessing({
