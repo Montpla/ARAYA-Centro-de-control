@@ -365,3 +365,28 @@ test("every /data-center/ document referenced from the app exists on disk and th
   assert.match(deployScript, /guia-corporativa-bricket-control-personal-obra\.pdf/);
   assert.match(deployScript, /informe-analisis-ifc-2026-07-29\.pdf/);
 });
+
+test("la tarjeta \"Mayor avance\" de urbanismo sale del mismo array que la tarjeta de especialidades, no de un número fijo", async () => {
+  // El eyebrow "Mayor avance" mostraba un "72,76%" escrito a mano que no se
+  // movía cuando el avance por especialidad de abajo sí cambiaba con cada
+  // corte -las dos tarjetas venían del mismo dato pero dejaban de coincidir
+  // en cuanto se publicaba una revisión nueva (bug real, visto el 09/09/2026:
+  // 72,76% arriba, 68% abajo, misma disciplina). Debe calcularse del array
+  // urbanismReportAreas ya materializado, igual que "Avance por especialidad".
+  const dashboard = await readFile("app/dashboard-client.tsx", "utf8");
+  assert.doesNotMatch(
+    dashboard,
+    /eyebrow="Mayor avance" value="[\d,]+%"/,
+    "\"Mayor avance\" no debe volver a ser un valor de texto fijo",
+  );
+  assert.match(
+    dashboard,
+    /urbanismReportAreas\.reduce\(\s*\(mayor, area\) => \(area\.progress > mayor\.progress \? area : mayor\)/,
+    "\"Mayor avance\" debe calcularse recorriendo urbanismReportAreas, el mismo array que pinta el avance por especialidad",
+  );
+  assert.match(
+    dashboard,
+    /eyebrow="Mayor avance" value=\{`\$\{number\.format\(topReportArea\.progress\)\}%`\} detail=\{topReportArea\.name\}/,
+    "la tarjeta debe pintar el nombre y el progreso de la disciplina calculada, no valores sueltos",
+  );
+});
