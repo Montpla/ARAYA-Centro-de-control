@@ -6,7 +6,12 @@ import { scheduleNotificationDispatch } from "../../../lib/notification-dispatch
 
 export const runtime = "edge";
 
-const ACTIVE_WINDOW_MS = 90_000;
+// El latido sólo se envía con la pestaña visible (ver dashboard-client.tsx),
+// así que cualquier ausencia se acumula sin heartbeats mientras tanto. 90 s
+// bastaba para que bloquear la pantalla del móvil un momento ya contara como
+// "reconexión nueva" y disparase un aviso — varias veces al día, cada vez.
+// Media hora es un hueco real de verdad estar fuera de la app.
+const ACTIVE_WINDOW_MS = 30 * 60_000;
 const SESSION_PATTERN = /^[a-zA-Z0-9._:-]{8,128}$/;
 
 function limitedText(value: unknown, maximum: number) {

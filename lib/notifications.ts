@@ -31,6 +31,8 @@ export type NotificationRecipient = {
 export type NotificationVisibilityRecord = {
   audience: string;
   area: string;
+  kind: string;
+  actorEmail: string;
 };
 
 export type NotificationInput = {
@@ -114,6 +116,14 @@ export function notificationVisibleToUser(
   const userArea = user.area.trim().toLowerCase();
   const userEmail = normalizedEmail(user.email);
 
+  // A nadie le hace falta que le avisen de su propia conexión: sólo genera
+  // ruido, y mucho en iOS, donde Safari descarta la sesión guardada de la
+  // pestaña en segundo plano y cada regreso a la app se registra como una
+  // reconexión nueva del mismo teléfono varias veces al día.
+  if (event.kind === "user_connected" && normalizedEmail(event.actorEmail) === userEmail) {
+    return false;
+  }
+
   // Finance and commercial data are always fail-closed, even if a producer
   // accidentally selects "all" or the user's normal area matches the event.
   const audienceArea = audience.startsWith("area:") ? audience.slice(5) : "";
@@ -169,8 +179,15 @@ export function notificationVisibilityWhere(user: NotificationRecipient) {
       AND ${audience} != 'finance'
       AND ${audience} NOT IN (${sql.join(protectedAreas.map((value) => sql`${`area:${value}`}`), sql`, `)})
     )`;
+  // Refleja la exclusión de notificationVisibleToUser(): nadie necesita ver
+  // en su propio listado que se ha conectado él mismo.
+  const notOwnConnection = sql`NOT (
+    ${notificationEvents.kind} = 'user_connected'
+    AND lower(${notificationEvents.actorEmail}) = ${userEmail}
+  )`;
   return and(
     financeGuard,
+    notOwnConnection,
     sql`(${sql.join(audienceClauses, sql` OR `)})`,
   );
 }

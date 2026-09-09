@@ -386,6 +386,10 @@ test("notification, presence and push routes are authenticated and durable", () 
     /insert\(notificationEvents\)/,
     /deliverPushNotification\(event\)\.catch/,
     /notificationVisibleToUser/,
+    // Nadie ve ni recibe el aviso de su propia conexión (ni en la campanita
+    // ni por push): mismo criterio en JS y en el equivalente SQL.
+    /event\.kind === ["']user_connected["'] && normalizedEmail\(event\.actorEmail\) === userEmail/,
+    /notOwnConnection = sql`NOT \([\s\S]*?kind\} = ['"]user_connected['"][\s\S]*?actorEmail\}\) = \$\{userEmail\}/,
     /!user\.financeAccess && \([\s\S]*?requiresFinanceAccessForArea\(eventArea\)[\s\S]*?audience === ["']finance["'][\s\S]*?requiresFinanceAccessForArea\(audienceArea\)/,
     /buildPushPayload\(/,
     /insert\(notificationDeliveries\)/,
@@ -409,7 +413,7 @@ test("notification, presence and push routes are authenticated and durable", () 
   expectPatterns(presenceRoute, [
     /export async function POST\(request: Request\)/,
     /requireApiUser\(\)/,
-    /const ACTIVE_WINDOW_MS = 90_000/,
+    /const ACTIVE_WINDOW_MS = 30 \* 60_000/,
     /insert\(userPresence\)/,
     /onConflictDoUpdate/,
     /if \(becameActive\) scheduleNotificationDispatch\(\)/,
@@ -482,7 +486,7 @@ test("notification dispatch cannot be starved by future retries or protected his
 
 test("connection notices remain visible to every authorized area", async () => {
   const notificationVisibleToUser = await loadNotificationVisibility();
-  const connectionEvent = { audience: "all", area: "direccion" };
+  const connectionEvent = { audience: "all", area: "direccion", kind: "user_connected", actorEmail: "otro@example.com" };
   const obraUser = {
     email: "obra@example.com",
     role: "member",
@@ -493,11 +497,47 @@ test("connection notices remain visible to every authorized area", async () => {
   assert.equal(notificationVisibleToUser({
     audience: "area:finanzas",
     area: "direccion",
+    kind: "user_connected",
+    actorEmail: "otro@example.com",
   }, { ...obraUser, area: "finanzas" }), false);
   assert.equal(notificationVisibleToUser({
     audience: "all",
     area: "ventas",
+    kind: "user_connected",
+    actorEmail: "otro@example.com",
   }, obraUser), false);
+});
+
+test("nadie ve ni recibe el aviso de su propia conexión", async () => {
+  // Reportado en producción: al abrir el Centro de Control desde el
+  // ordenador, llegaba un aviso de "conectado desde iPhone" que en realidad
+  // era el propio teléfono del mismo usuario reconectando en segundo plano
+  // (Safari en iOS descarta la sesión guardada de la pestaña con frecuencia).
+  // audience "all" nunca excluía al propio actor de su aviso de conexión.
+  const notificationVisibleToUser = await loadNotificationVisibility();
+  const ownConnection = {
+    audience: "all",
+    area: "direccion",
+    kind: "user_connected",
+    actorEmail: "Enrique@Example.com",
+  };
+  const self = {
+    email: "enrique@example.com",
+    role: "member",
+    area: "obra",
+    financeAccess: false,
+  };
+  const someoneElse = { ...self, email: "otra-persona@example.com" };
+  assert.equal(notificationVisibleToUser(ownConnection, self), false);
+  assert.equal(notificationVisibleToUser(ownConnection, someoneElse), true);
+  // Otros tipos de aviso con el mismo actor siguen viéndose con normalidad:
+  // la exclusión es sólo para "uno mismo se ha conectado".
+  assert.equal(notificationVisibleToUser({
+    audience: "all",
+    area: "direccion",
+    kind: "action_created",
+    actorEmail: "Enrique@Example.com",
+  }, self), true);
 });
 
 test("Ventas y cobranza shares the fail-closed finance permission on every server boundary", () => {
