@@ -436,6 +436,97 @@ function numeroDeCelda(valor: string) {
   return Number.isFinite(numero) ? numero : null;
 }
 
+// El lector de .xlsx entrega la celda de fecha tal cual la guarda Excel: un
+// número de serie de días desde el 30/12/1899, sin interpretar su formato. El
+// rango descarta cualquier número que no sea de verdad una fecha (por
+// ejemplo, un porcentaje o un peso de la fila de arriba).
+function excelSerialToDate(serial: number): Date | null {
+  if (!Number.isFinite(serial) || serial < 36_526 || serial > 73_050) return null;
+  return new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86_400_000);
+}
+
+/**
+ * Curva S del Excel maestro de obra: "PLAN OPERATIVO" y "EJECUTADO REAL"
+ * acumulados, uno por fila, con una fecha de corte mensual en la columna de
+ * cada dato. No es una tabla de edificio+avance ni la matriz de disciplinas:
+ * es la única fuente de projectSnapshot.overallProgress una vez publicada
+ * (ver monthlyPlan en lib/spatial-live-data.ts), así que sin este lector el
+ * Excel que de verdad manda el avance físico del proyecto se archivaba sin
+ * leer ni una cifra, aunque abriera bien como hoja de cálculo.
+ */
+function extractCurvaSMonthlyProgress(
+  filas: Array<Record<string, string>>,
+  defaults: ExtractionDefaults,
+): StructuredExtraction | null {
+  let planRow = -1;
+  let actualRow = -1;
+  let labelCol = "";
+  for (let indice = 0; indice < filas.length; indice += 1) {
+    const celdas = Object.entries(filas[indice]);
+    if (planRow < 0) {
+      const plan = celdas.find(([, v]) => normalizarCabecera(v) === "plan operativo");
+      if (plan) { planRow = indice; labelCol = plan[0]; }
+      continue;
+    }
+    if (actualRow < 0) {
+      const actual = celdas.find(([col, v]) => col === labelCol && normalizarCabecera(v) === "ejecutado real");
+      if (actual) { actualRow = indice; break; }
+    }
+  }
+  if (planRow < 0 || actualRow < 0) return null;
+
+  // La fila de fechas va justo encima del plan, aunque a veces con el título
+  // del proyecto de por medio (una fila con una sola celda de texto).
+  let dateRow = -1;
+  for (let indice = planRow - 1; indice >= 0 && indice >= planRow - 4; indice -= 1) {
+    const fechas = Object.entries(filas[indice]).filter(
+      ([col, v]) => col !== labelCol && excelSerialToDate(Number(v)) !== null,
+    );
+    if (fechas.length >= 6) { dateRow = indice; break; }
+  }
+  if (dateRow < 0) return null;
+
+  const base = {
+    area: defaults.area,
+    cutoff: defaults.cutoff,
+    sourceCurrency: defaults.sourceCurrency,
+    sourceName: defaults.sourceName,
+  };
+  const updates: LiveDataUpdate[] = [];
+  let meses = 0;
+  let fueraDeCalendario = 0;
+  for (const [col, rawFecha] of Object.entries(filas[dateRow])) {
+    if (col === labelCol) continue;
+    const fecha = excelSerialToDate(Number(rawFecha));
+    if (!fecha) continue;
+    // El calendario de la Curva S empieza en junio de 2025 (índice 0); ver
+    // planCurveMonths en app/demo-data.ts.
+    const indiceMes = (fecha.getUTCFullYear() - 2025) * 12 + (fecha.getUTCMonth() - 5);
+    if (indiceMes < 0 || indiceMes > 40) { fueraDeCalendario += 1; continue; }
+
+    const planValor = numeroDeCelda(filas[planRow][col] ?? "");
+    if (planValor !== null) {
+      updates.push({ key: `monthlyPlan.${indiceMes}.planned`, value: Math.round(planValor * 10_000) / 100, ...base });
+      meses += 1;
+    }
+    const actualValor = numeroDeCelda(filas[actualRow][col] ?? "");
+    if (actualValor !== null) {
+      updates.push({ key: `monthlyPlan.${indiceMes}.actual`, value: Math.round(actualValor * 10_000) / 100, ...base });
+    }
+  }
+  if (!meses) return null;
+
+  const warnings: string[] = [];
+  if (fueraDeCalendario) {
+    warnings.push(`${fueraDeCalendario} columna(s) de fecha fuera del calendario de la Curva S se ignoraron.`);
+  }
+  return {
+    updates,
+    summary: `Curva S actualizada: ${meses} meses de plan operativo y ejecutado real leídos del Excel maestro.`,
+    warnings,
+  };
+}
+
 /**
  * Lee una tabla de avance por edificio de una hoja corriente.
  *
@@ -1589,6 +1680,12 @@ export async function extractStructuredUpdates(
           });
           continue;
         }
+      }
+
+      const curvaS = extractCurvaSMonthlyProgress(filas, defaults);
+      if (curvaS) {
+        results.push(curvaS);
+        continue;
       }
 
       const caratula = extractCubicacionCoverProgress(filas, defaults);
