@@ -1281,7 +1281,7 @@ export async function POST(request: Request) {
   // runner de GitHub en vez de esperar al siguiente tick del cron (ver
   // triggerMppConversion). Sin GITHUB_ACTIONS_TOKEN configurado, no hace
   // nada y el cron programado sigue siendo la única vía, como hasta ahora.
-  if (extension === "mpp") triggerMppConversion();
+  if (extension === "mpp") triggerMppConversion(id);
 
   if (deferProcessingRequested && !resumedRow) {
     scheduleBackgroundUploadProcessing({
