@@ -516,6 +516,20 @@ async function deleteTemporaryFile(fileId: string, apiKey: string) {
   return "";
 }
 
+/**
+ * Detecta cuando la API cortó la respuesta por agotar max_output_tokens antes
+ * de cerrar el JSON. Sin esta comprobación, el texto truncado llegaba a
+ * JSON.parse y fallaba con "no contiene JSON válido" -- un mensaje que
+ * escondía la causa real (el modelo necesitaba más margen de salida) y que
+ * exactamente el mismo documento, con los mismos bytes, no siempre disparaba:
+ * el consumo de tokens de razonamiento varía de una llamada a otra.
+ */
+function truncatedByOutputLimit(response: Record<string, unknown>) {
+  if (response.status !== "incomplete") return false;
+  const details = response.incomplete_details;
+  return isRecord(details) && details.reason === "max_output_tokens";
+}
+
 function responseOutputText(payload: Record<string, unknown>) {
   if (typeof payload.output_text === "string") return payload.output_text;
   if (!Array.isArray(payload.output)) return "";
@@ -1218,7 +1232,9 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
     1,
     Math.min(32, Math.round(input.maxAgentToolCalls ?? PRIMARY_AGENT_TOOL_CALLS)),
   );
-  const maxOutputTokens = Math.max(
+  // Mutable: se duplica, con tope en 20 000, cuando una respuesta se corta
+  // por max_output_tokens antes de cerrar el JSON (ver truncatedByOutputLimit).
+  let maxOutputTokens = Math.max(
     1_000,
     Math.min(20_000, Math.round(
       input.maxOutputTokens ?? (model === INGESTION_ESCALATION_MODEL ? 12_000 : 8_000),
@@ -1318,6 +1334,10 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
       totalUsage = addAiTokenUsage(totalUsage, readOpenAiTokenUsage(response));
       const calls = responseFunctionCalls(response);
       if (!calls.length) {
+        if (truncatedByOutputLimit(response) && maxOutputTokens < 20_000) {
+          maxOutputTokens = Math.min(20_000, maxOutputTokens * 2);
+          continue;
+        }
         finalResponse = response;
         break;
       }
@@ -1352,38 +1372,46 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
       // una única llamada sin herramientas: no puede abrir otro bucle y debe
       // transformar el contexto acumulado en la salida estructurada. Esta
       // finalización sólo se paga cuando se agota el bucle normal.
-      const response = await requestOpenAIJson(`${OPENAI_API_BASE}/responses`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${input.apiKey.trim()}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          reasoning: { effort: "low" },
-          instructions: `${EXTRACTION_INSTRUCTIONS}\n\nFINALIZACIÓN OBLIGATORIA\n- No solicites ni invoques más herramientas. Devuelve ahora el objeto JSON final con todos los hechos ya leídos y contrastados.`,
-          input: conversationInput,
-          text: {
-            format: {
-              type: "json_schema",
-              name: "araya_live_data_extraction",
-              description: "Hechos documentales conservadores para el contrato vivo de ARAYA.",
-              strict: true,
-              schema: EXTRACTION_SCHEMA,
-            },
-            verbosity: "low",
+      let response: Record<string, unknown> = {};
+      for (let intento = 1; intento <= 2; intento += 1) {
+        response = await requestOpenAIJson(`${OPENAI_API_BASE}/responses`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${input.apiKey.trim()}`,
+            "Content-Type": "application/json",
           },
-          max_output_tokens: maxOutputTokens,
-          service_tier: "default",
-          safety_identifier: SAFETY_IDENTIFIER,
-          prompt_cache_key: `${PROMPT_VERSION}-final`,
-          store: false,
-        }),
-      });
-      if (isRecord(response.error)) {
-        throw new OpenAIOperationalError(apiErrorMessage(response, 200));
+          body: JSON.stringify({
+            model,
+            reasoning: { effort: "low" },
+            instructions: `${EXTRACTION_INSTRUCTIONS}\n\nFINALIZACIÓN OBLIGATORIA\n- No solicites ni invoques más herramientas. Devuelve ahora el objeto JSON final con todos los hechos ya leídos y contrastados.`,
+            input: conversationInput,
+            text: {
+              format: {
+                type: "json_schema",
+                name: "araya_live_data_extraction",
+                description: "Hechos documentales conservadores para el contrato vivo de ARAYA.",
+                strict: true,
+                schema: EXTRACTION_SCHEMA,
+              },
+              verbosity: "low",
+            },
+            max_output_tokens: maxOutputTokens,
+            service_tier: "default",
+            safety_identifier: SAFETY_IDENTIFIER,
+            prompt_cache_key: `${PROMPT_VERSION}-final`,
+            store: false,
+          }),
+        });
+        if (isRecord(response.error)) {
+          throw new OpenAIOperationalError(apiErrorMessage(response, 200));
+        }
+        totalUsage = addAiTokenUsage(totalUsage, readOpenAiTokenUsage(response));
+        if (truncatedByOutputLimit(response) && intento === 1 && maxOutputTokens < 20_000) {
+          maxOutputTokens = Math.min(20_000, maxOutputTokens * 2);
+          continue;
+        }
+        break;
       }
-      totalUsage = addAiTokenUsage(totalUsage, readOpenAiTokenUsage(response));
       if (!responseOutputText(response)) {
         throw new OpenAIOperationalError(
           `El agente no completó una salida estructurada tras ${maxAgentIterations} iteraciones y su cierre obligatorio.`,
@@ -1393,11 +1421,15 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
       completedIterations += 1;
     }
     result = {
-      ...validateModelOutput(
-        responseOutputText(finalResponse),
-        input,
-        typeof finalResponse.model === "string" ? finalResponse.model : model,
-      ),
+      ...(truncatedByOutputLimit(finalResponse)
+        ? emptyResult("La respuesta de OpenAI se cortó por límite de tokens incluso tras ampliarlo.", [
+            "El documento generó más datos de los que caben en una sola respuesta; repite la carga o divídelo en partes más pequeñas.",
+          ])
+        : validateModelOutput(
+            responseOutputText(finalResponse),
+            input,
+            typeof finalResponse.model === "string" ? finalResponse.model : model,
+          )),
       agentTrace: trace,
       agentIterations: completedIterations,
       inputTokens: totalUsage.inputTokens,

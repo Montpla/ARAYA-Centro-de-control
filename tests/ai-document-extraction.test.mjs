@@ -445,6 +445,80 @@ test("an exhausted tool loop is forced to emit one final structured response wit
   assert.equal(result.outputTokens, 80);
 });
 
+test("a response truncated by max_output_tokens retries with a bigger budget instead of failing as invalid JSON", async () => {
+  const requestBodies = [];
+  globalThis.fetch = async (url, init) => {
+    const body = JSON.parse(init.body);
+    requestBodies.push(body);
+    if (requestBodies.length === 1) {
+      return new Response(JSON.stringify({
+        model: "gpt-5.6-luna",
+        status: "incomplete",
+        incomplete_details: { reason: "max_output_tokens" },
+        output: [{ type: "message", content: [{ type: "output_text", text: "{\"updates\":[{\"key\":" }] }],
+        usage: { input_tokens: 200, output_tokens: 8000 },
+      }), { status: 200 });
+    }
+    return new Response(JSON.stringify({
+      model: "gpt-5.6-luna",
+      status: "completed",
+      output: [{
+        type: "message",
+        content: [{
+          type: "output_text",
+          text: JSON.stringify({
+            updates: [{
+              key: "projectSnapshot.overallProgress",
+              value_json: "27.9",
+              area: "obra",
+              cutoff: "2026-08-31",
+              source_currency: "DOP",
+              confidence: 0.95,
+              evidence: "Curva S, Ejecutado agosto",
+            }],
+            summary: "Avance ejecutado detectado tras ampliar el margen de salida.",
+            warnings: [],
+            confidence: 0.95,
+          }),
+        }],
+      }],
+      usage: { input_tokens: 200, output_tokens: 300 },
+    }), { status: 200 });
+  };
+
+  const result = await extraction.extractDocumentWithAI(input("png"));
+
+  assert.equal(requestBodies.length, 2);
+  assert.equal(requestBodies[0].max_output_tokens, 8000);
+  assert.equal(requestBodies[1].max_output_tokens, 16000);
+  assert.equal(result.updates[0].value, 27.9);
+  assert.deepEqual(result.warnings, []);
+});
+
+test("a response still truncated after retrying reports the real cause instead of \"invalid JSON\"", async () => {
+  const requestBodies = [];
+  globalThis.fetch = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    requestBodies.push(body);
+    return new Response(JSON.stringify({
+      model: "gpt-5.6-luna",
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [{ type: "message", content: [{ type: "output_text", text: "{\"updates\":[" }] }],
+      usage: { input_tokens: 200, output_tokens: body.max_output_tokens },
+    }), { status: 200 });
+  };
+
+  const result = await extraction.extractDocumentWithAI({ ...input("png"), maxOutputTokens: 15_000 });
+
+  assert.equal(requestBodies.length, 2);
+  assert.equal(requestBodies[0].max_output_tokens, 15_000);
+  assert.equal(requestBodies[1].max_output_tokens, 20_000);
+  assert.deepEqual(result.updates, []);
+  assert.doesNotMatch(result.summary, /JSON válido/);
+  assert.match(result.summary, /límite de tokens/i);
+});
+
 test("the ingestion agent accepts the lookup fan-out needed by complex workbooks", async () => {
   let responseCalls = 0;
   globalThis.fetch = async (url, init) => {
