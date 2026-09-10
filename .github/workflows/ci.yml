@@ -1,0 +1,46 @@
+name: Verificación de pull requests
+
+# Corre typecheck, build y toda la batería de pruebas en cada pull request,
+# antes de fusionar. Hasta ahora esas comprobaciones sólo corrían dentro de
+# "Deploy Centro de Control ARAYA" (deploy.yml), que se dispara con el push a
+# main — es decir, DESPUÉS de fusionar. Eso protegía la producción (el paso
+# de "wrangler deploy" nunca llega a ejecutarse si algo falla antes), pero
+# dejaba main con un commit roto hasta que alguien notara el workflow en rojo,
+# y dependía de que quien fusionara hubiera corrido las pruebas a mano. Este
+# workflow adelanta la misma comprobación al momento de abrir/actualizar el
+# PR, para que un error de lógica no llegue a fusionarse.
+#
+# Usa exactamente los mismos pasos que scripts/deploy.mjs (typecheck, build,
+# pruebas) mediante "npm test", sin tocar producción ni requerir secretos.
+#
+# Para que esto bloquee la fusión de verdad, hay que marcarlo como "required
+# status check" en Settings → Branches → main, en GitHub (paso manual, no
+# disponible desde aquí).
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Typecheck, build y pruebas (npm test)
+        run: npm test
