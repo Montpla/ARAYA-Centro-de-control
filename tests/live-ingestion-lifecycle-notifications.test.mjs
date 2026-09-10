@@ -856,3 +856,80 @@ test("business alerts derive idempotent, audience-safe candidates from polled st
     /scheduleBusinessAlerts\(controlRoomAlertCandidates\(payload\)\)/,
   ], "control room business alerts");
 });
+
+test("un dato financiero se publica aunque el área del archivo sea otra", () => {
+  // Bug real: cubicacionCaratula (el monto certificado de una cubicación,
+  // "Avance edificio.xlsx") se aislaba en silencio porque el archivo, en
+  // conjunto, clasifica como "obra" (avance físico), no "finanzas". Lo mismo
+  // le pasaría a costBreakdown o a fiduciaryStatementSummary si algún día
+  // conviven en un archivo cuyo contenido mayoritario es de otra área (un
+  // PDF ejecutivo con edificios Y un balance fiduciario, por ejemplo).
+  // isFinancialLiveKey ya determina por sí sola la pantalla protegida del
+  // dato, así que exigir además que su área coincida con la del archivo era
+  // una condición de más. Se evalúa la función real extraída de la ruta,
+  // no una reimplementación, para que un cambio futuro que la reintroduzca
+  // rompa este test.
+  const start = filesRoute.indexOf("const updateIsAutoPublishable = (update");
+  assert.ok(start >= 0, "no se encontró updateIsAutoPublishable en la ruta");
+  const markerEnd = filesRoute.indexOf(
+    "individualUpdateContractIsSafe(update, liveValues);",
+    start,
+  );
+  assert.ok(markerEnd >= 0, "no se encontró el final de updateIsAutoPublishable");
+  const rawSnippet = filesRoute.slice(start, markerEnd + "individualUpdateContractIsSafe(update, liveValues);".length);
+  // El snippet trae anotaciones de tipo (el parámetro de la arrow function);
+  // new Function sólo entiende JS, así que se transpila igual que el resto
+  // de los módulos que esta suite evalúa directamente.
+  const snippet = ts.transpileModule(rawSnippet, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+
+  const factory = new Function(
+    "resolvedArea",
+    "financeProtectedUpload",
+    "publicationActor",
+    "isFinancialLiveKey",
+    "requiresFinanceAccessForArea",
+    "unsafeAgentKeys",
+    "confidenceByKey",
+    "isSafeAutomaticStructuredUpdate",
+    "individualUpdateContractIsSafe",
+    "liveValues",
+    `${snippet}\nreturn updateIsAutoPublishable;`,
+  );
+  const build = (overrides = {}) => factory(
+    overrides.resolvedArea ?? "obra",
+    overrides.financeProtectedUpload ?? false,
+    overrides.publicationActor ?? { financeAccess: true },
+    overrides.isFinancialLiveKey ?? ((key) => key === "cubicacionCaratula"),
+    overrides.requiresFinanceAccessForArea ?? (() => false),
+    overrides.unsafeAgentKeys ?? new Set(),
+    overrides.confidenceByKey ?? new Map([["cubicacionCaratula", 1], ["buildings.TH-9.progress", 1]]),
+    overrides.isSafeAutomaticStructuredUpdate ?? (() => true),
+    overrides.individualUpdateContractIsSafe ?? (() => true),
+    overrides.liveValues ?? {},
+  );
+
+  // El dato financiero, con un área distinta a la del archivo, se publica:
+  // el permiso financiero ya lo protege.
+  const financiero = build();
+  assert.equal(financiero({ key: "cubicacionCaratula", area: "finanzas" }), true);
+
+  // Sin permiso financiero, sigue sin publicarse: el área no sustituye al
+  // permiso, sólo deja de exigir que además coincidan.
+  assert.equal(
+    build({ publicationActor: { financeAccess: false } })({ key: "cubicacionCaratula", area: "finanzas" }),
+    false,
+  );
+
+  // Un dato NO financiero con el área del archivo cambiada sigue exigiendo
+  // la coincidencia de siempre (salvo el caso ya existente de archivo
+  // finance-protected): esto no se vuelve una vía libre general.
+  assert.equal(
+    build()({ key: "buildings.TH-9.progress", area: "finanzas" }),
+    false,
+  );
+
+  // El dato obra de siempre, con su área, sigue publicándose igual.
+  assert.equal(build()({ key: "buildings.TH-9.progress", area: "obra" }), true);
+});

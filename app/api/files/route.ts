@@ -2046,6 +2046,19 @@ export async function POST(request: Request) {
         financeProtectedUpload &&
         !requiresFinanceAccessForArea(update.area) &&
         !isFinancialLiveKey(update.key)
+      ) || (
+        // El caso simétrico: un dato financiero (cubicacionCaratula,
+        // costBreakdown, fiduciaryStatementSummary...) puede venir en un
+        // archivo que, en conjunto, clasifica a otra área -una cubicación es
+        // sobre todo avance físico, un PDF ejecutivo puede traer edificios Y
+        // un balance fiduciario a la vez-. isFinancialLiveKey ya determina
+        // por sí sola a qué pantalla protegida pertenece el dato,
+        // independientemente de la etiqueta de área que traiga; exigir
+        // además que coincida con la del archivo sólo lo aislaba en
+        // silencio (pasó de verdad con el monto certificado de la
+        // cubicación). Sigue exigiendo permiso financiero de todas formas,
+        // igual que la comprobación siguiente.
+        isFinancialLiveKey(update.key) && publicationActor.financeAccess
       )) &&
       (publicationActor.financeAccess || !isFinancialLiveKey(update.key)) &&
       !unsafeAgentKeys.has(update.key) &&
