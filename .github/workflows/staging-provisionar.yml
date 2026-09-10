@@ -1,0 +1,41 @@
+name: Provisionar entorno de staging
+
+# Frente 4 del plan de fiabilidad: un entorno de preproducción para probar
+# cambios de lógica de ingesta/clasificación contra el Worker real (con su
+# propia D1 y su propio bucket R2) antes de fusionar a main.
+#
+# Este workflow crea (una vez) los recursos de Cloudflare de staging y aplica
+# las migraciones. Es seguro volver a ejecutarlo: no toca nada de producción
+# (usa nombres de recursos distintos, "-staging") y es idempotente (si ya
+# existen, sigue adelante sin fallar).
+#
+# Deliberadamente NO importa ningún dato de producción: la base de staging
+# arranca vacía. El valor de este entorno es probar el camino completo
+# (subida → clasificación → extracción → publicación → notificación) con
+# archivos reales de tests/fixtures/, no con cifras reales de la obra —
+# así se evita duplicar datos de negocio confidenciales o credenciales del
+# equipo en un segundo entorno.
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: staging-provisionar
+  cancel-in-progress: false
+
+jobs:
+  provisionar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Crear recursos y aplicar migraciones
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/staging-provisionar.mjs
