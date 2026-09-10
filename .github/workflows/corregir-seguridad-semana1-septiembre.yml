@@ -1,0 +1,27 @@
+name: Corregir seguridad con la semana real (31 ago-5 sep)
+
+# El reporte semanal de seguridad más reciente no dejó propuesta de la IA (el
+# lector ligero de PDF sólo recupera la cabecera, no la tabla de datos), así
+# que safetyMetrics quedó publicado con la semana del 10-15 de agosto. Se
+# releyó el original con PyMuPDF y esta corrección publica las cifras reales.
+# Se retira tras confirmarla.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  corregir:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Corregir safetyMetrics y safetyWeeklySeries
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+        run: node scripts/corregir-seguridad-semana1-septiembre.mjs
