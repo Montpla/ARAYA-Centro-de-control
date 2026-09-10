@@ -71,6 +71,7 @@ import {
   requiresFinanceAccessForDocument,
 } from "../../../lib/live-data";
 import { urbanismReportAreas } from "../../../app/june-report-data";
+import { cubicacionCaratula } from "../../../app/demo-data";
 import {
   decodeFileRegistryCursor,
   encodeFileRegistryCursor,
@@ -1399,6 +1400,11 @@ export async function POST(request: Request) {
       currentUrbanismReportAreas: materializeLiveRoot(
         "urbanismReportAreas",
         urbanismReportAreas,
+        currentLiveData.values,
+      ),
+      currentCubicacionCaratula: materializeLiveRoot(
+        "cubicacionCaratula",
+        cubicacionCaratula,
         currentLiveData.values,
       ),
     });

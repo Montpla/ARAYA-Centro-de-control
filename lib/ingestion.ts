@@ -1,4 +1,4 @@
-import { LiveDataUpdate, LiveDataValue, isLiveDataKey } from "./live-data";
+import { LiveDataUpdate, LiveDataValue, isLiveDataKey, namingToken } from "./live-data";
 import { buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml } from "./project-xml";
 import { readXlsxSheets, readZipEntries, rowsToRecords } from "./xlsx-reader";
 import { readOfficeTables, readPptxSlideShapes } from "./ooxml-tables";
@@ -1004,6 +1004,77 @@ function extractCubicacionDisciplineProgress(
   };
 }
 
+/**
+ * Lee el resumen "Monto Cubicación" de una cubicación: otra hoja del mismo
+ * libro que la carátula de avance físico, con el número de cubicación y su
+ * monto certificado en el periodo ("Avance edificio.xlsx" / Cubicación 9 lo
+ * trae así). cubicacionCaratula (panel de Finanzas) es una lista con una
+ * entrada por cubicación; como cada mes aparece un número nuevo, escribir un
+ * campo de una entrada existente no basta -hay que añadir la entrada si no
+ * existe todavía-, así que este lector recibe el array vigente completo
+ * (currentCubicacionCaratula) y publica la lista ya actualizada como un solo
+ * valor de raíz. Antes de esto nadie leía esta hoja: sólo se extraía el
+ * avance físico de la carátula y el detalle de partidas por oficio, y el
+ * monto certificado -el número financiero real de cada cubicación mensual-
+ * se archivaba sin publicar nada.
+ */
+function extractCubicacionMontoResumen(
+  filas: Array<Record<string, string>>,
+  defaults: {
+    area: string;
+    cutoff: string;
+    sourceCurrency: "DOP" | "USD";
+    sourceName: string;
+    currentCubicacionCaratula?: ReadonlyArray<{ label: string; montoDop: number; cutoff: string }>;
+  },
+): StructuredExtraction | null {
+  let numero = "";
+  let monto: number | null = null;
+
+  for (const row of filas.slice(0, 20)) {
+    const cells = Object.entries(row);
+    if (!numero) {
+      for (const [, valor] of cells) {
+        const match = normalizarCabecera(valor).match(/^cubicacion\s+n(?:ro\.?|[o°]\.?)?\.?\s*(\d+)/);
+        if (match) { numero = match[1]; break; }
+      }
+    }
+    if (monto === null) {
+      const labelIndex = cells.findIndex(([, valor]) => /^monto\s+cubicacion:?$/.test(normalizarCabecera(valor)));
+      if (labelIndex >= 0) {
+        const [labelColumn] = cells[labelIndex];
+        for (const [columna, valor] of cells) {
+          if (columna === labelColumn) continue;
+          const numeroCelda = numeroDeCelda(valor);
+          if (numeroCelda !== null && numeroCelda > 0) { monto = numeroCelda; break; }
+        }
+      }
+    }
+  }
+  if (!numero || monto === null) return null;
+
+  const label = `Cubicación Nº${numero}`;
+  const otrasCubicaciones = (defaults.currentCubicacionCaratula ?? [])
+    .filter((item) => namingToken(item.label) !== namingToken(label));
+  const lista = [
+    ...otrasCubicaciones,
+    { label, montoDop: Math.round(monto * 100) / 100, cutoff: defaults.cutoff },
+  ];
+
+  return {
+    updates: [{
+      key: "cubicacionCaratula",
+      value: lista,
+      area: "finanzas",
+      cutoff: defaults.cutoff,
+      sourceCurrency: defaults.sourceCurrency,
+      sourceName: defaults.sourceName,
+    }],
+    summary: `Monto certificado de ${label} añadido a la carátula de cubicaciones.`,
+    warnings: [],
+  };
+}
+
 // El primer dígito antes del primer guión del código de partida es el
 // capítulo contable del fideicomiso: 1 = obra, 2 = comercialización y
 // administración fiduciaria, 3 = legal y financiero. costBreakdown del panel
@@ -1645,6 +1716,10 @@ export async function extractStructuredUpdates(
     // nunca retrasarla con una cifra de alcance menor: ver
     // extractProjectXmlUpdates.
     currentUrbanismReportAreas?: ReadonlyArray<{ name: string; progress: number }>;
+    // La carátula de cubicaciones ya publicada. Cada mes aparece un número de
+    // cubicación nuevo, así que hay que añadir la entrada a la lista vigente
+    // en vez de escribir un campo suelto: ver extractCubicacionMontoResumen.
+    currentCubicacionCaratula?: ReadonlyArray<{ label: string; montoDop: number; cutoff: string }>;
   },
 ): Promise<StructuredExtraction> {
   if (!["csv", "json", "xml", "xlsx", "docx", "pptx", "zip", "pdf"].includes(extension)) {
@@ -1967,6 +2042,16 @@ export async function extractStructuredUpdates(
       const disciplinas = extractCubicacionDisciplineProgress(filas, defaults);
       if (disciplinas) {
         results.push(disciplinas);
+        continue;
+      }
+
+      // El monto certificado de la cubicación (otra hoja del mismo libro,
+      // "Monto Cubicación:" junto al número "CUBICACION Nro. X"): el número
+      // financiero real de esta cubicación mensual, que ni la carátula ni el
+      // detalle de partidas traen.
+      const montoCubicacion = extractCubicacionMontoResumen(filas, defaults);
+      if (montoCubicacion) {
+        results.push(montoCubicacion);
         continue;
       }
 
