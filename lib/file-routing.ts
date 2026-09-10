@@ -66,7 +66,12 @@ export const reviewStatusLabels: Record<string, string> = {
 const areaKeywords: Record<Exclude<ClassifiedArea, "sin_clasificar">, string[]> = {
   direccion: ["direccion", "directivo", "comite", "resumen ejecutivo", "consolidado"],
   planificacion: ["cronograma", "planificacion", "programacion", "mpp", "project", "linea base", "curva s", "graficos araya", "plan operativo"],
-  obra: ["obra", "edificio", "apartamento", "vivienda", "avance", "cubicacion", "superestructura", "hormigon", "encofrado"],
+  // "avance" es demasiado genérico -aparece en "avance de urbanismo", "avance
+  // comercial"...- y aquí empataba con "urbanismo" en archivos como "Avance
+  // urbanismo.xlsx", que el empate por orden de declaración mandaba a Obra en
+  // vez de a Urbanismo aunque su contenido fuera claramente urbanismo. Los
+  // demás términos ya identifican Obra sin depender de esa palabra.
+  obra: ["obra", "edificio", "apartamento", "vivienda", "cubicacion", "superestructura", "hormigon", "encofrado"],
   urbanismo: ["urbanismo", "vial", "paisajismo", "jardineria", "infraestructura", "alcantarillado"],
   comercial: ["venta", "reserva", "cliente", "cobranza", "morosidad", "comercial", "desistimiento"],
   finanzas: ["finanza", "financiero", "costos", "costes", "cuentas por pagar", "cxp", "balance", "flujo", "anticipo", "datos para informe"],

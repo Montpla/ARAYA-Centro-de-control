@@ -129,10 +129,17 @@ export async function reconcileReportingPeriods() {
   for (const requirement of requirements) {
     const period = periods.find((item) => item.id === requirement.periodId);
     if (!period || period.status === "closed") continue;
+    // Sólo documentType, no también area: un derivado automático (el XML que
+    // sale de convertir un .mpp) se archiva deliberadamente en Obra para que
+    // su publicación no se frene por "sin clasificar" -ver
+    // lib/mpp-conversion-trigger.ts-, aunque su documentType siga siendo
+    // "cronograma". Exigir también area="planificacion" dejaba el requisito
+    // "Cronograma actualizado" en pendiente para siempre, así avanzara el
+    // cronograma o no: cada documentType de DEFAULT_REPORTING_REQUIREMENTS ya
+    // es único y no ambiguo, así que basta con él para identificar el archivo.
     const winner = files
       .filter((file) =>
         file.status === "integrado" &&
-        file.area === requirement.area &&
         file.documentType === requirement.documentType &&
         fileBusinessDate(file) >= period.startDate &&
         fileBusinessDate(file) <= period.endDate)
