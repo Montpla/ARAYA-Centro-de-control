@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// Mira en qué estado quedaron los dos informes de julio tras el reproceso, sin
-// imprimir NUNCA valores: sólo estado de revisión, resumen de proceso, tipos de
-// evento y los NOMBRES de las claves de cada propuesta (jamás su contenido).
+// Mira en qué estado quedó la ingesta de un archivo (nacido del reproceso de
+// julio, generalizado desde entonces a cualquier expediente), sin imprimir
+// NUNCA valores: sólo estado de revisión, resumen de proceso, tipos de evento
+// y los NOMBRES de las claves de cada propuesta (jamás su contenido).
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 const FILTRO = (process.env.FILTRO ?? "jul").toLowerCase();
+const EXTENSION = (process.env.EXTENSION ?? "").toLowerCase();
 
 const email = process.env.DEPLOY_VERIFY_EMAIL;
 const pin = process.env.DEPLOY_VERIFY_PIN;
@@ -29,7 +31,7 @@ const filesResponse = await fetch(`${PRODUCTION_URL}/api/files?limit=200&include
 const { files = [] } = await filesResponse.json();
 const objetivo = files.filter((f) =>
   f.originalName.toLowerCase().includes(FILTRO) &&
-  String(f.extension).toLowerCase() === "pptx");
+  (!EXTENSION || String(f.extension).toLowerCase() === EXTENSION));
 
 for (const f of objetivo) {
   console.log(`\n=== ${f.originalName} ===`);
