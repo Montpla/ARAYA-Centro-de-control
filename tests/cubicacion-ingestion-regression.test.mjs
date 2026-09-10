@@ -41,6 +41,17 @@ test("la IA distingue una cubicación de TH-76 y TH-77 del avance global", () =>
   assert.match(prompt, /No lo publiques como projectSnapshot\.overallProgress/);
 });
 
+test("safetyMetrics no se pisa con un reporte semanal más antiguo que el ya publicado", () => {
+  // safetyMetrics es una fotografía sin fecha propia (no una serie como
+  // safetyWeeklySeries). Cuando se suben varias semanas de golpe, sin esta
+  // regla la que se procese después gana aunque sea más vieja -pasó en
+  // producción: 4 reportes semanales de seguridad subidos juntos dejaron el
+  // panel mostrando la semana del 10-15 de agosto en vez de la más reciente-.
+  assert.match(prompt, /safetyMetrics no tiene fecha propia/);
+  assert.match(prompt, /read_current_value sobre safetyWeeklySeries/);
+  assert.match(prompt, /no publiques safetyMetrics con sus cifras/);
+});
+
 test("el reproceso puede apuntar al expediente exacto sin tocar copias homónimas", () => {
   assert.match(reprocessWorkflow, /file_id:/);
   assert.match(reprocessWorkflow, /FILE_ID: \$\{\{ inputs\.file_id \}\}/);
