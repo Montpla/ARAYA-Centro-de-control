@@ -1,0 +1,26 @@
+name: Diagnóstico de finanzas y seguridad
+
+# Consulta puntual, solo lectura: la oficina reporta que ni seguridad ni
+# finanzas se han actualizado. Vuelca los archivos recientes de esas áreas,
+# su estado de publicación, las claves vivas más recientes de cada dominio, y
+# el checklist de agosto/septiembre. Se retira tras el diagnóstico.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  diagnosticar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Consultar finanzas y seguridad
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/diagnostico-finanzas-seguridad.mjs
