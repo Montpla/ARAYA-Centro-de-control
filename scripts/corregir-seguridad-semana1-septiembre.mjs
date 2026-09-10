@@ -45,6 +45,27 @@ const session = login.headers.get("set-cookie")?.match(/araya_session=([^;]+)/)?
 if (!session) { console.error(`Login falló (${login.status})`); process.exit(1); }
 const Cookie = `araya_session=${session}`;
 
+// El contrato vivo sólo resuelve índices NUMÉRICOS dentro de un array
+// (expectedAtPath, lib/live-data-contract.ts): a diferencia de la
+// materialización en publicación (que sí admite "safetyMetrics.Accidentes"
+// por nombre), la validación de contrato exige "safetyMetrics.0". El orden
+// vigente coincide con el estático de app/june-report-data.ts, confirmado
+// leyendo directamente live_data_points: 0 Accidentes, 1 Personal,
+// 2 Horas-persona, 3 Observaciones, 4 Reuniones, 5 Inspecciones, 6 Acciones.
+//
+// safetyWeeklySeries.4 (añadir por índice) tampoco sirve aquí: el contrato
+// valida un elemento nuevo sólo contra el PRIMER elemento no nulo del array
+// (S1, que trae eventsWeek=null), así que un valor numérico como el 0 de
+// esta semana rechazaría por "no coincide con el modelo autorizado". Publicar
+// el ARRAY COMPLETO sí funciona: el contrato fusiona los campos de TODAS las
+// filas existentes (S1-S4), y con eventsWeek visto como null en unas filas y
+// como número en otras, acepta ambas formas en la fila nueva.
+const semanasExistentes = [
+  { week: "S1", startDate: "2026-07-06", endDate: "2026-07-11", cutoff: "2026-07-11", eventsWeek: null, eventsCumulative: 2, personnel: 134, hoursWeek: 48, hoursCumulative: 48, observationsWeek: 5, observationsCumulative: 5, meetingsWeek: 5, meetingsCumulative: 5, inspectionsWeek: 5, inspectionsCumulative: 5, openActions: 3 },
+  { week: "S2", startDate: "2026-07-13", endDate: "2026-07-18", cutoff: "2026-07-18", eventsWeek: null, eventsCumulative: 2, personnel: 134, hoursWeek: 48, hoursCumulative: 96, observationsWeek: 5, observationsCumulative: 10, meetingsWeek: 5, meetingsCumulative: 10, inspectionsWeek: 5, inspectionsCumulative: 10, openActions: 3 },
+  { week: "S3", startDate: "2026-07-20", endDate: "2026-07-25", cutoff: "2026-07-25", eventsWeek: 0, eventsCumulative: 2, personnel: 134, hoursWeek: 48, hoursCumulative: 144, observationsWeek: 7, observationsCumulative: 17, meetingsWeek: 4, meetingsCumulative: 14, inspectionsWeek: 5, inspectionsCumulative: 15, openActions: 2 },
+  { week: "S4", startDate: "2026-07-27", endDate: "2026-08-01", cutoff: "2026-08-01", eventsWeek: 0, eventsCumulative: 2, personnel: 134, hoursWeek: 48, hoursCumulative: 192, observationsWeek: 7, observationsCumulative: 24, meetingsWeek: 5, meetingsCumulative: 19, inspectionsWeek: 5, inspectionsCumulative: 20, openActions: 2 },
+];
 const nuevaSemana = {
   week: "S1 (31 ago-5 sep)",
   startDate: "2026-08-31",
@@ -69,21 +90,21 @@ const response = await fetch(`${PRODUCTION_URL}/api/live-data`, {
   headers: { Cookie, "Content-Type": "application/json" },
   body: JSON.stringify({
     updates: [
-      { key: "safetyMetrics.Accidentes.value", value: "0" },
-      { key: "safetyMetrics.Accidentes.detail", value: "Sin eventos no deseados esta semana (31 ago-5 sep)" },
-      { key: "safetyMetrics.Personal.value", value: "136" },
-      { key: "safetyMetrics.Personal.detail", value: "Total de empleados · semana 31 ago-5 sep" },
-      { key: "safetyMetrics.Horas-persona.value", value: "49.00" },
-      { key: "safetyMetrics.Horas-persona.detail", value: "Horas Trabajadas del Proyecto esta semana" },
-      { key: "safetyMetrics.Observaciones.value", value: "10" },
-      { key: "safetyMetrics.Observaciones.detail", value: "Reporte de Observaciones" },
-      { key: "safetyMetrics.Reuniones.value", value: "5" },
-      { key: "safetyMetrics.Reuniones.detail", value: "Reunión de Seguridad" },
-      { key: "safetyMetrics.Inspecciones.value", value: "5" },
-      { key: "safetyMetrics.Inspecciones.detail", value: "Inspecciones ejecutadas" },
-      { key: "safetyMetrics.Acciones.value", value: "3" },
-      { key: "safetyMetrics.Acciones.detail", value: "Seguimiento a Acciones Levantadas, en proceso" },
-      { key: "safetyWeeklySeries.4", value: nuevaSemana },
+      { key: "safetyMetrics.0.value", value: "0" },
+      { key: "safetyMetrics.0.detail", value: "Sin eventos no deseados esta semana (31 ago-5 sep)" },
+      { key: "safetyMetrics.1.value", value: "136" },
+      { key: "safetyMetrics.1.detail", value: "Total de empleados · semana 31 ago-5 sep" },
+      { key: "safetyMetrics.2.value", value: "49.00" },
+      { key: "safetyMetrics.2.detail", value: "Horas Trabajadas del Proyecto esta semana" },
+      { key: "safetyMetrics.3.value", value: "10" },
+      { key: "safetyMetrics.3.detail", value: "Reporte de Observaciones" },
+      { key: "safetyMetrics.4.value", value: "5" },
+      { key: "safetyMetrics.4.detail", value: "Reunión de Seguridad" },
+      { key: "safetyMetrics.5.value", value: "5" },
+      { key: "safetyMetrics.5.detail", value: "Inspecciones ejecutadas" },
+      { key: "safetyMetrics.6.value", value: "3" },
+      { key: "safetyMetrics.6.detail", value: "Seguimiento a Acciones Levantadas, en proceso" },
+      { key: "safetyWeeklySeries", value: [...semanasExistentes, nuevaSemana] },
     ],
     area: "seguridad",
     cutoff: "2026-09-05",
