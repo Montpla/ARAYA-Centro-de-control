@@ -18,9 +18,11 @@ const Cookie = `araya_session=${session}`;
 
 const response = await fetch(`${PRODUCTION_URL}/api/automation-center`, { headers: { Cookie } });
 const body = await response.json();
-const mes = body.periods?.find((p) => p.id.startsWith("month-2026-09"));
-if (!mes) { console.log("No se encontró el periodo de septiembre."); process.exit(0); }
-console.log(`=== ${mes.label} · ${mes.received}/${mes.requirements.length} recibidos (${mes.completion}%) ===`);
-for (const r of mes.requirements) {
-  console.log(`  · ${r.label} → ${r.status} · fuente: ${r.sourceFileId || "(ninguna)"}`);
+for (const mesId of ["month-2026-08", "month-2026-09"]) {
+  const mes = body.periods?.find((p) => p.id === mesId);
+  if (!mes) { console.log(`No se encontró el periodo ${mesId}.`); continue; }
+  console.log(`=== ${mes.label} · ${mes.received}/${mes.requirements.length} recibidos (${mes.completion}%) ===`);
+  for (const r of mes.requirements) {
+    console.log(`  · ${r.label} → ${r.status} · fuente: ${r.sourceFileId || "(ninguna)"}`);
+  }
 }
