@@ -1,0 +1,25 @@
+name: Leer PDF de seguridad más reciente
+
+# No quedó ningún registro de lo que la IA propuso para el reporte semanal de
+# seguridad más reciente (31 ago-5 sep). Descarga el original y extrae su
+# texto para corregir safetyMetrics con la cifra real. Se retira tras leerlo.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  leer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Leer el PDF
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+        run: node scripts/leer-pdf-seguridad-semana1.mjs
