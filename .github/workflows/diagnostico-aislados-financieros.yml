@@ -1,0 +1,28 @@
+name: Diagnóstico de propuestas financieras aisladas
+
+# El primer diagnóstico buscó por coincidencia exacta de clave y no vio
+# costBreakdown/reprogrammedFlow* (se publican por campo, no como raíz
+# entera), y encontró varios archivos financieros "aprobado_con_alertas"
+# con entradas aisladas. Este segundo diagnóstico, de solo lectura, mira
+# el área de cada propuesta y su estado para confirmar si el bug de área
+# afectó a algo más. Se retira tras el diagnóstico.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  diagnosticar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Diagnosticar
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/diagnostico-aislados-financieros.mjs
