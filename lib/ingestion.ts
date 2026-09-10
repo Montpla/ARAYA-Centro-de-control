@@ -1069,7 +1069,16 @@ function extractCubicacionMontoResumen(
     updates: [{
       key: "cubicacionCaratula",
       value: lista,
-      area: "finanzas",
+      // "finanzas" fijo aquí descartaba el dato en la práctica: esta hoja
+      // vive dentro de una cubicación real clasificada como "obra" (no
+      // "financeProtectedUpload", porque el resto del archivo es avance
+      // físico), y updateIsAutoPublishable (app/api/files/route.ts) sólo
+      // exime del área del archivo a los datos NO financieros -éste sí lo
+      // es (isFinancialLiveKey) -, así que un área distinta a la del
+      // archivo lo aislaba en silencio en cada carga real. cubicacionCara-
+      // tula ya está en financialRootSet: la vista de Finanzas lo protege
+      // igual sin necesidad de que el dato lleve esa etiqueta.
+      area: defaults.area,
       cutoff: defaults.cutoff,
       sourceCurrency: defaults.sourceCurrency,
       sourceName: defaults.sourceName,
