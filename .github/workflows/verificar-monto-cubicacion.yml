@@ -1,0 +1,26 @@
+name: Verificar el monto certificado de la cubicación
+
+# Reprocesa "Avance edificio.xlsx" (Cubicación 9) para confirmar que
+# extractCubicacionMontoResumen publica de verdad el monto certificado en
+# cubicacionCaratula contra la app real desplegada. Se retira tras
+# confirmarlo.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Reprocesar y verificar
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+        run: node scripts/verificar-monto-cubicacion.mjs
