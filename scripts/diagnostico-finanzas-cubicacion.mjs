@@ -47,16 +47,15 @@ if (!res.ok) { console.error(`Descarga falló (${res.status})`); process.exit(1)
 const bytes = await res.arrayBuffer();
 console.log(`Descargado: ${bytes.byteLength} bytes`);
 
-const { readXlsxWorkbook } = await import("../lib/xlsx-reader.ts");
-const libro = await readXlsxWorkbook(bytes);
-for (const hoja of libro.sheets) {
-  console.log(`\n--- Hoja: "${hoja.name}" (${hoja.rows.length} filas) ---`);
-  for (let i = 0; i < Math.min(hoja.rows.length, 6); i++) {
-    const fila = hoja.rows[i];
-    console.log(`Fila ${i}:`, JSON.stringify(fila.map((c) => c?.value ?? c)).slice(0, 500));
+const { readXlsxSheets } = await import("../lib/xlsx-reader.ts");
+const hojas = await readXlsxSheets(bytes);
+hojas.forEach((filas, indice) => {
+  console.log(`\n--- Hoja #${indice + 1} (${filas.length} filas) ---`);
+  for (let i = 0; i < Math.min(filas.length, 8); i++) {
+    console.log(`Fila ${i}:`, JSON.stringify(filas[i]).slice(0, 600));
   }
-  const textoHoja = JSON.stringify(hoja.rows.slice(0, 30)).toLowerCase();
+  const textoHoja = JSON.stringify(filas.slice(0, 40)).toLowerCase();
   const pistas = ["monto", "costo", "presupuesto", "valorizacion", "valorización", "pagado", "facturado", "financ", "$", "usd", "precio", "venta"];
   const encontradas = pistas.filter((p) => textoHoja.includes(p));
   if (encontradas.length) console.log(`  Posibles columnas financieras: ${encontradas.join(", ")}`);
-}
+});
