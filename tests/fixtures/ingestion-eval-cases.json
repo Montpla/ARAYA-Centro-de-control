@@ -22,5 +22,7 @@
   { "fileName": "Alcantarillado infraestructura 2026-07-28.pdf", "description": "", "extension": "pdf", "area": "urbanismo", "expectedType": "urbanismo", "expectedPeriod": "2026-07-28" },
   { "fileName": "Informe seguridad accidentes julio 2026.pdf", "description": "", "extension": "pdf", "area": "seguridad", "expectedType": "seguridad_permisos", "expectedPeriod": "2026-07" },
   { "fileName": "Permiso MIVED 2026-07-20.pdf", "description": "", "extension": "pdf", "area": "legal", "expectedType": "seguridad_permisos", "expectedPeriod": "2026-07-20" },
-  { "fileName": "IMG_20260730_181500.jpg", "description": "evidencia de campo", "extension": "jpg", "area": "obra", "expectedType": "evidencia_fotografica", "expectedPeriod": "" }
+  { "fileName": "IMG_20260730_181500.jpg", "description": "evidencia de campo", "extension": "jpg", "area": "obra", "expectedType": "evidencia_fotografica", "expectedPeriod": "" },
+  { "fileName": "Avance urbanismo.xlsx", "description": "", "extension": "xlsx", "area": "urbanismo", "expectedType": "urbanismo", "expectedPeriod": "" },
+  { "fileName": "Avance edificio.xlsx", "description": "", "extension": "xlsx", "area": "obra", "expectedType": "avance_obra", "expectedPeriod": "" }
 ]

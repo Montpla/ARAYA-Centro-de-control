@@ -117,7 +117,13 @@ const documentRules = [
   {
     id: "avance_obra",
     label: "Avance de obra",
-    keywords: ["avance", "obra", "cubicacion", "produccion", "superestructura", "albanileria", "hormigon"],
+    // "avance" es demasiado genérico -aparece en "avance de urbanismo",
+    // "avance comercial"...- y empataba con "urbanismo" en archivos como
+    // "Avance urbanismo.xlsx"; el empate se resolvía por orden de declaración,
+    // no por contenido, y clasificaba como avance de obra un archivo que era
+    // claramente de urbanismo. "edificio" ya identifica un avance de obra sin
+    // depender de esa palabra.
+    keywords: ["obra", "edificio", "cubicacion", "produccion", "superestructura", "albanileria", "hormigon"],
   },
   {
     id: "cronograma",

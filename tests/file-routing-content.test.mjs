@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { inferUploadAreaFromContent } from "../lib/file-routing.ts";
+import { classifyUpload, inferUploadAreaFromContent } from "../lib/file-routing.ts";
+
+// "avance" era palabra clave de Obra y empataba con "urbanismo" en nombres
+// como "Avance urbanismo.xlsx"; el empate se resolvía por el orden de
+// declaración del mapa, no por contenido, así que el archivo se archivaba en
+// Obra pese a ser claramente de urbanismo (visto en producción el 10/09/2026).
+test("un nombre con \"avance\" y una disciplina específica no empata a favor de Obra", () => {
+  assert.equal(classifyUpload({ fileName: "Avance urbanismo.xlsx" }).area, "urbanismo");
+  assert.equal(classifyUpload({ fileName: "Avance edificio.xlsx" }).area, "obra");
+});
 
 test("un nombre neutro se dirige a Obra por los edificios encontrados", () => {
   const result = inferUploadAreaFromContent({

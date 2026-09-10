@@ -42,6 +42,19 @@ test("el auditor es idempotente, repara cargas seguras y no salta controles fina
   assert.match(auditWorkflow, /auditar-produccion\.mjs/);
 });
 
+test("un requisito del checklist se satisface por documentType, no también por area", () => {
+  // Un derivado automático (el XML que sale de convertir un .mpp) se archiva
+  // deliberadamente en Obra para que su publicación no se frene por "sin
+  // clasificar" (lib/mpp-conversion-trigger.ts), aunque su documentType siga
+  // siendo "cronograma". Exigir también area="planificacion" dejaba
+  // "Cronograma actualizado" en pendiente para siempre, avanzara el
+  // cronograma o no (visto en producción el 10/09/2026).
+  const match = center.match(/const winner = files\s*\.filter\(\(file\) =>([\s\S]*?)\)\s*\n\s*\.sort/);
+  assert.ok(match, "no se encontró el filtro de reconcileReportingPeriods");
+  assert.match(match[1], /file\.documentType === requirement\.documentType/);
+  assert.doesNotMatch(match[1], /file\.area === requirement\.area/);
+});
+
 test("los cierres tienen requisitos, responsables, recordatorios y bloqueo por faltantes", () => {
   assert.match(center, /DEFAULT_REPORTING_REQUIREMENTS/);
   assert.match(center, /closeReportingPeriod/);
