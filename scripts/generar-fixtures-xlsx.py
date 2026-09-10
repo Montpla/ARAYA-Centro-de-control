@@ -170,6 +170,31 @@ construir(SALIDA / "curva-s.xlsx", [
     ["EJECUTADO REAL", 0, 0.04, 0.09, 0.13, 0, 0],
 ])
 
+# El detalle de partidas de la Cubicacion Nº9: un bloque por edificio, con un
+# encabezado de oficio en mayusculas ("SUPERESTRUCTURA.") en vez de una
+# columna de disciplina, y subgrupos ("Hormigon.") que no deben cerrar el
+# oficio en curso. Reproduce en miniatura (2 edificios, 3 oficios) la hoja
+# real que hizo evidente que "Albañileria" e "Instalaciones" llevaban semanas
+# sin actualizarse en el apartamento aunque el edificio si avanzara: la
+# caratula de la misma cubicacion solo trae el % por edificio, nunca el % por
+# oficio que necesita constructionDisciplines.
+construir(SALIDA / "cubicacion-detalle-partidas.xlsx", [
+    ["Nº Partida.", "Descripción de partida:", "Unidad", "Cantidad", "Precio Unitario", "Total",
+     "CANTIDAD", "MONTO", "%", "CANTIDAD", "MONTO", "%"],
+    ["ARAYA-E01 EDIFICIO 1", "", "", "", "", "", "", "", "", "", "", ""],
+    ["SUPERESTRUCTURA.", "", "", "", "", "", "", "", "", "", "", ""],
+    ["Hormigón.", "", "", "", "", "", "", "", "", "", "", ""],
+    [1, "Vaciado de losa", "M2", 10, 100, 1000, 0, 0, 0, 10, 800, 80],
+    [2, "Encofrado", "M2", 10, 50, 500, 0, 0, 0, 10, 500, 100],
+    ["ALBAÑILERIA.", "", "", "", "", "", "", "", "", "", "", ""],
+    [3, "Paredes", "M2", 20, 60, 1200, 0, 0, 0, 20, 600, 50],
+    ["INSTALACIONES", "", "", "", "", "", "", "", "", "", "", ""],
+    [4, "Cableado", "UND", 1, 300, 300, 0, 0, 0, 1, 150, 50],
+    ["ARAYA-E02 EDIFICIO 2", "", "", "", "", "", "", "", "", "", "", ""],
+    ["SUPERESTRUCTURA.", "", "", "", "", "", "", "", "", "", "", ""],
+    [5, "Vaciado de losa edificio 2", "M2", 5, 100, 500, 0, 0, 0, 5, 500, 100],
+])
+
 
 # --- Word y PowerPoint -------------------------------------------------------
 # Comparten envoltorio con Excel (ZIP con XML), asi que sus tablas se leen con

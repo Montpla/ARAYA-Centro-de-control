@@ -875,6 +875,135 @@ function extractCubicacionCoverProgress(
   };
 }
 
+// El propio encabezado de la sección, en mayúsculas, ES el oficio: no hay
+// columna de disciplina en esta hoja. Los nombres son los que trae la
+// cubicación real de ARAYA; el nombre canónico es el mismo que usa
+// constructionDisciplines (app/june-report-data.ts), que es lo que
+// lib/unit-progress.ts ya usa como respaldo de un apartamento sin dato
+// propio de Albañilería o Instalaciones. "instalaciones" y "revestimientos"
+// necesitan alias porque la hoja los abrevia distinto al nombre canónico;
+// el resto coincide una vez quitados acentos y mayúsculas.
+const CUBICACION_DISCIPLINE_TOKENS: ReadonlyArray<{ token: RegExp; canonicalName: string }> = [
+  { token: /^infraestructura\.?$/, canonicalName: "Infraestructura" },
+  { token: /^superestructura\.?$/, canonicalName: "Superestructura" },
+  { token: /^instalaciones\.?$/, canonicalName: "Inst. eléctricas, sanitarias y gas" },
+  { token: /^albanileria\.?$/, canonicalName: "Albañilería" },
+  { token: /^herreria\.?$/, canonicalName: "Herrería" },
+  { token: /^revestimientos\.?$/, canonicalName: "Revestimientos y cerámica" },
+  { token: /^carpinteria\.?$/, canonicalName: "Carpintería" },
+  { token: /^pintura\.?$/, canonicalName: "Pintura" },
+  { token: /^miscelaneos\.?$/, canonicalName: "Misceláneos" },
+];
+
+/**
+ * Lee el detalle de partidas de una cubicación por edificio: una hoja con un
+ * bloque de partidas por cada "EDIFICIO N", agrupadas bajo un encabezado de
+ * oficio (INFRAESTRUCTURA, SUPERESTRUCTURA, INSTALACIONES, ALBAÑILERIA,
+ * HERRERIA, REVESTIMIENTOS, CARPINTERIA, PINTURA, MISCELANEOS).
+ *
+ * A diferencia de extractCubicacionCoverProgress (que solo lee el % acumulado
+ * por edificio de la CARATULA), esta hoja sí trae el avance por oficio -el
+ * dato que le faltaba a cada apartamento- pero repartido en miles de filas de
+ * partida sin ninguna columna de "oficio": el propio encabezado en mayúsculas
+ * es el oficio. Se agrega por presupuesto contractual (columna "Total"), la
+ * misma fórmula que usa el resto de la cubicación, sumando TODOS los
+ * edificios de la hoja: el resultado es el oficio del proyecto completo, el
+ * mismo alcance que ya tiene constructionDisciplines.
+ *
+ * Antes de esto, ningún lector tocaba esta hoja para nada más que el avance
+ * por edificio (extractCubicacionCoverProgress, sobre la CARATULA); el
+ * detalle de partidas se archivaba sin leer, y por eso "Albañilería" e
+ * "Instalaciones" en cada apartamento llevaban semanas sin moverse aunque el
+ * edificio sí avanzara.
+ */
+function extractCubicacionDisciplineProgress(
+  filas: Array<Record<string, string>>,
+  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string },
+): StructuredExtraction | null {
+  let partidaColumn = "";
+  let totalColumn = "";
+  let montoAcumuladoColumn = "";
+
+  for (let index = 0; index < Math.min(filas.length, 60); index += 1) {
+    const cells = Object.entries(filas[index]);
+    const partidaIndex = cells.findIndex(([, value]) => /^n[°ºo]?\s*partida\.?$/.test(normalizarCabecera(value)));
+    if (partidaIndex < 0) continue;
+    const totalIndex = cells.findIndex(([, value]) => /^total$/.test(normalizarCabecera(value)));
+    const montoIndexes = cells
+      .map(([, value], cellIndex) => (/^monto$/.test(normalizarCabecera(value)) ? cellIndex : -1))
+      .filter((cellIndex) => cellIndex >= 0);
+    if (totalIndex < 0 || !montoIndexes.length) continue;
+    // Hay dos columnas "MONTO" (la del periodo y la acumulada); la acumulada
+    // es siempre la última, junto al "% acumulado" con el que cuadra la
+    // cubicación entera.
+    partidaColumn = cells[partidaIndex][0];
+    totalColumn = cells[totalIndex][0];
+    montoAcumuladoColumn = cells[montoIndexes[montoIndexes.length - 1]][0];
+    break;
+  }
+  if (!partidaColumn || !totalColumn || !montoAcumuladoColumn) return null;
+
+  const budgetByDiscipline = new Map<string, number>();
+  const accumulatedByDiscipline = new Map<string, number>();
+  let currentDiscipline = "";
+  let partidaRowCount = 0;
+
+  for (const row of filas) {
+    const label = (row[partidaColumn] ?? "").trim();
+    if (!label) continue;
+    // Una fila de partida real siempre trae su número; el encabezado de
+    // oficio ("SUPERESTRUCTURA.") y los subgrupos internos ("Hormigón.") no.
+    // Distinguir así evita depender de que las demás columnas del encabezado
+    // estén en blanco: algunas traen una fórmula cacheada en 0 en vez de
+    // vacío, y sumar eso duplicaría lo que ya suman sus propias partidas.
+    if (!/^\d+$/.test(label)) {
+      const normalized = normalizarCabecera(label);
+      const match = CUBICACION_DISCIPLINE_TOKENS.find((entry) => entry.token.test(normalized));
+      // Un subgrupo que no es ninguno de los 9 oficios no cierra el oficio en
+      // curso: "Hormigón." va dentro de "SUPERESTRUCTURA.", no fuera de ella.
+      if (match) currentDiscipline = match.canonicalName;
+      continue;
+    }
+    if (!currentDiscipline) continue;
+    const budget = numeroDeCelda(row[totalColumn] ?? "");
+    const accumulated = numeroDeCelda(row[montoAcumuladoColumn] ?? "");
+    if (budget === null || budget <= 0 || accumulated === null || accumulated < 0) continue;
+    budgetByDiscipline.set(currentDiscipline, (budgetByDiscipline.get(currentDiscipline) ?? 0) + budget);
+    accumulatedByDiscipline.set(currentDiscipline, (accumulatedByDiscipline.get(currentDiscipline) ?? 0) + accumulated);
+    partidaRowCount += 1;
+  }
+  if (!partidaRowCount) return null;
+
+  const baseUpdate = {
+    area: "obra",
+    cutoff: defaults.cutoff,
+    sourceCurrency: defaults.sourceCurrency,
+    sourceName: defaults.sourceName,
+  } as const;
+  const updates: LiveDataUpdate[] = [];
+  for (const [name, budget] of budgetByDiscipline) {
+    if (budget <= 0) continue;
+    const accumulated = accumulatedByDiscipline.get(name) ?? 0;
+    const progress = Math.min(100, Math.max(0, (accumulated / budget) * 100));
+    updates.push({
+      // El punto de "Inst." partiría la clave en un segmento de más: las
+      // claves vivas se separan por ".", y el nombre canónico de esa
+      // disciplina trae uno propio. namingToken() descarta la puntuación al
+      // comparar, así que quitarlo aquí no cambia a qué entidad apunta.
+      key: `constructionDisciplines.${name.replace(/\./g, "")}.progress`,
+      value: Math.round(progress * 100) / 100,
+      ...baseUpdate,
+    });
+  }
+  if (!updates.length) return null;
+
+  return {
+    updates,
+    summary: `${updates.length} oficio(s) de construcción actualizados desde el detalle de partidas de la cubicación.`,
+    warnings: [],
+  };
+}
+
 /**
  * Lee una cifra de avance que pertenece al alcance completo de una
  * cubicacion, por ejemplo "Edificios 76 y 77" + "Avance fisico ejecutado
@@ -1703,6 +1832,18 @@ export async function extractStructuredUpdates(
       if (caratula) {
         results.push(caratula);
         for (const code of caratula.expectedBuildingCodes ?? []) expectedBuildingCodes.add(code);
+        continue;
+      }
+
+      // El detalle de partidas de la misma cubicación (otra hoja del mismo
+      // libro) trae el avance por oficio que la carátula no trae. Se prueba
+      // antes que los lectores genéricos de tabla porque su forma -miles de
+      // filas de partida bajo un encabezado de oficio, sin columna de
+      // avance por edificio- podría, si no se reconoce primero, colarse por
+      // extractSheetProgress/extractMatrixProgress y leerse mal.
+      const disciplinas = extractCubicacionDisciplineProgress(filas, defaults);
+      if (disciplinas) {
+        results.push(disciplinas);
         continue;
       }
 
