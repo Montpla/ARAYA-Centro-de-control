@@ -1,0 +1,24 @@
+name: Diagnóstico del checklist de septiembre
+
+# Consulta de sólo lectura contra D1 remoto: por qué "Cronograma
+# actualizado", "Avance de urbanismo" y "Seguridad y permisos" siguen
+# PENDIENTE pese a que sus datos avanzaron. Se retira tras la comprobación.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  diagnosticar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Diagnosticar checklist
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/diagnostico-checklist-septiembre.mjs
