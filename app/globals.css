@@ -4082,7 +4082,8 @@ button {
   font-size: 0.76rem;
 }
 
-.financial-receipt-audit-list > div.blocked > b {
+.financial-receipt-audit-list > div.blocked > b,
+.financial-receipt-audit-list > div.warning > b {
   color: #9e452f;
 }
 

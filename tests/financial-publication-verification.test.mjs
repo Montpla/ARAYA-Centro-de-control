@@ -31,10 +31,15 @@ test("la aprobación manual no puede publicar un grupo financiero que siga descu
 });
 
 test("cada revisión publicada se relee y verifica en todas sus vistas", () => {
+  // La comprobación cruzada tras publicar ya no vuelve a ejecutar
+  // validateFinancialPublication: un descuadre aritmético no bloquea ni
+  // marca una publicación como fallida (se publica "cuadre o no cuadre" y
+  // el descuadre queda como advertencia en el recibo, no aquí). Esta
+  // segunda barrera sigue confirmando que la escritura realmente ganó en
+  // el snapshot vivo y respeta el contrato de datos.
   assert.match(publisher, /verifyPublishedLiveData/);
   assert.match(verifier, /readEffectiveLiveData\(true\)/);
   assert.match(verifier, /point\.revision !== input\.eventId/);
-  assert.match(verifier, /validateFinancialPublication/);
   assert.match(verifier, /verification\.status === "failed"/);
   assert.match(verifier, /post_publish_verification_failed/);
   for (const column of ["financial_validation_json", "monetary_audit_json", "source_authority_json", "affected_views_json", "verification_json"]) {

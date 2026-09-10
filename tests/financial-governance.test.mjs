@@ -139,7 +139,7 @@ test("una auditoría no completa julio con componentes históricos de junio", ()
   assert.ok(!result.checks.some((check) => check.id === "fiduciary-equity-rollforward"));
 });
 
-test("aísla sólo el grupo financiero descuadrado y deja intacto otro grupo válido", () => {
+test("un grupo financiero descuadrado se publica igual, con el descuadre marcado como advertencia", () => {
   const updates = [
     update("fiduciaryStatementSummary.balance.assetsDop", 999),
     update("reprogrammedFlowMonths.0.currentDop", 30, { sourceName: "Flujo reprogramado.xlsx" }),
@@ -155,9 +155,10 @@ test("aísla sólo el grupo financiero descuadrado y deja intacto otro grupo vá
       reprogrammedFlowMonths: [{ month: "jun-26", currentDop: 30, urbanismDop: 10, buildingsDop: 20 }],
     },
   });
-  assert.equal(result.status, "blocked");
-  assert.ok(result.blockingKeys.includes("fiduciaryStatementSummary.balance.assetsDop"));
-  assert.ok(!result.blockingKeys.some((key) => key.startsWith("reprogrammedFlowMonths")));
+  assert.equal(result.status, "passed_with_warnings");
+  assert.equal(result.blockingKeys.length, 0);
+  assert.ok(result.checks.some((check) => check.id === "fiduciary-balance-equation" && check.status === "warning"));
+  assert.ok(result.warnings.some((warning) => warning.includes("no coincide con pasivo más patrimonio")));
   assert.ok(result.checks.some((check) => check.id === "flow-month-0" && check.status === "passed"));
 });
 
