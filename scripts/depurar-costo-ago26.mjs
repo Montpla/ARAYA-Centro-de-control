@@ -32,3 +32,19 @@ hojas.forEach((filas, indice) => {
     console.log(`Fila ${i}:`, JSON.stringify(filas[i]).slice(0, 500));
   }
 });
+
+console.log("\n=== extractStructuredUpdates completo ===");
+try {
+  const { extractStructuredUpdates } = await import("../lib/ingestion.ts");
+  const resultado = await extractStructuredUpdates(bytes, "xlsx", {
+    area: "finanzas",
+    cutoff: "2026-08-31",
+    sourceCurrency: "DOP",
+    sourceName: "Costo Ago-26.xlsx",
+  });
+  console.log("Summary:", resultado.summary);
+  console.log("Warnings:", JSON.stringify(resultado.warnings));
+  console.log("Claves:", resultado.updates.map((u) => u.key).join(", ") || "(ninguna)");
+} catch (error) {
+  console.error("Fallo al llamar extractStructuredUpdates:", error?.stack ?? error);
+}
