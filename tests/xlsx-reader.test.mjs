@@ -326,7 +326,15 @@ test("el monto certificado de la cubicación se añade a la carátula sin perder
   assert.equal(resultado.updates.length, 1);
   const [update] = resultado.updates;
   assert.equal(update.key, "cubicacionCaratula");
-  assert.equal(update.area, "finanzas");
+  // El área del DATO tiene que ser la del ARCHIVO ("obra": la cubicación es
+  // ante todo avance físico), no "finanzas" a secas: bug real encontrado al
+  // verificar contra la app desplegada. updateIsAutoPublishable
+  // (app/api/files/route.ts) sólo exime del área del archivo a datos NO
+  // financieros; con area:"finanzas" fijo, este dato financiero se aislaba
+  // en silencio en cada carga real porque nunca coincidía con "obra".
+  // cubicacionCaratula ya está en financialRootSet, así que la vista de
+  // Finanzas lo protege igual sin necesidad de esa etiqueta.
+  assert.equal(update.area, defaults.area);
   // vm.runInNewContext produce objetos de otro realm: deepEqual los rechaza
   // por prototipo aunque su contenido sea idéntico, así que se compara la
   // forma serializada.
