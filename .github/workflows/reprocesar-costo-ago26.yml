@@ -1,0 +1,28 @@
+name: Reprocesar Costo Ago-26.xlsx
+
+# "Costo Ago-26.xlsx" nunca se reprocesó desde que extractCostByCategory-
+# Progress existe ni desde que se corrigió el bug de la celda vacía-con-
+# estilo que rompía justo esta hoja. El expediente seguía con el resultado
+# de su primera lectura, de antes de que ese lector existiera. Reprocesa el
+# archivo para que publique costBreakdown de verdad. Se retira tras
+# confirmarlo.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  reprocesar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Reprocesar y verificar
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+        run: node scripts/reprocesar-costo-ago26.mjs
