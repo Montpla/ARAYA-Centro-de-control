@@ -304,6 +304,58 @@ test("el desglose de costos por partida se agrupa por el capítulo contable (1/2
   assert.equal(resultado.updates.length, 6);
 });
 
+test("el monto certificado de la cubicación se añade a la carátula sin perder otras cubicaciones", async () => {
+  // "Avance edificio.xlsx" (Cubicación 9) trae, en otra hoja, el monto
+  // certificado del periodo -el número financiero real de la cubicación
+  // mensual- que ni la carátula de avance físico ni el detalle de partidas
+  // leían. cubicacionCaratula es una lista con una entrada por cubicación:
+  // como cada mes trae un número nuevo, la entrada anterior (Cubicación
+  // Nº8, de un mes distinto) debe seguir intacta en el resultado.
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("cubicacion-monto-resumen.xlsx"),
+    "xlsx",
+    {
+      ...defaults,
+      sourceName: "Avance edificio.xlsx",
+      currentCubicacionCaratula: [
+        { label: "Cubicación Nº8", montoDop: 33639335.59, cutoff: "2026-07-31" },
+      ],
+    },
+  );
+  assert.equal(resultado.updates.length, 1);
+  const [update] = resultado.updates;
+  assert.equal(update.key, "cubicacionCaratula");
+  assert.equal(update.area, "finanzas");
+  // vm.runInNewContext produce objetos de otro realm: deepEqual los rechaza
+  // por prototipo aunque su contenido sea idéntico, así que se compara la
+  // forma serializada.
+  assert.equal(JSON.stringify(update.value), JSON.stringify([
+    { label: "Cubicación Nº8", montoDop: 33639335.59, cutoff: "2026-07-31" },
+    { label: "Cubicación Nº9", montoDop: 28030340.5, cutoff: "2026-07-31" },
+  ]));
+});
+
+test("una corrección del monto de una cubicación reemplaza la entrada anterior, no la duplica", async () => {
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("cubicacion-monto-resumen.xlsx"),
+    "xlsx",
+    {
+      ...defaults,
+      sourceName: "Avance edificio.xlsx",
+      currentCubicacionCaratula: [
+        { label: "Cubicación Nº8", montoDop: 33639335.59, cutoff: "2026-07-31" },
+        { label: "Cubicación Nº9", montoDop: 1, cutoff: "2026-06-30" },
+      ],
+    },
+  );
+  assert.equal(JSON.stringify(resultado.updates[0].value), JSON.stringify([
+    { label: "Cubicación Nº8", montoDop: 33639335.59, cutoff: "2026-07-31" },
+    { label: "Cubicación Nº9", montoDop: 28030340.5, cutoff: "2026-07-31" },
+  ]));
+});
+
 test("el Excel de finanzas actualiza el flujo reprogramado mes a mes", async () => {
   // El flujo mensual (hoja Comparación Mensual) es la parte que cambia cada mes.
   // Se lee y se traduce cada mes a su posición en la línea temporal del flujo.

@@ -223,6 +223,17 @@ construir(SALIDA / "cubicacion-detalle-partidas.xlsx", [
     [5, "Vaciado de losa edificio 2", "M2", 5, 100, 500, 0, 0, 0, 5, 500, 100],
 ])
 
+# El resumen "Monto Cubicación" de una cubicación mensual: otra hoja del mismo
+# libro que la carátula y el detalle de partidas, con el número de cubicación
+# y su monto certificado. Reproduce "Avance edificio.xlsx" (Cubicación 9):
+# "$RD" se cuela como celda suelta entre la etiqueta y el importe.
+construir(SALIDA / "cubicacion-monto-resumen.xlsx", [
+    ["CUBICACION Nro. 9"],
+    ["Empresa: TECNICA MMHB", "", "", "Proyecto: FIDEICOMISO ARAYA FASE I"],
+    ["Ubicación:  Bavaro Punta Cana", "", "", "Fecha de Incio :"],
+    ["Monto Cubicacion:", "", "$RD", 28030340.5],
+])
+
 
 # --- Word y PowerPoint -------------------------------------------------------
 # Comparten envoltorio con Excel (ZIP con XML), asi que sus tablas se leen con
