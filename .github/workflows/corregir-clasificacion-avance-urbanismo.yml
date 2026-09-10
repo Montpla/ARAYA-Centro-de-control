@@ -1,0 +1,25 @@
+name: Corregir clasificación de Avance urbanismo
+
+# Corrección puntual: reclasifica "Avance urbanismo.xlsx" a area/documentType
+# "urbanismo" (el empate con "avance" que lo mandó a Obra ya está corregido
+# en el código, PR #169). No toca ninguna cifra ni evento publicado. Se
+# retira tras confirmarla.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  corregir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Corregir clasificación
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/corregir-clasificacion-avance-urbanismo.mjs
