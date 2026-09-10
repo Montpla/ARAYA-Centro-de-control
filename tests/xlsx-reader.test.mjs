@@ -264,6 +264,46 @@ test("el detalle de partidas de la cubicación no confunde un subgrupo con el ci
   assert.ok(!claves.some((key) => /hormigon|edificio/i.test(key)));
 });
 
+test("una celda vacía-con-estilo no le roba el valor a la celda siguiente", async () => {
+  // Bug real encontrado con "Costo Ago-26.xlsx": el patrón `<c r="X" s="1"/>`
+  // -una celda vacía pero con estilo, la forma real en que Excel escribe una
+  // celda sin contenido dentro de una tabla con formato- se emparejaba con el
+  // `</c>` de la SIGUIENTE celda en vez de reconocerse como autocontenida,
+  // porque `[^>]*` no excluye "/". El valor de la celda de después migraba
+  // entero a la vacía anterior y esa celda desaparecía sin avisar. Terreno
+  // (fila de "1-1-1 Terreno" en el fixture) reproduce el caso: la columna C
+  // vacía justo antes de D con el valor.
+  const filas = await xlsxReader.readXlsxRows(await leerFixture("costo-por-categoria.xlsx"));
+  const terreno = filas.find((fila) => fila.A === "1-1-1 Terreno");
+  assert.equal(terreno.C, undefined, "la celda vacía-con-estilo no debe tener valor");
+  assert.equal(terreno.D, "1000", "el valor de la celda siguiente debe quedarse en su propia columna");
+});
+
+test("el desglose de costos por partida se agrupa por el capítulo contable (1/2/3)", async () => {
+  // costBreakdown del panel sólo tiene tres categorías (Construcción,
+  // Operación, Otros); el propio código de partida ya las agrupa así (1 =
+  // obra, 2 = comercialización y fiduciaria, 3 = legal y financiero), así
+  // que no hace falta inventar un criterio de reparto.
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("costo-por-categoria.xlsx"),
+    "xlsx",
+    { ...defaults, sourceName: "Costo Ago-26.xlsx" },
+  );
+  const porClave = new Map(resultado.updates.map((update) => [update.key, update]));
+  // Construcción suma Terreno (1000, sin movimiento en agosto) + Urbanismo
+  // (700 acumulado, 200 de movimiento): 1700 acumulado, 200 de movimiento.
+  assert.equal(porClave.get("costBreakdown.Construcción.cumulative").value, 1700);
+  assert.equal(porClave.get("costBreakdown.Construcción.june").value, 200);
+  assert.equal(porClave.get("costBreakdown.Construcción.cumulative").area, "finanzas");
+  assert.equal(porClave.get("costBreakdown.Operación.cumulative").value, 350);
+  assert.equal(porClave.get("costBreakdown.Operación.june").value, 50);
+  assert.equal(porClave.get("costBreakdown.Otros.cumulative").value, 110);
+  assert.equal(porClave.get("costBreakdown.Otros.june").value, 10);
+  // La fila "Total" no tiene código de capítulo: no debe generar una cuarta clave.
+  assert.equal(resultado.updates.length, 6);
+});
+
 test("el Excel de finanzas actualiza el flujo reprogramado mes a mes", async () => {
   // El flujo mensual (hoja Comparación Mensual) es la parte que cambia cada mes.
   // Se lee y se traduce cada mes a su posición en la línea temporal del flujo.
