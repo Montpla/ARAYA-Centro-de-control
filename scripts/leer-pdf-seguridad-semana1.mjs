@@ -20,6 +20,10 @@ if (!res.ok) { console.error(`Descarga falló (${res.status})`); process.exit(1)
 const bytes = await res.arrayBuffer();
 console.log(`Descargado: ${bytes.byteLength} bytes`);
 
+const { writeFile } = await import("node:fs/promises");
+await writeFile("seguridad-semana1.pdf", Buffer.from(bytes));
+console.log("Guardado como seguridad-semana1.pdf para subirlo como artifact");
+
 const { readPdfText } = await import("../lib/pdf-text.ts");
 const resultado = await readPdfText(bytes);
 console.log(`escaneado: ${resultado.scanned} · streams: ${resultado.streams}`);

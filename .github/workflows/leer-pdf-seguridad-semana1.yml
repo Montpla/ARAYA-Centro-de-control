@@ -23,3 +23,9 @@ jobs:
           DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
           DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
         run: node scripts/leer-pdf-seguridad-semana1.mjs
+      - name: Subir el PDF original como artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: seguridad-semana1-pdf
+          path: seguridad-semana1.pdf
+          retention-days: 3
