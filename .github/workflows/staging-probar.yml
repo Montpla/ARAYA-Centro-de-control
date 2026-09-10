@@ -1,0 +1,32 @@
+name: Probar staging con archivos reales
+
+# Frente 4 del plan de fiabilidad: sube cada archivo de tests/fixtures/ al
+# Worker de staging por su API real y comprueba que el camino completo
+# (clasificación, extracción, publicación) termina sin incidencias. Pensado
+# para correr a mano antes de fusionar un cambio de lógica de ingesta que dé
+# motivos para desconfiar del camino completo, no en cada PR (esa
+# comprobación rápida ya la hace ci.yml con las pruebas unitarias).
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: staging-probar
+  cancel-in-progress: false
+
+jobs:
+  probar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Subir archivos de prueba a staging
+        env:
+          STAGING_VERIFY_EMAIL: ${{ secrets.STAGING_VERIFY_EMAIL }}
+          STAGING_VERIFY_PIN: ${{ secrets.STAGING_VERIFY_PIN }}
+        run: node scripts/probar-staging.mjs
