@@ -28,7 +28,7 @@
     {
       "binding": "DB",
       "database_name": "araya-centro-control-d1-staging",
-      "database_id": "PENDIENTE_TRAS_APROVISIONAR",
+      "database_id": "de118df4-0220-427c-8f11-8ceda0eb675a",
       "migrations_dir": "drizzle"
     }
   ],
