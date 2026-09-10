@@ -8755,14 +8755,20 @@ function DirectionReport({
 
 function FinancialReceiptPanel({ receipt }: { receipt: FinancialProcessingReceipt }) {
   const passedChecks = receipt.checks.filter((check) => check.status === "passed").length;
-  const blockedChecks = receipt.checks.filter((check) => check.status === "blocked");
+  const warningChecks = receipt.checks.filter((check) => check.status === "warning");
   const verificationPassed = receipt.verification?.status === "passed";
   const formatAuditMoney = (value: number | null, currency: CurrencyCode | null) =>
     value === null ? "Sin valor anterior" : `${currency ?? ""} ${number.format(value)}`.trim();
   return (
     <section className={`financial-receipt-detail ${receipt.status === "blocked" ? "has-alerts" : "is-clear"}`}>
       <div className="financial-receipt-heading">
-        <div><span className="section-kicker">CONTROL FINANCIERO AUTOMÁTICO</span><h4>{receipt.status === "blocked" ? "Publicación parcial protegida" : "Comprobaciones contables superadas"}</h4></div>
+        <div><span className="section-kicker">CONTROL FINANCIERO AUTOMÁTICO</span><h4>{
+          receipt.status === "blocked"
+            ? "Publicación parcial protegida"
+            : receipt.status === "passed_with_warnings"
+              ? "Publicado con descuadres marcados"
+              : "Comprobaciones contables superadas"
+        }</h4></div>
         <strong>{verificationPassed ? "Sincronización verificada" : receipt.verification ? "Verificación observada" : "Sin cambios publicados"}</strong>
       </div>
       <div className="financial-receipt-metrics">
@@ -8817,8 +8823,8 @@ function FinancialReceiptPanel({ receipt }: { receipt: FinancialProcessingReceip
           ))}
         </div>
       )}
-      {blockedChecks.length > 0 && (
-        <div className="financial-receipt-alerts"><strong>Entradas aisladas sin bloquear el resto</strong><ul>{blockedChecks.map((check) => <li key={check.id}>{check.message}</li>)}</ul></div>
+      {warningChecks.length > 0 && (
+        <div className="financial-receipt-alerts"><strong>Descuadres detectados, publicados igualmente</strong><ul>{warningChecks.map((check) => <li key={check.id}>{check.message}</li>)}</ul></div>
       )}
       {receipt.verification?.issues.length ? (
         <div className="financial-receipt-alerts"><strong>Comprobación transversal</strong><ul>{receipt.verification.issues.map((issue) => <li key={issue}>{issue}</li>)}</ul></div>

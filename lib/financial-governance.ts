@@ -319,16 +319,21 @@ function arithmeticCheck(input: {
   const difference = roundMoney(input.actual - input.expected);
   const tolerance = toleranceFor(input.expected);
   const passed = Math.abs(difference) <= tolerance;
+  // Por decisión del propietario, un descuadre aritmético ya no aísla la
+  // cifra: el dato se publica igual y el descuadre queda como advertencia
+  // trazable ("te cuadre o no te cuadre, lo subes"). Quien lo revise decide
+  // si corresponde una corrección; el Centro de Control nunca se queda
+  // desactualizado esperando a que alguien concilie el número a mano.
   return {
     id: input.id,
     label: input.label,
-    status: passed ? "passed" : "blocked",
+    status: passed ? "passed" : "warning",
     actual: input.actual,
     expected: input.expected,
     difference,
     tolerance,
     keys: input.keys,
-    message: passed ? `${input.label}: cuadrado.` : input.message,
+    message: passed ? `${input.label}: cuadrado.` : `${input.message} Se publica de todas formas; queda marcado para revisión.`,
   };
 }
 
@@ -655,13 +660,16 @@ export function validateFinancialPublication(input: {
     ...projectionChecks(materialize("financialProjection"), financialUpdates),
   ];
   const authority = authorityDecisions(financialUpdates, input.currentPoints);
+  // Un descuadre aritmético ya no bloquea nada (arithmeticCheck lo marca
+  // "warning", no "blocked"): sólo una fuente vieja o de menor autoridad para
+  // la MISMA clave sigue aislándose, porque eso no es "no cuadra", es "esto
+  // no es lo último que hay que mostrar".
   const blockingKeys = new Set<string>();
-  checks.filter((check) => check.status === "blocked").forEach((check) => check.keys.forEach((key) => blockingKeys.add(key)));
   authority.filter((decision) => decision.status === "stale" || decision.status === "lower_authority")
     .forEach((decision) => blockingKeys.add(decision.key));
 
   const warnings = [
-    ...checks.filter((check) => check.status === "blocked").map((check) => check.message),
+    ...checks.filter((check) => check.status === "warning").map((check) => check.message),
     ...authority.filter((decision) => decision.status === "stale" || decision.status === "lower_authority")
       .map((decision) => `${decision.key}: ${decision.message}`),
   ];

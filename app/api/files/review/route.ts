@@ -861,7 +861,7 @@ export async function POST(request: Request) {
         if (financialValidation.blockingKeys.length) {
           await cancel();
           return Response.json({
-            error: "La aprobación conserva grupos financieros descuadrados, de un corte anterior o de una fuente subordinada. Corrige sólo las claves indicadas y vuelve a preparar la revisión.",
+            error: "La aprobación conserva grupos financieros de un corte anterior o de una fuente subordinada. Corrige sólo las claves indicadas y vuelve a preparar la revisión.",
             financialValidation,
           }, { status: 409 });
         }

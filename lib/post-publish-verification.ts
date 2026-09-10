@@ -2,11 +2,10 @@ import { eq, inArray } from "drizzle-orm";
 
 import { getDb } from "../db";
 import { liveDataEvents, uploadedFiles } from "../db/schema";
-import { getContractRootsSnapshot, validateLiveDataContract } from "./live-data-contract";
+import { validateLiveDataContract } from "./live-data-contract";
 import { readEffectiveLiveData } from "./effective-live-data";
 import {
   affectedViewsForUpdates,
-  validateFinancialPublication,
   type FinancialUpdateLike,
 } from "./financial-governance";
 import { isFinancialLiveKey } from "./live-data";
@@ -58,15 +57,6 @@ export async function verifyPublishedLiveData(input: {
     const contract = validateLiveDataContract(update.key, point.valueJson, snapshot.values);
     if (!contract.valid) issues.push(`${update.key}: ${contract.reason ?? "contrato vivo no válido"}.`);
   }
-
-  const finance = validateFinancialPublication({
-    updates: input.updates,
-    currentValues: snapshot.values,
-    currentPoints: snapshot.points,
-    baselineValues: getContractRootsSnapshot(),
-  });
-  finance.checks.filter((check) => check.status === "blocked")
-    .forEach((check) => issues.push(check.message));
 
   const checkedAt = new Date().toISOString();
   const verification: PublicationVerification = {
