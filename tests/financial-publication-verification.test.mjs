@@ -42,6 +42,25 @@ test("cada revisión publicada se relee y verifica en todas sus vistas", () => {
   }
 });
 
+test("una verificación fallida avisa aunque la publicación no venga de un archivo", () => {
+  // Una corrección manual (sin sourceFileIds, por ejemplo un ajuste puntual
+  // de datos vivos) puede fallar esta misma comprobación transversal. Antes
+  // el aviso sólo salía si había un archivo de origen al que marcar
+  // "requiere revisión"; una corrección sin archivo fallaba en silencio
+  // hasta que alguien lo notara a simple vista (pasó con "Movimiento de
+  // tierra" al 72,76%). El bloque de aviso debe ejecutarse siempre que
+  // status === "failed"; sólo el marcado del archivo depende de que existan
+  // sourceFileIds.
+  const block = verifier.slice(verifier.indexOf('if (verification.status === "failed") {'));
+  const fileFlagIf = block.indexOf("if (input.sourceFileIds.length) {");
+  const emitCall = block.indexOf("await emitMissingNotifications([{");
+  assert.ok(fileFlagIf >= 0 && emitCall >= 0, "no se encontró la estructura esperada del bloque de fallo");
+  assert.ok(emitCall > fileFlagIf, "emitMissingNotifications debe quedar fuera del if de sourceFileIds, no anidado dentro");
+  const fileFlagBlock = block.slice(fileFlagIf, emitCall);
+  assert.match(fileFlagBlock, /requiresReview: true/);
+  assert.doesNotMatch(fileFlagBlock, /emitMissingNotifications/);
+});
+
 test("reconocer una verificación posterior fallida nunca publica ni toca datos vivos", () => {
   // acknowledge_verification cierra el aviso de un expediente que quedó
   // "verificacion_posterior_fallida" (otra fuente con más autoridad ya tenía

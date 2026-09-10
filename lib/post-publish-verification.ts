@@ -84,13 +84,22 @@ export async function verifyPublishedLiveData(input: {
     verificationJson: JSON.stringify(verification),
   }).where(eq(liveDataEvents.id, input.eventId));
 
-  if (verification.status === "failed" && input.sourceFileIds.length) {
-    await db.update(uploadedFiles).set({
-      requiresReview: true,
-      reviewStatus: "verificacion_posterior_fallida",
-      processingSummary: `La revisión ${input.eventId} se publicó, pero la comprobación transversal detectó ${issues.length} incidencia(s). No vuelvas a subir el original: abre su diagnóstico.`,
-      updatedAt: checkedAt,
-    }).where(inArray(uploadedFiles.id, input.sourceFileIds));
+  if (verification.status === "failed") {
+    // Antes esta alerta sólo salía si la publicación venía ligada a un
+    // archivo (sourceFileIds). Una corrección manual sin archivo de origen
+    // -como la que fijó "Movimiento de tierra" al 72,76%- podía fallar esta
+    // misma comprobación y quedar guardada como "failed" en el evento sin que
+    // nadie se enterase, hasta que alguien lo notara a simple vista en el
+    // panel. Ahora toda publicación fallida avisa, tenga o no archivo de
+    // origen.
+    if (input.sourceFileIds.length) {
+      await db.update(uploadedFiles).set({
+        requiresReview: true,
+        reviewStatus: "verificacion_posterior_fallida",
+        processingSummary: `La revisión ${input.eventId} se publicó, pero la comprobación transversal detectó ${issues.length} incidencia(s). No vuelvas a subir el original: abre su diagnóstico.`,
+        updatedAt: checkedAt,
+      }).where(inArray(uploadedFiles.id, input.sourceFileIds));
+    }
     await emitMissingNotifications([{
       kind: "post_publish_verification_failed",
       area: input.updates.some((update) => isFinancialLiveKey(update.key)) ? "finanzas" : "direccion",
@@ -100,7 +109,9 @@ export async function verifyPublishedLiveData(input: {
       subjectType: "live_revision_verification",
       subjectId: String(input.eventId),
       title: `Comprobación posterior pendiente · revisión ${input.eventId}`,
-      body: `${issues.length} incidencia(s) impiden confirmar la sincronización transversal. El original permanece protegido.`,
+      body: input.sourceFileIds.length
+        ? `${issues.length} incidencia(s) impiden confirmar la sincronización transversal. El original permanece protegido.`
+        : `${issues.length} incidencia(s) impiden confirmar la sincronización transversal de una corrección sin archivo de origen.`,
       view: "fuentes",
       payload: { revision: input.eventId, sourceFileIds: input.sourceFileIds, issues: issues.slice(0, 8) },
     }]);
