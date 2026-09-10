@@ -1,0 +1,39 @@
+name: Reintentar subida diferida
+
+# Una subida desde el panel difiere su extracción a segundo plano dentro del
+# propio Worker (waitUntil), que Cloudflare no garantiza que sobreviva si el
+# Worker se recicla antes de terminar. Este workflow reintenta esa extracción
+# desde fuera: al instante cuando app/api/files/route.ts lo dispara (ver
+# lib/deferred-upload-retry-trigger.ts) y cada 5 minutos por cron como red de
+# seguridad para cualquier expediente que ambos caminos hayan dejado atrás.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+    inputs:
+      fileId:
+        description: "Id del expediente a reintentar (vacío = barrer todos los pendientes)"
+        required: false
+        default: ""
+        type: string
+
+jobs:
+  reintentar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Reintentar subida diferida
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+          FILE_ID: ${{ inputs.fileId }}
+        run: node scripts/reintentar-subida.mjs
+
+concurrency:
+  group: reintentar-subida-diferida-produccion
+  cancel-in-progress: false

@@ -91,6 +91,7 @@ import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-upsert";
 import { nothingExtractedMessage } from "../../../lib/upload-messages";
 import { triggerMppConversion } from "../../../lib/mpp-conversion-trigger";
+import { triggerDeferredUploadRetry } from "../../../lib/deferred-upload-retry-trigger";
 import { readUploadAgentToken, resolveUploadAgentToken } from "../../../lib/upload-agent-auth";
 import {
   proposalPointerWasCommitted,
@@ -1296,6 +1297,12 @@ export async function POST(request: Request) {
       uploaderEmail: row.uploaderEmail,
       uploaderName: row.uploaderName,
     });
+    // El reintento de fondo de arriba corre dentro de esta misma petición vía
+    // waitUntil, que Cloudflare no garantiza que sobreviva si el Worker se
+    // recicla antes de terminar -sin ningún error visible: el expediente se
+    // queda en "recibido" hasta que algo lo reclame. Este disparo pide el
+    // mismo reintento a un runner externo, no sujeto a ese ciclo de vida.
+    triggerDeferredUploadRetry(id);
     return Response.json({
       processing: true,
       file: publicFileRow(row, user),
