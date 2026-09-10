@@ -1005,16 +1005,20 @@ function extractCubicacionDisciplineProgress(
 }
 
 /**
- * Lee el resumen "Monto Cubicación" de una cubicación: otra hoja del mismo
- * libro que la carátula de avance físico, con el número de cubicación y su
- * monto certificado en el periodo ("Avance edificio.xlsx" / Cubicación 9 lo
- * trae así). cubicacionCaratula (panel de Finanzas) es una lista con una
- * entrada por cubicación; como cada mes aparece un número nuevo, escribir un
- * campo de una entrada existente no basta -hay que añadir la entrada si no
- * existe todavía-, así que este lector recibe el array vigente completo
- * (currentCubicacionCaratula) y publica la lista ya actualizada como un solo
- * valor de raíz. Antes de esto nadie leía esta hoja: sólo se extraía el
- * avance físico de la carátula y el detalle de partidas por oficio, y el
+ * Lee el resumen "Monto Cubicación": el número de cubicación y su monto
+ * certificado en el periodo comparten la MISMA hoja que la carátula de
+ * avance físico por edificio, en sus primeras filas ("Avance edificio.xlsx"
+ * / Cubicación 9 la trae así). Por eso se llama sin consumir la hoja -el
+ * llamador no hace `continue` tras esto-: extractCubicacionCoverProgress
+ * todavía tiene que leer la tabla de edificios que sigue debajo.
+ *
+ * cubicacionCaratula (panel de Finanzas) es una lista con una entrada por
+ * cubicación; como cada mes aparece un número nuevo, escribir un campo de
+ * una entrada existente no basta -hay que añadir la entrada si no existe
+ * todavía-, así que este lector recibe el array vigente completo
+ * (currentCubicacionCaratula) y publica la lista ya actualizada como un
+ * solo valor de raíz. Antes de esto nadie leía este dato: sólo se extraía
+ * el avance físico de la carátula y el detalle de partidas por oficio, y el
  * monto certificado -el número financiero real de cada cubicación mensual-
  * se archivaba sin publicar nada.
  */
@@ -2001,6 +2005,16 @@ export async function extractStructuredUpdates(
       for (const code of detectedBuildingProgressScope(filas, defaults.knownBuildingTokens)) {
         expectedBuildingCodes.add(code);
       }
+
+      // El monto certificado de la cubicación ("CUBICACION Nro. X" / "Monto
+      // Cubicación:") comparte hoja con la carátula de avance físico por
+      // edificio de la misma cubicación real (el resumen ocupa las primeras
+      // filas y la tabla de edificios sigue debajo): no puede tratarse como
+      // una coincidencia excluyente que cierre la hoja, o la carátula que
+      // sigue debajo se quedaría sin leer.
+      const montoCubicacion = extractCubicacionMontoResumen(filas, defaults);
+      if (montoCubicacion) results.push(montoCubicacion);
+
       const porClave = rowsToRecords(filas, ["clave", "key", "campo"]);
       if (porClave.records.length) {
         const warnings: string[] = [];
@@ -2042,16 +2056,6 @@ export async function extractStructuredUpdates(
       const disciplinas = extractCubicacionDisciplineProgress(filas, defaults);
       if (disciplinas) {
         results.push(disciplinas);
-        continue;
-      }
-
-      // El monto certificado de la cubicación (otra hoja del mismo libro,
-      // "Monto Cubicación:" junto al número "CUBICACION Nro. X"): el número
-      // financiero real de esta cubicación mensual, que ni la carátula ni el
-      // detalle de partidas traen.
-      const montoCubicacion = extractCubicacionMontoResumen(filas, defaults);
-      if (montoCubicacion) {
-        results.push(montoCubicacion);
         continue;
       }
 

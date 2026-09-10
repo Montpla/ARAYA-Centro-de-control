@@ -356,6 +356,28 @@ test("una corrección del monto de una cubicación reemplaza la entrada anterior
   ]));
 });
 
+test("el monto certificado no se roba la carátula de avance físico que sigue en la misma hoja", async () => {
+  // Bug real encontrado al verificar contra la app desplegada: "Avance
+  // edificio.xlsx" trae el resumen de "Monto Cubicación" y la carátula de
+  // avance físico por edificio en la MISMA hoja (el resumen arriba, la tabla
+  // de edificios debajo). Como extractCubicacionMontoResumen se probaba
+  // DESPUÉS de extractCubicacionCoverProgress y éste ya "cerraba" la hoja
+  // con `continue`, el monto nunca llegaba a leerse. Tras moverlo al frente
+  // sin consumir la hoja, ambos deben convivir en el mismo resultado.
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("cubicacion-monto-y-caratula.xlsx"),
+    "xlsx",
+    { ...defaults, area: "obra", knownBuildingTokens: new Set(["76", "77"]) },
+  );
+  const porClave = new Map(resultado.updates.map((update) => [update.key, update]));
+  assert.equal(JSON.stringify(porClave.get("cubicacionCaratula")?.value), JSON.stringify([
+    { label: "Cubicación Nº9", montoDop: 28030340.5, cutoff: "2026-07-31" },
+  ]));
+  assert.equal(porClave.get("buildings.TH-76.progress")?.value, 8);
+  assert.equal(porClave.get("buildings.TH-77.progress")?.value, 9);
+});
+
 test("el Excel de finanzas actualiza el flujo reprogramado mes a mes", async () => {
   // El flujo mensual (hoja Comparación Mensual) es la parte que cambia cada mes.
   // Se lee y se traduce cada mes a su posición en la línea temporal del flujo.

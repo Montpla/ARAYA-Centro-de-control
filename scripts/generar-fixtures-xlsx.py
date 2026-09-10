@@ -234,6 +234,21 @@ construir(SALIDA / "cubicacion-monto-resumen.xlsx", [
     ["Monto Cubicacion:", "", "$RD", 28030340.5],
 ])
 
+# El caso real: el resumen "Monto Cubicación" y la carátula de avance físico
+# por edificio comparten la MISMA hoja ("Avance edificio.xlsx"), el resumen
+# arriba y la tabla de edificios debajo. Reproduce el bug de rutas
+# excluyentes: si el monto certificado "cerraba" la hoja, la tabla de
+# edificios que sigue debajo se quedaba sin leer.
+construir(SALIDA / "cubicacion-monto-y-caratula.xlsx", [
+    ["CUBICACION Nro. 9"],
+    ["Monto Cubicacion:", "", "$RD", 28030340.5],
+    ["Nº", "Capitulo", "Monto RD$.", "En el periodo", "%", "Anterior Acumulado", "%", "Actual Acumulado", "%"],
+    [1, "", 100, 5, 0.05, 20, 0.20, 25, 0.25],
+    [2, "EDIFICIO 76", 100, 6, 0.06, 2, 0.02, 8, 0.08],
+    [3, "EDIFICIO 77", 100, 9, 0.09, 0, 0, 9, 0.09],
+    ["", "", 300, "", "", "", "", 42, 0.14],
+])
+
 
 # --- Word y PowerPoint -------------------------------------------------------
 # Comparten envoltorio con Excel (ZIP con XML), asi que sus tablas se leen con
