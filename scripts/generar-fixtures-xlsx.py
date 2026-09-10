@@ -29,7 +29,17 @@ def anadir(z, nombre, datos):
 
 
 
+# Marca una celda vacía pero con estilo (`<c r="X" s="1"/>`), la forma real
+# que escribe Excel para una celda sin contenido dentro de una tabla con
+# formato. A diferencia de omitir la celda sin más (lo que hace este mismo
+# generador con None/""), esto reproduce el caso real que rompía el lector:
+# una celda vacía-con-estilo justo antes de otra con contenido.
+VACIA_CON_ESTILO = object()
+
+
 def celda(ref, valor, compartidas):
+    if valor is VACIA_CON_ESTILO:
+        return f'<c r="{ref}" s="1"/>'
     if isinstance(valor, (int, float)):
         return f'<c r="{ref}"><v>{valor}</v></c>'
     if valor not in compartidas:
@@ -44,7 +54,7 @@ def construir(ruta, filas):
         celdas = "".join(
             celda(f"{chr(65 + j)}{i}", v, compartidas)
             for j, v in enumerate(fila)
-            if v is not None and v != ""
+            if v is VACIA_CON_ESTILO or (v is not None and v != "")
         )
         cuerpo.append(f'<row r="{i}">{celdas}</row>')
     hoja = (
@@ -178,6 +188,24 @@ construir(SALIDA / "curva-s.xlsx", [
 # sin actualizarse en el apartamento aunque el edificio si avanzara: la
 # caratula de la misma cubicacion solo trae el % por edificio, nunca el % por
 # oficio que necesita constructionDisciplines.
+construir(SALIDA / "costo-por-categoria.xlsx", [
+    ["Account Transactions"],
+    ["Fideicomiso Irrevocable de Desarrollo Inmobiliario ARAYA"],
+    ["For the period 1 August 2016 to 31 August 2026"],
+    [],
+    ["AUXILIAR", "Corte Julio 2026", "Agosto 2026.", "Corte Agosto 2026"],
+    # Terreno reproduce el caso real que rompía el lector de .xlsx: la celda
+    # de "Agosto 2026." vacía-con-estilo (sin movimiento ese mes) justo antes
+    # de la de "Corte Agosto 2026" -Excel las escribe así, no las omite-. El
+    # lector viejo le robaba a "Corte Agosto" su valor y se lo atribuía a la
+    # celda vacía anterior.
+    ["1-1-1 Terreno", 1000, VACIA_CON_ESTILO, 1000],
+    ["1-4-1 Urbanismo", 500, 200, 700],
+    ["2-1-1 Gerencia de la Promotora", 300, 50, 350],
+    ["3-1-1 Permisos Legales y Preliminares", 100, 10, 110],
+    ["Total", 1900, 260, 2160],
+])
+
 construir(SALIDA / "cubicacion-detalle-partidas.xlsx", [
     ["Nº Partida.", "Descripción de partida:", "Unidad", "Cantidad", "Precio Unitario", "Total",
      "CANTIDAD", "MONTO", "%", "CANTIDAD", "MONTO", "%"],

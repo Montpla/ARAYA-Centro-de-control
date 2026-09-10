@@ -171,9 +171,18 @@ export type SheetRow = Record<string, string>;
  */
 function parseSheet(sheetXml: string, shared: string[], maxRows: number): SheetRow[] {
   const filas = new Map<number, SheetRow>();
-  for (const match of sheetXml.matchAll(/<c\s([^>]*)>([\s\S]*?)<\/c>|<c\s([^>]*)\/>/g)) {
-    const attrs = match[1] ?? match[3] ?? "";
-    const cuerpo = match[2] ?? "";
+  // La celda vacía-pero-con-estilo (`<c r="C6" s="10"/>`) tiene que probarse
+  // ANTES que la forma con contenido: `[^>]*` no excluye "/", así que probar
+  // primero `<c ...>...</c>` la reconoce como apertura y la empareja con el
+  // `</c>` de la SIGUIENTE celda -la que sí trae valor-, robándole su
+  // contenido. Con una fórmula compartida detrás (`<f t="shared".../><v>…`,
+  // el patrón exacto de "Corte Agosto" en la cubicación real) el valor de esa
+  // celda migra entera a la celda vacía anterior y la celda con la fórmula
+  // desaparece sin avisar: ambas comparten columna en la fila siguiente y el
+  // lector no puede distinguir "vino vacía" de "se perdió".
+  for (const match of sheetXml.matchAll(/<c\s([^>]*)\/>|<c\s([^>]*)>([\s\S]*?)<\/c>/g)) {
+    const attrs = match[1] ?? match[2] ?? "";
+    const cuerpo = match[3] ?? "";
     const refMatch = attrs.match(/r="([A-Z]+\d+)"/);
     if (!refMatch) continue;
     const referencia = refMatch[1];

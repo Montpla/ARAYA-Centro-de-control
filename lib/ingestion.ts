@@ -1004,6 +1004,129 @@ function extractCubicacionDisciplineProgress(
   };
 }
 
+// El primer dígito antes del primer guión del código de partida es el
+// capítulo contable del fideicomiso: 1 = obra, 2 = comercialización y
+// administración fiduciaria, 3 = legal y financiero. costBreakdown del panel
+// sólo tiene esas tres categorías (Construcción, Operación, Otros); en vez de
+// inventar un criterio de reparto, se suma cada partida al capítulo que el
+// propio documento ya le asigna.
+const COST_CATEGORY_BUCKETS: ReadonlyArray<{ prefix: RegExp; bucket: string }> = [
+  { prefix: /^1-/, bucket: "Construcción" },
+  { prefix: /^2-/, bucket: "Operación" },
+  { prefix: /^3-/, bucket: "Otros" },
+];
+
+/**
+ * Lee un desglose de costos por partida presupuestaria ("1-1-1 Terreno",
+ * "2-2-1 Comisiones por Venta"...) con una columna "Corte <mes> <año>" por
+ * cada corte disponible y, si la trae, el movimiento del mes en curso en una
+ * columna suelta con el mismo mes sin la palabra "Corte" delante.
+ *
+ * Antes de esto nadie leía esta hoja: no es la tabla de edificio+avance, ni
+ * la matriz de disciplinas, ni la carátula de una cubicación, así que
+ * quedaba catalogada sin actualizar ningún indicador ("Costo Ago-26.xlsx",
+ * confianza 0.48, "no se reconoció ninguna tabla de datos en la hoja").
+ */
+function extractCostByCategoryProgress(
+  filas: Array<Record<string, string>>,
+  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string },
+): StructuredExtraction | null {
+  let headerIndex = -1;
+  let cumulativeColumn = "";
+  let periodColumn = "";
+  let allDateColumns = new Set<string>();
+
+  for (let index = 0; index < Math.min(filas.length, 30); index += 1) {
+    const cells = Object.entries(filas[index]);
+    const cortes: Array<{ columna: string; monthKey: string }> = [];
+    const periodos: Array<{ columna: string; monthKey: string }> = [];
+    for (const [columna, valor] of cells) {
+      const normalizado = normalizarCabecera(valor);
+      const corte = normalizado.match(/^corte\s+([a-z]+)\s+(\d{4})\.?$/);
+      if (corte && monthNumbers[corte[1]]) {
+        cortes.push({ columna, monthKey: `${corte[2]}${monthNumbers[corte[1]]}` });
+        continue;
+      }
+      const periodo = normalizado.match(/^([a-z]+)\s+(\d{4})\.?$/);
+      if (periodo && monthNumbers[periodo[1]]) {
+        periodos.push({ columna, monthKey: `${periodo[2]}${monthNumbers[periodo[1]]}` });
+      }
+    }
+    if (cortes.length < 2) continue;
+    // El corte más reciente es el acumulado vigente; uno solo (sin otro corte
+    // anterior con el que compararlo) podría ser cualquier tabla con una
+    // columna de fecha suelta, así que hacen falta al menos dos.
+    cortes.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+    const ultimoCorte = cortes[cortes.length - 1];
+    cumulativeColumn = ultimoCorte.columna;
+    periodColumn = periodos.find((p) => p.monthKey === ultimoCorte.monthKey)?.columna ?? "";
+    // Un corte anterior descartado (aquí, "Corte Julio") sigue siendo una
+    // columna de fecha: si no se excluye también, una fila donde el mes en
+    // curso viene vacío ("1-1-1 Terreno", sin movimiento en agosto) deja dos
+    // columnas candidatas a partida en vez de una y la detección falla.
+    allDateColumns = new Set([...cortes.map((c) => c.columna), ...periodos.map((p) => p.columna)]);
+    headerIndex = index;
+    break;
+  }
+  if (headerIndex < 0) return null;
+
+  // La columna de la partida no trae cabecera propia (la fila de cabeceras
+  // sólo nombra las columnas de fecha): es la única columna que aparece en
+  // las filas de datos sin ser ninguna de las de fecha.
+  const dateColumns = allDateColumns;
+  let categoryColumn = "";
+  for (const row of filas.slice(headerIndex + 1, headerIndex + 5)) {
+    const candidatas = Object.keys(row).filter((columna) => !dateColumns.has(columna));
+    if (candidatas.length === 1) {
+      categoryColumn = candidatas[0];
+      break;
+    }
+  }
+  if (!categoryColumn) return null;
+
+  const cumulativeByBucket = new Map<string, number>();
+  const periodByBucket = new Map<string, number>();
+  let matchedRows = 0;
+
+  for (const row of filas.slice(headerIndex + 1, headerIndex + 1 + 200)) {
+    const label = (row[categoryColumn] ?? "").trim();
+    const match = COST_CATEGORY_BUCKETS.find((entry) => entry.prefix.test(label));
+    if (!match) continue;
+    const cumulative = numeroDeCelda(row[cumulativeColumn] ?? "");
+    if (cumulative !== null) {
+      cumulativeByBucket.set(match.bucket, (cumulativeByBucket.get(match.bucket) ?? 0) + cumulative);
+    }
+    if (periodColumn) {
+      const periodo = numeroDeCelda(row[periodColumn] ?? "");
+      if (periodo !== null) periodByBucket.set(match.bucket, (periodByBucket.get(match.bucket) ?? 0) + periodo);
+    }
+    matchedRows += 1;
+  }
+  if (!matchedRows) return null;
+
+  const baseUpdate = {
+    area: "finanzas",
+    cutoff: defaults.cutoff,
+    sourceCurrency: defaults.sourceCurrency,
+    sourceName: defaults.sourceName,
+  } as const;
+  const updates: LiveDataUpdate[] = [];
+  for (const [bucket, cumulative] of cumulativeByBucket) {
+    updates.push({ key: `costBreakdown.${bucket}.cumulative`, value: Math.round(cumulative * 100) / 100, ...baseUpdate });
+    const periodo = periodByBucket.get(bucket);
+    if (periodo !== undefined) {
+      updates.push({ key: `costBreakdown.${bucket}.june`, value: Math.round(periodo * 100) / 100, ...baseUpdate });
+    }
+  }
+  if (!updates.length) return null;
+
+  return {
+    updates,
+    summary: `Costos agrupados en ${cumulativeByBucket.size} categoría(s) desde el desglose por partida presupuestaria.`,
+    warnings: [],
+  };
+}
+
 /**
  * Lee una cifra de avance que pertenece al alcance completo de una
  * cubicacion, por ejemplo "Edificios 76 y 77" + "Avance fisico ejecutado
@@ -1844,6 +1967,16 @@ export async function extractStructuredUpdates(
       const disciplinas = extractCubicacionDisciplineProgress(filas, defaults);
       if (disciplinas) {
         results.push(disciplinas);
+        continue;
+      }
+
+      // Un desglose de costos por partida presupuestaria ("1-1-1 Terreno"...)
+      // con columnas "Corte <mes> <año>": otra forma financiera real que
+      // ningún lector reconocía, distinta de la cubicación (no hay Nº de
+      // partida ni columnas de avance físico, sólo importes por categoría).
+      const costos = extractCostByCategoryProgress(filas, defaults);
+      if (costos) {
+        results.push(costos);
         continue;
       }
 
