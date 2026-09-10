@@ -1,7 +1,8 @@
-name: Diagnóstico del reproceso de julio
+name: Diagnóstico de ingesta de un archivo
 
-# Muestra en qué estado quedaron los informes de julio tras el reproceso, sin
-# imprimir ningún valor: sólo estado, resumen y nombres de clave.
+# Muestra en qué estado quedó la ingesta de un archivo -nombre y, si hace
+# falta desambiguar, extensión-, sin imprimir ningún valor: sólo estado,
+# resumen y nombres de clave de cada propuesta.
 
 on:
   workflow_dispatch:
@@ -10,6 +11,11 @@ on:
         description: "Texto que debe contener el nombre del archivo"
         required: false
         default: "jul"
+        type: string
+      extension:
+        description: "Extensión exacta a filtrar (vacío = cualquiera)"
+        required: false
+        default: ""
         type: string
 
 jobs:
@@ -25,4 +31,5 @@ jobs:
           DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
           DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
           FILTRO: ${{ inputs.filtro }}
+          EXTENSION: ${{ inputs.extension }}
         run: node scripts/diagnostico-reproceso.mjs
