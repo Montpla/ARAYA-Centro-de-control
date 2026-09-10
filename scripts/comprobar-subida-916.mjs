@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Diagnóstico de sólo lectura: comprueba el estado de los archivos subidos
-// hoy alrededor de las 9:16 (hora local, se comparan en UTC) y su actividad
-// asociada, para confirmar si quedaron validados y publicados.
+// Diagnóstico de sólo lectura: comprueba el estado de los 3 archivos cuyas
+// revisiones de datos vivos se publicaron hoy a las 7:16 UTC (9:16 hora de
+// España) y su actividad asociada, para confirmar si quedaron validados.
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -16,10 +16,17 @@ async function query(sql) {
   return JSON.parse(stdout)?.[0]?.results ?? [];
 }
 
+const nombres = [
+  "ARAYA_-Flujo_I_reprogramado final.xlsx",
+  "Avance edificio.xlsx",
+  "Avance urbanismo.xlsx",
+];
+const enLista = nombres.map((n) => `'${n.replace(/'/g, "''")}'`).join(",");
+
 const files = await query(
-  `SELECT id, original_name, extension, area, status, processing_stage, processing_progress, processing_summary, requires_review, review_status, created_at FROM uploaded_files WHERE created_at LIKE '2026-09-10%' ORDER BY created_at;`,
+  `SELECT id, original_name, extension, area, status, processing_stage, processing_progress, processing_summary, requires_review, review_status, created_at FROM uploaded_files WHERE original_name IN (${enLista}) ORDER BY created_at;`,
 );
-console.log(`=== ${files.length} archivo(s) subidos hoy (2026-09-10) ===`);
+console.log(`=== ${files.length} archivo(s) encontrados por nombre ===`);
 for (const f of files) {
   console.log(`\n[${f.id}] ${f.original_name}`);
   console.log(`  area: ${f.area} · estado: ${f.status} · etapa: ${f.processing_stage} (${f.processing_progress}%)`);
@@ -38,14 +45,4 @@ if (files.length) {
     console.log(`[${a.file_id}] ${a.event_type} · ${a.created_at}`);
     console.log(`   ${a.message}`);
   }
-}
-
-const eventos = await query(
-  `SELECT id, source_file_id, source_name, change_count, message, status, verification_json, created_at FROM live_data_events WHERE created_at LIKE '2026-09-10%' ORDER BY id;`,
-);
-console.log(`\n=== ${eventos.length} revisión(es) de datos vivos hoy ===`);
-for (const e of eventos) {
-  console.log(`#${e.id} · ${e.status} · fuente "${e.source_name}" · ${e.change_count} cambios · ${e.created_at}`);
-  console.log(`   ${e.message}`);
-  if (e.verification_json) console.log(`   verificacion: ${e.verification_json}`);
 }
