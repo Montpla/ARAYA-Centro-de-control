@@ -10,7 +10,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const run = promisify(execFile);
-async function query(sql) {
+async function query(sql, quiet = false) {
   const { stdout } = await run("npx", [
     "wrangler", "d1", "execute", "araya-centro-control-d1",
     "--remote", "--config", "wrangler.deploy.jsonc", "--json",
@@ -53,20 +53,20 @@ const lastFiles = await query(`
 console.log(JSON.stringify(lastFiles, null, 2));
 
 console.log("=== Último punto vivo por raíz de clave (todas las raíces mapeadas) ===");
+// Una sola consulta con CASE/OR para ~50 raíces excede el límite de
+// profundidad de expresión de D1 (SQLITE_ERROR 7500). Se consulta cada
+// raíz por separado: son consultas triviales (una comparación de índice),
+// el coste es solo de latencia de red.
 const allRoots = Object.values(areaRootKeys).flat();
-const rootsCsv = allRoots.map((r) => `'${r}'`).join(",");
-const liveRows = await query(`
-  SELECT
-    CASE
-      ${allRoots.map((r) => `WHEN key = '${r}' OR key LIKE '${r}.%' THEN '${r}'`).join("\n      ")}
-    END AS raiz,
-    MAX(updated_at) AS ultima_actualizacion,
-    COUNT(*) AS puntos
-  FROM live_data_points
-  WHERE ${allRoots.map((r) => `key = '${r}' OR key LIKE '${r}.%'`).join(" OR ")}
-  GROUP BY raiz
-  ORDER BY raiz;
-`);
+const liveRows = [];
+for (const root of allRoots) {
+  const rows = await query(`
+    SELECT '${root}' AS raiz, MAX(updated_at) AS ultima_actualizacion, COUNT(*) AS puntos
+    FROM live_data_points
+    WHERE key = '${root}' OR key LIKE '${root}.%';
+  `, true);
+  if (rows[0] && rows[0].puntos > 0) liveRows.push(rows[0]);
+}
 console.log(JSON.stringify(liveRows, null, 2));
 
 console.log("=== Comparación por área: archivo más reciente vs. dato vivo más reciente ===");
