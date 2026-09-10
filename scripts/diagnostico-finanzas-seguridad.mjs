@@ -17,7 +17,7 @@ async function query(sql) {
   console.log(stdout);
 }
 
-console.log("=== Archivos de finanzas/seguridad de los últimos 60 días ===");
+console.log("=== Archivos de finanzas/seguridad de las últimas 24 horas ===");
 await query(`
   SELECT id, original_name, area, document_type, status, processing_stage,
          publication_revision, requires_review, review_status, declared_cutoff,
@@ -25,7 +25,7 @@ await query(`
   FROM uploaded_files
   WHERE (area IN ('finanzas', 'seguridad') OR document_type IN ('estado_financiero', 'seguridad_permisos'))
     AND deleted_at = ''
-    AND created_at >= datetime('now', '-60 days')
+    AND created_at >= datetime('now', '-1 day')
   ORDER BY created_at DESC;
 `);
 
@@ -38,6 +38,17 @@ await query(`
      OR key LIKE 'financialProjection%' OR key LIKE 'safety%' OR key LIKE 'permits%'
   ORDER BY updated_at DESC
   LIMIT 40;
+`);
+
+console.log("=== Ejecuciones del agente de IA sobre los archivos de seguridad/finanzas de ayer ===");
+await query(`
+  SELECT r.id AS run_id, r.file_id, uf.original_name, r.status, r.proposed_count,
+         r.published_count, r.error, r.validation_json
+  FROM ingestion_agent_runs r
+  JOIN uploaded_files uf ON uf.id = r.file_id
+  WHERE (uf.area IN ('finanzas', 'seguridad') OR uf.document_type IN ('estado_financiero', 'seguridad_permisos'))
+    AND uf.created_at >= datetime('now', '-1 day')
+  ORDER BY r.started_at DESC;
 `);
 
 console.log("=== Requisitos de checklist de seguridad y finanzas (agosto y septiembre) ===");
