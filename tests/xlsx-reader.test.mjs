@@ -221,6 +221,49 @@ test("la carátula de cubicación actualiza edificios, urbanismo y total pondera
   assert.deepEqual([...resultado.expectedBuildingCodes].sort(), ["TH-76", "TH-77"]);
 });
 
+test("el detalle de partidas de la cubicación actualiza el avance por oficio (Albañilería, Instalaciones...)", async () => {
+  // La oficina reportó que "los porcentajes de los apartamentos" no se movían
+  // aunque la cubicación traía avance real: la carátula sólo trae el % por
+  // edificio, nunca el % por oficio del que cuelga Albañilería/Instalaciones
+  // en cada apartamento (lib/unit-progress.ts). Este es el fixture reducido
+  // de la hoja de detalle real (Cubicación Nº9) que hizo evidente el hueco.
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("cubicacion-detalle-partidas.xlsx"),
+    "xlsx",
+    {
+      ...defaults,
+      sourceName: "Cubicacion 9 Araya Agos.xlsx",
+    },
+  );
+  const porClave = new Map(resultado.updates.map((update) => [update.key, update]));
+  // Superestructura suma dos edificios: (800+500+500)/(1000+500+500) = 90%.
+  assert.equal(porClave.get("constructionDisciplines.Superestructura.progress").value, 90);
+  assert.equal(porClave.get("constructionDisciplines.Superestructura.progress").area, "obra");
+  // Albañilería: 600/1200 = 50%.
+  assert.equal(porClave.get("constructionDisciplines.Albañilería.progress").value, 50);
+  // El nombre canónico ("Inst. eléctricas, sanitarias y gas") lleva un punto:
+  // la clave no puede traerlo tal cual porque partiría la ruta en un
+  // segmento de más. 150/300 = 50%.
+  assert.equal(porClave.get("constructionDisciplines.Inst eléctricas, sanitarias y gas.progress").value, 50);
+  assert.match(resultado.summary, /3 oficio\(s\) de construcción actualizados/);
+});
+
+test("el detalle de partidas de la cubicación no confunde un subgrupo con el cierre del oficio", async () => {
+  // "Hormigón." (subgrupo dentro de SUPERESTRUCTURA) y "ARAYA-E02 EDIFICIO 2"
+  // (encabezado de edificio) no son ninguno de los 9 oficios: no deben cerrar
+  // el oficio en curso ni colarse como uno nuevo.
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("cubicacion-detalle-partidas.xlsx"),
+    "xlsx",
+    { ...defaults, sourceName: "Cubicacion 9 Araya Agos.xlsx" },
+  );
+  const claves = resultado.updates.map((update) => update.key);
+  assert.equal(claves.length, 3);
+  assert.ok(!claves.some((key) => /hormigon|edificio/i.test(key)));
+});
+
 test("el Excel de finanzas actualiza el flujo reprogramado mes a mes", async () => {
   // El flujo mensual (hoja Comparación Mensual) es la parte que cambia cada mes.
   // Se lee y se traduce cada mes a su posición en la línea temporal del flujo.
