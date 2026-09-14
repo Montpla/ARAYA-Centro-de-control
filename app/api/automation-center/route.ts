@@ -1,7 +1,6 @@
 import { requireApiUser } from "../../../lib/access-control";
 import {
   closeReportingPeriod,
-  emitPreferenceDigests,
   ensureCurrentReportingPeriods,
   getAutomationCenterSnapshot,
   reconcileReportingPeriods,
@@ -10,7 +9,6 @@ import {
   retryAutomationIncident,
   runOperationalAudit,
   saveAutomationPreferences,
-  sendReportingReminders,
 } from "../../../lib/automation-center";
 
 export const runtime = "edge";
@@ -75,15 +73,6 @@ export async function POST(request: Request) {
     if (action === "close_period") {
       await closeReportingPeriod(String(body.periodId ?? ""), auth.user);
       return privateJson({ ok: true, snapshot: await getAutomationCenterSnapshot(auth.user) });
-    }
-    if (action === "send_reminders") {
-      const sent = await sendReportingReminders(auth.user, String(body.periodId ?? "") || undefined);
-      return privateJson({ ok: true, sent, snapshot: await getAutomationCenterSnapshot(auth.user) });
-    }
-    if (action === "send_digests") {
-      const frequency = body.frequency === "weekly" ? "weekly" : "daily";
-      const sent = await emitPreferenceDigests(frequency);
-      return privateJson({ ok: true, sent });
     }
     if (action === "retry_incident") {
       await retryAutomationIncident(Number(body.incidentId ?? 0), auth.user);

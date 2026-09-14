@@ -1,11 +1,10 @@
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { getDb } from "../db";
 import {
   appUsers,
   automationIncidents,
   automationRuns,
-  notificationEvents,
   reportingPeriods,
   reportingRequirements,
   uploadedFiles,
@@ -16,8 +15,6 @@ import { readEffectiveLiveData } from "./effective-live-data";
 import { validateFinancialPublication, type FinancialUpdateLike } from "./financial-governance";
 import { requiresFinanceAccessForArea } from "./live-data";
 import { validateLiveDataContract } from "./live-data-contract";
-import { emitMissingNotifications, notificationVisibleToUser, type NotificationInput } from "./notifications";
-import { scheduleNotificationDispatch } from "./notification-dispatch";
 
 export const DEFAULT_REPORTING_REQUIREMENTS = [
   { area: "planificacion", documentType: "cronograma", label: "Cronograma actualizado" },
@@ -190,48 +187,6 @@ export async function closeReportingPeriod(periodId: string, actor: AuthorizedUs
     closedAt: now,
     closedByEmail: actor.email,
   }).where(eq(reportingPeriods.id, periodId));
-  await emitMissingNotifications([{
-    kind: "reporting_period_closed",
-    area: "direccion",
-    audience: "all",
-    actorEmail: actor.email,
-    actorName: actor.displayName,
-    subjectType: "reporting_period",
-    subjectId: periodId,
-    title: "Periodo documental cerrado",
-    body: "Todos los documentos obligatorios están recibidos y el periodo queda bloqueado para su informe.",
-    view: "fuentes",
-    payload: { periodId },
-  }]);
-  scheduleNotificationDispatch();
-}
-
-export async function sendReportingReminders(actor: AuthorizedUser, periodId?: string) {
-  const db = getDb();
-  const conditions = [ne(reportingRequirements.status, "received")];
-  if (periodId) conditions.push(eq(reportingRequirements.periodId, periodId));
-  const rows = await db.select().from(reportingRequirements).where(and(...conditions));
-  const now = new Date().toISOString();
-  const dueSoon = rows.filter((row) => !row.lastReminderAt || Date.parse(now) - Date.parse(row.lastReminderAt) >= 20 * 60 * 60 * 1000);
-  await emitMissingNotifications(dueSoon.map((row) => ({
-    kind: "reporting_requirement_due",
-    area: row.area,
-    audience: row.ownerEmail ? `user:${row.ownerEmail}` : `area:${row.area}`,
-    actorEmail: actor.email,
-    actorName: actor.displayName,
-    subjectType: "reporting_requirement",
-    subjectId: `${row.periodId}:${row.id}:${now.slice(0, 10)}`,
-    title: row.status === "overdue" ? `Documento vencido · ${row.label}` : `Documento pendiente · ${row.label}`,
-    body: `Entrega prevista antes de ${row.dueAt.slice(0, 10)}. Puedes subirlo sin seleccionar área: el sistema lo clasificará.`,
-    view: "fuentes",
-    payload: { periodId: row.periodId, requirementId: row.id },
-  })));
-  for (const row of dueSoon) {
-    await db.update(reportingRequirements).set({ lastReminderAt: now, updatedAt: now })
-      .where(eq(reportingRequirements.id, row.id));
-  }
-  if (dueSoon.length) scheduleNotificationDispatch();
-  return dueSoon.length;
 }
 
 async function upsertIncident(candidate: IncidentCandidate, seenAt: string) {
@@ -405,23 +360,6 @@ export async function runOperationalAudit(input: {
   await db.update(automationRuns).set({ status, summary, metricsJson: JSON.stringify(metrics), completedAt })
     .where(eq(automationRuns.idempotencyKey, key));
 
-  const critical = candidates.filter((candidate) => candidate.severity === "critical");
-  if (critical.length) {
-    await emitMissingNotifications(critical.map((candidate) => ({
-      kind: "automation_audit_incident",
-      area: candidate.area,
-      audience: requiresFinanceAccessForArea(candidate.area) ? "finance" : "admin",
-      actorEmail: input.actorEmail,
-      actorName: input.actorName,
-      subjectType: "automation_incident",
-      subjectId: candidate.fingerprint,
-      title: candidate.title,
-      body: candidate.detail.slice(0, 300),
-      view: "fuentes",
-      payload: { fingerprint: candidate.fingerprint, sourceFileId: candidate.sourceFileId ?? "" },
-    })));
-    scheduleNotificationDispatch();
-  }
   const [run] = await db.select().from(automationRuns).where(eq(automationRuns.idempotencyKey, key)).limit(1);
   return { run, reused: false, incidents: candidates };
 }
@@ -556,53 +494,6 @@ export async function saveAutomationPreferences(input: {
       updatedAt: now,
     },
   });
-}
-
-export async function emitPreferenceDigests(frequency: "daily" | "weekly", now = new Date()) {
-  const db = getDb();
-  const since = new Date(now.getTime() - (frequency === "daily" ? 24 : 7 * 24) * 60 * 60 * 1000).toISOString();
-  const [preferences, users, events] = await Promise.all([
-    db.select().from(userAutomationPreferences).where(eq(userAutomationPreferences.digestFrequency, frequency)),
-    db.select().from(appUsers).where(and(eq(appUsers.active, true), eq(appUsers.deletedAt, ""))),
-    db.select().from(notificationEvents)
-      .where(and(sql`${notificationEvents.createdAt} >= ${since}`, ne(notificationEvents.kind, "notification_digest")))
-      .orderBy(desc(notificationEvents.createdAt))
-      .limit(500),
-  ]);
-  const periodKey = frequency === "daily"
-    ? now.toISOString().slice(0, 10)
-    : weekPeriod(now).id;
-  const digests: NotificationInput[] = [];
-  for (const preference of preferences) {
-    const user = users.find((candidate) => candidate.email === preference.userEmail);
-    if (!user) continue;
-    const selectedAreas = parseJsonArray(preference.notificationAreasJson);
-    const visible = events.filter((event) =>
-      notificationVisibleToUser(event, {
-        email: user.email,
-        role: user.role === "admin" ? "admin" : "member",
-        area: user.area,
-        financeAccess: user.role === "admin" || user.financeAccess,
-      }) && (!selectedAreas.length || selectedAreas.includes(event.area)));
-    if (!visible.length) continue;
-    const critical = visible.filter((event) => /critical|failed|incident|overdue|blocked|verification/i.test(event.kind)).length;
-    digests.push({
-      kind: "notification_digest",
-      area: "direccion",
-      audience: `user:${user.email}`,
-      actorEmail: "system",
-      actorName: "Resumen automático",
-      subjectType: "notification_digest",
-      subjectId: `${frequency}:${periodKey}:${user.email}`,
-      title: frequency === "daily" ? "Resumen diario de Bricket Control" : "Resumen semanal de Bricket Control",
-      body: `${visible.length} novedad(es) en tus áreas${critical ? ` · ${critical} requieren atención` : ""}.`,
-      view: "resumen",
-      payload: { frequency, periodKey, events: visible.slice(0, 20).map((event) => event.id) },
-    });
-  }
-  await emitMissingNotifications(digests);
-  if (digests.length) scheduleNotificationDispatch();
-  return digests.length;
 }
 
 export async function unresolvedIncidentCount() {

@@ -1,9 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { fileActivity, notificationEvents, uploadedFiles } from "../../../../db/schema";
+import { fileActivity, uploadedFiles } from "../../../../db/schema";
 import { requireApiUser } from "../../../../lib/access-control";
 import { requiresFinanceAccessForDocument } from "../../../../lib/live-data";
-import { scheduleNotificationDispatch } from "../../../../lib/notification-dispatch";
 
 export const runtime = "edge";
 
@@ -99,22 +98,6 @@ export async function POST(request: Request) {
     actorName: auth.user.displayName,
     createdAt: now,
   });
-  await db.insert(notificationEvents).values({
-    kind: "file_superseded",
-    projectId: source.projectId || "araya",
-    area: protectedFiles ? source.area : "direccion",
-    audience: protectedFiles ? "finance" : "all",
-    actorEmail: auth.user.email,
-    actorName: auth.user.displayName,
-    subjectType: "uploaded_file",
-    subjectId: source.id,
-    title: "Fuente documental sustituida",
-    body: `${source.originalName} queda como histórico; prevalece ${replacement.originalName}.`,
-    view: "fuentes",
-    payloadJson: JSON.stringify({ fileId: source.id, replacementFileId: replacement.id }),
-    createdAt: now,
-  });
-  scheduleNotificationDispatch();
 
   return Response.json({
     idempotent: false,

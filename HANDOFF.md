@@ -2633,6 +2633,10 @@ detección de cambios de usuario sigue funcionando igual.
 
 ### 2. Avisos push de negocio
 
+> **Retirado el 14/09/2026** — ver la entrada "Notificaciones: solo
+> conexión y carga de documentos" al final de este documento. Esta sección
+> describe cómo funcionaba entonces, no el estado actual.
+
 `lib/business-alerts.ts` deriva avisos del estado que los endpoints
 sondeados acaban de calcular, sin consultas extra cuando no hay candidatos:
 
@@ -3623,3 +3627,57 @@ los expedientes eternamente pendientes.
   con antivirus antes de abrirlos o procesarlos.
 - La excepción temporal de red no cambió el código ni se comprometió. La copia
   de trabajo estaba limpia antes de documentar este cierre.
+
+## Notificaciones: solo conexión y carga de documentos (14/09/2026)
+
+- La directiva reportó ráfagas de hasta ~30 notificaciones seguidas. Causa
+  raíz: la auditoría nocturna (`scripts/auditar-produccion.mjs`, cron
+  `auditoria-nocturna.yml` a las 12:17 UTC) llamaba cada noche a
+  `sendReportingReminders` sin filtrar por periodo, emitiendo un aviso
+  `reporting_requirement_due` por cada documento semanal/mensual todavía no
+  recibido (cronograma, avance de obra, ventas, finanzas, compras,
+  seguridad × periodo semanal y mensual).
+- Se retiró **todo** aviso automático de negocio, no solo ese: `lib/business-alerts.ts`
+  completo (desviación física, acciones vencidas, facturas CxP envejecidas,
+  presupuesto de IA — sección "2. Avisos push de negocio" arriba, ahora
+  histórica); `sendReportingReminders` y `reporting_period_closed` en
+  `lib/automation-center.ts`; las incidencias de auditoría
+  (`automation_audit_incident`); los resúmenes diario/semanal por
+  preferencia (`emitPreferenceDigests`); el resumen semanal de obra por
+  push (`lib/weekly-summary.ts`, `weekly-summary-data.ts`,
+  `weekly-summary-emit.ts`, y su endpoint `app/api/weekly-summary/route.ts`
+  — con su tabla `weekly_summary_snapshots`, cuya definición se quitó de
+  `db/schema.ts` sin migrar el DROP: la tabla física queda huérfana pero
+  inofensiva en D1); el aviso de publicación de datos vivos
+  (`data_published`, "Centro de Control actualizado · revisión N", que
+  vivía como una de las sentencias de la transacción atómica de
+  `lib/publish-live-data.ts` — el conteo esperado de sentencias bajó de
+  10/15 a 9/14); el de verificación posterior fallida
+  (`post_publish_verification_failed`); y el de sustitución de fuente
+  histórica (`file_superseded`).
+- Los únicos tipos de notificación que quedan: `user_connected` y
+  `file_uploaded`, generados por **triggers SQL** directos sobre
+  `notification_events` (migración `0015`) — nunca pasan por
+  `emitNotification`/`emitMissingNotifications` en JS — y `test`, el botón
+  manual de administrador para comprobar su propia suscripción push
+  (`app/api/push/test/route.ts`), que no se dispara solo ni llega a nadie
+  más.
+- Lo que **no** se tocó: el auditor nocturno sigue reparando cargas
+  atascadas y registrando incidencias en el Centro de incidencias (visibles
+  solo dentro de la app, sin push); los periodos de cierre documental
+  siguen calculándose y se pueden cerrar a mano; una verificación posterior
+  fallida sigue quedando registrada en `liveDataEvents.verificationJson` (y
+  el archivo de origen, si lo hay, se sigue marcando
+  `verificacion_posterior_fallida`) — solo dejó de avisar por push.
+- En `app/automation-workspace.tsx` se quitó el botón "Recordar
+  pendientes" y las opciones "Resumen diario"/"Resumen semanal" del
+  selector de frecuencia (ya no existe nada que las genere). El checkbox
+  "Sólo avisos críticos" también se quitó de la UI y de
+  `lib/notification-preferences.ts`: ninguno de los tres tipos que quedan
+  es nunca "crítico", así que ese filtro solo podía silenciarlo todo sin
+  avisar por qué — se prefirió retirarlo a dejar una trampa. Quedan
+  intactos el horario de silencio y el filtro por área, que sí siguen
+  aplicando a `file_uploaded`.
+- Verificación local: TypeScript, build y suite completa en verde
+  (419/419; bajó de 430 al retirar la prueba de `business-alerts.ts` y la
+  de `weekly-summary.ts` junto con el código que probaban).

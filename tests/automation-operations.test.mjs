@@ -55,13 +55,11 @@ test("un requisito del checklist se satisface por documentType, no también por 
   assert.doesNotMatch(match[1], /file\.area === requirement\.area/);
 });
 
-test("los cierres tienen requisitos, responsables, recordatorios y bloqueo por faltantes", () => {
+test("los cierres tienen requisitos, responsables y bloqueo por faltantes", () => {
   assert.match(center, /DEFAULT_REPORTING_REQUIREMENTS/);
   assert.match(center, /closeReportingPeriod/);
   assert.match(center, /obligatorio\(s\) para cerrar el periodo/);
-  assert.match(center, /sendReportingReminders/);
   assert.match(workspace, /Cierre semanal y mensual/);
-  assert.match(workspace, /Recordar pendientes/);
 });
 
 test("la carga múltiple y compartir desde móvil conservan un recibo por archivo", () => {
@@ -75,9 +73,8 @@ test("la carga múltiple y compartir desde móvil conservan un recibo por archiv
 
 test("las preferencias conservan privacidad, frecuencia y horario silencioso", () => {
   assert.match(center, /digestFrequency/);
-  assert.match(center, /notificationVisibleToUser/);
   assert.match(workspace, /Silencio desde/);
-  assert.match(workspace, /Resumen semanal/);
+  assert.match(workspace, /Inmediatas/);
   assert.match(route, /body\.criticalOnly === undefined/);
 });
 

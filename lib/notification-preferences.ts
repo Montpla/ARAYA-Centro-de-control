@@ -21,11 +21,9 @@ export async function preferenceAllowsPush(input: {
   const [preference] = await getDb().select().from(userAutomationPreferences)
     .where(eq(userAutomationPreferences.userEmail, input.userEmail)).limit(1);
   if (!preference) return true;
-  if (input.kind === "notification_digest") return preference.digestFrequency !== "off";
   if (preference.digestFrequency !== "immediate") return false;
   const areas = parseAreas(preference.notificationAreasJson);
   if (areas.length && !areas.includes(input.area)) return false;
-  if (preference.criticalOnly && !/critical|failed|incident|overdue|blocked|verification/i.test(input.kind)) return false;
   if (preference.quietStart && preference.quietEnd) {
     const now = input.createdAt ?? new Date();
     const local = new Date(now.getTime() - preference.timezoneOffsetMinutes * 60_000);

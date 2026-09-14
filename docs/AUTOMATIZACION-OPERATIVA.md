@@ -1,13 +1,13 @@
 # Automatización operativa de Bricket Control
 
-Actualizado: 22/08/2026
+Actualizado: 14/09/2026
 
 ## Objetivo
 
 Reducir trabajo manual sin rebajar los controles de autoridad, privacidad ni
 cuadre financiero. Las tareas deterministas no usan IA: auditoría, cierres,
-recordatorios, reintentos, notificaciones, copias y restauraciones se ejecutan
-con reglas de código y quedan registradas.
+reintentos, copias y restauraciones se ejecutan con reglas de código y quedan
+registradas.
 
 ```mermaid
 flowchart LR
@@ -39,9 +39,12 @@ flowchart LR
    bandeja IndexedDB y abre el formulario de carga.
 4. **Centro de incidencias**: muestra severidad, área, archivo, responsable e
    intentos. El administrador puede reintentar o resolver con trazabilidad.
-5. **Avisos configurables**: cada usuario elige áreas, solo críticos, horario
-   silencioso en su hora local, avisos inmediatos o resumen diario/semanal.
-   Silenciar el push no elimina el aviso interno.
+5. **Notificaciones**: solo dos tipos, para no saturar al equipo — quién se
+   conecta y quién sube un documento (más un botón manual de autocomprobación
+   para el administrador). No hay avisos automáticos de negocio (desviación,
+   vencimientos, recordatorios de cierre, resúmenes ni incidencias de
+   auditoría): esas ráfagas se retiraron el 14/09/2026. Cada usuario puede
+   elegir áreas a seguir y un horario silencioso en su hora local.
 6. **Copia y restauración**: GitHub Actions exporta D1 cada día, restaura el SQL
    en una base temporal, ejecuta `PRAGMA integrity_check`, conserva 30 días de
    artefactos versionados y actualiza una copia `latest` protegida en R2.

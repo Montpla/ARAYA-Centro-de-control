@@ -41,29 +41,28 @@ test("cada revisión publicada se relee y verifica en todas sus vistas", () => {
   assert.match(verifier, /readEffectiveLiveData\(true\)/);
   assert.match(verifier, /point\.revision !== input\.eventId/);
   assert.match(verifier, /verification\.status === "failed"/);
-  assert.match(verifier, /post_publish_verification_failed/);
   for (const column of ["financial_validation_json", "monetary_audit_json", "source_authority_json", "affected_views_json", "verification_json"]) {
     assert.match(migration, new RegExp(column));
   }
 });
 
-test("una verificación fallida avisa aunque la publicación no venga de un archivo", () => {
+test("una verificación fallida se registra en el evento aunque la publicación no venga de un archivo", () => {
   // Una corrección manual (sin sourceFileIds, por ejemplo un ajuste puntual
-  // de datos vivos) puede fallar esta misma comprobación transversal. Antes
-  // el aviso sólo salía si había un archivo de origen al que marcar
-  // "requiere revisión"; una corrección sin archivo fallaba en silencio
-  // hasta que alguien lo notara a simple vista (pasó con "Movimiento de
-  // tierra" al 72,76%). El bloque de aviso debe ejecutarse siempre que
-  // status === "failed"; sólo el marcado del archivo depende de que existan
-  // sourceFileIds.
-  const block = verifier.slice(verifier.indexOf('if (verification.status === "failed") {'));
-  const fileFlagIf = block.indexOf("if (input.sourceFileIds.length) {");
-  const emitCall = block.indexOf("await emitMissingNotifications([{");
-  assert.ok(fileFlagIf >= 0 && emitCall >= 0, "no se encontró la estructura esperada del bloque de fallo");
-  assert.ok(emitCall > fileFlagIf, "emitMissingNotifications debe quedar fuera del if de sourceFileIds, no anidado dentro");
-  const fileFlagBlock = block.slice(fileFlagIf, emitCall);
-  assert.match(fileFlagBlock, /requiresReview: true/);
-  assert.doesNotMatch(fileFlagBlock, /emitMissingNotifications/);
+  // de datos vivos) puede fallar esta misma comprobación transversal. El
+  // registro en liveDataEvents.verificationJson ocurre siempre, antes de
+  // saber si status === "failed" tiene o no archivo de origen; sólo el
+  // marcado del archivo como "requiere revisión" depende de que existan
+  // sourceFileIds. Antes esto sólo se notaba si había un archivo al que
+  // marcar; una corrección sin archivo podía pasar desapercibida hasta que
+  // alguien lo notara a simple vista (pasó con "Movimiento de tierra" al
+  // 72,76%) — ahora el evento siempre queda con su estado real.
+  const updateEventIndex = verifier.indexOf("await db.update(liveDataEvents).set({");
+  const failedBlockIndex = verifier.indexOf('if (verification.status === "failed") {');
+  assert.ok(updateEventIndex >= 0 && failedBlockIndex >= 0, "no se encontró la estructura esperada");
+  assert.ok(updateEventIndex < failedBlockIndex, "el registro del evento debe ocurrir antes del bloque de fallo, no depender de él");
+  const block = verifier.slice(failedBlockIndex);
+  assert.match(block, /if \(input\.sourceFileIds\.length\) \{/);
+  assert.match(block, /requiresReview: true/);
 });
 
 test("reconocer una verificación posterior fallida nunca publica ni toca datos vivos", () => {

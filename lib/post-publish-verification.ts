@@ -8,9 +8,6 @@ import {
   affectedViewsForUpdates,
   type FinancialUpdateLike,
 } from "./financial-governance";
-import { isFinancialLiveKey } from "./live-data";
-import { emitMissingNotifications } from "./notifications";
-import { scheduleNotificationDispatch } from "./notification-dispatch";
 
 export type PublicationVerification = {
   status: "passed" | "failed";
@@ -32,7 +29,6 @@ export async function verifyPublishedLiveData(input: {
   eventId: number;
   updates: FinancialUpdateLike[];
   sourceFileIds: string[];
-  actor: { email: string; displayName: string };
 }): Promise<PublicationVerification> {
   const snapshot = await readEffectiveLiveData(true);
   const pointByKey = new Map(snapshot.points.map((point) => [point.key, point]));
@@ -75,13 +71,10 @@ export async function verifyPublishedLiveData(input: {
   }).where(eq(liveDataEvents.id, input.eventId));
 
   if (verification.status === "failed") {
-    // Antes esta alerta sólo salía si la publicación venía ligada a un
-    // archivo (sourceFileIds). Una corrección manual sin archivo de origen
-    // -como la que fijó "Movimiento de tierra" al 72,76%- podía fallar esta
-    // misma comprobación y quedar guardada como "failed" en el evento sin que
-    // nadie se enterase, hasta que alguien lo notara a simple vista en el
-    // panel. Ahora toda publicación fallida avisa, tenga o no archivo de
-    // origen.
+    // El estado "failed" queda registrado en liveDataEvents.verificationJson
+    // aunque la corrección no tenga archivo de origen (por ejemplo, un ajuste
+    // manual como el que fijó "Movimiento de tierra" al 72,76%). Cuando sí
+    // hay archivo, además se marca para revisión.
     if (input.sourceFileIds.length) {
       await db.update(uploadedFiles).set({
         requiresReview: true,
@@ -90,22 +83,6 @@ export async function verifyPublishedLiveData(input: {
         updatedAt: checkedAt,
       }).where(inArray(uploadedFiles.id, input.sourceFileIds));
     }
-    await emitMissingNotifications([{
-      kind: "post_publish_verification_failed",
-      area: input.updates.some((update) => isFinancialLiveKey(update.key)) ? "finanzas" : "direccion",
-      audience: input.updates.some((update) => isFinancialLiveKey(update.key)) ? "finance" : "admin",
-      actorEmail: input.actor.email,
-      actorName: input.actor.displayName,
-      subjectType: "live_revision_verification",
-      subjectId: String(input.eventId),
-      title: `Comprobación posterior pendiente · revisión ${input.eventId}`,
-      body: input.sourceFileIds.length
-        ? `${issues.length} incidencia(s) impiden confirmar la sincronización transversal. El original permanece protegido.`
-        : `${issues.length} incidencia(s) impiden confirmar la sincronización transversal de una corrección sin archivo de origen.`,
-      view: "fuentes",
-      payload: { revision: input.eventId, sourceFileIds: input.sourceFileIds, issues: issues.slice(0, 8) },
-    }]);
-    scheduleNotificationDispatch();
   }
 
   return verification;
