@@ -130,7 +130,7 @@ export function AutomationWorkspace({
         credentials: "same-origin",
         body: JSON.stringify({ action, ...payload }),
       });
-      const result = await response.json() as { error?: string; snapshot?: Snapshot; sent?: number };
+      const result = await response.json() as { error?: string; snapshot?: Snapshot };
       if (!response.ok) throw new Error(result.error || "No se pudo completar la acción.");
       if (result.snapshot) {
         setSnapshot(result.snapshot);
@@ -138,9 +138,7 @@ export function AutomationWorkspace({
       } else {
         await refresh();
       }
-      setMessage(action === "send_reminders"
-        ? `${result.sent ?? 0} recordatorio(s) preparados.`
-        : "Acción completada y registrada.");
+      setMessage("Acción completada y registrada.");
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "No se pudo completar la acción.");
     } finally {
@@ -217,7 +215,6 @@ export function AutomationWorkspace({
               </ul>
               {user.role === "admin" && (
                 <div className="automation-actions">
-                  <button className="button secondary" type="button" disabled={Boolean(busy)} onClick={() => void act("send_reminders", { periodId: period.id })}>Recordar pendientes</button>
                   <button className="button primary" type="button" disabled={Boolean(busy) || period.completion < 100} onClick={() => void act("close_period", { periodId: period.id })}>Cerrar periodo</button>
                 </div>
               )}
@@ -257,14 +254,11 @@ export function AutomationWorkspace({
             <label>Frecuencia
               <select value={preferences.digestFrequency} onChange={(event) => setPreferences({ ...preferences, digestFrequency: event.target.value })}>
                 <option value="immediate">Inmediatas</option>
-                <option value="daily">Resumen diario</option>
-                <option value="weekly">Resumen semanal</option>
                 <option value="off">Sólo dentro de la aplicación</option>
               </select>
             </label>
             <label>Silencio desde<input type="time" value={preferences.quietStart} onChange={(event) => setPreferences({ ...preferences, quietStart: event.target.value })} /></label>
             <label>Silencio hasta<input type="time" value={preferences.quietEnd} onChange={(event) => setPreferences({ ...preferences, quietEnd: event.target.value })} /></label>
-            <label className="automation-check"><input type="checkbox" checked={preferences.criticalOnly} onChange={(event) => setPreferences({ ...preferences, criticalOnly: event.target.checked })} /> Sólo avisos críticos</label>
             <fieldset>
               <legend>Áreas que quiero seguir</legend>
               {areas.filter(([id]) => user.financeAccess || !["finanzas", "comercial"].includes(id)).map(([id, label]) => (

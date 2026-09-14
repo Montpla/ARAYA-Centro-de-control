@@ -33,11 +33,4 @@ async function action(payload) {
 }
 
 const audit = await action({ action: "run_audit", idempotencyKey: `nightly-audit:${date}` });
-const reminders = await action({ action: "send_reminders" });
-const dailyDigest = await action({ action: "send_digests", frequency: "daily" });
-const weeklyDigest = new Date().getUTCDay() === 1
-  ? await action({ action: "send_digests", frequency: "weekly" })
-  : { sent: 0 };
 console.log(audit.result?.run?.summary || "Auditoría completada.");
-console.log(`${Number(reminders.sent || 0)} recordatorio(s) de cierre enviados.`);
-console.log(`${Number(dailyDigest.sent || 0)} resumen(es) diario(s) y ${Number(weeklyDigest.sent || 0)} semanal(es).`);

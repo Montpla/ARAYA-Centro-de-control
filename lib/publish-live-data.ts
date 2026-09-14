@@ -6,10 +6,6 @@ import {
   liveDataPoints,
   uploadedFiles,
 } from "../db/schema";
-import {
-  dispatchNotificationBySubject,
-  prepareNotificationRecord,
-} from "./notifications";
 import { readEffectiveLiveData } from "./effective-live-data";
 import {
   CanonicalPublicationPoint,
@@ -34,9 +30,9 @@ const MAX_ATOMIC_PUBLICATION_STATEMENTS = 20;
 const MAX_ATOMIC_JSON_BYTES = 1_800_000;
 
 function expectedAtomicPublicationStatementCount(hasReviewClosure: boolean) {
-  // Ten set-based statements publish any batch from 1 to MAX_UPDATES rows.
+  // Nine set-based statements publish any batch from 1 to MAX_UPDATES rows.
   // Review closure adds five more statements, independently of row count.
-  return hasReviewClosure ? 15 : 10;
+  return hasReviewClosure ? 14 : 9;
 }
 
 export type LiveDataActor = {
@@ -449,38 +445,6 @@ export async function publishLiveDataUpdates(input: {
   if (!createdEvent) throw new Error("No se pudo crear la revisión de datos.");
 
   let event = createdEvent;
-  const isAutomaticPublication = input.reviewClosure?.completedAction === "aprobado_automatico";
-  const notificationRecord = prepareNotificationRecord({
-    kind: "data_published",
-    projectId: "araya",
-    area: event.area,
-    audience: publicationProtected ? "finance" : "all",
-    actorEmail: input.actor.email,
-    actorName: input.actor.displayName,
-    subjectType: "live_revision",
-    subjectId: event.id,
-    title: isAutomaticPublication
-      ? `Publicación automática sin revisión · revisión ${event.id}`
-      : `Centro de Control actualizado · revisión ${event.id}`,
-    body: isAutomaticPublication
-      ? `${event.changeCount} datos de ${event.area} se publicaron solos desde ${event.sourceName}, sin que nadie los revisara. Échales un vistazo; si algo no cuadra, retira el archivo de origen para deshacerlo.`
-      : `${event.changeCount} datos de ${event.area} se han recalculado y ya están disponibles.`,
-    view: event.area === "comercial"
-      ? "comercial"
-      : event.area === "finanzas"
-        ? "metricas"
-        : event.area === "obra"
-          ? "planificacion"
-          : "resumen",
-    payload: {
-      revision: event.id,
-      changeCount: event.changeCount,
-      sourceFileIds: linkedFileIds,
-      cutoff: event.cutoff,
-      automatic: isAutomaticPublication,
-    },
-    createdAt: updatedAt,
-  });
   try {
     const database = getAtomicD1();
     const atomicStatements: AtomicD1Statement[] = [];
@@ -742,27 +706,6 @@ export async function publishLiveDataUpdates(input: {
     }
     atomicStatements.push(statement(
       database,
-      `INSERT INTO notification_events (
-         kind, project_id, area, audience, actor_email, actor_name,
-         subject_type, subject_id, title, body, view, payload_json,
-         fanout_status, created_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
-      notificationRecord.kind,
-      notificationRecord.projectId,
-      notificationRecord.area,
-      notificationRecord.audience,
-      notificationRecord.actorEmail,
-      notificationRecord.actorName,
-      notificationRecord.subjectType,
-      notificationRecord.subjectId,
-      notificationRecord.title,
-      notificationRecord.body,
-      notificationRecord.view,
-      notificationRecord.payloadJson,
-      notificationRecord.createdAt,
-    ));
-    atomicStatements.push(statement(
-      database,
       "UPDATE live_data_events SET status = 'published' WHERE id = ? AND status = 'preparing'",
       event.id,
     ));
@@ -799,16 +742,10 @@ export async function publishLiveDataUpdates(input: {
     }
   }
 
-  await dispatchNotificationBySubject({
-    kind: notificationRecord.kind,
-    subjectType: notificationRecord.subjectType,
-    subjectId: notificationRecord.subjectId,
-  }).catch(() => undefined);
   const verification = await verifyPublishedLiveData({
     eventId: event.id,
     updates: input.normalized,
     sourceFileIds: linkedFileIds,
-    actor: input.actor,
   }).catch((error): import("./post-publish-verification").PublicationVerification => ({
     status: "failed",
     revision: event.id,

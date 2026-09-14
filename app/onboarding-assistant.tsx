@@ -35,7 +35,7 @@ const steps = [
   {
     mark: "05",
     title: "Configura avisos sin ruido",
-    body: "En Centro de datos → Automatización puedes elegir áreas, avisos críticos, horario silencioso o un resumen diario/semanal.",
+    body: "El Centro de Control solo avisa de quién se conecta y quién sube un documento. En Centro de datos → Automatización puedes elegir qué áreas seguir y un horario silencioso.",
     tip: "Los avisos permanecen dentro de la app aunque silencies el push.",
   },
   {
