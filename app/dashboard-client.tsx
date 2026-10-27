@@ -1205,7 +1205,7 @@ const projects: Record<ProjectId, {
 };
 
 type NavItem = { id: View; label: string; mark: string };
-type NavigationGroupId = "resumen" | "sala-operativa" | "obra" | "finanzas" | "datos" | "agente";
+type NavigationGroupId = "resumen" | "obra" | "finanzas" | "datos" | "agente";
 type NavigationGroup = {
   id: NavigationGroupId;
   label: string;
@@ -1235,13 +1235,12 @@ const navItems: NavItem[] = [
 
 const navigationGroups: NavigationGroup[] = [
   { id: "resumen", label: "Resumen ejecutivo", mobileLabel: "Resumen", mark: "01", directView: "resumen" },
-  { id: "sala-operativa", label: "Sala operativa", mobileLabel: "Sala", mark: "SO", directView: "sala-operativa" },
   {
     id: "obra",
     label: "Obra",
     mobileLabel: "Obra",
     mark: "02",
-    itemIds: ["planificacion", "implantacion", "edificios", "viviendas", "urbanismo", "proveedores", "control"],
+    itemIds: ["sala-operativa", "planificacion", "implantacion", "edificios", "viviendas", "urbanismo", "proveedores", "control"],
   },
   {
     id: "finanzas",
