@@ -3,6 +3,7 @@ import { ChatGPTUser, getChatGPTUser } from "../app/chatgpt-auth";
 import { getDb } from "../db";
 import { appUsers } from "../db/schema";
 import { UserArea, isUserArea } from "./file-routing";
+import { isLocalDemoModeEnabled } from "./local-demo-mode";
 
 export type AuthorizedUser = {
   id: number;
@@ -48,7 +49,7 @@ export function publicUser(row: typeof appUsers.$inferSelect): AuthorizedUser {
 }
 
 export async function resolveAuthorizedUser(identity: ChatGPTUser) {
-  if (process.env.LOCAL_DEMO_MODE === "true") {
+  if (isLocalDemoModeEnabled()) {
     return {
       id: 1,
       email: identity.email,
@@ -107,7 +108,7 @@ export async function resolveAuthorizedUser(identity: ChatGPTUser) {
 
 export async function getAuthorizedUser() {
   const identity =
-    process.env.LOCAL_DEMO_MODE === "true"
+    isLocalDemoModeEnabled()
       ? {
           displayName: "Usuario Demo",
           email: "demo@araya.local",

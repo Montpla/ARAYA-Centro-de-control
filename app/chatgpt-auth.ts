@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { isLocalDemoModeEnabled } from "../lib/local-demo-mode";
 import { SESSION_COOKIE, sessionUserFromToken } from "../lib/session";
 
 export type ChatGPTUser = {
@@ -27,7 +28,7 @@ export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
 export async function requireChatGPTUser(
   returnTo: string,
 ): Promise<ChatGPTUser> {
-  if (process.env.LOCAL_DEMO_MODE === "true") {
+  if (isLocalDemoModeEnabled()) {
     return {
       displayName: "Usuario Demo",
       email: "demo@araya.local",
