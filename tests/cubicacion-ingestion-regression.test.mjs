@@ -59,3 +59,32 @@ test("el reproceso puede apuntar al expediente exacto sin tocar copias homónima
   assert.match(reprocessScript, /!f\.supersededByFileId/);
   assert.match(reprocessScript, /form\.set\("reprocessFileId", f\.id\)/);
 });
+
+test("un xlsx/csv sin plantilla reconocida recibe el mismo colchón de IA que un documento narrativo", () => {
+  // extensionesNarrativas sigue intacto, y las dos condiciones que deciden
+  // cuándo correr la IA siguen usando literalmente documentoNarrativo/
+  // documentosNarrativos (lo exigen tests ya existentes en
+  // ingestion-automation.test.mjs y live-ingestion-lifecycle-notifications.
+  // test.mjs): la extensión al caso estructurado vive dentro de cómo se
+  // calcula documentosNarrativos, no en una condición ni una lista paralela.
+  assert.match(filesRoute, /new Set\(\["ppt", "pptx", "doc", "docx", "pdf", "jpg", "jpeg", "png"\]\)/);
+  assert.doesNotMatch(filesRoute, /extensionesNarrativas[^;]+"xls"/);
+  assert.match(filesRoute, /extensionesEstructuradasConLector = new Set\(\["xlsx", "csv"\]\)/);
+  assert.match(filesRoute, /documentoEstructuradoSinCobertura =\s*\n\s*extensionesEstructuradasConLector\.has\(extension\) && deterministicExtraction\.updates\.length === 0/);
+  assert.match(filesRoute, /const documentosNarrativos = aiDocuments\.filter\(\(document\) =>\s*\n\s*extensionesNarrativas\.has\(document\.extension\) \|\|\s*\n\s*\(documentoEstructuradoSinCobertura && extensionesEstructuradasConLector\.has\(document\.extension\)\)\);/);
+  // El caso común (xlsx bien formado, con actualizaciones deterministas)
+  // nunca debe entrar al bloque de IA: sigue costando $0.
+  assert.match(filesRoute, /if \(documentoNarrativo && \(!deterministicExtraction\.updates\.length \|\| lecturaParcial\) && !aiBudget\.blocked\)/);
+  assert.match(filesRoute, /\} else if \(documentoNarrativo && \(!deterministicExtraction\.updates\.length \|\| lecturaParcial\) && aiBudget\.blocked\)/);
+});
+
+test("un rechazo determinista tras una extracción de IA no se reintenta tres veces", () => {
+  // El catch de POST clasifica el error y lo manda en el receipt "observed";
+  // scheduleBackgroundUploadProcessing lee ese campo para no reproducir todo
+  // el handler (con su posible llamada a OpenAI ya pagada) cuando el fallo
+  // es determinista y va a repetirse igual.
+  assert.match(filesRoute, /const retryWorthy = error instanceof Error && \/SQLITE_BUSY/);
+  assert.match(filesRoute, /outcome: "observed",\s*\n\s*retryWorthy,/);
+  assert.match(filesRoute, /const terminal = observed && payload\.receipt\?\.retryWorthy !== true;/);
+  assert.match(filesRoute, /if \(response\.ok && \(!observed \|\| terminal\)\)/);
+});

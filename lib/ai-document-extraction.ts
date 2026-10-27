@@ -448,11 +448,20 @@ export function apiErrorMessage(payload: unknown, status: number) {
   return `La API respondió con estado ${status}.`;
 }
 
+// Por llamada HTTP individual, no por el bucle completo del agente (que
+// puede hacer hasta ~24 llamadas por documento): así una llamada colgada
+// falla rápido y el bucle decide si reintenta o escala, en vez de quedarse
+// esperando indefinidamente dentro de una sola invocación del Worker.
+const OPENAI_REQUEST_TIMEOUT_MS = 30_000;
+
 async function requestOpenAIJson(url: string, init: RequestInit): Promise<Record<string, unknown>> {
   let response: Response;
   try {
-    response = await fetch(url, init);
-  } catch {
+    response = await fetch(url, { ...init, signal: init.signal ?? AbortSignal.timeout(OPENAI_REQUEST_TIMEOUT_MS) });
+  } catch (error) {
+    if (error instanceof Error && error.name === "TimeoutError") {
+      throw new OpenAIOperationalError("OpenAI no respondió dentro del tiempo de espera configurado.");
+    }
     throw new OpenAIOperationalError("No se pudo conectar con la API de OpenAI.");
   }
 
