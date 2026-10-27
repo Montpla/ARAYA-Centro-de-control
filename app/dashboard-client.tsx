@@ -3602,12 +3602,7 @@ function Overview({
         </div>
       </section>
 
-      <div className="site-plan-preview">
-        <SitePlan onSelectBuilding={onSelectBuilding} onNavigate={onNavigate} />
-      </div>
-      <button className="text-button site-plan-preview-expand" onClick={() => onNavigate("implantacion")}>
-        Ver plano completo
-      </button>
+      <SitePlan onSelectBuilding={onSelectBuilding} onNavigate={onNavigate} />
 
       <section className="dashboard-grid">
         <article className="panel schedule-card">
