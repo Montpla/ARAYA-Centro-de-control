@@ -838,7 +838,12 @@ test("tablet and mobile mode provides navigation, camera, notifications, biometr
   assert.match(dashboard, /Instalar app/);
   assert.match(dashboard, /canInstall=\{Boolean\(installPrompt\)\}/);
   assert.match(dashboard, /Modo sin conexión · solo lectura/);
-  assert.match(dashboard, /href="#control-room-priority"/);
+  // La prioridad del área de dirección es la sala operativa (antes vivía
+  // apilada bajo el resumen con un ancla "#control-room-priority"; ahora es
+  // su propia pestaña, así que el botón navega con onNavigate en vez de un
+  // href de ancla).
+  assert.match(dashboard, /direccion: \{[\s\S]*?view: "sala-operativa",/);
+  assert.match(dashboard, /onClick=\{\(\) => onNavigate\(focusView\)\}/);
   assert.match(dashboard, /<Overview onNavigate=\{navigate\}/);
   assert.match(controlRoomPanel, /id="control-room-priority"/);
   assert.match(dashboard, /Abrir documento/);

@@ -635,6 +635,117 @@ button {
   min-width: 0;
 }
 
+/* Vista previa del plano del sitio en el resumen ejecutivo: el mismo
+   SitePlan interactivo, solo acotado en altura para no duplicar el mapa
+   completo que ya vive en Implantación. */
+.site-plan-preview {
+  max-height: 320px;
+  overflow: hidden;
+  position: relative;
+  border-radius: 18px;
+}
+
+.site-plan-preview-expand {
+  margin: -6px 0 0 auto;
+  display: block;
+}
+
+/* Vista simple dentro del resumen: mismo rol que el modo TV/obra (letra
+   grande, poco texto, se lee de lejos), pero acotada a su contenedor en vez
+   de position:fixed, para no tapar la navegación de la app normal. */
+.simple-overview-shell {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 18px;
+  min-height: 60vh;
+  padding: 32px;
+  border-radius: 22px;
+  background: radial-gradient(circle at 20% 0%, #16233a 0%, #0b1220 55%, #070b14 100%);
+  color: #f4f7fb;
+}
+
+.simple-overview-exit {
+  justify-self: end;
+  color: #f4f7fb;
+}
+
+.simple-overview-slide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+}
+
+.simple-overview-slide .section-kicker {
+  color: #9fb4d4;
+}
+
+.simple-overview-slide p {
+  max-width: 48ch;
+  font-size: 20px;
+}
+
+.simple-overview-slide-wide {
+  width: 100%;
+  align-items: stretch;
+}
+
+.simple-overview-chart-card {
+  width: 100%;
+  padding: 18px;
+  border-radius: 16px;
+  background: #fdfcf9;
+}
+
+.simple-overview-actions {
+  display: flex;
+  gap: 28px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 18px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.simple-overview-actions strong {
+  display: block;
+  font-size: 40px;
+}
+
+.simple-overview-dots {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.simple-overview-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: rgba(244, 247, 251, 0.3);
+  cursor: pointer;
+}
+
+.simple-overview-dot.active {
+  background: #f4f7fb;
+}
+
+@media (max-width: 760px) {
+  .simple-overview-shell {
+    padding: 20px;
+    min-height: 50vh;
+  }
+
+  .simple-overview-actions strong {
+    font-size: 28px;
+  }
+}
+
 .panel {
   padding: 24px;
   border: 1px solid var(--line);
@@ -7234,6 +7345,13 @@ button.financial-detail-row:focus-visible {
   margin: 0;
   color: var(--muted);
   font-size: 10px;
+}
+
+.role-focus-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .attention-item.profile-priority {
