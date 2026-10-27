@@ -653,6 +653,24 @@ function canAnswerWithoutAi(question: string) {
   return /archivo|adjunt|subir|cargar|calidad|fuente|inconsisten|venta|reserva|moros|cobran|seguridad|accidente|permiso|confotur|plano|implantaci|urbanismo|flujo|reprogram|fideicomiso|balance|resultado|cubic|contab|dinero|financ|paquete|infraestructura|cr[ií]tic|edificio|vivienda|apartamento|desv|retras|fecha|^\s*(resumen|estado|avance)/i.test(question);
 }
 
+const AGENT_REQUEST_TIMEOUT_MS = 30_000;
+
+async function fetchAgentResponse(
+  body: Record<string, unknown>,
+  headers: Record<string, string>,
+): Promise<Response | null> {
+  try {
+    return await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(AGENT_REQUEST_TIMEOUT_MS),
+    });
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: Request) {
   const auth = await requireApiUser();
   if (!auth.user) return auth.response;
@@ -725,10 +743,8 @@ export async function POST(request: Request) {
   const maxOutputTokens = 1_400;
   let totalUsage = emptyAiTokenUsage();
   const headers = { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
-  let response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
+  let response = await fetchAgentResponse(
+    {
       model,
       reasoning: { effort: "low" },
       instructions: AGENT_SYSTEM_PROMPT,
@@ -740,8 +756,12 @@ export async function POST(request: Request) {
       service_tier: "default",
       prompt_cache_key: `${AGENT_PROMPT_VERSION}:normal`,
       safety_identifier: "araya-dashboard-user",
-    }),
-  });
+    },
+    headers,
+  );
+  if (!response) {
+    return Response.json({ error: "El agente no está disponible en este momento." }, { status: 502 });
+  }
 
   for (let turn = 0; turn < maxTurns; turn += 1) {
     if (!response.ok) {
@@ -782,10 +802,8 @@ export async function POST(request: Request) {
       output: JSON.stringify(await executeTool(call.name as ToolName, JSON.parse(call.arguments || "{}"), auth.user.financeAccess)),
     })));
     if (turn + 1 >= maxTurns) break;
-    response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
+    response = await fetchAgentResponse(
+      {
         model,
         reasoning: { effort: "low" },
         previous_response_id: data.id,
@@ -797,8 +815,12 @@ export async function POST(request: Request) {
         service_tier: "default",
         prompt_cache_key: `${AGENT_PROMPT_VERSION}:normal`,
         safety_identifier: "araya-dashboard-user",
-      }),
-    });
+      },
+      headers,
+    );
+    if (!response) {
+      return Response.json({ error: "El agente no está disponible en este momento." }, { status: 502 });
+    }
   }
 
   await recordAssistantAiRun({

@@ -12,6 +12,8 @@ name: Verificación de pull requests
 #
 # Usa exactamente los mismos pasos que scripts/deploy.mjs (typecheck, build,
 # pruebas) mediante "npm test", sin tocar producción ni requerir secretos.
+# El lint corre aparte: antes no se ejecutaba en ningún workflow, así que un
+# error real de ESLint podía fusionarse sin que nadie lo viera.
 #
 # Para que esto bloquee la fusión de verdad, hay que marcarlo como "required
 # status check" en Settings → Branches → main, en GitHub (paso manual, no
@@ -41,6 +43,9 @@ jobs:
 
       - name: Instalar dependencias
         run: npm ci
+
+      - name: Lint
+        run: npm run lint
 
       - name: Typecheck, build y pruebas (npm test)
         run: npm test

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveAuthorizedUser } from "./lib/access-control";
 import { requiresFinanceDocumentAccess } from "./lib/document-access";
+import { isLocalDemoModeEnabled } from "./lib/local-demo-mode";
 import { SESSION_COOKIE, sessionUserFromToken } from "./lib/session";
 
 async function chatGPTIdentity(request: NextRequest) {
@@ -22,7 +23,7 @@ function protectedResponse(body: string, status: number) {
 }
 
 export async function proxy(request: NextRequest) {
-  if (process.env.LOCAL_DEMO_MODE === "true") {
+  if (isLocalDemoModeEnabled()) {
     return NextResponse.next();
   }
   const identity = await chatGPTIdentity(request);

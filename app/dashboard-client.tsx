@@ -9770,6 +9770,7 @@ export function DashboardClient({
         if ([liveResponse.status, dashboardResponse.status].some((status) => status === 401 || status === 403)) {
           removeBiometricRecord(currentUser.id);
           navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- recarga deliberada: la sesión ya no es válida, así que no debe quedar ningún estado financiero en memoria del router.
           window.location.assign("/signout-with-chatgpt?return_to=/");
           return;
         }
@@ -10097,6 +10098,7 @@ export function DashboardClient({
     if (!online) return;
     removeBiometricRecord(currentUser.id);
     navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- recarga deliberada: la sesión ya no es válida, así que no debe quedar ningún estado financiero en memoria del router.
     window.location.assign("/signout-with-chatgpt?return_to=/");
   }
 
@@ -10183,6 +10185,7 @@ export function DashboardClient({
       event.preventDefault();
       navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
       void releasePushSubscription().finally(() => {
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- recarga deliberada: la sesión ya no es válida, así que no debe quedar ningún estado financiero en memoria del router.
         window.location.assign(`${url.pathname}${url.search}${url.hash}`);
       });
       return;
