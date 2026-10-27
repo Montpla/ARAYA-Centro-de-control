@@ -187,13 +187,21 @@ function scheduleBackgroundUploadProcessing(input: {
         }));
         const payload = await response.clone().json().catch(() => ({})) as {
           error?: string;
-          receipt?: { outcome?: string };
+          receipt?: { outcome?: string; retryWorthy?: boolean };
         };
         const observed = payload.receipt?.outcome === "observed";
-        if (response.ok && !observed) {
+        // Un "observed" con retryWorthy=false ya pasó por la clasificación del
+        // catch de POST (route.ts) y se determinó que es un rechazo
+        // determinista (contrato vivo, validación financiera...): reintentar
+        // va a reproducir exactamente el mismo resultado, pagando otra vez
+        // cualquier lectura de IA que ya corrió en este intento. Solo vale la
+        // pena seguir reintentando cuando el fallo es transitorio o cuando ni
+        // siquiera hubo receipt (p. ej. un error de red del propio replay).
+        const terminal = observed && payload.receipt?.retryWorthy !== true;
+        if (response.ok && (!observed || terminal)) {
           await db.update(uploadedFiles).set({
             nextRetryAt: "",
-            lastProcessingError: "",
+            lastProcessingError: terminal ? (payload.error || "Rechazo no recuperable; no se reintenta.").slice(0, 300) : "",
             updatedAt: new Date().toISOString(),
           }).where(eq(uploadedFiles.id, input.fileId)).catch(() => undefined);
           return;
@@ -1458,7 +1466,21 @@ export async function POST(request: Request) {
       }
     }
     const extensionesNarrativas = new Set(["ppt", "pptx", "doc", "docx", "pdf", "jpg", "jpeg", "png"]);
-    const documentosNarrativos = aiDocuments.filter((document) => extensionesNarrativas.has(document.extension));
+    // Un .xlsx/.csv estructurado puede no coincidir con ninguna plantilla
+    // conocida de extractStructuredUpdates (lib/ingestion.ts) y devolver cero
+    // actualizaciones sin que eso signifique que el archivo es ilegible. El
+    // lector de IA ya sabe adjuntar xlsx/csv como input_file (FILE_EXTENSIONS
+    // en lib/ai-document-extraction.ts); se trata como "narrativo" a estos
+    // efectos cuando el lector determinista no encontró nada, dándole el
+    // mismo colchón en vez de dejarlo sin publicar para siempre. Un archivo
+    // bien formado (con actualizaciones deterministas) nunca entra aquí:
+    // sigue costando $0.
+    const extensionesEstructuradasConLector = new Set(["xlsx", "csv"]);
+    const documentoEstructuradoSinCobertura =
+      extensionesEstructuradasConLector.has(extension) && deterministicExtraction.updates.length === 0;
+    const documentosNarrativos = aiDocuments.filter((document) =>
+      extensionesNarrativas.has(document.extension) ||
+      (documentoEstructuradoSinCobertura && extensionesEstructuradasConLector.has(document.extension)));
     const documentoNarrativo = documentosNarrativos.length > 0;
     const lecturaParcial = deterministicExtraction.updates.length > 0 && documentoNarrativo;
     const aiBudget = await getAiUsageSnapshot();
@@ -2421,6 +2443,14 @@ export async function POST(request: Request) {
     // fase son mensajes descriptivos del contrato/publicación o del motor D1
     // (nombres de restricción), nunca valores de negocio.
     const debugDetail = (error instanceof Error ? `${error.name}: ${error.message}` : String(error)).slice(0, 600);
+    // Lista corta y explícita de fallos realmente transitorios (contención en
+    // D1, o las dos carreras de concurrencia optimista ya conocidas y con
+    // mensaje literal en lib/publish-live-data.ts). Todo lo que no reconoce
+    // esta allowlist se trata como definitivo por defecto: un reintento ciego
+    // de scheduleBackgroundUploadProcessing vuelve a pagar cualquier lectura
+    // de IA ya hecha en este intento para llegar otra vez al mismo rechazo
+    // determinista (contrato vivo, validación financiera, etc.).
+    const retryWorthy = error instanceof Error && /SQLITE_BUSY|database is locked|D1_ERROR|ETIMEDOUT|ECONNRESET|la generaci[oó]n documental cambi[oó]|publicaci[oó]n no coincide con el contrato transaccional/i.test(error.message);
     if (agentRunId) {
       await db.update(ingestionAgentRuns).set({
         templateId: matchedTemplateId,
@@ -2532,6 +2562,7 @@ export async function POST(request: Request) {
         restricted: true,
         receipt: {
           outcome: "observed",
+          retryWorthy,
           area: "protegida",
           areaLabel: "Área financiera/comercial protegida",
           publishedCount: 0,
@@ -2550,6 +2581,7 @@ export async function POST(request: Request) {
       file: publicFileRow(currentRow, user),
       receipt: {
         outcome: "observed",
+        retryWorthy,
         area: currentRow.area,
         areaLabel: areaLabels[currentRow.area as keyof typeof areaLabels] ?? currentRow.area,
         publishedCount: publicationCompleted ? agentPublishedCount : 0,

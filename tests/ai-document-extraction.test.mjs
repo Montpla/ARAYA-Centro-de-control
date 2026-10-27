@@ -77,6 +77,22 @@ test("legacy formats return a warning without calling OpenAI", async () => {
   assert.match(result.promptVersion, /^araya-ingestion-agent-/);
 });
 
+test("a timed-out OpenAI call fails fast with a clear warning instead of hanging or throwing", async () => {
+  let capturedInit;
+  globalThis.fetch = async (url, init) => {
+    capturedInit = init;
+    const timeoutError = new Error("The operation was aborted due to timeout");
+    timeoutError.name = "TimeoutError";
+    throw timeoutError;
+  };
+
+  const result = await extraction.extractDocumentWithAI(input("pdf"));
+
+  assert.ok(capturedInit.signal instanceof AbortSignal, "requestOpenAIJson debe pasar un AbortSignal a fetch");
+  assert.deepEqual(result.updates, []);
+  assert.match(result.warnings.join(" "), /no respondió dentro del tiempo de espera/i);
+});
+
 test("image extraction uses a data URL and rejects keys outside the live contract", async () => {
   let requestBody;
   globalThis.fetch = async (url, init) => {
