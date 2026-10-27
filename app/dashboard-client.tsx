@@ -391,6 +391,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
 
 type View =
   | "resumen"
+  | "sala-operativa"
   | "planificacion"
   | "implantacion"
   | "edificios"
@@ -1204,7 +1205,7 @@ const projects: Record<ProjectId, {
 };
 
 type NavItem = { id: View; label: string; mark: string };
-type NavigationGroupId = "resumen" | "obra" | "finanzas" | "datos" | "agente";
+type NavigationGroupId = "resumen" | "sala-operativa" | "obra" | "finanzas" | "datos" | "agente";
 type NavigationGroup = {
   id: NavigationGroupId;
   label: string;
@@ -1216,6 +1217,7 @@ type NavigationGroup = {
 
 const navItems: NavItem[] = [
   { id: "resumen", label: "Resumen ejecutivo", mark: "01" },
+  { id: "sala-operativa", label: "Sala operativa", mark: "SO" },
   { id: "planificacion", label: "Planificación", mark: "02" },
   { id: "implantacion", label: "Implantación general", mark: "03" },
   { id: "edificios", label: "Edificios", mark: "04" },
@@ -1233,6 +1235,7 @@ const navItems: NavItem[] = [
 
 const navigationGroups: NavigationGroup[] = [
   { id: "resumen", label: "Resumen ejecutivo", mobileLabel: "Resumen", mark: "01", directView: "resumen" },
+  { id: "sala-operativa", label: "Sala operativa", mobileLabel: "Sala", mark: "SO", directView: "sala-operativa" },
   {
     id: "obra",
     label: "Obra",
@@ -1309,7 +1312,7 @@ const profileFocus: Record<UserArea, { title: string; detail: string; view: View
   direccion: {
     title: "Decisiones, desviaciones y calidad del dato",
     detail: "Prioriza plazo, avance global, alertas críticas y conciliaciones abiertas.",
-    view: "resumen",
+    view: "sala-operativa",
   },
   planificacion: {
     title: "Curva S, camino crítico y previsión final",
@@ -1607,6 +1610,7 @@ function financialQualityIssues() {
 
 const defaultUploadArea: Record<View, UploadArea> = {
   resumen: "auto",
+  "sala-operativa": "auto",
   planificacion: "planificacion",
   implantacion: "diseno",
   edificios: "obra",
@@ -3436,22 +3440,112 @@ function SitePlan({
   );
 }
 
+const SIMPLE_OVERVIEW_SLIDE_MS = 15_000;
+
+// Reutiliza exactamente los mismos componentes de gráfico que ya se ven en
+// el resumen normal (ProgressRing, ProgressChart) en vez de reimplementarlos:
+// así "vista simple" nunca puede quedar desincronizada de los gráficos
+// reales, porque es literalmente el mismo gráfico, solo en pantalla completa
+// y rotando solo. No reemplaza /tv (pantallas físicas con su propio token);
+// es la misma idea dentro de la sesión normal, con los datos que el resumen
+// ya trae y ya refresca por su cuenta.
+function SimpleOverviewSlides({
+  controlRoom,
+  onExit,
+}: {
+  controlRoom: ControlRoomSnapshot | null;
+  onExit: () => void;
+}) {
+  const slideIds = ["avance", "curva", "acciones"] as const;
+  const [slide, setSlide] = useState(0);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setSlide((current) => (current + 1) % slideIds.length);
+    }, SIMPLE_OVERVIEW_SLIDE_MS);
+    return () => window.clearInterval(interval);
+  }, [slideIds.length]);
+
+  return (
+    <section className="simple-overview-shell" aria-label="Vista simple de avance">
+      <button className="text-button simple-overview-exit" onClick={onExit}>
+        Salir de vista simple
+      </button>
+      {slideIds[slide] === "avance" && (
+        <article className="simple-overview-slide">
+          <span className="section-kicker">AVANCE FÍSICO · CORTE {projectSnapshot.declaredCutoff}</span>
+          <ProgressRing value={projectSnapshot.overallProgress} />
+          <p>
+            {number.format(projectSnapshot.overallProgress)}% ejecutado frente a{" "}
+            {number.format(projectSnapshot.plannedProgress)}% previsto · {number.format(Math.abs(projectSnapshot.deviationPoints))} pp{" "}
+            {projectSnapshot.deviationPoints < 0 ? "por debajo" : "por encima"} del plan.
+          </p>
+        </article>
+      )}
+      {slideIds[slide] === "curva" && (
+        <article className="simple-overview-slide simple-overview-slide-wide">
+          {/* ProgressChart está pensado para fondo claro (texto #0d1018); se
+              envuelve en una tarjeta clara en vez de tocar sus estilos. */}
+          <div className="simple-overview-chart-card">
+            <ProgressChart />
+          </div>
+        </article>
+      )}
+      {slideIds[slide] === "acciones" && (
+        <article className="simple-overview-slide">
+          <span className="section-kicker">ACCIONES</span>
+          {controlRoom ? (
+            <ul className="simple-overview-actions">
+              <li><strong>{controlRoom.actionSummary.open}</strong> abiertas</li>
+              <li><strong>{controlRoom.actionSummary.overdue}</strong> vencidas</li>
+              <li><strong>{controlRoom.actionSummary.blocked}</strong> bloqueadas</li>
+              <li><strong>{controlRoom.actionSummary.completed}</strong> completadas</li>
+            </ul>
+          ) : (
+            <p>Sin datos de acciones todavía.</p>
+          )}
+        </article>
+      )}
+      <div className="simple-overview-dots" role="tablist" aria-label="Diapositivas">
+        {slideIds.map((id, index) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={index === slide}
+            aria-label={`Diapositiva ${index + 1}`}
+            className={`simple-overview-dot${index === slide ? " active" : ""}`}
+            onClick={() => setSlide(index)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Overview({
   onNavigate,
   onSelectBuilding,
   currency,
   canAccessFinance,
   currentUser,
+  controlRoom,
 }: {
   onNavigate: (view: View) => void;
   onSelectBuilding: (building: Building) => void;
   currency: CurrencyCode;
   canAccessFinance: boolean;
   currentUser: DashboardUser;
+  controlRoom: ControlRoomSnapshot | null;
 }) {
   const focus = profileFocus[currentUser.area];
   const focusView = focus.view === "metricas" && !canAccessFinance ? "fuentes" : focus.view;
   const alerts = operationalAlerts(canAccessFinance, currentUser.area, currency);
+  const [simpleMode, setSimpleMode] = useState(false);
+
+  if (simpleMode) {
+    return <SimpleOverviewSlides controlRoom={controlRoom} onExit={() => setSimpleMode(false)} />;
+  }
+
   return (
     <div className="view-stack">
       <section className="panel role-focus-card">
@@ -3460,15 +3554,14 @@ function Overview({
           <h3>{focus.title}</h3>
           <p>{focus.detail}</p>
         </div>
-        {focusView === "resumen" ? (
-          <a className="button secondary" href="#control-room-priority">
-            Abrir prioridad del área
-          </a>
-        ) : (
+        <div className="role-focus-actions">
           <button className="button secondary" onClick={() => onNavigate(focusView)}>
             Abrir prioridad del área
           </button>
-        )}
+          <button className="button secondary" onClick={() => setSimpleMode(true)}>
+            Vista simple
+          </button>
+        </div>
       </section>
       <section className="hero-grid">
         <article className="project-pulse panel">
@@ -3493,14 +3586,29 @@ function Overview({
             value={`${number.format(projectSnapshot.activeBuildingsProgress)}%`}
             detail={`Ritmo real de los ${buildings.filter((building) => building.progress > 0).length} edificios con obra empezada`}
           />
-          <StatCard eyebrow="Plan operativo" value={`${number.format(projectSnapshot.plannedProgress)}%`} detail={`${number.format(projectSnapshot.deviationPoints)} pp de brecha física`} tone="warn" />
-          <StatCard eyebrow="Cronograma MPP" value={`${number.format(projectSnapshot.scheduleProgress)}%`} detail="Avance del plan de Project (corte 30/07), distinto del avance físico" tone="warn" />
+          <StatCard
+            eyebrow="Plan operativo"
+            value={`${number.format(projectSnapshot.plannedProgress)}%`}
+            detail={`${number.format(projectSnapshot.deviationPoints)} pp de brecha física`}
+            tone={projectSnapshot.deviationPoints >= 0 ? "good" : projectSnapshot.deviationPoints >= -5 ? "warn" : "danger"}
+          />
+          <StatCard eyebrow="Cronograma MPP" value={`${number.format(projectSnapshot.scheduleProgress)}%`} detail="Avance del plan de Project (corte 30/07), distinto del avance físico" />
           <StatCard eyebrow="Alcance residencial" value={`${buildings.length} edificios`} detail={`${buildings.reduce((total, building) => total + building.units.length, 0)} apartamentos en el modelo vivo`} />
-          <StatCard eyebrow="Previsión final" value={`${projectSnapshot.deviationDays >= 0 ? "+" : ""}${projectSnapshot.deviationDays} días`} detail={`${projectSnapshot.forecastFinish} frente a ${projectSnapshot.baselineFinish}`} tone="danger" />
+          <StatCard
+            eyebrow="Previsión final"
+            value={`${projectSnapshot.deviationDays >= 0 ? "+" : ""}${projectSnapshot.deviationDays} días`}
+            detail={`${projectSnapshot.forecastFinish} frente a ${projectSnapshot.baselineFinish}`}
+            tone={projectSnapshot.deviationDays <= 0 ? "good" : projectSnapshot.deviationDays >= 14 ? "danger" : "warn"}
+          />
         </div>
       </section>
 
-      <SitePlan onSelectBuilding={onSelectBuilding} onNavigate={onNavigate} />
+      <div className="site-plan-preview">
+        <SitePlan onSelectBuilding={onSelectBuilding} onNavigate={onNavigate} />
+      </div>
+      <button className="text-button site-plan-preview-expand" onClick={() => onNavigate("implantacion")}>
+        Ver plano completo
+      </button>
 
       <section className="dashboard-grid">
         <article className="panel schedule-card">
@@ -10259,7 +10367,13 @@ export function DashboardClient({
     if (view === "resumen") {
       return (
         <div className="view-stack">
-          <Overview onNavigate={navigate} onSelectBuilding={setSelectedBuilding} currency={currency} canAccessFinance={currentUser.financeAccess} currentUser={profileUser} />
+          <Overview onNavigate={navigate} onSelectBuilding={setSelectedBuilding} currency={currency} canAccessFinance={currentUser.financeAccess} currentUser={profileUser} controlRoom={controlRoom} />
+        </div>
+      );
+    }
+    if (view === "sala-operativa") {
+      return (
+        <div className="view-stack">
           <ControlRoomPanel
             snapshot={controlRoom}
             loading={controlRoomLoading}
