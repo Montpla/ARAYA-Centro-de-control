@@ -635,21 +635,6 @@ button {
   min-width: 0;
 }
 
-/* Vista previa del plano del sitio en el resumen ejecutivo: el mismo
-   SitePlan interactivo, solo acotado en altura para no duplicar el mapa
-   completo que ya vive en Implantación. */
-.site-plan-preview {
-  max-height: 320px;
-  overflow: hidden;
-  position: relative;
-  border-radius: 18px;
-}
-
-.site-plan-preview-expand {
-  margin: -6px 0 0 auto;
-  display: block;
-}
-
 /* Vista simple dentro del resumen: mismo rol que el modo TV/obra (letra
    grande, poco texto, se lee de lejos), pero acotada a su contenedor en vez
    de position:fixed, para no tapar la navegación de la app normal. */
