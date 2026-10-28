@@ -503,7 +503,8 @@ test("all variable dashboard values use a versioned live-data layer with five-se
   ]);
   assert.match(dashboard, /fetchWithEtag\("\/api\/live-data"/);
   assert.match(dashboard, /applyLiveValuesToTargets/);
-  assert.match(dashboard, /setInterval\(\(\) => void refreshLiveData\(\), 5_000\)/);
+  assert.match(dashboard, /const refreshAll = \(\) => \{/);
+  assert.match(dashboard, /window\.setInterval\(refreshAll, 5_000\)/);
   assert.match(dashboard, /Gráficas, cifras, porcentajes, cronograma y avance/);
   assert.match(dashboard, /Tiempo real/);
   assert.match(route, /publishLiveDataUpdates/);
@@ -769,7 +770,7 @@ test("points three to eight add a live operational control room without autonomo
   ]);
   assert.match(dashboard, /fetch\("\/api\/control-room"/);
   assert.match(dashboard, /araya-control-room-updated/);
-  assert.match(dashboard, /setInterval\(\(\) => void refresh\(\), 5_000\)/);
+  assert.match(dashboard, /if \(active\) void refreshControlRoom\(\);/);
   assert.match(dashboard, /generateDirectionReport/);
   assert.match(dashboard, /archivedSnapshot/);
   assert.match(panel, /Calidad y cobertura/);
