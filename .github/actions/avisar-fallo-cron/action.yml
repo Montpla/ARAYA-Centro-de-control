@@ -1,0 +1,32 @@
+name: "Avisar fallo de cron"
+description: >
+  Antes de esto, si un workflow programado fallaba, nadie se enteraba salvo
+  que entrara a mano a la pestaña Actions de GitHub. Crea (o comenta, si ya
+  existe uno abierto para el mismo workflow) un issue de GitHub, que sí
+  notifica por los canales normales de GitHub a quien mira el repositorio.
+  Requiere "permissions: issues: write" en el job que lo usa.
+
+inputs:
+  workflow-name:
+    description: "Nombre legible del workflow que falló (se usa en el título del issue)."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Crear o actualizar issue de fallo
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        WORKFLOW_NAME: ${{ inputs.workflow-name }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        TITLE="⚠️ Falló: ${WORKFLOW_NAME}"
+        EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"${TITLE}\" in:title" --json number --jq '.[0].number // empty')
+        if [ -n "$EXISTING" ]; then
+          gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" --body "Volvió a fallar: ${RUN_URL}"
+        else
+          BODY="El workflow programado \"${WORKFLOW_NAME}\" falló. Revisa el registro: ${RUN_URL}"$'\n\n'"Este issue se reabre con un comentario en cada fallo nuevo mientras siga abierto; ciérralo cuando esté resuelto."
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
+        fi
