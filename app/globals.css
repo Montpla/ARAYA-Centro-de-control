@@ -4355,6 +4355,11 @@ button {
   text-align: center;
 }
 
+.upload-dropzone.is-dragging {
+  border-color: var(--orange);
+  background: var(--orange-soft);
+}
+
 .upload-dropzone input {
   position: absolute;
   inset: 0;
