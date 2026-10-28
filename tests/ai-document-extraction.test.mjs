@@ -18,6 +18,11 @@ const executableSource = source.replace(
   ];
   const isLiveDataKey = (key) => /^(projectSnapshot|monthlyPlan|buildings|urbanismAreas|urbanismReportAreas|reprogrammedFlowMonths|fiduciaryStatementSummary|fiduciaryBalanceSections)(?:\\.(?:[A-Za-z][A-Za-z0-9]*|\\d+))*$/.test(key);`,
 ).replace(
+  /import \{ getContractRootsSnapshot \} from "\.\/live-data-contract";/,
+  `const getContractRootsSnapshot = () => ({
+    projectSnapshot: { overallProgress: 0, deviationDays: 0 },
+  });`,
+).replace(
   /import \{[\s\S]*?\} from "\.\/ai-cost";/,
   `const emptyAiTokenUsage = () => ({ inputTokens: 0, cachedInputTokens: 0, cacheWriteInputTokens: 0, outputTokens: 0 });
   const addAiTokenUsage = (a, b) => ({ inputTokens: a.inputTokens + b.inputTokens, cachedInputTokens: a.cachedInputTokens + b.cachedInputTokens, cacheWriteInputTokens: a.cacheWriteInputTokens + b.cacheWriteInputTokens, outputTokens: a.outputTokens + b.outputTokens });
@@ -148,6 +153,106 @@ test("image extraction uses a data URL and rejects keys outside the live contrac
   assert.equal(requestBody.text.format.strict, true);
   assert.equal(requestBody.safety_identifier, "araya_document_ingestion_service");
   assert.match(requestBody.input[0].content[2].image_url, /^data:image\/png;base64,/);
+});
+
+test("a field name that only differs in case or separators resolves to the known schema field instead of being discarded", async () => {
+  globalThis.fetch = async () => {
+    const output = {
+      updates: [{
+        key: "projectSnapshot.overall_progress",
+        value_json: "42.5",
+        area: "obra",
+        cutoff: "2026-08-31",
+        source_currency: "DOP",
+        confidence: 0.9,
+        evidence: "Resumen ejecutivo, avance físico",
+      }],
+      summary: "Avance detectado.",
+      warnings: [],
+      confidence: 0.9,
+    };
+    return new Response(JSON.stringify({
+      model: "gpt-5.6-luna",
+      output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(output) }] }],
+    }), { status: 200 });
+  };
+
+  const result = await extraction.extractDocumentWithAI(input("png"));
+
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].key, "projectSnapshot.overallProgress");
+  assert.equal(result.updates[0].value, 42.5);
+  assert.match(result.warnings.join(" "), /overall_progress se interpretó como projectSnapshot\.overallProgress/);
+});
+
+test("a field name with an unknown root is still discarded, never guessed", async () => {
+  globalThis.fetch = async () => {
+    const output = {
+      updates: [{
+        key: "unknownRoot.overall_progress",
+        value_json: "42.5",
+        area: "obra",
+        cutoff: "2026-08-31",
+        source_currency: "DOP",
+        confidence: 0.9,
+        evidence: "Resumen ejecutivo",
+      }],
+      summary: "",
+      warnings: [],
+      confidence: 0.9,
+    };
+    return new Response(JSON.stringify({
+      model: "gpt-5.6-luna",
+      output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(output) }] }],
+    }), { status: 200 });
+  };
+
+  const result = await extraction.extractDocumentWithAI(input("png"));
+
+  assert.equal(result.updates.length, 0);
+  assert.match(result.warnings.join(" "), /clave no compatible/i);
+});
+
+test("two conflicting readings of the same key in one document keep the higher-confidence one instead of discarding both", async () => {
+  globalThis.fetch = async () => {
+    const output = {
+      updates: [
+        {
+          key: "projectSnapshot.overallProgress",
+          value_json: "18",
+          area: "obra",
+          cutoff: "2026-08-31",
+          source_currency: "DOP",
+          confidence: 0.4,
+          evidence: "Tabla preliminar, avance 18%",
+        },
+        {
+          key: "projectSnapshot.overallProgress",
+          value_json: "22.71",
+          area: "obra",
+          cutoff: "2026-08-31",
+          source_currency: "DOP",
+          confidence: 0.93,
+          evidence: "Curva S final, avance 22,71%",
+        },
+      ],
+      summary: "",
+      warnings: [],
+      confidence: 0.9,
+    };
+    return new Response(JSON.stringify({
+      model: "gpt-5.6-luna",
+      output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(output) }] }],
+    }), { status: 200 });
+  };
+
+  const result = await extraction.extractDocumentWithAI(input("png"));
+
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].value, 22.71);
+  assert.deepEqual(result.updateConfidences, [0.93]);
+  assert.match(result.warnings.join(" "), /lecturas distintas en el mismo documento/);
+  assert.doesNotMatch(result.warnings.join(" "), /valores contradictorios/);
 });
 
 test("a fiduciary balance is completed and reconciled only with components from the same extraction", async () => {
@@ -533,6 +638,45 @@ test("a response still truncated after retrying reports the real cause instead o
   assert.deepEqual(result.updates, []);
   assert.doesNotMatch(result.summary, /JSON válido/);
   assert.match(result.summary, /límite de tokens/i);
+});
+
+test("a response truncated mid-element still publishes the complete updates that closed before the cutoff", async () => {
+  const requestBodies = [];
+  const completeUpdate = JSON.stringify({
+    key: "projectSnapshot.overallProgress",
+    value_json: "22.71",
+    area: "obra",
+    cutoff: "2026-08-31",
+    source_currency: "DOP",
+    confidence: 0.92,
+    evidence: "Curva S, Ejecutado agosto",
+  });
+  // El segundo elemento se corta a mitad de "value_json" -justo el punto en
+  // el que max_output_tokens agotaría la respuesta a mitad de un objeto.
+  const truncatedTail = "{\"key\":\"monthlyPlan.0.actual\",\"value_json\":\"18";
+  globalThis.fetch = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    requestBodies.push(body);
+    return new Response(JSON.stringify({
+      model: "gpt-5.6-luna",
+      status: "incomplete",
+      incomplete_details: { reason: "max_output_tokens" },
+      output: [{
+        type: "message",
+        content: [{ type: "output_text", text: `{"updates":[${completeUpdate},${truncatedTail}` }],
+      }],
+      usage: { input_tokens: 200, output_tokens: body.max_output_tokens },
+    }), { status: 200 });
+  };
+
+  const result = await extraction.extractDocumentWithAI({ ...input("png"), maxOutputTokens: 15_000 });
+
+  assert.equal(requestBodies.length, 2);
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].key, "projectSnapshot.overallProgress");
+  assert.equal(result.updates[0].value, 22.71);
+  assert.match(result.summary, /se recuperaron 1 propuesta/i);
+  assert.match(result.warnings.join(" "), /se cortó por límite de tokens/i);
 });
 
 test("the ingestion agent accepts the lookup fan-out needed by complex workbooks", async () => {
