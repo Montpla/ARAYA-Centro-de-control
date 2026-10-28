@@ -22,6 +22,9 @@ on:
         default: "0"
         type: string
 
+permissions:
+  issues: write
+
 jobs:
   convertir:
     runs-on: ubuntu-latest
@@ -66,6 +69,11 @@ jobs:
           APLICAR: ${{ github.event_name == 'schedule' && '1' || inputs.aplicar }}
           MAX_POR_EJECUCION: "5"
         run: node scripts/convertir-mpp.mjs
+      - name: Avisar si falló
+        if: failure()
+        uses: ./.github/actions/avisar-fallo-cron
+        with:
+          workflow-name: "Convertir MPP a XML y leerlo"
 
 concurrency:
   group: convertir-mpp-produccion

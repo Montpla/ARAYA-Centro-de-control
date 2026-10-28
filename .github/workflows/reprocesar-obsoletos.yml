@@ -18,6 +18,9 @@ on:
         default: "0"
         type: string
 
+permissions:
+  issues: write
+
 jobs:
   reprocesar:
     runs-on: ubuntu-latest
@@ -34,6 +37,11 @@ jobs:
           APLICAR: ${{ github.event_name == 'schedule' && '1' || inputs.aplicar }}
           MAX_POR_EJECUCION: "5"
         run: node scripts/reprocesar-obsoletos.mjs
+      - name: Avisar si falló
+        if: failure()
+        uses: ./.github/actions/avisar-fallo-cron
+        with:
+          workflow-name: "Reprocesar archivos con lector nuevo"
 
 concurrency:
   group: reprocesar-archivos-produccion

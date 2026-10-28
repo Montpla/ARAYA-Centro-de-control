@@ -5,6 +5,9 @@ on:
     - cron: "43 4 * * *"
   workflow_dispatch: {}
 
+permissions:
+  issues: write
+
 concurrency:
   group: backup-produccion
   cancel-in-progress: false
@@ -59,3 +62,8 @@ jobs:
           DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
           BACKUP_KEY: system-backups/d1/latest.sql.gz
         run: BACKUP_SIZE_BYTES=$(stat -c%s araya-d1.sql.gz) node scripts/registrar-backup-produccion.mjs
+      - name: Avisar si falló
+        if: failure()
+        uses: ./.github/actions/avisar-fallo-cron
+        with:
+          workflow-name: "Copia y restauración de prueba"

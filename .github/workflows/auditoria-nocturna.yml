@@ -6,6 +6,9 @@ on:
     - cron: "17 12 * * *"
   workflow_dispatch: {}
 
+permissions:
+  issues: write
+
 concurrency:
   group: auditoria-nocturna-produccion
   cancel-in-progress: false
@@ -24,3 +27,8 @@ jobs:
           DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
           DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
         run: node scripts/auditar-produccion.mjs
+      - name: Avisar si falló
+        if: failure()
+        uses: ./.github/actions/avisar-fallo-cron
+        with:
+          workflow-name: "Auditoría nocturna del Centro de Control"
