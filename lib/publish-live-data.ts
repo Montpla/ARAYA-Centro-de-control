@@ -124,6 +124,17 @@ function failedInvariantStatement(
   );
 }
 
+// failedInvariantStatement reclama a propósito la clave primaria que ya tiene
+// el evento cuando el CAS no se cumplió, para que D1 rechace el batch
+// completo. Es la única forma esperada de que database.batch() falle por una
+// colisión de concurrencia real (otra publicación ganó la carrera para el
+// mismo dato) — se detecta por esa firma concreta para no enmascarar un
+// fallo distinto con un mensaje que no le corresponde.
+function isConcurrentPublicationRejection(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /unique constraint failed/i.test(message) && /live_data_events/i.test(message);
+}
+
 function assertUniqueUpdateKeys(updates: Array<Pick<NormalizedLiveDataUpdate, "key">>) {
   const conflict = publicationKeyConflict(updates.map((update) => update.key));
   if (!conflict) return;
@@ -751,7 +762,14 @@ export async function publishLiveDataUpdates(input: {
         throw error;
       }
     } catch (settlementError) {
-      if (settlementError === error) throw error;
+      if (settlementError === error) {
+        if (isConcurrentPublicationRejection(error)) {
+          throw new Error(
+            "Alguien más publicó un cambio para el mismo dato justo antes; vuelve a intentarlo con los valores más recientes.",
+          );
+        }
+        throw error;
+      }
       throw new AggregateError(
         [error, settlementError],
         `No se pudo confirmar el resultado de la revisión ${event.id}.`,

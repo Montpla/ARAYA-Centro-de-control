@@ -197,6 +197,19 @@ async function fetchWithEtag(url: string, state: EtagState, init?: RequestInit):
   return response;
 }
 
+// Varios diálogos (role="dialog") solo se cerraban con clic en el fondo o en
+// el botón ×, sin responder a Escape como sí hacen la mayoría. Un hook
+// compartido en vez de que cada uno reimplemente su propio listener.
+function useEscapeToClose(onClose: () => void) {
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose]);
+}
+
 let dashboardBootstrapInstalled = false;
 function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
   if (dashboardBootstrapInstalled) return;
@@ -3140,6 +3153,9 @@ function SitePlan({
   const [planZoom, setPlanZoom] = useState(100);
   const [planExpanded, setPlanExpanded] = useState(false);
   const [planProgressFilter, setPlanProgressFilter] = useState<ProgressBandId | "all">("all");
+  useEscapeToClose(() => setPlanBuilding(null));
+  useEscapeToClose(() => setSelectedUnit(null));
+  useEscapeToClose(() => setSelectedUrbanism(null));
   const allUnits = buildings.flatMap((item) => item.units);
   const blockedUnits = allUnits.filter((unit) => unit.status === "bloqueada").length;
   const mapUrbanismAreas = urbanismAreas;
@@ -3774,6 +3790,7 @@ function UnitDetailPanel({
   unit: Unit;
   onClose: () => void;
 }) {
+  useEscapeToClose(onClose);
   const disciplines = unitDisciplines(unit);
   const openIssues = (unit.issues ?? []).filter((issue) => issue.status === "abierta");
   return (
@@ -4666,6 +4683,10 @@ function SuppliersView({ suppliers, onAdd, currency, canAccessFinance }: { suppl
   const [directorySearch, setDirectorySearch] = useState("");
   const [selectedVendorName, setSelectedVendorName] = useState("");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
+  useEscapeToClose(() => {
+    setSelectedVendorName("");
+    setSelectedInvoiceId("");
+  });
 
   useEffect(() => {
     if (!canAccessFinance) return;
@@ -8435,6 +8456,7 @@ function ReportBuilder({
   onClose: () => void;
   onGenerate: (period: DirectionReportPeriod) => Promise<void>;
 }) {
+  useEscapeToClose(onClose);
   const [reportType, setReportType] = useState<ReportType>(canAccessFinance ? "global" : "obra_seguridad");
   const [frequency, setFrequency] = useState<ReportFrequency>("monthly");
   const [month, setMonth] = useState("2026-06");
@@ -8570,6 +8592,7 @@ function DirectionReport({
   currency: CurrencyCode;
   onClose: () => void;
 }) {
+  useEscapeToClose(onClose);
   const reportType = period.reportType ?? "global";
   const showObra = reportType === "global" || reportType === "obra_seguridad";
   const showFinance = reportType === "global" || reportType === "finanzas";
@@ -9282,6 +9305,7 @@ function RecordModal({
   onSaveMetric: (metric: CustomMetric) => void;
   onSaveSupplier: (supplier: Supplier) => void;
 }) {
+  useEscapeToClose(onClose);
   const [saving, setSaving] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -9399,6 +9423,7 @@ export function DashboardClient({
   const [expandedNavGroup, setExpandedNavGroup] = useState<NavigationGroupId | null>(null);
   const [mobileNavigationGroup, setMobileNavigationGroup] = useState<NavigationGroupId>("obra");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useEscapeToClose(() => setMobileMenuOpen(false));
   const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");

@@ -28,7 +28,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await requireApiUser();
   if (!auth.user) return auth.response;
-  const payload = (await request.json()) as Record<string, unknown>;
+  let payload: Record<string, unknown>;
+  try {
+    payload = await request.json();
+  } catch {
+    return Response.json({ error: "La operación no contiene un JSON válido." }, { status: 400 });
+  }
   const kind = String(payload.kind ?? "");
   const db = getDb();
 

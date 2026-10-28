@@ -674,7 +674,12 @@ async function fetchAgentResponse(
 export async function POST(request: Request) {
   const auth = await requireApiUser();
   if (!auth.user) return auth.response;
-  const payload = (await request.json()) as { question?: string; currency?: string };
+  let payload: { question?: string; currency?: string };
+  try {
+    payload = await request.json();
+  } catch {
+    return Response.json({ error: "La pregunta no contiene un JSON válido." }, { status: 400 });
+  }
   const question = payload.question?.trim() ?? "";
   const currency: CurrencyCode = payload.currency === "DOP" ? "DOP" : "USD";
   if (!question) return Response.json({ error: "Escribe una pregunta." }, { status: 400 });
