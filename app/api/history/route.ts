@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { fileActivity, uploadedFiles } from "../../../db/schema";
 import { requireApiUser } from "../../../lib/access-control";
+import { conditionalJson } from "../../../lib/conditional-json";
 import { readPublishedLiveDataHistory } from "../../../lib/effective-live-data";
 import { requiresFinanceAccessForDocument } from "../../../lib/live-data";
 
@@ -20,7 +21,7 @@ function valuePreview(valueJson: string) {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await requireApiUser();
   if (!auth.user) return auth.response;
 
@@ -73,11 +74,9 @@ export async function GET() {
       createdAt: row.createdAt,
     }));
 
-  const response = Response.json({
+  return conditionalJson(request, {
     changes,
     activity,
     refreshedAt: new Date().toISOString(),
-  });
-  response.headers.set("Cache-Control", "private, no-store");
-  return response;
+  }, { volatile: ["refreshedAt"] });
 }
