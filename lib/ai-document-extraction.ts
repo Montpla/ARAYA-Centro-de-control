@@ -5,6 +5,7 @@ import {
   type LiveDataUpdate,
   type LiveDataValue,
 } from "./live-data";
+import { getContractRootsSnapshot } from "./live-data-contract";
 import type { DocumentTemplateHint, IngestionAgentTrace } from "./ingestion-agent";
 import {
   addAiTokenUsage,
@@ -332,6 +333,65 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function normalizedFieldName(segment: string) {
+  return segment
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * El modelo a veces escribe un nombre de campo que no coincide carácter a
+ * carácter con el contrato vivo ("avance_fisico" en vez de "avanceFisico",
+ * o con acentos/espacios de más) aunque haya consultado el esquema correcto.
+ * Antes, esa clave se descartaba entera -junto con una evidencia y confianza
+ * ya buenas- por una diferencia puramente cosmética. Esto sólo corrige el
+ * ÚLTIMO tramo dentro de un objeto de forma fija conocida (nunca dentro de
+ * una lista, donde los segmentos son identidades reales como "TH-14" y no
+ * hay nada que "normalizar"): si existe exactamente un campo hermano cuyo
+ * nombre coincide ignorando mayúsculas, acentos y separadores, se usa ese en
+ * vez de descartar. Una raíz desconocida, una lista o una ambigüedad (dos
+ * campos hermanos que normalizan igual) no se adivinan: se devuelve null y
+ * el descarte original sigue aplicando.
+ */
+function resolveApproximateLiveDataKey(rawKey: string): string | null {
+  const segments = rawKey.split(".");
+  if (segments.length < 2) return null;
+  const schema = getContractRootsSnapshot() as Record<string, unknown>;
+  let current: unknown = schema[segments[0]];
+  if (current === undefined) return null;
+  const resolvedSegments = [segments[0]];
+  let correctedAnySegment = false;
+  for (let index = 1; index < segments.length; index += 1) {
+    const segment = segments[index];
+    if (Array.isArray(current)) {
+      // Identidades de lista (edificios, apartamentos, zonas...): no se
+      // adivinan, se conservan tal cual.
+      resolvedSegments.push(segment);
+      current = undefined;
+      continue;
+    }
+    if (!isRecord(current)) return null;
+    if (Object.hasOwn(current, segment)) {
+      resolvedSegments.push(segment);
+      current = current[segment];
+      continue;
+    }
+    const normalizedTarget = normalizedFieldName(segment);
+    const matches = Object.keys(current).filter(
+      (candidateKey) => normalizedFieldName(candidateKey) === normalizedTarget,
+    );
+    if (matches.length !== 1) return null;
+    resolvedSegments.push(matches[0]);
+    current = current[matches[0]];
+    correctedAnySegment = true;
+  }
+  if (!correctedAnySegment) return null;
+  const resolvedKey = resolvedSegments.join(".");
+  return isLiveDataKey(resolvedKey) ? resolvedKey : null;
+}
+
 function normalizeExtension(extension: string) {
   return String(extension ?? "").trim().toLowerCase().replace(/^\.+/, "");
 }
@@ -538,6 +598,83 @@ function truncatedByOutputLimit(response: Record<string, unknown>) {
   if (response.status !== "incomplete") return false;
   const details = response.incomplete_details;
   return isRecord(details) && details.reason === "max_output_tokens";
+}
+
+/**
+ * Recupera los objetos JSON completos de un array cortado a mitad de un
+ * elemento. Sólo cuenta llaves fuera de literales de cadena (con su escape),
+ * así que un value_json interno con sus propias llaves no desincroniza el
+ * conteo. El elemento que queda a medias al final del texto no se incluye.
+ */
+function extractCompleteJsonObjects(text: string): string[] {
+  const objects: string[] = [];
+  let index = 0;
+  while (index < text.length) {
+    while (index < text.length && text[index] !== "{") index += 1;
+    if (index >= text.length) break;
+    const start = index;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    let closed = false;
+    for (; index < text.length; index += 1) {
+      const char = text[index];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === "\"") inString = false;
+        continue;
+      }
+      if (char === "\"") {
+        inString = true;
+      } else if (char === "{") {
+        depth += 1;
+      } else if (char === "}") {
+        depth -= 1;
+        if (depth === 0) {
+          objects.push(text.slice(start, index + 1));
+          index += 1;
+          closed = true;
+          break;
+        }
+      }
+    }
+    if (!closed) break;
+  }
+  return objects;
+}
+
+/**
+ * Última red antes de tirar todo el documento: una respuesta cortada por
+ * max_output_tokens (incluso ya duplicado el límite) seguía descartando
+ * también los hechos que el modelo ya había escrito completos antes del
+ * corte. Se busca el array "updates" en el texto crudo y se reconstruye un
+ * payload sintético sólo con los elementos que cerraron bien, para que pase
+ * por las mismas comprobaciones (clave, evidencia, contrato vivo) que una
+ * respuesta normal.
+ */
+function salvageTruncatedExtraction(
+  rawText: string,
+  input: ExtractionInput,
+  model: string,
+): ExtractionResult {
+  const marker = rawText.indexOf("\"updates\"");
+  const arrayStart = marker >= 0 ? rawText.indexOf("[", marker) : -1;
+  const recovered = arrayStart >= 0 ? extractCompleteJsonObjects(rawText.slice(arrayStart)) : [];
+  if (!recovered.length) {
+    return emptyResult("La respuesta de OpenAI se cortó por límite de tokens incluso tras ampliarlo.", [
+      "El documento generó más datos de los que caben en una sola respuesta; repite la carga o divídelo en partes más pequeñas.",
+    ]);
+  }
+  const syntheticPayload = `{"updates":[${recovered.join(",")}],"unmapped_candidates":[]}`;
+  const result = validateModelOutput(syntheticPayload, input, model);
+  const truncationWarning = `La respuesta se cortó por límite de tokens incluso tras ampliarlo; se recuperaron ${recovered.length} ` +
+    `propuesta(s) completas de antes del corte. Repite la carga para leer el resto del documento o divídelo en partes más pequeñas.`;
+  return {
+    ...result,
+    summary: `${truncationWarning} ${result.summary}`.trim().slice(0, 1_000),
+    warnings: [truncationWarning, ...result.warnings].slice(0, MAX_WARNINGS),
+  };
 }
 
 function responseOutputText(payload: Record<string, unknown>) {
@@ -1032,12 +1169,20 @@ function validateModelOutput(
 
   const areaLookup = buildAreaLookup(input.knownAreas);
   const accepted = new Map<string, { update: LiveDataUpdate; valueJson: string; confidence: number }>();
-  const conflictedKeys = new Set<string>();
   candidates.slice(0, MAX_UPDATES).forEach((candidate) => {
-    const key = candidate.key.trim();
-    if (key.length > 300 || !isLiveDataKey(key)) {
+    let key = candidate.key.trim();
+    if (key.length > 300) {
       addWarning(warnings, `Se descartó la clave no compatible ${key.slice(0, 120) || "(vacía)"}.`);
       return;
+    }
+    if (!isLiveDataKey(key)) {
+      const resolvedKey = resolveApproximateLiveDataKey(key);
+      if (!resolvedKey) {
+        addWarning(warnings, `Se descartó la clave no compatible ${key.slice(0, 120) || "(vacía)"}.`);
+        return;
+      }
+      addWarning(warnings, `${key} se interpretó como ${resolvedKey} (mismo campo del contrato vivo, distinta grafía).`);
+      key = resolvedKey;
     }
     const evidence = candidate.evidence.replace(/\s+/g, " ").trim();
     if (!evidence) {
@@ -1062,20 +1207,24 @@ function validateModelOutput(
     }
 
     const canonicalValueJson = JSON.stringify(value);
-    if (conflictedKeys.has(key)) return;
+    const confidence = clampConfidence(candidate.confidence);
     const previous = accepted.get(key);
     if (previous) {
       if (previous.valueJson === canonicalValueJson) {
         addWarning(warnings, `Se omitió una propuesta duplicada para ${key}.`);
-      } else {
-        accepted.delete(key);
-        conflictedKeys.add(key);
-        addWarning(warnings, `Se descartó ${key} porque la fuente produjo valores contradictorios.`);
+        return;
       }
-      return;
+      // Dos lecturas distintas de la misma clave en el mismo documento: antes
+      // se descartaban ambas y la clave quedaba bloqueada el resto del lote,
+      // perdiendo también el dato bueno por una ambigüedad interna del propio
+      // modelo. Ahora se conserva la de mayor confianza (la evidencia de cada
+      // una ya se comprobó por separado arriba) y sólo se avisa.
+      if (confidence <= previous.confidence) {
+        addWarning(warnings, `${key} tenía lecturas distintas en el mismo documento; se conservó la de mayor confianza.`);
+        return;
+      }
+      addWarning(warnings, `${key} tenía lecturas distintas en el mismo documento; se conservó la de mayor confianza.`);
     }
-
-    const confidence = clampConfidence(candidate.confidence);
     if (confidence < 0.5) {
       addWarning(warnings, `${key} tiene confianza baja y requiere contraste manual.`);
     }
@@ -1432,9 +1581,11 @@ export async function extractDocumentWithAI(input: ExtractionInput): Promise<Ext
     }
     result = {
       ...(truncatedByOutputLimit(finalResponse)
-        ? emptyResult("La respuesta de OpenAI se cortó por límite de tokens incluso tras ampliarlo.", [
-            "El documento generó más datos de los que caben en una sola respuesta; repite la carga o divídelo en partes más pequeñas.",
-          ])
+        ? salvageTruncatedExtraction(
+            responseOutputText(finalResponse),
+            input,
+            typeof finalResponse.model === "string" ? finalResponse.model : model,
+          )
         : validateModelOutput(
             responseOutputText(finalResponse),
             input,
