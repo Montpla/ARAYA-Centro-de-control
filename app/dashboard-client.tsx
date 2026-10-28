@@ -7921,8 +7921,9 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
   );
 }
 
-async function fetchDataHistory() {
-  const response = await fetch("/api/history", { cache: "no-store" });
+async function fetchDataHistory(etag: EtagState) {
+  const response = await fetchWithEtag("/api/history", etag);
+  if (response.status === 304) return null;
   const payload = await response.json() as {
     changes?: HistoryChange[];
     activity?: HistoryActivity[];
@@ -7944,10 +7945,11 @@ function DataHistoryPanel() {
 
   useEffect(() => {
     let active = true;
+    const historyEtag: EtagState = { etag: "" };
     const refresh = () => {
-      void fetchDataHistory()
+      void fetchDataHistory(historyEtag)
         .then((payload) => {
-          if (!active) return;
+          if (!active || !payload) return;
           setChanges(payload.changes);
           setActivity(payload.activity);
           setError("");
@@ -7961,9 +7963,12 @@ function DataHistoryPanel() {
     };
     refresh();
     const interval = window.setInterval(refresh, 5_000);
+    const onFilesUpdated = () => refresh();
+    window.addEventListener("araya-files-updated", onFilesUpdated);
     return () => {
       active = false;
       window.clearInterval(interval);
+      window.removeEventListener("araya-files-updated", onFilesUpdated);
     };
   }, []);
 
