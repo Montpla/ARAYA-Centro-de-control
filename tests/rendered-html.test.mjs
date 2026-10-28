@@ -1152,7 +1152,10 @@ test("simple uploads default to automatic publication and close every processed 
   assert.match(filesRoute, /const batchPreconditions =/);
   assert.match(filesRoute, /const updateIsAutoPublishable = /);
   assert.match(filesRoute, /user\.role === "admin"/);
-  assert.match(filesRoute, /resolvedArea !== "sin_clasificar"/);
+  // "sin_clasificar" ya no bloquea el lote entero (ver lib/publish-live-data.ts
+  // y app/api/files/route.ts): un archivo sin área dominante todavía publica,
+  // dato por dato, lo que sí trae su propia área detectada.
+  assert.match(filesRoute, /resolvedArea === "sin_clasificar"/);
   assert.match(filesRoute, /isSafeAutomaticStructuredUpdate/);
   assert.match(filesRoute, /isFinancialLiveKey/);
   assert.match(filesRoute, /if \(autoPublishable\.length\)/);

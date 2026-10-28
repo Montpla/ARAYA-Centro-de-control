@@ -125,7 +125,7 @@ test("multiformat ingestion publishes valid facts and closes isolated diagnostic
     /canAutomaticallyPublishExtraction\(/,
     /updateConfidences: normalizedUpdateConfidences/,
     /normalizedUpdates\.length > 0/,
-    /resolvedArea !== ["']sin_clasificar["']/,
+    /resolvedArea === ["']sin_clasificar["']/,
     /publicationActor\.financeAccess \|\| !isFinancialLiveKey\(update\.key\)/,
     /isSafeAutomaticStructuredUpdate\(update\)/,
     // La confianza se vuelve a enlazar por clave+valor después de normalizar;

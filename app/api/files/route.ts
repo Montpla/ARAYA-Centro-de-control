@@ -221,7 +221,16 @@ function scheduleBackgroundUploadProcessing(input: {
         await wait(attempt === 1 ? 500 : 1_500);
       }
     }
+    // Los 3 intentos rápidos (aquí mismo, en ~2 segundos) ya dejaron
+    // processingAttempts en 3 — justo el tope que excluye al expediente de
+    // technicalRetryCandidate en scripts/reprocesar-obsoletos.mjs. Sin este
+    // ajuste, ningún reintento programado (ni el de 5 ni el de 15 minutos)
+    // vuelve a tocarlo nunca: el presupuesto de reintentos del carril lento
+    // ya estaba agotado antes de que el carril lento tuviera oportunidad de
+    // actuar. Se deja en 1 (no en 0) para no perder el "ya falló al menos
+    // una vez" que exige esa misma condición.
     await db.update(uploadedFiles).set({
+      processingAttempts: 1,
       nextRetryAt: "",
       lastProcessingError: lastError.slice(0, 300),
       processingSummary: "El original está protegido. Los intentos automáticos terminaron y el equipo validador ha recibido el diagnóstico.",
@@ -2051,10 +2060,15 @@ export async function POST(request: Request) {
     ]);
     // Condiciones del lote: valen para todos los datos por igual (se pidió
     // publicar solo, el área permite publicar, hay datos y contexto vivo).
+    // "sin_clasificar" ya NO bloquea el lote entero: es un fallo de etiquetado
+    // del archivo como conjunto (el clasificador no encontró un área
+    // dominante), no una señal sobre si cada dato extraído es seguro de
+    // publicar. Antes, un archivo así perdía TODAS sus cifras aunque fueran de
+    // alta confianza y encajaran en el contrato vivo — exactamente el mismo
+    // "todo o nada" que el comentario de abajo ya evitó a nivel de cada dato.
     const batchPreconditions =
       automaticPublicationRequested &&
       canPublishInArea &&
-      resolvedArea !== "sin_clasificar" &&
       normalizedUpdates.length > 0 &&
       Boolean(currentLiveData);
     // Condiciones de cada dato: su área coincide, quien sube puede publicarlo y
@@ -2064,7 +2078,12 @@ export async function POST(request: Request) {
     // decide dato a dato: los que encajan se publican solos y el resto queda
     // aislado con diagnóstico, sin bloquear el expediente.
     const updateIsAutoPublishable = (update: ReturnType<typeof normalizeLiveDataUpdates>[number]) =>
-      (update.area === resolvedArea || (
+      (update.area === resolvedArea ||
+        // El archivo en conjunto no se pudo etiquetar, pero este dato puntual
+        // sí trae su propia área (la que detectó la extracción, no la del
+        // archivo). El resto de condiciones de abajo —acceso financiero,
+        // claves seguras, contrato vivo— siguen aplicando igual.
+        resolvedArea === "sin_clasificar" || (
         financeProtectedUpload &&
         !requiresFinanceAccessForArea(update.area) &&
         !isFinancialLiveKey(update.key)
@@ -2450,7 +2469,7 @@ export async function POST(request: Request) {
     // de scheduleBackgroundUploadProcessing vuelve a pagar cualquier lectura
     // de IA ya hecha en este intento para llegar otra vez al mismo rechazo
     // determinista (contrato vivo, validación financiera, etc.).
-    const retryWorthy = error instanceof Error && /SQLITE_BUSY|database is locked|D1_ERROR|ETIMEDOUT|ECONNRESET|la generaci[oó]n documental cambi[oó]|publicaci[oó]n no coincide con el contrato transaccional/i.test(error.message);
+    const retryWorthy = error instanceof Error && /SQLITE_BUSY|database is locked|D1_ERROR|ETIMEDOUT|ECONNRESET|la generaci[oó]n documental cambi[oó]|publicaci[oó]n no coincide con el contrato transaccional|no respondi[oó] dentro del tiempo de espera|no se pudo conectar con la api de openai/i.test(error.message);
     if (agentRunId) {
       await db.update(ingestionAgentRuns).set({
         templateId: matchedTemplateId,
