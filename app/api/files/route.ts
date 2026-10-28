@@ -180,11 +180,17 @@ function scheduleBackgroundUploadProcessing(input: {
           const value = input.request.headers.get(name);
           if (value) headers.set(name, value);
         }
-        const response = await POST(new Request(input.request.url, {
+        // Petición HTTP real (no una reentrada en el mismo proceso a POST):
+        // así cada intento arranca con su propio contexto de headers/cookies
+        // bien inicializado por el Worker, en vez de reutilizar uno que el
+        // request original puede haber dejado de ser válido mientras el
+        // waitUntil seguía corriendo (causa del "cookies() context loss"
+        // intermitente que gastaba un intento con un 401 fantasma).
+        const response = await fetch(input.request.url, {
           method: "POST",
           headers,
           body: backgroundUploadForm(input.formData, input.bytes, input.fileName, input.mimeType),
-        }));
+        });
         const payload = await response.clone().json().catch(() => ({})) as {
           error?: string;
           receipt?: { outcome?: string; retryWorthy?: boolean };

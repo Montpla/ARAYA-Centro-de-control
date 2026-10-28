@@ -1649,8 +1649,18 @@ async function uploadProjectFile(
   formData.set("source", input.source);
   formData.set("sourceCurrency", input.sourceCurrency ?? "auto");
   formData.set("autoPublish", "true");
-  const response = await fetch("/api/files", { method: "POST", body: formData });
-  const result = (await response.json()) as UploadResult;
+  let response: Response;
+  try {
+    response = await fetch("/api/files", { method: "POST", body: formData });
+  } catch {
+    throw new Error("No se pudo conectar con el servidor. Comprueba tu conexión a internet e inténtalo de nuevo.");
+  }
+  let result: UploadResult;
+  try {
+    result = (await response.json()) as UploadResult;
+  } catch {
+    throw new Error("El servidor respondió de forma inesperada. Vuelve a intentarlo en un momento.");
+  }
   if (!response.ok) throw new Error(result.error ?? "No se pudo cargar el archivo.");
   window.dispatchEvent(new CustomEvent("araya-files-updated"));
   return result;
@@ -8975,6 +8985,7 @@ function UploadModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [completedBatch, setCompletedBatch] = useState<Array<{ fileName: string; result?: UploadResult; error?: string }> | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -9094,7 +9105,16 @@ function UploadModal({
         {!canUploadFinance && (
           <div className="callout warn"><strong>Entrega financiera no habilitada</strong><p>El administrador puede activar este permiso sin concederte acceso de lectura a Finanzas.</p></div>
         )}
-        <div className={`upload-dropzone ${previewUrl ? "with-preview" : ""}`}>
+        <div
+          className={`upload-dropzone ${previewUrl ? "with-preview" : ""} ${isDragging ? "is-dragging" : ""}`}
+          onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setIsDragging(false);
+            chooseFiles(Array.from(event.dataTransfer.files));
+          }}
+        >
           <input
             type="file"
             required
