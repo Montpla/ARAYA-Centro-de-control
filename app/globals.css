@@ -2221,6 +2221,8 @@ button {
 }
 
 .plan-building-trigger {
+  position: relative;
+  z-index: 1;
   width: 100%;
   min-height: 21px;
   border: 2px solid white;
@@ -2235,12 +2237,55 @@ button {
   transition: filter 160ms ease;
 }
 
+/* Relieve isométrico del edificio: la cara superior sigue siendo el botón de
+   siempre, sin rotar (lleva la etiqueta "TH-01" y tiene que seguir legible).
+   Las dos caras nuevas son tiras sesgadas en 2D (sin perspective/preserve-3d)
+   que reutilizan los mismos --progress-color/--progress-border de la banda
+   de avance -ninguna paleta nueva-, para dar sensación de bloque con volumen
+   sin tocar el cálculo de avance ni el resto del plano. */
+.plan-building-block {
+  position: relative;
+}
+
+.plan-building-face {
+  position: absolute;
+  z-index: 0;
+  pointer-events: none;
+  --block-depth: 4px;
+}
+
+.plan-building-face--side {
+  top: 2px;
+  right: calc(var(--block-depth) * -1);
+  width: var(--block-depth);
+  height: calc(100% - 4px);
+  background: var(--progress-color, #606762);
+  transform-origin: top left;
+  transform: skewY(20deg);
+}
+
+.plan-building-face--front {
+  left: 2px;
+  bottom: calc(var(--block-depth) * -1);
+  height: var(--block-depth);
+  width: calc(100% - 4px);
+  background: var(--progress-border, #444a46);
+  transform-origin: bottom left;
+  transform: skewX(-20deg);
+}
+
+.plan-building-face.is-progress-muted {
+  opacity: 0.16;
+  filter: saturate(0.25);
+}
+
 .plan-building-hotspot:hover {
   z-index: 3;
   transform: translate(-50%, -50%) scale(1.14);
 }
 
-.plan-building-hotspot:hover .plan-building-trigger {
+.plan-building-hotspot:hover .plan-building-trigger,
+.plan-building-hotspot:hover .plan-building-face {
   filter: brightness(1.08);
 }
 
@@ -2436,6 +2481,10 @@ button {
     min-height: 17px;
     border-width: 1px;
     font-size: 5px;
+  }
+
+  .plan-building-face {
+    --block-depth: 2px;
   }
 
   .urbanism-map-point {
