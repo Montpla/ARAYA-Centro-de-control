@@ -2251,7 +2251,7 @@ button {
   position: absolute;
   z-index: 0;
   pointer-events: none;
-  --block-depth: 4px;
+  --block-depth: 7px;
 }
 
 .plan-building-face--side {
@@ -2484,7 +2484,7 @@ button {
   }
 
   .plan-building-face {
-    --block-depth: 2px;
+    --block-depth: 4px;
   }
 
   .urbanism-map-point {
