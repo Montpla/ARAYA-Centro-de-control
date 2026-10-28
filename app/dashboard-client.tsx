@@ -3277,18 +3277,28 @@ function SitePlan({
                   className="plan-building-hotspot"
                   style={{ left: `${point.x}%`, top: `${point.y}%` }}
                 >
-                  <button
-                    className={`plan-building-trigger ${buildingProgressBand} ${buildingMuted ? "is-progress-muted" : ""}`}
-                    title={`Abrir TH-${building.shortName.padStart(2, "0")} · ${number.format(building.progress)}%`}
-                    onClick={() => {
-                      setPlanExpanded(false);
-                      setSelectedUnit(null);
-                      setSelectedUrbanism(null);
-                      setPlanBuilding(building);
-                    }}
-                  >
-                    TH-{building.shortName.padStart(2, "0")}
-                  </button>
+                  <div className={`plan-building-block ${buildingProgressBand}`}>
+                    <span
+                      className={`plan-building-face plan-building-face--side ${buildingMuted ? "is-progress-muted" : ""}`}
+                      aria-hidden="true"
+                    />
+                    <span
+                      className={`plan-building-face plan-building-face--front ${buildingMuted ? "is-progress-muted" : ""}`}
+                      aria-hidden="true"
+                    />
+                    <button
+                      className={`plan-building-trigger ${buildingProgressBand} ${buildingMuted ? "is-progress-muted" : ""}`}
+                      title={`Abrir TH-${building.shortName.padStart(2, "0")} · ${number.format(building.progress)}%`}
+                      onClick={() => {
+                        setPlanExpanded(false);
+                        setSelectedUnit(null);
+                        setSelectedUrbanism(null);
+                        setPlanBuilding(building);
+                      }}
+                    >
+                      TH-{building.shortName.padStart(2, "0")}
+                    </button>
+                  </div>
                   <div className="plan-home-statuses" aria-label={`Apartamentos de TH-${building.shortName.padStart(2, "0")}`}>
                     {building.units.map((unit) => {
                       const unitBand = progressBandClass(unitOverallProgress(unit));
