@@ -101,19 +101,31 @@ test("un PIN incorrecto cuenta como intento fallido y uno correcto limpia el con
   assert.match(loginRoute, /await clearFailedPinAttempts\(existing\.id\);/);
 });
 
-test("crear el admin de arranque exige que coincidan el correo Y el PIN del entorno, no solo el correo", () => {
-  assert.match(loginRoute, /Boolean\(bootstrapEmail\) && Boolean\(bootstrapPin\) && email === bootstrapEmail && pin === bootstrapPin/);
-  // Sin existing, solo isBootstrapAttempt abre paso a crear la cuenta.
-  assert.match(loginRoute, /if \(!existing\) \{\s*\n\s*if \(!isBootstrapAttempt\) \{\s*\n\s*return redirectToSignIn\(request, returnTo, "invalid"\);/);
+test("crear o completar el admin de arranque exige que coincidan el correo Y el PIN del entorno, comparado en tiempo constante", () => {
+  assert.match(loginRoute, /Boolean\(bootstrapEmail\) && Boolean\(bootstrapPin\) && email === bootstrapEmail/);
+  assert.match(loginRoute, /timingSafeStringsEqual\(pin, bootstrapPin\)/);
+  // pin === bootstrapPin (fuga de tiempo) ya no se usa para esta comparación.
+  assert.doesNotMatch(loginRoute, /pin === bootstrapPin/);
 });
 
-test("una cuenta borrada o desactivada no entra ni siquiera por el camino de arranque", () => {
-  // Este chequeo va después de resolver `existing` y antes de la
-  // autoreparación de bootstrap: una cuenta ya existente que fue desactivada
-  // no puede reactivarse coincidiendo con el PIN de arranque.
-  const deletedCheckIndex = loginRoute.indexOf("existing.deletedAt || !existing.active");
-  const bootstrapRepairIndex = loginRoute.indexOf("!existing.pinHash && isBootstrapAttempt");
-  assert.ok(deletedCheckIndex > -1 && bootstrapRepairIndex > -1 && deletedCheckIndex < bootstrapRepairIndex);
+test("una cuenta borrada o que ya tiene PIN no puede (re)entrar por el camino de arranque", () => {
+  // canAttemptBootstrap exige, para una cuenta ya existente, que no tenga
+  // pinHash todavía Y que no esté borrada: una cuenta eliminada no puede
+  // reactivarse coincidiendo con el PIN de arranque, ni una que ya tiene su
+  // propio PIN puede volver a completarse con el de arranque.
+  assert.match(loginRoute, /isBootstrapCandidate && \(!existing \|\| \(!existing\.pinHash && !existing\.deletedAt\)\)/);
+});
+
+test("el intento de arranque también respeta el bloqueo por intentos fallidos, antes de comparar el PIN", () => {
+  const lockIndex = loginRoute.indexOf("if (existing && isLockedOut(existing.pinLockedUntil))");
+  const compareIndex = loginRoute.indexOf("timingSafeStringsEqual(pin, bootstrapPin)");
+  assert.ok(lockIndex > -1 && compareIndex > -1 && lockIndex < compareIndex);
+});
+
+test("un intento de arranque fallido sin cuenta todavía queda registrado, no sin límite", () => {
+  assert.match(loginRoute, /createdByEmail: BOOTSTRAP_PENDING_MARKER/);
+  assert.match(loginRoute, /failedPinAttempts: 1,/);
+  assert.match(loginRoute, /active: false,/);
 });
 
 // lib/local-demo-mode.ts tampoco depende de getDb(), así que se ejecuta de

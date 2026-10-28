@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { appUsers } from "../../../../db/schema";
 import { safeRelativeReturnPath } from "../../../chatgpt-auth";
-import { hashPin, validPinFormat, verifyPin } from "../../../../lib/pin";
+import { hashPin, timingSafeStringsEqual, validPinFormat, verifyPin } from "../../../../lib/pin";
 import {
   clearFailedPinAttempts,
   createSession,
@@ -12,6 +12,13 @@ import {
 } from "../../../../lib/session";
 
 export const runtime = "edge";
+
+// Marca el expediente que absorbe los intentos fallidos del PIN de arranque
+// antes de que exista el administrador real: no es una cuenta usable (queda
+// inactiva, sin pinHash), solo el mismo mecanismo de bloqueo por intentos que
+// ya protege a cualquier otro usuario, aplicado también a esa ventana sin
+// cuenta todavía.
+const BOOTSTRAP_PENDING_MARKER = "bootstrap-pending";
 
 function normalizeEmail(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
@@ -41,47 +48,90 @@ export async function POST(request: Request) {
 
   // Arranque: la primera vez que entra la cuenta declarada en
   // BOOTSTRAP_ADMIN_EMAIL con el PIN de BOOTSTRAP_ADMIN_PIN, se crea (o se
-  // completa, si ya existía sin PIN) como administrador. A partir de ahí
-  // entra por el camino normal como cualquier otro usuario.
+  // completa, si ya existía sin PIN -p. ej. la creó el otro camino de
+  // arranque vía ChatGPT en lib/access-control.ts-) como administrador. A
+  // partir de que tiene pinHash, entra por el camino normal como cualquier
+  // otro usuario: el PIN de arranque deja de compararse.
+  //
+  // Antes de que exista una cuenta real, no hay ninguna fila donde registrar
+  // intentos fallidos -por eso se trata aparte y con su propio bloqueo-: un
+  // marcador inactivo (BOOTSTRAP_PENDING_MARKER) absorbe los fallos con el
+  // mismo mecanismo de lockout que ya protege a cualquier otra cuenta, en vez
+  // de dejar la comparación del PIN sin límite de intentos.
   const bootstrapEmail = normalizeEmail(process.env.BOOTSTRAP_ADMIN_EMAIL);
   const bootstrapPin = String(process.env.BOOTSTRAP_ADMIN_PIN ?? "");
-  const isBootstrapAttempt =
-    Boolean(bootstrapEmail) && Boolean(bootstrapPin) && email === bootstrapEmail && pin === bootstrapPin;
+  const isBootstrapCandidate = Boolean(bootstrapEmail) && Boolean(bootstrapPin) && email === bootstrapEmail;
+  const canAttemptBootstrap =
+    isBootstrapCandidate && (!existing || (!existing.pinHash && !existing.deletedAt));
 
-  if (!existing) {
-    if (!isBootstrapAttempt) {
+  if (canAttemptBootstrap) {
+    if (existing && isLockedOut(existing.pinLockedUntil)) {
+      return redirectToSignIn(request, returnTo, "locked");
+    }
+    if (!timingSafeStringsEqual(pin, bootstrapPin)) {
+      if (existing) {
+        await registerFailedPinAttempt(existing.id, existing.failedPinAttempts);
+      } else {
+        await db
+          .insert(appUsers)
+          .values({
+            email,
+            displayName: "Administrador",
+            role: "member",
+            area: "direccion",
+            financeAccess: false,
+            active: false,
+            pinHash: "",
+            failedPinAttempts: 1,
+            createdByEmail: BOOTSTRAP_PENDING_MARKER,
+          })
+          .onConflictDoNothing({ target: appUsers.email });
+      }
       return redirectToSignIn(request, returnTo, "invalid");
     }
-    const [created] = await db
-      .insert(appUsers)
-      .values({
-        email,
-        displayName: "Administrador",
-        role: "admin",
-        area: "direccion",
-        financeAccess: true,
-        active: true,
-        pinHash: hashPin(pin),
-        createdByEmail: "bootstrap",
-        lastLoginAt: new Date().toISOString(),
-      })
-      .returning();
-    if (!created) return redirectToSignIn(request, returnTo, "invalid");
-    return finishLogin(request, created.id, returnTo);
+    const [confirmed] = existing
+      ? await db
+          .update(appUsers)
+          .set({
+            displayName: "Administrador",
+            role: "admin",
+            area: "direccion",
+            financeAccess: true,
+            active: true,
+            pinHash: hashPin(pin),
+            failedPinAttempts: 0,
+            pinLockedUntil: "",
+            createdByEmail: "bootstrap",
+            lastLoginAt: new Date().toISOString(),
+          })
+          .where(eq(appUsers.id, existing.id))
+          .returning()
+      : await db
+          .insert(appUsers)
+          .values({
+            email,
+            displayName: "Administrador",
+            role: "admin",
+            area: "direccion",
+            financeAccess: true,
+            active: true,
+            pinHash: hashPin(pin),
+            createdByEmail: "bootstrap",
+            lastLoginAt: new Date().toISOString(),
+          })
+          .returning();
+    if (!confirmed) return redirectToSignIn(request, returnTo, "invalid");
+    return finishLogin(request, confirmed.id, returnTo);
   }
 
+  if (!existing) {
+    return redirectToSignIn(request, returnTo, "invalid");
+  }
   if (existing.deletedAt || !existing.active) {
     return redirectToSignIn(request, returnTo, "invalid");
   }
   if (isLockedOut(existing.pinLockedUntil)) {
     return redirectToSignIn(request, returnTo, "locked");
-  }
-
-  // Autoreparación de arranque: el admin de bootstrap ya existe (p. ej. lo
-  // creó otra vía) pero todavía no tiene PIN asignado.
-  if (!existing.pinHash && isBootstrapAttempt) {
-    await db.update(appUsers).set({ pinHash: hashPin(pin) }).where(eq(appUsers.id, existing.id));
-    return finishLogin(request, existing.id, returnTo);
   }
 
   if (!existing.pinHash || !verifyPin(pin, existing.pinHash)) {

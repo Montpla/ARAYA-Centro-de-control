@@ -395,7 +395,12 @@ export async function POST(request: Request) {
   const authResult = await requireApiUser();
   if (!authResult.user) return authResult.response;
   const auth = authResult.user;
-  const payload = (await request.json()) as Record<string, unknown>;
+  let payload: Record<string, unknown>;
+  try {
+    payload = await request.json();
+  } catch {
+    return Response.json({ error: "La operación no contiene un JSON válido." }, { status: 400 });
+  }
   const operation = text(payload.operation, 50);
   const requestKey = text(payload.requestKey, 120);
   if (!requestKey) {

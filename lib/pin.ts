@@ -21,3 +21,17 @@ export function verifyPin(pin: string, stored: string): boolean {
 export function validPinFormat(pin: unknown): pin is string {
   return typeof pin === "string" && /^\d{4,10}$/.test(pin);
 }
+
+// Para comparar un PIN contra un secreto en claro (el PIN de arranque de
+// variables de entorno, no un hash) sin la fuga de tiempo de `===`.
+export function timingSafeStringsEqual(a: string, b: string): boolean {
+  const bufferA = Buffer.from(a);
+  const bufferB = Buffer.from(b);
+  if (bufferA.length !== bufferB.length) {
+    // Compara el buffer contra sí mismo para no devolver antes y filtrar por
+    // tiempo que las longitudes no coinciden.
+    timingSafeEqual(bufferA, bufferA);
+    return false;
+  }
+  return timingSafeEqual(bufferA, bufferB);
+}
