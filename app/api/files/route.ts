@@ -24,6 +24,7 @@ import {
   unmappedFieldCandidates,
 } from "../../../db/schema";
 import { requireApiUser } from "../../../lib/access-control";
+import { conditionalJson } from "../../../lib/conditional-json";
 import { resolveSourceCurrency } from "../../../lib/currency";
 import {
   canonicalizeFinancialUpdates,
@@ -848,7 +849,14 @@ export async function GET(request: Request) {
         .map((row) => row.id),
     );
     const removedIds = knownIds.filter((id) => !visibleKnownIds.has(id));
-    return privateJson({
+    // nextChangeCursor avanza su marca de tiempo a "ahora" incluso sin
+    // cambios reales (anti-estancamiento, ver latestFileRegistryCursor), así
+    // que dos sondeos ociosos consecutivos nunca lo producirían igual; se
+    // excluye del hash del ETag junto con refreshedAt para que un sondeo sin
+    // cambios reales (files/removedIds/hasMore/summary idénticos) sí
+    // produzca 304. El cliente, al recibir 304, simplemente conserva el
+    // cursor que ya tenía -sigue siendo válido- en vez de perder el avance.
+    return conditionalJson(request, {
       mode,
       files: pageRows.map((row) => publicFileRow(row, user)),
       removedIds,
@@ -856,7 +864,7 @@ export async function GET(request: Request) {
       nextChangeCursor: encodeFileRegistryCursor(nextWatermark),
       summary: await summaryPromise,
       refreshedAt: new Date().toISOString(),
-    });
+    }, { volatile: ["nextChangeCursor", "refreshedAt"] });
   }
 
   const cursorValue = searchParams.get("cursor");

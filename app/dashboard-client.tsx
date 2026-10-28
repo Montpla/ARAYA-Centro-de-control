@@ -7562,6 +7562,7 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
   const pollingRef = useRef(false);
   const filesRef = useRef<UploadedFileRecord[]>([]);
   const reconciliationOffsetRef = useRef(0);
+  const changesEtagRef = useRef<EtagState>({ etag: "" });
 
   useEffect(() => {
     filesRef.current = files;
@@ -7608,10 +7609,11 @@ function CollaborativeFileRegistry({ currentUser }: { currentUser: DashboardUser
           const knownQuery = page === 0 && knownIds.length
             ? `&known=${encodeURIComponent(knownIds.join(","))}`
             : "";
-          const response = await fetch(
+          const response = await fetchWithEtag(
             `/api/files?includeDeleted=1&mode=changes&limit=100&after=${encodeURIComponent(cursor)}${knownQuery}`,
-            { cache: "no-store" },
+            changesEtagRef.current,
           );
+          if (response.status === 304) break;
           const payload = (await response.json()) as FileRegistryPayload;
           if (!response.ok) throw new Error(payload.error ?? "No se pudieron sincronizar los cambios documentales.");
           if (!active) return;
@@ -9694,32 +9696,41 @@ export function DashboardClient({
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [biometricRecord]);
 
+  // Sala de control, notificaciones y datos en vivo son las 3 piezas que
+  // siempre están montadas en la raíz del tablero (a diferencia de proveedores
+  // o el registro de archivos, que solo existen al entrar a esa vista). Antes
+  // cada una tenía su propio setInterval de 5s corriendo en paralelo sin
+  // coordinación -3 timers idénticos, 3 listeners de los mismos eventos-; se
+  // consolidan aquí en un único tick compartido: mismo trabajo total, pero un
+  // solo setInterval/listener en vez de tres, y las tres se refrescan juntas
+  // ante cualquiera de los dos eventos en vez de que cada una reaccione solo
+  // a una parte.
   useEffect(() => {
     let active = true;
-    const refresh = async () => {
-      if (!active) return;
-      await refreshControlRoom();
-    };
-    void refresh();
-    const interval = window.setInterval(() => void refresh(), 5_000);
-    const handleUpdate = () => void refresh();
-    window.addEventListener("araya-control-room-updated", handleUpdate);
-    window.addEventListener("araya-files-updated", handleUpdate);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-      window.removeEventListener("araya-control-room-updated", handleUpdate);
-      window.removeEventListener("araya-files-updated", handleUpdate);
-    };
-  }, [refreshControlRoom]);
-
-  useEffect(() => {
-    let active = true;
-    let refreshing = false;
+    let notificationsRefreshing = false;
+    let liveDataRefreshing = false;
     const notificationsEtag: EtagState = { etag: "" };
+    type LivePayload = {
+      healthy?: boolean;
+      values?: LiveDataMap;
+      provenance?: Record<string, ProvenanceEntry>;
+      revision?: number;
+      refreshedAt?: string;
+      latestEvent?: LiveSyncState["latestEvent"];
+      currentUser?: DashboardUser;
+    };
+    type DashboardPayload = {
+      metrics?: CustomMetric[];
+      suppliers?: Supplier[];
+    };
+    const liveEtag: EtagState = { etag: "" };
+    const dashboardEtag: EtagState = { etag: "" };
+    let cachedLive: LivePayload | null = null;
+    let cachedDashboard: DashboardPayload | null = null;
+
     const refreshNotifications = async () => {
-      if (refreshing || !navigator.onLine) return;
-      refreshing = true;
+      if (notificationsRefreshing || !navigator.onLine) return;
+      notificationsRefreshing = true;
       try {
         const response = await fetchWithEtag("/api/notifications?limit=100", notificationsEtag, {
           credentials: "same-origin",
@@ -9736,21 +9747,115 @@ export function DashboardClient({
       } catch {
         // La bandeja local continúa funcionando cuando el servidor no responde.
       } finally {
-        refreshing = false;
+        notificationsRefreshing = false;
       }
     };
-    const handleNotificationUpdate = () => void refreshNotifications();
-    void refreshNotifications();
-    const interval = window.setInterval(() => void refreshNotifications(), 5_000);
-    window.addEventListener("araya-control-room-updated", handleNotificationUpdate);
-    window.addEventListener("araya-files-updated", handleNotificationUpdate);
+
+    const refreshLiveData = async () => {
+      if (liveDataRefreshing) return;
+      liveDataRefreshing = true;
+      try {
+        const [liveResponse, dashboardResponse] = await Promise.all([
+          fetchWithEtag("/api/live-data", liveEtag),
+          fetchWithEtag("/api/dashboard", dashboardEtag),
+        ]);
+        if ([liveResponse.status, dashboardResponse.status].some((status) => status === 401 || status === 403)) {
+          removeBiometricRecord(currentUser.id);
+          navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
+          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- recarga deliberada: la sesión ya no es válida, así que no debe quedar ningún estado financiero en memoria del router.
+          window.location.assign("/signout-with-chatgpt?return_to=/");
+          return;
+        }
+        const liveNotModified = liveResponse.status === 304 && cachedLive !== null;
+        const dashboardNotModified = dashboardResponse.status === 304 && cachedDashboard !== null;
+        if (liveNotModified && dashboardNotModified) {
+          // Sin cambios en el servidor: la cinta de conexión sigue viva y el
+          // resto del estado se conserva sin re-aplicar ni re-renderizar.
+          if (active) {
+            setLiveSync((current) => ({
+              ...current,
+              status: "connected",
+              refreshedAt: new Date().toISOString(),
+            }));
+          }
+          return;
+        }
+        if ((!liveResponse.ok && !liveNotModified) || (!dashboardResponse.ok && !dashboardNotModified)) {
+          throw new Error("Sincronización no disponible");
+        }
+        const [liveData, dashboardData] = await Promise.all([
+          liveNotModified
+            ? Promise.resolve(cachedLive as LivePayload)
+            : liveResponse.json() as Promise<LivePayload>,
+          dashboardNotModified
+            ? Promise.resolve(cachedDashboard as DashboardPayload)
+            : dashboardResponse.json() as Promise<DashboardPayload>,
+        ]);
+        cachedLive = liveData;
+        cachedDashboard = dashboardData;
+        if (!active) return;
+        const refreshedUser = liveData.currentUser;
+        if (
+          refreshedUser &&
+          (
+            refreshedUser.active !== currentUser.active ||
+            refreshedUser.financeAccess !== currentUser.financeAccess ||
+            refreshedUser.role !== currentUser.role ||
+            refreshedUser.area !== currentUser.area
+          )
+        ) {
+          navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
+          window.location.reload();
+          return;
+        }
+        if (liveData.healthy === false) throw new Error("Sincronización no disponible");
+        applyLiveValuesToTargets(
+          liveData.values ?? {},
+          liveDataTargets,
+          synchronizeDerivedDashboardState,
+        );
+        setMetrics(currentUser.financeAccess
+          ? [
+            ...(Array.isArray(dashboardData.metrics) ? dashboardData.metrics : []),
+            ...initialMetrics,
+          ]
+          : []);
+        setSupplierRows([
+          ...(Array.isArray(dashboardData.suppliers) ? dashboardData.suppliers : []),
+          ...initialSuppliers,
+        ]);
+        setLiveProvenance(liveData.provenance ?? {});
+        setLiveSync({
+          status: "connected",
+          revision: liveData.revision ?? 0,
+          refreshedAt: liveData.refreshedAt ?? new Date().toISOString(),
+          latestEvent: liveData.latestEvent ?? null,
+        });
+      } catch {
+        if (active) {
+          setLiveSync((current) => ({ ...current, status: "offline" }));
+        }
+      } finally {
+        liveDataRefreshing = false;
+      }
+    };
+
+    const refreshAll = () => {
+      if (active) void refreshControlRoom();
+      void refreshNotifications();
+      void refreshLiveData();
+    };
+    refreshAll();
+    const interval = window.setInterval(refreshAll, 5_000);
+    window.addEventListener("araya-control-room-updated", refreshAll);
+    window.addEventListener("araya-files-updated", refreshAll);
     return () => {
       active = false;
       window.clearInterval(interval);
-      window.removeEventListener("araya-control-room-updated", handleNotificationUpdate);
-      window.removeEventListener("araya-files-updated", handleNotificationUpdate);
+      window.removeEventListener("araya-control-room-updated", refreshAll);
+      window.removeEventListener("araya-files-updated", refreshAll);
     };
-  }, [currentUser.id]);
+  }, [refreshControlRoom, currentUser.active, currentUser.area, currentUser.financeAccess, currentUser.id, currentUser.role]);
 
   useEffect(() => {
     let active = true;
@@ -9899,126 +10004,6 @@ export function DashboardClient({
     };
   }, [deviceCenterOpen, directionReport, fileViewer, mobileMenuOpen, modal, reportBuilderOpen, uploadOpen, workspaceDetail]);
 
-  useEffect(() => {
-    let active = true;
-    let refreshing = false;
-    type LivePayload = {
-      healthy?: boolean;
-      values?: LiveDataMap;
-      provenance?: Record<string, ProvenanceEntry>;
-      revision?: number;
-      refreshedAt?: string;
-      latestEvent?: LiveSyncState["latestEvent"];
-      currentUser?: DashboardUser;
-    };
-    type DashboardPayload = {
-      metrics?: CustomMetric[];
-      suppliers?: Supplier[];
-    };
-    const liveEtag: EtagState = { etag: "" };
-    const dashboardEtag: EtagState = { etag: "" };
-    let cachedLive: LivePayload | null = null;
-    let cachedDashboard: DashboardPayload | null = null;
-
-    async function refreshLiveData() {
-      if (refreshing) return;
-      refreshing = true;
-      try {
-        const [liveResponse, dashboardResponse] = await Promise.all([
-          fetchWithEtag("/api/live-data", liveEtag),
-          fetchWithEtag("/api/dashboard", dashboardEtag),
-        ]);
-        if ([liveResponse.status, dashboardResponse.status].some((status) => status === 401 || status === 403)) {
-          removeBiometricRecord(currentUser.id);
-          navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
-          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- recarga deliberada: la sesión ya no es válida, así que no debe quedar ningún estado financiero en memoria del router.
-          window.location.assign("/signout-with-chatgpt?return_to=/");
-          return;
-        }
-        const liveNotModified = liveResponse.status === 304 && cachedLive !== null;
-        const dashboardNotModified = dashboardResponse.status === 304 && cachedDashboard !== null;
-        if (liveNotModified && dashboardNotModified) {
-          // Sin cambios en el servidor: la cinta de conexión sigue viva y el
-          // resto del estado se conserva sin re-aplicar ni re-renderizar.
-          if (active) {
-            setLiveSync((current) => ({
-              ...current,
-              status: "connected",
-              refreshedAt: new Date().toISOString(),
-            }));
-          }
-          return;
-        }
-        if ((!liveResponse.ok && !liveNotModified) || (!dashboardResponse.ok && !dashboardNotModified)) {
-          throw new Error("Sincronización no disponible");
-        }
-        const [liveData, dashboardData] = await Promise.all([
-          liveNotModified
-            ? Promise.resolve(cachedLive as LivePayload)
-            : liveResponse.json() as Promise<LivePayload>,
-          dashboardNotModified
-            ? Promise.resolve(cachedDashboard as DashboardPayload)
-            : dashboardResponse.json() as Promise<DashboardPayload>,
-        ]);
-        cachedLive = liveData;
-        cachedDashboard = dashboardData;
-        if (!active) return;
-        const refreshedUser = liveData.currentUser;
-        if (
-          refreshedUser &&
-          (
-            refreshedUser.active !== currentUser.active ||
-            refreshedUser.financeAccess !== currentUser.financeAccess ||
-            refreshedUser.role !== currentUser.role ||
-            refreshedUser.area !== currentUser.area
-          )
-        ) {
-          navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_PRIVATE_CACHE" });
-          window.location.reload();
-          return;
-        }
-        if (liveData.healthy === false) throw new Error("Sincronización no disponible");
-        applyLiveValuesToTargets(
-          liveData.values ?? {},
-          liveDataTargets,
-          synchronizeDerivedDashboardState,
-        );
-        setMetrics(currentUser.financeAccess
-          ? [
-            ...(Array.isArray(dashboardData.metrics) ? dashboardData.metrics : []),
-            ...initialMetrics,
-          ]
-          : []);
-        setSupplierRows([
-          ...(Array.isArray(dashboardData.suppliers) ? dashboardData.suppliers : []),
-          ...initialSuppliers,
-        ]);
-        setLiveProvenance(liveData.provenance ?? {});
-        setLiveSync({
-          status: "connected",
-          revision: liveData.revision ?? 0,
-          refreshedAt: liveData.refreshedAt ?? new Date().toISOString(),
-          latestEvent: liveData.latestEvent ?? null,
-        });
-      } catch {
-        if (active) {
-          setLiveSync((current) => ({ ...current, status: "offline" }));
-        }
-      } finally {
-        refreshing = false;
-      }
-    }
-
-    void refreshLiveData();
-    const interval = window.setInterval(() => void refreshLiveData(), 5_000);
-    const handleFileUpdate = () => void refreshLiveData();
-    window.addEventListener("araya-files-updated", handleFileUpdate);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-      window.removeEventListener("araya-files-updated", handleFileUpdate);
-    };
-  }, [currentUser.active, currentUser.area, currentUser.financeAccess, currentUser.id, currentUser.role]);
 
   useEffect(() => {
     if (!deviceSecurityReady || liveSync.revision <= 0) return;
