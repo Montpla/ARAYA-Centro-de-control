@@ -21,6 +21,9 @@
   --font-ui: "Aptos", "Segoe UI Variable", "Helvetica Neue", Arial, sans-serif;
   --font-editorial: "Iowan Old Style", "Baskerville", "Times New Roman", serif;
   --font-mono: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  --font-sans: var(--font-ui);
+  --font-serif: var(--font-editorial);
+  --font-display: var(--font-editorial);
 }
 
 /* Escala espacial común: el relleno expresa avance; el borde expresa estado. */
