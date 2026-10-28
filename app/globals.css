@@ -1131,6 +1131,23 @@ button {
   stroke-linejoin: round;
 }
 
+.progress-gap-fill {
+  stroke: none;
+  pointer-events: none;
+}
+
+.progress-gap-fill.good {
+  fill: rgba(84, 184, 140, 0.22);
+}
+
+.progress-gap-fill.warn {
+  fill: rgba(221, 164, 74, 0.22);
+}
+
+.progress-gap-fill.danger {
+  fill: rgba(224, 92, 68, 0.26);
+}
+
 .progress-line.planned {
   stroke: #28d4ed;
   stroke-width: 3.4;

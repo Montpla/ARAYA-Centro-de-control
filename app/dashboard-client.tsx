@@ -2949,6 +2949,27 @@ function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
     )
     .filter(Boolean)
     .join(" ");
+  // Relleno del hueco entre plan y ejecutado: mismo criterio de 3 niveles que
+  // ya usan las tarjetas de desvío del tablero (bien / atención / crítico),
+  // aplicado por tramo en vez de a las líneas en sí -que mantienen siempre su
+  // color de serie (plan=cian, ejecutado=dorado), fijado a un diseño ya
+  // aprobado y protegido por test.
+  const gapSegments = data
+    .slice(0, -1)
+    .map((point, index) => {
+      const next = data[index + 1];
+      if (point.actual === null || next.actual === null) return null;
+      const gap = (point.actual - point.planned + (next.actual - next.planned)) / 2;
+      const tone = gap >= 0 ? "good" : gap >= -5 ? "warn" : "danger";
+      const points = [
+        `${xFor(index)},${yFor(point.planned)}`,
+        `${xFor(index + 1)},${yFor(next.planned)}`,
+        `${xFor(index + 1)},${yFor(next.actual)}`,
+        `${xFor(index)},${yFor(point.actual)}`,
+      ].join(" ");
+      return { key: `${point.month}-${index}`, points, tone };
+    })
+    .filter((segment): segment is { key: string; points: string; tone: "good" | "warn" | "danger" } => segment !== null);
   // El texto bajo la gráfica citaba los mismos números a mano, congelados en
   // el momento en que se escribió — una tercera copia del mismo dato que el
   // punto "Ejecutado Real" ya corrige, así que se recalcula del mismo punto
@@ -3031,6 +3052,9 @@ function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
             <text className="line-chart-y-title" transform={`translate(18 ${plotTop + (plotBottom - plotTop) / 2}) rotate(-90)`}>
               % acumulado
             </text>
+            {gapSegments.map((segment) => (
+              <polygon key={segment.key} className={`progress-gap-fill ${segment.tone}`} points={segment.points} />
+            ))}
             <polyline className="progress-line planned" points={plannedPoints} />
             <polyline className="progress-line actual" points={actualPoints} />
             {data.map((point, index) => (
