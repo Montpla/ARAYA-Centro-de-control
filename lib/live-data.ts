@@ -171,6 +171,22 @@ export function isLiveDataKey(key: string) {
     !segments.some((segment) => forbiddenPathSegments.has(segment));
 }
 
+const ISO_CUTOFF_PATTERN = /^\d{4}-\d{2}(?:-\d{2})?$/;
+
+/**
+ * Un reproceso automático de un expediente antiguo (lector actualizado,
+ * reintento diferido) no sabe qué otros archivos publicaron esa misma clave
+ * mientras tanto. Sin esta comparación, "la semana del 10 al 15 de agosto"
+ * puede volver a publicarse después de "la semana del 31 de agosto" y
+ * ganar solo por haberse procesado más tarde en el reloj, no por tener un
+ * corte más reciente. Solo compara cortes con la misma forma ISO (AAAA-MM o
+ * AAAA-MM-DD); un corte vacío o con otro formato no autoriza el bloqueo.
+ */
+export function isCutoffOlder(candidate: string, reference: string) {
+  if (!ISO_CUTOFF_PATTERN.test(candidate) || !ISO_CUTOFF_PATTERN.test(reference)) return false;
+  return candidate < reference;
+}
+
 export function isFinancialLiveKey(key: string) {
   const root = key.split(".")[0];
   if (financialRootSet.has(root) || isCommercialLiveKey(key)) return true;

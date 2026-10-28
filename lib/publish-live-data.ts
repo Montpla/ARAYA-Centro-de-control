@@ -15,6 +15,7 @@ import {
 import {
   LiveDataUpdate,
   isCommercialLiveKey,
+  isCutoffOlder,
   isFinancialLiveKey,
   isLiveDataKey,
   liveValueType,
@@ -377,6 +378,22 @@ export async function publishLiveDataUpdates(input: {
     : requestedEventArea;
   const pointSnapshots = new Map(pointRows.map((row) => [row.key, row]));
   const fileSnapshots = new Map(fileRows.map((row) => [row.id, row]));
+  // Una corrección manual explícita (sin archivo detrás) sabe lo que hace;
+  // el reproceso automático de un expediente antiguo no. Ese es exactamente
+  // el patrón que dejó "safetyMetrics" clavado en la semana del 10 al 15 de
+  // agosto mientras archivos más nuevos ya habían publicado la del 31.
+  const cutoffRegression = input.normalized.find((update) => {
+    if (update.sourceName === "Actualización manual") return false;
+    const existing = pointSnapshots.get(update.key);
+    return existing ? isCutoffOlder(update.cutoff, existing.cutoff) : false;
+  });
+  if (cutoffRegression) {
+    const existing = pointSnapshots.get(cutoffRegression.key);
+    throw new Error(
+      `${cutoffRegression.key} declara el corte ${cutoffRegression.cutoff}, anterior al que ya está publicado ` +
+      `(${existing?.cutoff}); no se publicará nada de este lote para evitar una regresión.`,
+    );
+  }
   if (input.reviewClosure) {
     const closureFile = fileSnapshots.get(input.reviewClosure.fileId);
     if (!closureFile || closureFile.proposalGeneration !== input.reviewClosure.proposalGeneration) {
