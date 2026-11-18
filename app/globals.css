@@ -1186,6 +1186,16 @@ button {
   fill: #aebdd0;
 }
 
+.progress-point.reprogrammed {
+  fill: #c9a7ff;
+}
+
+.line-chart-value.reprogrammed {
+  fill: #d9c4ff;
+  font-weight: 700;
+  text-anchor: start;
+}
+
 .line-chart-month {
   fill: #c8d3e1;
   font-size: 14px;

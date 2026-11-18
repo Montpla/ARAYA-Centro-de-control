@@ -3025,7 +3025,6 @@ function ProgressChart({ data = monthlyPlan }: { data?: Array<{ month: string; p
     ? cutoffReprogrammedRaw
     : null;
   const cutoffGap = cutoffPoint ? Math.round((cutoffPoint.actual! - cutoffPoint.planned) * 10) / 10 : 0;
-  const cutoffYear = cutoffIndex >= 0 ? new Date(2025, 5 + cutoffIndex, 1).getFullYear() : null;
   const finalIndex = data.length - 1;
   const finalMonthName = finalIndex >= 0
     ? new Intl.DateTimeFormat("es-ES", { month: "long" }).format(new Date(2025, 5 + finalIndex, 1))
@@ -3105,6 +3104,28 @@ function ProgressChart({ data = monthlyPlan }: { data?: Array<{ month: string; p
               <polyline className="progress-line reprogrammed" points={reprogrammedPoints} />
             )}
             <polyline className="progress-line actual" points={actualPoints} />
+            {/* El plan reprogramado en el mes del corte: punto y porcentaje a la
+                derecha de la línea, entre las etiquetas del Plan Operativo
+                (encima) y del ejecutado (debajo), para no taparlas. */}
+            {cutoffReprogrammed !== null && (
+              <g>
+                <circle
+                  className="progress-point reprogrammed"
+                  cx={xFor(cutoffIndex)}
+                  cy={yFor(cutoffReprogrammed)}
+                  r="4.2"
+                >
+                  <title>{`${monthLabel(cutoffIndex)} · Plan reprogramado ${number.format(cutoffReprogrammed)}%`}</title>
+                </circle>
+                <text
+                  className="line-chart-value reprogrammed"
+                  x={xFor(cutoffIndex) + 9}
+                  y={yFor(cutoffReprogrammed) + 4}
+                >
+                  {number.format(cutoffReprogrammed)}
+                </text>
+              </g>
+            )}
             {data.map((point, index) => (
               <g key={`${point.month}-${index}`}>
                 <circle
@@ -3157,7 +3178,7 @@ function ProgressChart({ data = monthlyPlan }: { data?: Array<{ month: string; p
         </div>
       </div>
       <div className="s-curve-insight">
-        <strong>Al corte ({cutoffPoint ? `${cutoffPoint.month}-${cutoffYear}` : "sin dato"}):</strong>
+        <strong>Al corte ({cutoffPoint ? monthLabel(cutoffIndex) : "sin dato"}):</strong>
         <span>
           {cutoffPoint
             ? `Ejecutado ${number.format(cutoffPoint.actual as number)}% vs. Plan Operativo ${number.format(cutoffPoint.planned)}% → brecha de ${number.format(Math.abs(cutoffGap))} puntos porcentuales.${cutoffReprogrammed !== null ? ` Frente al Plan Reprogramado (${number.format(cutoffReprogrammed)}%) la brecha es de ${number.format(Math.abs(Math.round(((cutoffPoint.actual as number) - cutoffReprogrammed) * 10) / 10))} puntos.` : ""} El plan proyecta cierre en ${finalMonthName}-${finalYear}; sin corrección, la brecha actual se traduce en un desplazamiento equivalente en el cierre.`
