@@ -898,6 +898,9 @@ function extractCubicacionCoverProgress(
       buildingCodes.push(code);
     } else {
       updates.push({ key: "urbanismAreas.0.progress", value: progress, ...baseUpdate });
+      // El resumen lee el urbanismo de projectSnapshot; sin esto el plano
+      // mostraba la cubicación (31,89 %) y la cabecera el Informe (28,9 %).
+      updates.push({ key: "projectSnapshot.urbanismProgress", value: Math.round(progress * 100) / 100, ...baseUpdate });
     }
 
     if (hasAmounts) {
