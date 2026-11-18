@@ -220,6 +220,7 @@ test("la carátula de cubicación actualiza edificios, urbanismo y total pondera
   assert.equal(porClave.get("buildings.TH-76.progress").value, 8);
   assert.equal(porClave.get("buildings.TH-77.progress").value, 9);
   assert.equal(porClave.get("urbanismAreas.0.progress").value, 25);
+  assert.equal(porClave.get("projectSnapshot.urbanismProgress").value, 25);
   assert.equal(porClave.get("projectSnapshot.overallProgress").value, 14);
   assert.equal(porClave.get("projectSnapshot.overallProgress").area, "obra");
   // La cubicación manda en el avance físico: también es el ejecutado de la
