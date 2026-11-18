@@ -6,6 +6,11 @@
 // cruzarlas con lo que los paneles leen. Sólo imprime NOMBRES de clave, área y
 // procedencia —nunca valores—, así que es seguro en un registro.
 
+import { urbanismAreas as baselineUrbanismAreas } from "../app/demo-data.ts";
+import { urbanismReportAreas as baselineUrbanismReportAreas } from "../app/june-report-data.ts";
+import { materializeLiveRoot } from "../lib/live-data.ts";
+import { deriveUrbanismMapAreas, reconcileGeneralUrbanism } from "../lib/urbanism-map-progress.ts";
+
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 
 const email = process.env.DEPLOY_VERIFY_EMAIL;
@@ -115,4 +120,19 @@ for (const clave of fisicas) {
   const texto = typeof valor === "object" ? JSON.stringify(valor) : String(valor);
   const origen = provenance[clave] ? ` · rev ${provenance[clave].revision} · ${provenance[clave].sourceName ?? ""}` : "";
   console.log(`   ${clave}: ${texto.slice(0, 600)}${origen}`);
+}
+
+// Urbanismo tal como lo pinta el plano: disciplinas del informe (por nombre) y
+// áreas del plano (burbujas URB, VIAL, PAISAJISMO, P, EQ, ACCESO) ya
+// conciliadas. Sólo porcentajes.
+const disciplinas = materializeLiveRoot("urbanismReportAreas", baselineUrbanismReportAreas.map((area) => ({ ...area })), valores);
+console.log("\n=== Disciplinas de urbanismo vivas (nombre · %) ===");
+for (const area of disciplinas) console.log(`   ${area?.name}: ${area?.progress}%`);
+const areasPlano = reconcileGeneralUrbanism(
+  deriveUrbanismMapAreas(materializeLiveRoot("urbanismAreas", baselineUrbanismAreas, valores), disciplinas),
+  valores["projectSnapshot.urbanismProgress"],
+);
+console.log("\n=== Áreas del plano (id · nombre · avance · plan · estado · fuente) ===");
+for (const area of areasPlano) {
+  console.log(`   ${area.id} · ${area.name} · ${area.progress ?? "sin dato"} · ${area.planned ?? "-"} · ${area.status} · ${area.source}`);
 }
