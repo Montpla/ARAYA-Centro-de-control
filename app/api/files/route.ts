@@ -189,9 +189,12 @@ function scheduleBackgroundUploadProcessing(input: {
         // request original puede haber dejado de ser válido mientras el
         // waitUntil seguía corriendo (causa del "cookies() context loss"
         // intermitente que gastaba un intento con un 401 fantasma).
-        // Por la vinculación de servicio SELF (wrangler.deploy.jsonc): una
-        // petición del Worker a su propia URL pública devuelve 404 en
-        // Cloudflare. Sin la vinculación (desarrollo local) se usa fetch.
+        // Por la vinculación de servicio SELF (wrangler.deploy.jsonc, sin
+        // comentarios: varios scripts la leen con JSON.parse): una petición
+        // del Worker a su propia URL pública devuelve 404 en Cloudflare, así
+        // que el primer intento de cada carga fallaba siempre. La vinculación
+        // llega al mismo Worker sin salir a Internet. Sin ella (desarrollo
+        // local) se usa fetch.
         const selfBinding = (env as unknown as { SELF?: { fetch: typeof fetch } }).SELF;
         const response = await (selfBinding ? selfBinding.fetch.bind(selfBinding) : fetch)(input.request.url, {
           method: "POST",

@@ -32,11 +32,6 @@
       "migrations_dir": "drizzle"
     }
   ],
-  // El Worker se llama a sí mismo para procesar una carga en segundo plano.
-  // Una petición a su propia URL de workers.dev la rechaza Cloudflare (404):
-  // por eso el primer intento de cada carga fallaba siempre y todo dependía
-  // del reintento externo en GitHub. La vinculación de servicio no sale a
-  // Internet y llega al mismo Worker.
   "services": [
     { "binding": "SELF", "service": "araya-centro-control-staging" }
   ],
