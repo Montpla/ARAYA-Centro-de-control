@@ -165,16 +165,53 @@ function normalize(value: string) {
     .toLowerCase();
 }
 
-function detectPeriod(value: string, declaredCutoff: string) {
+/**
+ * Periodo (corte) de un documento: el declarado por quien lo sube o, si no,
+ * el que se lee en el NOMBRE del archivo; la descripción sólo se mira cuando
+ * el nombre no trae fecha.
+ *
+ * Antes se leía todo junto y una fecha ISO ganaba a cualquier otra. El
+ * conversor de .mpp escribe en la descripción la fecha de conversión
+ * ("con MPXJ (2026-11-18)"), así que los Project de urbanismo y de edificios
+ * de "CORTE 30-10-2026" quedaron registrados con corte 18/11, el día de la
+ * carga, y cada dato posterior de octubre parecía más antiguo que ellos.
+ *
+ * En un rango ("Semana No.3 19-10-2026 al 24-10-2026") el corte es la fecha
+ * final, no la de inicio; y "CORTE dd-mm-aaaa" manda sobre cualquier otra.
+ */
+export function detectPeriod(value: string, declaredCutoff: string, description = "", now = new Date()) {
   if (declaredCutoff.trim()) return declaredCutoff.trim().slice(0, 40);
+  return periodFromText(value, now) || periodFromText(description, now);
+}
+
+function isoDay(year: string, month: string, day: string) {
+  const m = Number(month);
+  const d = Number(day);
+  if (!Number.isInteger(m) || m < 1 || m > 12 || !Number.isInteger(d) || d < 1 || d > 31) return null;
+  return `${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+function periodFromText(value: string, now: Date) {
   const normalized = normalize(value);
-  const isoDate = normalized.match(/(?:^|\D)(20\d{2})[./_-](0?[1-9]|1[0-2])[./_-]([0-2]?\d|3[01])(?:\D|$)/);
-  if (isoDate) {
-    return `${isoDate[1]}-${isoDate[2].padStart(2, "0")}-${isoDate[3].padStart(2, "0")}`;
-  }
-  const fullDate = normalized.match(/(?:^|\D)(\d{1,2})[./_-](\d{1,2})[./_-](20\d{2})(?:\D|$)/);
-  if (fullDate) {
-    return `${fullDate[3]}-${fullDate[2].padStart(2, "0")}-${fullDate[1].padStart(2, "0")}`;
+  if (!normalized.trim()) return "";
+  const dayFirst = /(?:^|\D)(\d{1,2})[./_-](\d{1,2})[./_-](20\d{2})(?=\D|$)/g;
+  const yearFirst = /(?:^|\D)(20\d{2})[./_-](0?[1-9]|1[0-2])[./_-]([0-2]?\d|3[01])(?=\D|$)/g;
+  const dates = [
+    ...[...normalized.matchAll(dayFirst)].map((match) => ({
+      at: match.index ?? 0,
+      iso: isoDay(match[3], match[2], match[1]),
+    })),
+    ...[...normalized.matchAll(yearFirst)].map((match) => ({
+      at: match.index ?? 0,
+      iso: isoDay(match[1], match[2], match[3]),
+    })),
+  ]
+    .filter((date): date is { at: number; iso: string } => date.iso !== null)
+    .sort((left, right) => left.at - right.at);
+  if (dates.length) {
+    const corte = normalized.search(/\bcorte\b/);
+    const afterCorte = corte >= 0 ? dates.find((date) => date.at >= corte) : undefined;
+    return (afterCorte ?? dates[dates.length - 1]).iso;
   }
   const isoMonth = normalized.match(/(?:^|\D)(20\d{2})[./_-](0?[1-9]|1[0-2])(?:\D|$)/);
   if (isoMonth) return `${isoMonth[1]}-${isoMonth[2].padStart(2, "0")}`;
@@ -184,6 +221,19 @@ function detectPeriod(value: string, declaredCutoff: string) {
   if (monthYear) {
     const year = monthYear[2].length === 2 ? `20${monthYear[2]}` : monthYear[2];
     return `${year}-${monthNumbers[monthYear[1]]}`;
+  }
+  // Un mes sin año ("Cubicacion_11_Araya_Oct.xlsx", "Informe_..._Octubre_...")
+  // es el último mes con ese nombre que no queda en el futuro. Sin esto el
+  // corte caía en el día de la carga, posterior a todo el mes que el
+  // documento describe. Delimitado por algo que no sea letra: "_" cuenta como
+  // carácter de palabra y \b no lo separaría.
+  const bareMonth = normalized.match(
+    /(?:^|[^a-z])(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sept|sep|oct|nov|dic)(?=[^a-z]|$)/,
+  );
+  if (bareMonth) {
+    const month = Number(monthNumbers[bareMonth[1]]);
+    const year = month > now.getUTCMonth() + 1 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
+    return `${year}-${String(month).padStart(2, "0")}`;
   }
   return "";
 }
@@ -250,7 +300,7 @@ export function analyzeDocument(input: {
         input.extension === "mpp" ? { id: "cronograma", label: "Cronograma y planificación" } :
           { id: "documento_general", label: "Documento general" };
   const selected = best && best.matches > 0 ? best : fallbackType;
-  const detectedPeriod = detectPeriod(`${input.fileName} ${input.description ?? ""}`, input.declaredCutoff ?? "");
+  const detectedPeriod = detectPeriod(input.fileName, input.declaredCutoff ?? "", input.description ?? "");
   const mode = extractionMode(input.extension);
   const reviewReasons: string[] = [];
   if (input.classificationConfidence < 0.75) reviewReasons.push("El área sugerida necesita confirmación.");

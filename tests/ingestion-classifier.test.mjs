@@ -321,3 +321,44 @@ test("un PowerPoint que no es de ventas no dispara el lector", () => {
     [],
   );
 });
+
+test("el corte sale del nombre del archivo, no de la fecha de conversión de la descripción", () => {
+  const periodo = (fileName, description = "") => ingestion.analyzeDocument({
+    fileName,
+    description,
+    extension: "xml",
+    declaredCutoff: "",
+    area: "obra",
+    classificationConfidence: 0.9,
+  }).detectedPeriod;
+  assert.equal(
+    periodo(
+      "Urbanismo fase I MOD ACTUALIZADO AJUSTADO FLUJO ENERO MODIFICADO CORTE 30-10-2026 (convertido de MPP).xml",
+      "Convertido de Urbanismo fase I CORTE 30-10-2026.mpp con MPXJ (2026-11-18).",
+    ),
+    "2026-10-30",
+  );
+  // Un rango semanal se corta en su fecha final.
+  assert.equal(
+    periodo("ARAYA - Reporte Semanal de Indicadores de Seguridad - Semana No.3  19-10-2026  al  24-10-2026.pdf"),
+    "2026-10-24",
+  );
+  // "CORTE" manda sobre otras fechas del nombre.
+  assert.equal(periodo("Plan 2026-09-01 CORTE 15-10-2026 revisado 2026-11-02.xml"), "2026-10-15");
+  // Sin fecha en el nombre, se mira la descripción.
+  assert.equal(periodo("Informe de obra.pdf", "Corte al 31/10/2026"), "2026-10-31");
+  assert.equal(periodo("Informe de obra.pdf", ""), "");
+  // Una fecha imposible no es un corte.
+  assert.equal(periodo("Lote 45-13-2026.pdf"), "");
+});
+
+test("un mes sin año es el último con ese nombre que no queda en el futuro", () => {
+  const noviembre2026 = new Date(Date.UTC(2026, 10, 18));
+  assert.equal(ingestion.detectPeriod("Cubicacion_11_Araya_Oct.xlsx", "", "", noviembre2026), "2026-10");
+  assert.equal(ingestion.detectPeriod("Informe_Ejecutivo_ARAYA_Octubre_Definitivo_v5.pptx", "", "", noviembre2026), "2026-10");
+  assert.equal(ingestion.detectPeriod("Avance diciembre.pdf", "", "", noviembre2026), "2025-12");
+  // Una fecha completa sigue mandando sobre el nombre del mes.
+  assert.equal(ingestion.detectPeriod("Flujo ENERO CORTE 30-10-2026.xml", "", "", noviembre2026), "2026-10-30");
+  // Palabras que contienen un mes no cuentan.
+  assert.equal(ingestion.detectPeriod("Octavio mayorga marzano.pdf", "", "", noviembre2026), "");
+});
