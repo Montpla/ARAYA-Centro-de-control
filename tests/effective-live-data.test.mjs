@@ -5,6 +5,7 @@ import test from "node:test";
 import ts from "typescript";
 import * as demoData from "../app/demo-data.ts";
 import * as liveData from "../lib/live-data.ts";
+import * as urbanismDisciplines from "../lib/urbanism-disciplines.ts";
 
 async function loadSpatialIdentityResolver() {
   const source = await readFile(new URL("../lib/spatial-identity-upsert.ts", import.meta.url), "utf8");
@@ -19,6 +20,7 @@ async function loadSpatialIdentityResolver() {
   const require = (specifier) => {
     if (specifier === "./live-data") return liveData;
     if (specifier === "../app/demo-data") return demoData;
+    if (specifier === "./urbanism-disciplines") return urbanismDisciplines;
     throw new Error(`Unexpected import: ${specifier}`);
   };
   vm.runInNewContext(output, {

@@ -8,6 +8,7 @@ import {
   namingToken,
 } from "./live-data";
 import { buildings, urbanismAreas } from "../app/demo-data";
+import { findUrbanismDisciplineIndex } from "./urbanism-disciplines";
 
 function isRecord(value: unknown): value is Record<string, LiveDataValue> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -181,6 +182,15 @@ function resolveNamedListKey(
   roots: Record<string, unknown> | undefined,
 ) {
   if (!roots || segments.length < 3 || /^\d+$/.test(segments[1])) return null;
+  // Las disciplinas de urbanismo se escriben con grafías distintas en cada
+  // documento ("Sistemas especiales" / "SISTEMA ESPECIALES", "Gas" /
+  // "INSTALACIONES DE GAS"): se reconocen por disciplina, no por texto exacto.
+  if (segments[0] === "urbanismReportAreas" && Array.isArray(roots.urbanismReportAreas)) {
+    const current = materializeLiveRoot("urbanismReportAreas", roots.urbanismReportAreas, workingValues);
+    if (!Array.isArray(current)) return null;
+    const index = findUrbanismDisciplineIndex(current as Array<{ name?: unknown }>, segments[1]);
+    return index >= 0 ? ["urbanismReportAreas", index, ...segments.slice(2)].join(".") : null;
+  }
   const baseline = roots[segments[0]];
   if (!Array.isArray(baseline)) return null;
   const current = materializeLiveRoot(segments[0], baseline, workingValues);

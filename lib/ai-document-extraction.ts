@@ -6,6 +6,7 @@ import {
   type LiveDataValue,
 } from "./live-data";
 import { getContractRootsSnapshot } from "./live-data-contract";
+import { urbanismDisciplineInText, urbanismDisciplineLabel } from "./urbanism-disciplines";
 import type { DocumentTemplateHint, IngestionAgentTrace } from "./ingestion-agent";
 import {
   addAiTokenUsage,
@@ -151,6 +152,7 @@ ESPACIAL, EDIFICIOS, APARTAMENTOS Y URBANISMO
 - Si una entidad espacial no trae indice, usa una clave logica alfanumerica: buildings.<identidad>, buildings.<edificio>.units.<apartamento> o urbanismAreas.<identidad>. Incluye el id o codigo exacto dentro de value_json; el servidor resolvera esa identidad a un indice estable sin reutilizar huecos eliminados.
 - NUNCA uses un numero suelto como identidad de un edificio: en una clave, un segmento que solo tiene digitos significa POSICION EN LA LISTA, no numero de edificio, y las dos cosas no coinciden. El edificio TH-14 ocupa la posicion 13, asi que buildings.14 apunta a otro edificio distinto. Escribe siempre el nombre tal y como aparece en el documento —buildings.TH-14— y deja que el servidor lo traduzca.
 - Para un dato suelto de una entidad que ya existe (un avance, un estado, una fecha), la forma correcta es la ruta hija con nombre: buildings.TH-14.progress, buildings.TH-14.units.14-101.status o urbanismAreas.<identidad>.progress. Reserva el objeto completo (buildings.TH-14 = {...}) para dar de alta una entidad nueva o cambiar varios campos suyos a la vez.
+- Las disciplinas del informe de urbanismo (urbanismReportAreas) se dirigen SIEMPRE por su nombre, nunca por posición: urbanismReportAreas.Paisajismo.progress, urbanismReportAreas.Instalaciones de gas.progress. El orden de la lista viva no coincide con el de ningún informe, y la evidencia debe nombrar la disciplina de esa fila.
 - Conserva exactamente los identificadores visibles de edificios, apartamentos y zonas urbanas.
 - No adivines coordenadas, geometrías, posiciones, índices de arrays, relaciones entre edificios y apartamentos, estados ni porcentajes a partir del color o la proximidad visual.
 - No reemplaces una raíz espacial completa con una lista parcial. Solo emite buildings, urbanismAreas o urbanismReportAreas como raíz completa si la fuente contiene el inventario completo y compatible.
@@ -1188,6 +1190,20 @@ function validateModelOutput(
     if (!evidence) {
       addWarning(warnings, `Se descartó ${key} porque no aporta evidencia verificable.`);
       return;
+    }
+    // La posición de una disciplina de urbanismo no significa nada fuera de la
+    // lista viva (su orden cambió y no coincide con el de ningún informe): un
+    // avance escrito por posición acabó dos veces en la disciplina de al lado.
+    // Se dirige por la disciplina que nombra la evidencia; si no nombra
+    // exactamente una, el dato se descarta antes que escribirlo a ciegas.
+    const positionalUrbanism = key.match(/^urbanismReportAreas\.(\d+)\.(.+)$/);
+    if (positionalUrbanism) {
+      const discipline = urbanismDisciplineInText(evidence);
+      if (!discipline) {
+        addWarning(warnings, `Se descartó ${key}: su evidencia no nombra una única disciplina de urbanismo y la posición no basta para saber cuál es.`);
+        return;
+      }
+      key = `urbanismReportAreas.${urbanismDisciplineLabel(discipline)}.${positionalUrbanism[2]}`;
     }
     if (candidate.value_json.length > MAX_VALUE_JSON_LENGTH) {
       addWarning(warnings, `Se descartó ${key} porque su valor supera el tamaño permitido.`);

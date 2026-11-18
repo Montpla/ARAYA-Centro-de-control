@@ -5,6 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import * as demoData from "../app/demo-data.ts";
 import * as liveData from "../lib/live-data.ts";
+import * as urbanismDisciplines from "../lib/urbanism-disciplines.ts";
 import * as projectXml from "../lib/project-xml.ts";
 import * as xlsxReader from "../lib/xlsx-reader.ts";
 import * as pdfText from "../lib/pdf-text.ts";
@@ -60,6 +61,7 @@ async function loadResolver() {
   const require = (specifier) => {
     if (specifier === "./live-data") return liveData;
     if (specifier === "../app/demo-data") return demoData;
+    if (specifier === "./urbanism-disciplines") return urbanismDisciplines;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {
