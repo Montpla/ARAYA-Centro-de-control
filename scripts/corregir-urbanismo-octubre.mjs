@@ -65,7 +65,9 @@ const response = await fetch(`${PRODUCTION_URL}/api/live-data`, {
   body: JSON.stringify({
     updates,
     area: "urbanismo",
-    cutoff: "2026-10-31",
+    // Sin corte: una corrección sin periodo no compite por fecha con el Project
+    // de urbanismo (registrado con el corte del día de carga, 18/11), así que
+    // prevalece por ser la publicación más reciente.
     // Sin archivo de origen: es una corrección manual explícita. Así no la
     // frena la guarda de cortes (Vialidad ya tiene el corte del Project de
     // urbanismo, posterior al 31/10), que existe para reprocesos automáticos.
