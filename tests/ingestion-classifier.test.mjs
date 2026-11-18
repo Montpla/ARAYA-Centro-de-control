@@ -33,6 +33,11 @@ const sustitutos = {
     'const readPdfText = async () => ({ text: "", streams: 0, scanned: false });',
     "const findBuildingProgress = () => [];",
   ].join("\n"),
+  "./pptx-curva-s": [
+    "const CURVA_S_MONTH_COUNT = 27;",
+    "const readPptxCurvaS = async () => null;",
+    "const curvaSUpdates = () => [];",
+  ].join("\n"),
   "./progress-model": [
     "const PHASE_WEIGHTS = [];",
     "const buildingProgressFromPhases = () => 0;",

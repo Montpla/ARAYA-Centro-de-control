@@ -1137,15 +1137,15 @@ button {
 }
 
 .progress-gap-fill.good {
-  fill: rgba(84, 184, 140, 0.22);
+  fill: rgba(84, 184, 140, 0.4);
 }
 
 .progress-gap-fill.warn {
-  fill: rgba(221, 164, 74, 0.22);
+  fill: rgba(221, 164, 74, 0.42);
 }
 
 .progress-gap-fill.danger {
-  fill: rgba(224, 92, 68, 0.26);
+  fill: rgba(232, 96, 72, 0.45);
 }
 
 .progress-line.planned {
@@ -1156,6 +1156,12 @@ button {
 .progress-line.actual {
   stroke: #ddb45b;
   stroke-width: 3.4;
+}
+
+.progress-line.reprogrammed {
+  stroke: #c9a7ff;
+  stroke-width: 2.6;
+  stroke-dasharray: 7 5;
 }
 
 .progress-point {
@@ -2586,6 +2592,10 @@ button {
 
 .legend.actual {
   background: #ddb45b;
+}
+
+.legend.reprogrammed {
+  background: #c9a7ff;
 }
 
 .count-badge {

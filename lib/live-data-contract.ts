@@ -348,7 +348,7 @@ function validIsoDate(value: string) {
 function isPercentagePath(path: string[]) {
   const field = path.at(-1) ?? "";
   return PERCENT_FIELD.test(field) ||
-    (path[0] === "monthlyPlan" && (field === "planned" || field === "actual"));
+    (path[0] === "monthlyPlan" && (field === "planned" || field === "actual" || field === "reprogrammed"));
 }
 
 function identityKeyForArray(expected: unknown, actual: unknown[]) {

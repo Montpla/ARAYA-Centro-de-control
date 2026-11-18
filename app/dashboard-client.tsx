@@ -2944,7 +2944,7 @@ function DynamicAreaSections({
   );
 }
 
-function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
+function ProgressChart({ data = monthlyPlan }: { data?: Array<{ month: string; planned: number; actual: number | null; reprogrammed?: number | null }> }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const width = 1180;
   const height = 410;
@@ -2973,17 +2973,37 @@ function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
   // aplicado por tramo en vez de a las líneas en sí -que mantienen siempre su
   // color de serie (plan=cian, ejecutado=dorado), fijado a un diseño ya
   // aprobado y protegido por test.
-  const gapSegments = data
-    .slice(0, -1)
+  // Los tramos se forman entre meses CON ejecutado consecutivos, no entre
+  // meses de calendario consecutivos: si a un mes le falta el dato real (p. ej.
+  // septiembre, cuando el corte siguiente llega en octubre), la línea de
+  // ejecutado ya une los dos puntos que lo rodean y el sombreado debe cubrir
+  // ese mismo tramo. Antes el hueco quedaba sin sombrear justo en la parte más
+  // reciente de la curva. Entre ambos puntos el ejecutado se interpola en
+  // línea recta, igual que lo dibuja la polilínea.
+  // Plan reprogramado: sólo los meses que lo tienen (desde la reprogramación).
+  const reprogrammedPoints = data
     .map((point, index) => {
-      const next = data[index + 1];
+      const value = (point as { reprogrammed?: number | null }).reprogrammed;
+      return typeof value === "number" && Number.isFinite(value) ? `${xFor(index)},${yFor(value)}` : null;
+    })
+    .filter(Boolean)
+    .join(" ");
+  const actualIndexes = data.flatMap((point, index) => (point.actual === null ? [] : [index]));
+  const gapSegments = actualIndexes
+    .slice(0, -1)
+    .map((index, position) => {
+      const nextIndex = actualIndexes[position + 1];
+      const point = data[index];
+      const next = data[nextIndex];
       if (point.actual === null || next.actual === null) return null;
       const gap = (point.actual - point.planned + (next.actual - next.planned)) / 2;
       const tone = gap >= 0 ? "good" : gap >= -5 ? "warn" : "danger";
+      const plannedEdge = data
+        .slice(index, nextIndex + 1)
+        .map((monthPoint, offset) => `${xFor(index + offset)},${yFor(monthPoint.planned)}`);
       const points = [
-        `${xFor(index)},${yFor(point.planned)}`,
-        `${xFor(index + 1)},${yFor(next.planned)}`,
-        `${xFor(index + 1)},${yFor(next.actual)}`,
+        ...plannedEdge,
+        `${xFor(nextIndex)},${yFor(next.actual)}`,
         `${xFor(index)},${yFor(point.actual)}`,
       ].join(" ");
       return { key: `${point.month}-${index}`, points, tone };
@@ -2998,6 +3018,10 @@ function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
     if (point.actual !== null) cutoffIndex = index;
   });
   const cutoffPoint = cutoffIndex >= 0 ? data[cutoffIndex] : null;
+  const cutoffReprogrammedRaw = cutoffPoint ? (cutoffPoint as { reprogrammed?: number | null }).reprogrammed : null;
+  const cutoffReprogrammed = typeof cutoffReprogrammedRaw === "number" && Number.isFinite(cutoffReprogrammedRaw)
+    ? cutoffReprogrammedRaw
+    : null;
   const cutoffGap = cutoffPoint ? Math.round((cutoffPoint.actual! - cutoffPoint.planned) * 10) / 10 : 0;
   const cutoffYear = cutoffIndex >= 0 ? new Date(2025, 5 + cutoffIndex, 1).getFullYear() : null;
   const finalIndex = data.length - 1;
@@ -3075,6 +3099,9 @@ function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
               <polygon key={segment.key} className={`progress-gap-fill ${segment.tone}`} points={segment.points} />
             ))}
             <polyline className="progress-line planned" points={plannedPoints} />
+            {reprogrammedPoints && (
+              <polyline className="progress-line reprogrammed" points={reprogrammedPoints} />
+            )}
             <polyline className="progress-line actual" points={actualPoints} />
             {data.map((point, index) => (
               <g key={`${point.month}-${index}`}>
@@ -3124,13 +3151,14 @@ function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
         <div className="chart-legend">
           <span><i className="legend plan" />Plan Operativo</span>
           <span><i className="legend actual" />Ejecutado Real</span>
+          {reprogrammedPoints && <span><i className="legend reprogrammed" />Plan Reprogramado</span>}
         </div>
       </div>
       <div className="s-curve-insight">
         <strong>Al corte ({cutoffPoint ? `${cutoffPoint.month}-${cutoffYear}` : "sin dato"}):</strong>
         <span>
           {cutoffPoint
-            ? `Ejecutado ${number.format(cutoffPoint.actual as number)}% vs. Plan ${number.format(cutoffPoint.planned)}% → brecha de ${number.format(Math.abs(cutoffGap))} puntos porcentuales. El plan proyecta cierre en ${finalMonthName}-${finalYear}; sin corrección, la brecha actual se traduce en un desplazamiento equivalente en el cierre.`
+            ? `Ejecutado ${number.format(cutoffPoint.actual as number)}% vs. Plan Operativo ${number.format(cutoffPoint.planned)}% → brecha de ${number.format(Math.abs(cutoffGap))} puntos porcentuales.${cutoffReprogrammed !== null ? ` Frente al Plan Reprogramado (${number.format(cutoffReprogrammed)}%) la brecha es de ${number.format(Math.abs(Math.round(((cutoffPoint.actual as number) - cutoffReprogrammed) * 10) / 10))} puntos.` : ""} El plan proyecta cierre en ${finalMonthName}-${finalYear}; sin corrección, la brecha actual se traduce en un desplazamiento equivalente en el cierre.`
             : "Todavía no hay avance ejecutado publicado para calcular la brecha."}
         </span>
       </div>

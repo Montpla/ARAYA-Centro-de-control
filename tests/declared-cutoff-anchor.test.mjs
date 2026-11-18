@@ -48,8 +48,12 @@ test("un informe con corte posterior a la Curva S manda en el resumen", () => {
   assert.equal(anclado, true);
   assert.deepEqual(
     { actual: ultimoCorte(plan).actual, planned: ultimoCorte(plan).planned },
-    { actual: 32.06, planned: 39.8 },
+    { actual: 32.06, planned: 57.48 },
+    "el 39,8 % es del plan reprogramado: el Plan Operativo de octubre sigue en 57,48 %",
   );
+  for (let index = 1; index < plan.length; index += 1) {
+    assert.ok(plan[index].planned >= plan[index - 1].planned, `el plan no retrocede en el mes ${index}`);
+  }
   assert.equal(plan[15].actual, null, "septiembre no se inventa");
   assert.equal(plan[14].actual, 27.9, "agosto medido se conserva");
 });
