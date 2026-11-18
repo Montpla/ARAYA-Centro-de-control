@@ -58,6 +58,37 @@ const objetivo = activos
     !yaComprimido(file))
   .slice(0, MAX_POR_EJECUCION);
 
+// Originales cuyo comprimido ya se leyó pero siguen abiertos (por ejemplo,
+// porque se comprimieron antes de que un derivado leído pudiera cerrarlos).
+const sinCerrar = activos.filter((file) =>
+  file.publicationRevision === null &&
+  (!FILE_ID || file.id === FILE_ID) &&
+  activos.some((derivado) =>
+    derivado.derivedFromFileId === file.id &&
+    derivado.automationKind === AUTOMATIZACION &&
+    derivado.processingStage === "sincronizado"));
+for (const file of sinCerrar) {
+  const derivado = activos.find((item) =>
+    item.derivedFromFileId === file.id && item.automationKind === AUTOMATIZACION && item.processingStage === "sincronizado");
+  if (!APLICAR) {
+    console.log(`  · Sin cerrar: ${file.originalName} (sustituto leído: ${derivado.originalName}). Simulación: no se cierra.`);
+    continue;
+  }
+  const cierre = await fetch(`${PRODUCTION_URL}/api/files/supersede`, {
+    method: "POST",
+    headers: { Cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fileId: file.id,
+      replacementFileId: derivado.id,
+      reason: "PDF demasiado pesado para el lector: sustituido por su versión comprimida, que ya se ha leído.",
+    }),
+  });
+  const respuesta = await cierre.json().catch(() => ({}));
+  console.log(cierre.ok
+    ? `  ✔ Cerrado como histórico: ${file.originalName}`
+    : `  ⚠ No se pudo cerrar ${file.originalName} (${cierre.status}): ${respuesta.error ?? ""}`);
+}
+
 console.log(`=== ${objetivo.length} PDF pesado(s) pendiente(s) de comprimir ===`);
 for (const file of objetivo) {
   console.log(`  · ${file.originalName} · ${(file.sizeBytes / 1024 / 1024).toFixed(1)} MB · subido ${file.createdAt}`);
