@@ -297,12 +297,12 @@ export const monthlyPlan = planCurveMonths.map((month, indice) => ({
   month,
   planned: planCurvePlanned[indice],
   actual: indice < planCurveActualsToDate.length ? planCurveActualsToDate[indice] : null,
-  // Plan reprogramado: la nueva línea de programación que el Informe Ejecutivo
-  // dibuja junto al Plan Operativo original desde el mes en que se reprograma
-  // la obra. No sustituye al plan original: son dos cronogramas distintos y la
-  // Curva S muestra los dos. Sin dato hasta que un informe lo publique.
-  reprogrammed: null as number | null,
-}));
+  // Plan reprogramado (monthlyPlan.<n>.reprogrammed): campo opcional que sólo
+  // traen los meses desde la reprogramación, publicado por el Informe
+  // Ejecutivo. No va en la línea base: un campo null en todas las filas
+  // haría que el contrato exigiera null para siempre (ver
+  // OPTIONAL_OBJECT_FIELDS en lib/live-data-contract.ts).
+}) as { month: string; planned: number; actual: number | null; reprogrammed?: number | null });
 
 export const workPackages: WorkPackage[] = [
   { name: "Infraestructura", progress: 55, finish: "07/10/2026", baselineFinish: "10/08/2026", deviationDays: 58, critical: false },
