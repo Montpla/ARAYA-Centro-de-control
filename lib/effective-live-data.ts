@@ -374,8 +374,16 @@ async function annotateProtectedEventHistory(rows: PublishedLiveDataRow[]) {
 
 async function readEffectivePublishedRows() {
   const db = getDb();
-  // Rank inside D1 so the five-second poll transfers only one eligible winner
+  // Rank inside D1 so the five-second poll transfers at most two candidates
   // per key; immutable history may grow indefinitely without growing payloads.
+  //
+  // The two candidates are the best dated row and the latest undated row.
+  // compareEffectiveRevision() only orders by cutoff when BOTH rows declare
+  // one, so ranking every row of a key by cutoff here (with an empty cutoff
+  // sorting last) silently discarded any newer undated correction before the
+  // JS tie-break ever saw it — Vialidad stayed at 7 % after a manual
+  // correction to 20,4 % on 18/11/2026. Partitioning by "has a date" keeps
+  // both and lets deriveEffectiveLiveDataSnapshot() decide.
   const rows = await db.all<PublishedLiveDataRow>(sql`
     WITH eligible AS (
       SELECT
@@ -407,7 +415,9 @@ async function readEffectivePublishedRows() {
         f.area AS linkedFileArea,
         f.document_type AS linkedFileDocumentType,
         ROW_NUMBER() OVER (
-          PARTITION BY h.key
+          PARTITION BY
+            h.key,
+            COALESCE(NULLIF(h.cutoff, ''), NULLIF(e.cutoff, '')) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]*'
           ORDER BY
             CASE
               WHEN COALESCE(NULLIF(h.cutoff, ''), NULLIF(e.cutoff, '')) GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'

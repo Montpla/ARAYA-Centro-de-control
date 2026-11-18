@@ -65,10 +65,13 @@ const response = await fetch(`${PRODUCTION_URL}/api/live-data`, {
   body: JSON.stringify({
     updates,
     area: "urbanismo",
-    cutoff: "2026-10-31",
-    sourceFileId: INFORME.id,
-    sourceName: INFORME.nombre,
-    message: "Corrección de la revisión 111: la lectura por IA asignó por posición las filas del gráfico \"Avance por capítulo\" y desde la 5.ª cada valor cayó en la disciplina de al lado. Se publican por nombre los valores reales del gráfico (% real 31/10) y se da de alta Elementos urbanos.",
+    // Sin corte: una corrección sin periodo no compite por fecha con el Project
+    // de urbanismo (registrado con el corte del día de carga, 18/11), así que
+    // prevalece por ser la publicación más reciente.
+    // Sin archivo de origen: es una corrección manual explícita. Así no la
+    // frena la guarda de cortes (Vialidad ya tiene el corte del Project de
+    // urbanismo, posterior al 31/10), que existe para reprocesos automáticos.
+    message: `Corrección de la revisión 111 (${INFORME.nombre}): la lectura por IA asignó por posición las filas del gráfico \"Avance por capítulo\" y desde la 5.ª cada valor cayó en la disciplina de al lado. Se publican por nombre los valores reales del gráfico (% real 31/10) y se da de alta Elementos urbanos.`,
   }),
 });
 const body = await response.json().catch(() => ({}));

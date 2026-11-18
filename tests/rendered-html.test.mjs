@@ -510,7 +510,7 @@ test("all variable dashboard values use a versioned live-data layer with five-se
   assert.match(route, /publishLiveDataUpdates/);
   assert.match(route, /provenance/);
   assert.match(route, /refreshIntervalMs: 5_000/);
-  assert.match(effectiveLive, /ROW_NUMBER\(\) OVER \([\s\S]*PARTITION BY h\.key[\s\S]*h\.id DESC/);
+  assert.match(effectiveLive, /ROW_NUMBER\(\) OVER \(\s*PARTITION BY\s+h\.key,[\s\S]*h\.id DESC/);
   assert.match(effectiveLive, /e\.status = 'published'/);
   assert.match(publisher, /status: "preparing"/);
   assert.match(liveData, /LIVE_DATA_ROOTS/);
