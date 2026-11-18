@@ -75,6 +75,31 @@ try {
       for (const linea of relevantes) console.log(`   ${linea.slice(0, 220)}`);
     }
   }
+
+  // Gráficos: categoría → valor por serie. Sólo se muestran los que son
+  // porcentajes (todos los valores entre 0 y 100) y nombran urbanismo o zonas;
+  // un gráfico de importes nunca pasa el filtro.
+  const graficos = execFileSync("unzip", ["-Z1", ruta], { encoding: "utf8" })
+    .split("\n")
+    .filter((entrada) => /^ppt\/charts\/chart\d+\.xml$/.test(entrada));
+  const puntos = (bloque) => [...bloque.matchAll(/<c:pt idx="(\d+)">\s*<c:v>([^<]*)<\/c:v>/g)].map((m) => [Number(m[1]), m[2]]);
+  for (const entrada of graficos) {
+    const xml = execFileSync("unzip", ["-p", ruta, entrada], { encoding: "utf8", maxBuffer: 50 * 1024 * 1024 });
+    const series = [...xml.matchAll(/<c:ser>([\s\S]*?)<\/c:ser>/g)].map((m) => m[1]);
+    const lineas = [];
+    for (const serie of series) {
+      const nombre = serie.match(/<c:tx>[\s\S]*?<c:v>([^<]*)<\/c:v>/)?.[1] ?? "(serie)";
+      const categorias = new Map(puntos(serie.match(/<c:cat>([\s\S]*?)<\/c:cat>/)?.[1] ?? ""));
+      const valores = puntos(serie.match(/<c:val>([\s\S]*?)<\/c:val>/)?.[1] ?? "").map(([idx, v]) => [idx, Number(v)]);
+      if (!valores.length || valores.some(([, v]) => !Number.isFinite(v) || v < 0 || v > 100)) continue;
+      if (![...categorias.values()].some((categoria) => PALABRAS.test(categoria)) && !PALABRAS.test(nombre)) continue;
+      lineas.push(`   serie "${nombre}": ${valores.map(([idx, v]) => `${categorias.get(idx) ?? idx}=${Math.round(v * 100) / 100}`).join(" · ")}`);
+    }
+    if (lineas.length) {
+      console.log(`\n--- gráfico ${entrada.replace("ppt/charts/", "")} ---`);
+      for (const linea of lineas) console.log(linea.slice(0, 900));
+    }
+  }
 } finally {
   await rm(carpeta, { recursive: true, force: true });
 }
