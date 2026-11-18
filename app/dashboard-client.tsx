@@ -3359,7 +3359,7 @@ function SitePlan({
           <div className={`site-plan-image-wrap ${planMode}`}>
             <img
               className="site-plan-image"
-              src={planMode === "visual" ? "/araya-visual-masterplan-v3.png" : "/araya-site-plan-clean.png"}
+              src={planMode === "visual" ? "/araya-visual-masterplan-v4.png" : "/araya-site-plan-clean.png"}
               alt={
                 planMode === "visual"
                   ? "Implantación visual de ARAYA con edificios, apartamentos, viales, estacionamientos y urbanismo"

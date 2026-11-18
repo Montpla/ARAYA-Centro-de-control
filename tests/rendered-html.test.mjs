@@ -30,7 +30,7 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /planCoordinates/);
   assert.match(source, /Abrir documento/);
   assert.match(source, /Descargar/);
-  assert.match(source, /araya-visual-masterplan-v3\.png/);
+  assert.match(source, /araya-visual-masterplan-v4\.png/);
   assert.match(source, /Plano visual interactivo/);
   assert.match(source, /Plano técnico/);
   assert.match(source, /progress-line planned/);

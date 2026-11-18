@@ -529,7 +529,7 @@ def page_core(c: canvas.Canvas) -> None:
     rounded_rect(c, preview_x, preview_y, preview_w, preview_h, CREAM, LINE, 13)
     draw_contain(
         c,
-        PUBLIC / "araya-visual-masterplan-v3.png",
+        PUBLIC / "araya-visual-masterplan-v4.png",
         preview_x + 12,
         preview_y + 58,
         preview_w - 24,
