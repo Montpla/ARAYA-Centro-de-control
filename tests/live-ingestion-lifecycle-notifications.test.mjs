@@ -792,6 +792,7 @@ test("un dato financiero se publica aunque el área del archivo sea otra", () =>
     "isSafeAutomaticStructuredUpdate",
     "individualUpdateContractIsSafe",
     "liveValues",
+    "staleCutoffKeySet",
     `${snippet}\nreturn updateIsAutoPublishable;`,
   );
   const build = (overrides = {}) => factory(
@@ -805,12 +806,19 @@ test("un dato financiero se publica aunque el área del archivo sea otra", () =>
     overrides.isSafeAutomaticStructuredUpdate ?? (() => true),
     overrides.individualUpdateContractIsSafe ?? (() => true),
     overrides.liveValues ?? {},
+    overrides.staleCutoffKeySet ?? new Set(),
   );
 
   // El dato financiero, con un área distinta a la del archivo, se publica:
   // el permiso financiero ya lo protege.
   const financiero = build();
   assert.equal(financiero({ key: "cubicacionCaratula", area: "finanzas" }), true);
+
+  // Un dato de corte anterior al ya publicado se aparta él solo; el resto del
+  // lote sigue publicándose (antes la guarda de publicación tumbaba todo).
+  const conCorteAntiguo = build({ staleCutoffKeySet: new Set(["cubicacionCaratula"]) });
+  assert.equal(conCorteAntiguo({ key: "cubicacionCaratula", area: "finanzas" }), false);
+  assert.equal(conCorteAntiguo({ key: "buildings.TH-9.progress", area: "obra" }), true);
 
   // Sin permiso financiero, sigue sin publicarse: el área no sustituye al
   // permiso, sólo deja de exigir que además coincidan.
