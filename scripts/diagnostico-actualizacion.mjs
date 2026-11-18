@@ -6,7 +6,7 @@
 // cruzarlas con lo que los paneles leen. Sólo imprime NOMBRES de clave, área y
 // procedencia —nunca valores—, así que es seguro en un registro.
 
-import { urbanismAreas as baselineUrbanismAreas } from "../app/demo-data.ts";
+import { buildings as baselineBuildings, urbanismAreas as baselineUrbanismAreas } from "../app/demo-data.ts";
 import { urbanismReportAreas as baselineUrbanismReportAreas } from "../app/june-report-data.ts";
 import { materializeLiveRoot } from "../lib/live-data.ts";
 import { deriveUrbanismMapAreas, reconcileGeneralUrbanism } from "../lib/urbanism-map-progress.ts";
@@ -103,8 +103,14 @@ console.log(`avance de urbanismo (urbanismAreas.0.progress): ${urbanismo ?? "(si
 console.log(`avance de cronograma (projectSnapshot.scheduleProgress): ${crono ?? "(sin dato)"}%`);
 console.log(`previsión de fin (projectSnapshot.forecastFinish): ${fin ?? "(sin dato)"}`);
 console.log(`edificios con avance físico publicado: ${edificios.length}`);
-for (const clave of edificios.sort().slice(0, 30)) {
-  console.log(`   ${clave}: ${valores[clave]}%`);
+// Avance global de cada edificio con su origen: es lo que decide su color.
+const totales = edificios.filter((clave) => /^buildings\.[^.]+\.progress$/.test(clave))
+  .sort((a, b) => Number(a.split(".")[1]) - Number(b.split(".")[1]));
+console.log(`avance global por edificio (${totales.length}):`);
+for (const clave of totales) {
+  const origen = provenance[clave] ? ` · rev ${provenance[clave].revision} · ${provenance[clave].sourceName ?? ""}` : "";
+  const nombre = baselineBuildings[Number(clave.split(".")[1])]?.name ?? "";
+  console.log(`   ${clave}${nombre ? ` (${nombre})` : ""}: ${Number(valores[clave]).toFixed(2)}%${origen}`);
 }
 
 // El titular del resumen toma el último "actual" de la Curva S, no
