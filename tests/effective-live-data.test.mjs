@@ -1207,3 +1207,27 @@ test("el plan reprogramado de la Curva S se publica mes a mes como campo opciona
     "también en una publicación del array entero",
   );
 });
+
+test("el ganador de una clave no depende del orden de las filas (sin ciclos)", async () => {
+  // Historia real de Vialidad (urbanismReportAreas.6.progress) el 18/11/2026.
+  // La comparación "corte si ambos lo tienen; si no, publicación" no es
+  // transitiva, y ordenar todas las filas con ella devolvía 7 % (rev 114)
+  // según el orden de llegada. Gana la última publicación sin corte (rev 117)
+  // frente a la mejor fechada (rev 114), en cualquier orden.
+  const { deriveEffectiveLiveDataSnapshot } = await loadCore();
+  const key = "urbanismReportAreas.6.progress";
+  const filas = [
+    row({ historyId: 1, eventId: 111, key, cutoff: "2026-10-31", eventCutoff: "2026-10-31", valueJson: "6.8" }),
+    row({ historyId: 2, eventId: 114, key, cutoff: "2026-11-18", eventCutoff: "2026-11-18", valueJson: "7" }),
+    row({ historyId: 3, eventId: 116, key, cutoff: "2026-10-31", eventCutoff: "2026-10-31", valueJson: "20.4" }),
+    row({ historyId: 4, eventId: 117, key, cutoff: "", eventCutoff: "", valueJson: "20.4" }),
+    row({ historyId: 5, eventId: 118, key, cutoff: "2026-10-31", eventCutoff: "2026-10-31", valueJson: "20.4" }),
+    row({ historyId: 6, eventId: 118, key: "urbanismReportAreas.7.progress", cutoff: "2026-10-31", eventCutoff: "2026-10-31", valueJson: "6.8" }),
+  ];
+  const ordenes = [filas, [...filas].reverse(), [filas[1], filas[5], filas[3], filas[0], filas[4], filas[2]]];
+  for (const orden of ordenes) {
+    assert.equal(deriveEffectiveLiveDataSnapshot(orden, true).values[key], 20.4);
+  }
+  // Sin la corrección sin corte, manda la fechada más reciente.
+  assert.equal(deriveEffectiveLiveDataSnapshot(filas.filter((fila) => fila.eventId !== 117), true).values[key], 7);
+});

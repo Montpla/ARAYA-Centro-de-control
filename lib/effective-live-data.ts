@@ -202,11 +202,21 @@ export function deriveEffectiveLiveDataSnapshot(
   inputRows: PublishedLiveDataRow[],
   financeAccess: boolean,
 ): EffectiveLiveDataSnapshot {
-  const publishedRows = inputRows
-    .filter((row) => row.eventStatus === "published")
-    .sort((left, right) => compareEffectiveRevision(right, left));
+  const publishedRows = inputRows.filter((row) => row.eventStatus === "published");
   const exactWinnerByKey = new Map<string, PublishedLiveDataRow>();
   const eventProtected = new Map<number, boolean>();
+  // Ganador por clave, elegido explícitamente y no ordenando todas las filas
+  // con compareEffectiveRevision: esa comparación no es transitiva (una fila
+  // sin corte se compara por publicación y dos fechadas por corte, así que
+  // "sin corte rev 117" > "corte 18/11 rev 114" > "corte 31/10 rev 118" >
+  // "sin corte rev 117" es un ciclo) y Array.sort con un comparador así
+  // devuelve cualquier orden. El 18/11/2026 eso devolvió Vialidad a 7 %.
+  // Regla: la mejor fila fechada (corte más reciente, luego publicación) y la
+  // última sin corte; entre ambas manda la publicada después.
+  const bestDatedByKey = new Map<string, PublishedLiveDataRow>();
+  const latestUndatedByKey = new Map<string, PublishedLiveDataRow>();
+  const byPublication = (left: PublishedLiveDataRow, right: PublishedLiveDataRow) =>
+    left.eventId !== right.eventId ? left.eventId - right.eventId : left.historyId - right.historyId;
 
   for (const row of publishedRows) {
     if (
@@ -218,9 +228,20 @@ export function deriveEffectiveLiveDataSnapshot(
     ) {
       eventProtected.set(row.eventId, true);
     }
-    if (!exactWinnerByKey.has(row.key) && sourceIsActive(row)) {
-      exactWinnerByKey.set(row.key, row);
+    if (!sourceIsActive(row)) continue;
+    if (normalizedCutoff(row)) {
+      const current = bestDatedByKey.get(row.key);
+      if (!current || compareEffectiveRevision(row, current) > 0) bestDatedByKey.set(row.key, row);
+    } else {
+      const current = latestUndatedByKey.get(row.key);
+      if (!current || byPublication(row, current) > 0) latestUndatedByKey.set(row.key, row);
     }
+  }
+  for (const key of new Set([...bestDatedByKey.keys(), ...latestUndatedByKey.keys()])) {
+    const dated = bestDatedByKey.get(key);
+    const undated = latestUndatedByKey.get(key);
+    const winner = dated && undated ? (byPublication(undated, dated) > 0 ? undated : dated) : (dated ?? undated);
+    if (winner) exactWinnerByKey.set(key, winner);
   }
 
   // A complete root/branch replaces every older child below it. A newer child
