@@ -23,6 +23,7 @@ import {
   urbanismReportAreas,
 } from "../app/june-report-data";
 import { antonelyDetailTotals } from "../app/antonely-finance-data";
+import { currentPlannedProgress } from "./monthly-plan";
 import { procurementQualityIssues } from "../app/procurement-data";
 import { reprogrammedFlowQualityIssues } from "../app/reprogrammed-flow-data";
 import { fiduciaryStatementQualityIssues, fiduciaryStatementSummary } from "../app/fiduciary-statements-data";
@@ -199,7 +200,11 @@ export function buildControlRoomBaseline(
       physicalActual: currentProject.overallProgress,
       kpiPlan: currentProject.plannedProgress,
       kpiDeviationPoints: currentProject.deviationPoints,
-      curvePlanAtCutoff: lastActual?.planned ?? null,
+      // Plan vigente de la curva en el corte (el reprogramado si ese mes lo
+      // tiene): es el que debe coincidir con kpiPlan. El Plan Operativo
+      // original del mismo mes va aparte.
+      curvePlanAtCutoff: lastActual ? currentPlannedProgress(lastActual) : null,
+      curveOperativePlanAtCutoff: lastActual?.planned ?? null,
       curveActualAtCutoff: lastActual?.actual ?? null,
       curveCutoffLabel: lastActual?.month ?? "",
       baselineFinish: currentProject.baselineFinish,
