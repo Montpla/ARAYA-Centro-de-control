@@ -44,6 +44,13 @@ if (controlRoomResponse.ok) {
   console.log(`documentos vigentes: ${documents.total ?? "?"} · resueltos: ${documents.approved ?? "?"} · pendientes: ${documents.pending ?? "?"}`);
   console.log(`propuestas pendientes: ${documents.pendingProposals ?? "?"} · discrepancias vigentes: ${documents.discrepancies ?? "?"}`);
   console.log(`acciones abiertas: ${actions.open ?? "?"} · en curso: ${actions.inProgress ?? "?"} · bloqueadas: ${actions.blocked ?? "?"}`);
+  // Lo que el panel pinta ya derivado (avance físico del resumen y corte de
+  // la Curva S). Son porcentajes y fechas, no cifras de dinero.
+  const planning = controlRoom.planning ?? {};
+  console.log("=== Resumen tal como lo sirve producción (derivado) ===");
+  console.log(`avance físico: ${planning.physicalActual ?? "?"}% · plan: ${planning.kpiPlan ?? "?"}% · desvío: ${planning.kpiDeviationPoints ?? "?"} pp`);
+  console.log(`Curva S en el corte: ${planning.curveCutoffLabel ?? "?"} · ejecutado ${planning.curveActualAtCutoff ?? "?"}% · plan ${planning.curvePlanAtCutoff ?? "?"}%`);
+  console.log(`fin previsto: ${planning.forecastFinish ?? "?"} · fin base: ${planning.baselineFinish ?? "?"}`);
 }
 
 // Agrupar las claves por la revisión que las escribió.
