@@ -110,6 +110,7 @@ export type ControlRoomSnapshot = {
     kpiPlan: number;
     kpiDeviationPoints: number;
     curvePlanAtCutoff: number | null;
+    curveOperativePlanAtCutoff?: number | null;
     curveActualAtCutoff: number | null;
     curveCutoffLabel: string;
     baselineFinish: string;
