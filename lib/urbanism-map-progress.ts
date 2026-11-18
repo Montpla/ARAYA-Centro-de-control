@@ -34,6 +34,30 @@ function normalizedName(value: string) {
  * Una corrección que reduzca un acumulado debe publicarse sobre ambas claves
  * equivalentes; no se interpreta automáticamente como una regresión de obra.
  */
+/**
+ * Urbanismo general es un acumulado consolidado que también declara el
+ * Informe Ejecutivo (projectSnapshot.urbanismProgress). Con el mismo criterio
+ * de mayor avance conocido, un informe más reciente no puede quedar oculto por
+ * una ficha espacial publicada meses antes.
+ */
+export function reconcileGeneralUrbanism<T extends UrbanismMapArea>(
+  areas: readonly T[],
+  declaredProgress: number | null | undefined,
+): T[] {
+  if (typeof declaredProgress !== "number" || !Number.isFinite(declaredProgress)) return [...areas];
+  return areas.map((area) => {
+    if (area.id !== "urban-general") return area;
+    if (typeof area.progress === "number" && area.progress >= declaredProgress) return area;
+    return {
+      ...area,
+      progress: declaredProgress,
+      status: "integrado",
+      source: "Informe Ejecutivo · avance de urbanismo declarado",
+      pendingFields: area.pendingFields?.filter((field) => normalizedName(field) !== "avance"),
+    };
+  });
+}
+
 export function deriveUrbanismMapAreas<T extends UrbanismMapArea>(
   areas: readonly T[],
   reportAreas: readonly UrbanismReportArea[],

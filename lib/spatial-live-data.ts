@@ -17,8 +17,8 @@ import {
   activeBuildingsProgress,
   projectDateForDisplay,
 } from "./progress-model";
-import { clearTrailingMonthlyActualPlaceholders } from "./monthly-plan";
-import { deriveUrbanismMapAreas } from "./urbanism-map-progress";
+import { anchorDeclaredCutoff, clearTrailingMonthlyActualPlaceholders } from "./monthly-plan";
+import { deriveUrbanismMapAreas, reconcileGeneralUrbanism } from "./urbanism-map-progress";
 import { unitOverallProgress } from "./unit-progress";
 
 export function materializeSpatialLiveData(values: LiveDataMap) {
@@ -36,10 +36,14 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
   const urbanismReportAreas = compactLiveEntities(
     materializeLiveRoot("urbanismReportAreas", urbanismReportBaseline, values),
   );
-  const urbanismAreas = deriveUrbanismMapAreas(spatialUrbanismAreas, urbanismReportAreas);
   const snapshot = materializeLiveRoot("projectSnapshot", projectSnapshot, values);
+  const urbanismAreas = reconcileGeneralUrbanism(
+    deriveUrbanismMapAreas(spatialUrbanismAreas, urbanismReportAreas),
+    snapshot.urbanismProgress,
+  );
   const monthlyPlan = materializeLiveRoot("monthlyPlan", baselineMonthlyPlan, values);
   clearTrailingMonthlyActualPlaceholders(monthlyPlan);
+  anchorDeclaredCutoff(monthlyPlan, snapshot);
   const unitCount = buildings.reduce((total, building) => total + building.units.length, 0);
   const constructionDisciplines = materializeLiveRoot(
     "constructionDisciplines",

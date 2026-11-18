@@ -25,7 +25,7 @@ import {
   progressBandDefinitions,
   type ProgressBandId,
 } from "../lib/progress-palette";
-import { clearTrailingMonthlyActualPlaceholders } from "../lib/monthly-plan";
+import { anchorDeclaredCutoff, clearTrailingMonthlyActualPlaceholders } from "../lib/monthly-plan";
 import {
   technicalPlanCoordinates as planCoordinates,
   visualPlanCoordinates,
@@ -50,7 +50,7 @@ import {
   liveSupplierContactAudit,
   liveTypeABudgetSummary,
 } from "../lib/live-derivations";
-import { deriveUrbanismMapAreas } from "../lib/urbanism-map-progress";
+import { deriveUrbanismMapAreas, reconcileGeneralUrbanism } from "../lib/urbanism-map-progress";
 import { AutomationWorkspace } from "./automation-workspace";
 import { OnboardingAssistant } from "./onboarding-assistant";
 
@@ -1448,7 +1448,10 @@ function synchronizeDerivedDashboardState() {
   // Vialidad y paisajismo existen tanto en el inventario espacial como en el
   // informe de urbanismo. Se reconcilian aquí, una sola vez por revisión, para
   // que plano, ficha, resumen, agente y vistas auxiliares lean el mismo estado.
-  const reconciledUrbanismAreas = deriveUrbanismMapAreas(urbanismAreas, urbanismReportAreas);
+  const reconciledUrbanismAreas = reconcileGeneralUrbanism(
+    deriveUrbanismMapAreas(urbanismAreas, urbanismReportAreas),
+    projectSnapshot.urbanismProgress,
+  );
   urbanismAreas.splice(0, urbanismAreas.length, ...reconciledUrbanismAreas);
   projectSnapshot.forecastFinish = projectDateForDisplay(projectSnapshot.forecastFinish);
   buildings.forEach((building) => {
@@ -1506,6 +1509,7 @@ function synchronizeDerivedDashboardState() {
   // cortes ejecutados: se limpian antes de buscar el último dato real para que
   // resumen y Curva S compartan siempre el mismo corte válido.
   clearTrailingMonthlyActualPlaceholders(monthlyPlan);
+  anchorDeclaredCutoff(monthlyPlan, projectSnapshot);
   let cutoffIndex = -1;
   for (let index = 0; index < monthlyPlan.length; index += 1) {
     if (monthlyPlan[index].actual !== null) cutoffIndex = index;
@@ -3651,7 +3655,7 @@ function Overview({
             detail={`${number.format(projectSnapshot.deviationPoints)} pp de brecha física`}
             tone={projectSnapshot.deviationPoints >= 0 ? "good" : projectSnapshot.deviationPoints >= -5 ? "warn" : "danger"}
           />
-          <StatCard eyebrow="Cronograma MPP" value={`${number.format(projectSnapshot.scheduleProgress)}%`} detail="Avance del plan de Project (corte 30/07), distinto del avance físico" />
+          <StatCard eyebrow="Cronograma MPP" value={`${number.format(projectSnapshot.scheduleProgress)}%`} detail="Avance del plan de Project, distinto del avance físico" />
           <StatCard eyebrow="Alcance residencial" value={`${buildings.length} edificios`} detail={`${buildings.reduce((total, building) => total + building.units.length, 0)} apartamentos en el modelo vivo`} />
           <StatCard
             eyebrow="Previsión final"
