@@ -85,7 +85,15 @@ const day = (value) => String(value ?? "").slice(0, 10);
 // Corte que el sistema habría puesto mal y el que corresponde.
 const plan = [];
 for (const file of files) {
-  if (String(file.declared ?? "").trim()) continue;
+  // Un corte "declarado" igual al día de la carga no lo puso nadie: lo heredó
+  // el derivado de un .mpp convertido ese día. Se trata como no declarado.
+  const declarado = String(file.declared ?? "").trim();
+  if (declarado && declarado !== day(file.createdAt)) continue;
+  file.storedDetected = file.detected ?? "";
+  if (declarado) {
+    file.heredado = declarado;
+    file.detected = declarado;
+  }
   const now = new Date(String(file.createdAt).replace(" ", "T") + (String(file.createdAt).includes("Z") ? "" : "Z"));
   const nuevo = detectPeriod(file.name, "", file.description ?? "", Number.isNaN(now.getTime()) ? new Date() : now);
   if (!nuevo || nuevo === file.detected) continue;
@@ -154,7 +162,7 @@ for (const { file, nuevo } of plan) {
   for (const viejo of viejos) {
     sentencias.push(`UPDATE live_data_points SET cutoff = ${quote(nuevo)} WHERE source_file_id = ${quote(file.id)} AND cutoff = ${quote(viejo)};`);
   }
-  sentencias.push(`UPDATE uploaded_files SET detected_period = ${quote(nuevo)} WHERE id = ${quote(file.id)} AND detected_period = ${quote(file.detected ?? "")};`);
+  sentencias.push(`UPDATE uploaded_files SET detected_period = ${quote(nuevo)}${file.heredado ? ", declared_cutoff = ''" : ""} WHERE id = ${quote(file.id)} AND detected_period = ${quote(file.storedDetected)};`);
 }
 for (let index = 0; index < sentencias.length; index += 50) {
   await d1(sentencias.slice(index, index + 50).join("\n"));

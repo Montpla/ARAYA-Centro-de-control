@@ -914,11 +914,21 @@ function extractCubicacionCoverProgress(
   const overallProgress = declaredOverall ??
     (measuredRows > 0 && totalBudget > 0 ? (totalAccumulated / totalBudget) * 100 : null);
   if (overallProgress !== null) {
-    updates.push({
-      key: "projectSnapshot.overallProgress",
-      value: Math.round(overallProgress * 100) / 100,
-      ...baseUpdate,
-    });
+    const value = Math.round(overallProgress * 100) / 100;
+    updates.push({ key: "projectSnapshot.overallProgress", value, ...baseUpdate });
+    // La cubicación manda en el avance físico (decisión de dirección,
+    // 18/11/2026: la Nº11 de octubre da 38,01 % frente al 32,06 % del Informe
+    // Ejecutivo). El resumen toma el avance del último "Ejecutado Real" de la
+    // Curva S, así que se escribe también en el mes de su corte; si no, la
+    // cabecera, la curva y el desvío seguían en la cifra del Informe. Sin un
+    // periodo propio (el corte es el día de carga) no se sabe a qué mes
+    // pertenece y la curva no se toca.
+    const cutoffMatch = /^(\d{4})-(\d{2})/.exec(defaults.cutoff ?? "");
+    const isUploadDay = defaults.cutoff === new Date().toISOString().slice(0, 10);
+    const monthIndex = cutoffMatch ? (Number(cutoffMatch[1]) - 2025) * 12 + (Number(cutoffMatch[2]) - 6) : -1;
+    if (!isUploadDay && monthIndex >= 0 && monthIndex < CURVA_S_MONTH_COUNT) {
+      updates.push({ key: `monthlyPlan.${monthIndex}.actual`, value, ...baseUpdate });
+    }
   }
 
   return {
