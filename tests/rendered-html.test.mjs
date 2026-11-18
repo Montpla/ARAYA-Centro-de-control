@@ -634,7 +634,11 @@ test("S-curve matches the supplied executive reference without changing its data
   assert.match(dashboard, /jun-2025 a ago-2027/);
   assert.match(dashboard, /Plan Operativo/);
   assert.match(dashboard, /Ejecutado Real/);
-  assert.match(dashboard, /Al corte \(\{cutoffPoint \? `\$\{cutoffPoint\.month\}-\$\{cutoffYear\}` : "sin dato"\}\):/);
+  // El mes del corte se rotula como el eje (AAAA-MM). Antes se concatenaba el
+  // mes vivo ("2026-10-01") con el año y salía "2026-10-01-2026".
+  assert.match(dashboard, /Al corte \(\{cutoffPoint \? monthLabel\(cutoffIndex\) : "sin dato"\}\):/);
+  // El plan reprogramado del mes del corte lleva su punto y su porcentaje.
+  assert.match(dashboard, /className="line-chart-value reprogrammed"/);
   assert.match(dashboard, /monthLabel/);
   assert.match(dashboard, /isExpanded/);
   assert.match(dashboard, /Ver Curva S a pantalla completa/);
