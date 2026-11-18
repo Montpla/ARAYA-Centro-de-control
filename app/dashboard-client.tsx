@@ -1748,7 +1748,7 @@ const visualUrbanismMapPoints: Record<string, { x: number; y: number; short: str
   "urban-roads": { x: 50.0, y: 37.0, short: "VIAL" },
   "urban-parking": { x: 65.3, y: 61.4, short: "P" },
   "urban-landscape": { x: 48.0, y: 46.3, short: "PAISAJISMO" },
-  "urban-facilities": { x: 49.2, y: 58.7, short: "EQ" },
+  "urban-facilities": { x: 48.9, y: 58.1, short: "EQ" },
   "urban-access": { x: 51.5, y: 89.7, short: "ACCESO" },
 };
 
