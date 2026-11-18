@@ -65,6 +65,7 @@ import {
   financeProtectedAreaValues,
   financeProtectedDocumentTypeValues,
   isCommercialLiveKey,
+  isCutoffOlder,
   isFinancialLiveKey,
   materializeLiveRoot,
   namingToken,
@@ -83,6 +84,7 @@ import { scheduleNotificationDispatch } from "../../../lib/notification-dispatch
 import { emitMissingNotifications } from "../../../lib/notifications";
 import {
   D1JsonDatabase,
+  selectLivePointCutoffs,
   selectLivePointValues,
   upsertDocumentProposalRows,
 } from "../../../lib/d1-json-bulk";
@@ -2095,7 +2097,36 @@ export async function POST(request: Request) {
     // informe con un dato dudoso de relleno no actualizara ninguna cifra. Ahora
     // decide dato a dato: los que encajan se publican solos y el resto queda
     // aislado con diagnóstico, sin bloquear el expediente.
+    // Un dato con corte anterior al que ya está publicado para su clave se
+    // aparta él solo, como cualquier otro dato inválido. Antes llegaba a
+    // publishLiveDataUpdates, cuya guarda de regresión rechaza el lote ENTERO
+    // por un único dato antiguo: el reporte de Seguridad de la semana 1 de
+    // octubre perdió así todas sus cifras porque safetyMetrics ya tenía la
+    // semana 4. La guarda sigue en la publicación como última defensa.
+    const publishedCutoffs = new Map(
+      (await selectLivePointCutoffs(
+        getD1JsonDatabase(),
+        normalizedUpdates.map((update) => update.key),
+      ).catch(() => [])).map((row) => [row.key, row.cutoff]),
+    );
+    const staleCutoffKeys = normalizedUpdates
+      .filter((update) => {
+        const published = publishedCutoffs.get(update.key);
+        return published !== undefined && isCutoffOlder(update.cutoff, published);
+      })
+      .map((update) => update.key);
+    if (staleCutoffKeys.length) {
+      extraction = {
+        ...extraction,
+        warnings: [
+          ...extraction.warnings,
+          `${staleCutoffKeys.length} dato(s) son de un corte anterior al ya publicado y se conservan sin pisar el vigente: ${staleCutoffKeys.slice(0, 5).join(", ")}${staleCutoffKeys.length > 5 ? "…" : ""}.`,
+        ],
+      };
+    }
+    const staleCutoffKeySet = new Set(staleCutoffKeys);
     const updateIsAutoPublishable = (update: ReturnType<typeof normalizeLiveDataUpdates>[number]) =>
+      !staleCutoffKeySet.has(update.key) &&
       (update.area === resolvedArea ||
         // El archivo en conjunto no se pudo etiquetar, pero este dato puntual
         // sí trae su propia área (la que detectó la extracción, no la del

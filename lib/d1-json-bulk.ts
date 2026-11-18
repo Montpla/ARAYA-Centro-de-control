@@ -206,6 +206,32 @@ export async function selectLivePointValues(
   return (result.results ?? []) as LivePointValueRow[];
 }
 
+export const SELECT_LIVE_POINT_CUTOFFS_SQL = `
+SELECT key, cutoff
+FROM live_data_points
+WHERE key IN (
+  SELECT CAST(value AS TEXT) FROM json_each(?)
+)
+`;
+
+/**
+ * Corte con que está publicado ahora mismo cada clave: es el mismo dato que
+ * usa la guarda de regresión de publishLiveDataUpdates para negarse a
+ * publicar un lote.
+ */
+export async function selectLivePointCutoffs(
+  database: D1JsonDatabase,
+  keys: readonly string[],
+) {
+  if (!keys.length) return [] as Array<{ key: string; cutoff: string }>;
+  const payload = encodeBoundedJsonArray(keys, {
+    label: "La consulta de cortes publicados",
+    maxItems: MAX_DOCUMENT_PROPOSALS,
+  });
+  const result = await database.prepare(SELECT_LIVE_POINT_CUTOFFS_SQL).bind(payload).all();
+  return (result.results ?? []) as Array<{ key: string; cutoff: string }>;
+}
+
 export async function deleteExpiredReviewReservations(
   database: D1JsonDatabase,
   input: {

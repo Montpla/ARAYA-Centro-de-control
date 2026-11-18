@@ -6,6 +6,7 @@ import {
   MAX_D1_JSON_PAYLOAD_BYTES,
   deleteExpiredReviewReservations,
   encodeBoundedJsonArray,
+  selectLivePointCutoffs,
   selectLivePointValues,
   upsertDocumentProposalRows,
   upsertNotificationReceiptRows,
@@ -216,4 +217,15 @@ test("bulk payload limits reject item overflow and payloads of 2 MB or more befo
     }),
     /menos de 2 MB/,
   );
+});
+
+test("selectLivePointCutoffs devuelve el corte publicado de cada clave pedida", async () => {
+  const database = new DatabaseSync(":memory:");
+  database.exec("CREATE TABLE live_data_points (key TEXT PRIMARY KEY, value_json TEXT NOT NULL, cutoff TEXT NOT NULL DEFAULT '');");
+  database.prepare("INSERT INTO live_data_points (key, value_json, cutoff) VALUES (?, ?, ?)").run("safetyMetrics", "[]", "2026-10-31");
+  database.prepare("INSERT INTO live_data_points (key, value_json, cutoff) VALUES (?, ?, ?)").run("otro", "1", "2026-10-10");
+  const d1 = countedD1(database);
+  const rows = await selectLivePointCutoffs(d1.binding, ["safetyMetrics", "no-existe"]);
+  assert.deepEqual(rows.map((row) => ({ ...row })), [{ key: "safetyMetrics", cutoff: "2026-10-31" }]);
+  assert.deepEqual(await selectLivePointCutoffs(d1.binding, []), []);
 });
