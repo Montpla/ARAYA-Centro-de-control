@@ -27,3 +27,13 @@ test("un PDF de más de 15 MB se comprime en GitHub antes de leerse", async () =
   assert.match(workflow, /node scripts\/comprimir-pdf\.mjs/);
   assert.match(workflow, /file_id:/);
 });
+
+test("un derivado leído entero cierra su original aunque no publique datos", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const ruta = await readFile("app/api/files/supersede/route.ts", "utf8");
+  const script = await readFile("scripts/comprimir-pdf.mjs", "utf8");
+  assert.match(ruta, /replacement\.derivedFromFileId === source\.id/);
+  assert.match(ruta, /replacement\.processingStage === "sincronizado"/);
+  assert.match(ruta, /replacement\.publicationRevision === null && !readDerivative/);
+  assert.match(script, /derivado\?\.processingStage === "sincronizado"/);
+});

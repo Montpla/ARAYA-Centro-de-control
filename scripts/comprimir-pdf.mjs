@@ -129,14 +129,15 @@ for (const file of objetivo) {
   // El original no publicó nada y ya tiene sustituto publicado: se cierra como
   // histórico para que no siga apareciendo como pendiente.
   const derivado = cuerpo.file;
-  if (derivado?.id && derivado.publicationRevision !== null && derivado.publicationRevision !== undefined) {
+  const leido = derivado?.processingStage === "sincronizado";
+  if (derivado?.id && (leido || (derivado.publicationRevision !== null && derivado.publicationRevision !== undefined))) {
     const cierre = await fetch(`${PRODUCTION_URL}/api/files/supersede`, {
       method: "POST",
       headers: { Cookie, "Content-Type": "application/json" },
       body: JSON.stringify({
         fileId: file.id,
         replacementFileId: derivado.id,
-        reason: "PDF demasiado pesado para el lector: sustituido por su versión comprimida, que ya está publicada.",
+        reason: "PDF demasiado pesado para el lector: sustituido por su versión comprimida, que ya se ha leído.",
       }),
     });
     const respuesta = await cierre.json().catch(() => ({}));
@@ -144,6 +145,6 @@ for (const file of objetivo) {
       ? "   ✔ Original cerrado como histórico."
       : `   ⚠ No se pudo cerrar el original (${cierre.status}): ${respuesta.error ?? ""}`);
   } else {
-    console.log("   ⚠ El comprimido no publicó datos; el original se deja como está para revisarlo.");
+    console.log("   ⚠ El comprimido no terminó de leerse; el original se deja como está para revisarlo.");
   }
 }
