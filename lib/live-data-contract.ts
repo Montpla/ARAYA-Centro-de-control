@@ -43,6 +43,11 @@ const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
     // informe no lo trae: llega después con el primer plan de Project.
     phases: [{ id: "", name: "", progress: 0 }],
   },
+  "monthlyPlan.*": {
+    // Plan reprogramado: sólo existe desde el mes de la reprogramación y lo
+    // publica el Informe Ejecutivo desde su gráfico de Curva S.
+    reprogrammed: 0,
+  },
   "urbanismAreas.*": {
     mapCoordinates: {
       visual: { x: 0, y: 0, short: "" },

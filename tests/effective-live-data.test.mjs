@@ -1188,3 +1188,22 @@ test("la consulta de D1 no descarta una corrección sin corte posterior a la gan
   const snapshot = deriveEffectiveLiveDataSnapshot(rows, true);
   assert.equal(snapshot.values["urbanismReportAreas.6.progress"], 20.4);
 });
+
+test("el plan reprogramado de la Curva S se publica mes a mes como campo opcional", async () => {
+  // Reproceso del Informe Ejecutivo de octubre (18/11/2026): el lector de la
+  // Curva S sacó 12 meses de "Plan reprogramado" y el contrato los rechazó,
+  // porque el campo era null en todas las filas de la línea base y un null
+  // común se exige para siempre. Es un campo opcional numérico.
+  const { validateLiveDataContract } = await loadContractCore();
+  assert.equal(validateLiveDataContract("monthlyPlan.1.reprogrammed", "39.8").valid, true);
+  assert.equal(validateLiveDataContract("monthlyPlan.1.reprogrammed", "140").valid, false, "sigue siendo un porcentaje");
+  assert.equal(validateLiveDataContract("monthlyPlan.1.planned", "57.48").valid, true);
+  assert.equal(
+    validateLiveDataContract("monthlyPlan", JSON.stringify([
+      { month: "jun 26", planned: 21.24, actual: 18.23 },
+      { month: "ago 26", planned: 40.78, actual: null, reprogrammed: 39.8 },
+    ])).valid,
+    true,
+    "también en una publicación del array entero",
+  );
+});
