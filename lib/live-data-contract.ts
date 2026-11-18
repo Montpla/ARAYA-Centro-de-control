@@ -36,6 +36,9 @@ const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
       visual: { x: 0, y: 0 },
       technical: { x: 0, y: 0 },
     },
+    // Avance por fase del plan de obra. Un edificio dado de alta por un
+    // informe no lo trae: llega después con el primer plan de Project.
+    phases: [{ id: "", name: "", progress: 0 }],
   },
   "urbanismAreas.*": {
     mapCoordinates: {

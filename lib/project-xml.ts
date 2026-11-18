@@ -1,4 +1,5 @@
 import { namingToken } from "./live-data.ts";
+import { PHASE_WEIGHTS, type PhaseId } from "./progress-model.ts";
 
 /**
  * Lector del XML de Microsoft Project (MSPDI).
@@ -174,6 +175,36 @@ function matchUrbanismDiscipline(
   return currentUrbanismReportAreas.findIndex((area) => grupo.includes(namingToken(area.name)));
 }
 
+/**
+ * Capítulo del plan de obra → fase del modelo de avance (progress-model).
+ *
+ * El plan agrupa las tareas de cada edificio en capítulos (INFRAESTRUCTURA,
+ * SUPERESTRUCTURA, ALBAÑILERÍA…). Los apartamentos miden su avance con cinco
+ * fases, así que cada capítulo se atribuye a la suya: la obra común es la del
+ * edificio que no pertenece a ningún apartamento (platea, escaleras, cubierta y
+ * fachada). Se compara por prefijo del token normalizado porque algunos
+ * capítulos llevan apellidos largos ("INSTALACION DE GAS, SONDEO Y…") o
+ * erratas del propio plan ("IMPERMABILIZACION"). Un capítulo que no figure aquí
+ * no se atribuye a ninguna fase: mejor sin dato que en la fase equivocada.
+ */
+const CHAPTER_PHASES: Array<[PhaseId, string[]]> = [
+  ["comun", ["infraestructura", "escalera", "impermeabilizacion", "impermabilizacion", "paredesdepatios", "obrasexteriores", "panelsolar"]],
+  ["superestructura", ["superestructura"]],
+  ["albanileria", ["albanileria"]],
+  ["instalaciones", ["instalaciondegas", "instalacioneselectricas", "instalacionessanitarias", "instalaciones"]],
+  ["acabados", ["estucado", "revestimiento", "vidrioyaluminio", "herreria", "pintura", "pisodevinyl", "carpinteria", "zocalo", "plafon", "mampara", "texturizado", "remates"]],
+];
+
+export function phaseForChapter(name: string): PhaseId | null {
+  if (buildingCodeFromTaskName(name)) return null;
+  const token = namingToken(name);
+  if (!token) return null;
+  for (const [phase, prefixes] of CHAPTER_PHASES) {
+    if (prefixes.some((prefix) => token.startsWith(prefix))) return phase;
+  }
+  return null;
+}
+
 export type ProjectXmlExtraction = {
   // El avance es numérico; la fecha de fin se publica como ISO YYYY-MM-DD.
   updates: Array<{ key: string; value: number | string }>;
@@ -219,7 +250,11 @@ export function extractProjectXmlUpdates(
   // pila guarda, por nivel de esquema, el edificio vigente; al bajar de nivel
   // se descartan los ancestros que ya no aplican.
   const porNivel = new Map<number, string>();
+  const resumenesPorNivel = new Map<number, string>();
   const acumulado = new Map<string, { suma: number; peso: number }>();
+  // Avance por edificio y fase: de aquí salen los apartamentos, que miden su
+  // avance por fase y no con el total del edificio.
+  const porFase = new Map<string, { suma: number; peso: number }>();
   let leaves = 0;
   let sinEdificio = 0;
   // Avance del cronograma completo: media de TODAS las hojas del plan ponderada
@@ -237,6 +272,16 @@ export function extractProjectXmlUpdates(
     for (const clave of [...porNivel.keys()]) {
       if (clave >= nivel) porNivel.delete(clave);
     }
+    for (const clave of [...resumenesPorNivel.keys()]) {
+      if (clave >= nivel) resumenesPorNivel.delete(clave);
+    }
+    // La fase sale del capítulo más cercano entre los antecesores, en el orden
+    // que sea (capítulo → edificio o edificio → capítulo).
+    const fase = [...resumenesPorNivel.entries()]
+      .sort((a, b) => b[0] - a[0])
+      .map(([, nombre]) => phaseForChapter(nombre))
+      .find((candidata): candidata is PhaseId => candidata !== null) ?? null;
+    if (tarea.summary) resumenesPorNivel.set(nivel, tarea.name);
     const propio = buildingCodeFromTaskName(tarea.name);
     const heredado = [...porNivel.entries()].sort((a, b) => a[0] - b[0]).pop()?.[1];
     const edificio = propio || heredado || "";
@@ -263,6 +308,13 @@ export function extractProjectXmlUpdates(
     previo.suma += valor * peso;
     previo.peso += peso;
     acumulado.set(edificio, previo);
+    if (fase) {
+      const clave = `${edificio}|${fase}`;
+      const celda = porFase.get(clave) ?? { suma: 0, peso: 0 };
+      celda.suma += valor * peso;
+      celda.peso += peso;
+      porFase.set(clave, celda);
+    }
   }
 
   const updates: Array<{ key: string; value: number | string }> = [...acumulado.entries()]
@@ -276,6 +328,24 @@ export function extractProjectXmlUpdates(
   // Nº de edificios actualizados, antes de añadir el dato de cronograma: el
   // aviso y el resumen cuentan edificios, no el % global del plan.
   const edificioUpdates = updates.length;
+
+  // Fases por edificio, en el orden de PHASE_WEIGHTS (la posición es la del
+  // array `phases` de cada edificio). Sólo se publica una fase con tareas
+  // medidas en el plan: una fase ausente del archivo no es una fase al 0%.
+  const faseUpdates: Array<{ key: string; value: number }> = [];
+  for (const [clave, { suma, peso }] of porFase) {
+    if (peso <= 0) continue;
+    const [codigo, fase] = clave.split("|");
+    const posicion = PHASE_WEIGHTS.findIndex((definicion) => definicion.id === fase);
+    if (posicion < 0) continue;
+    faseUpdates.push({
+      key: `buildings.${codigo}.phases.${posicion}.progress`,
+      value: Math.round((suma / peso) * 100) / 100,
+    });
+  }
+  faseUpdates.sort((izquierda, derecha) => izquierda.key.localeCompare(derecha.key));
+  updates.push(...faseUpdates);
+  const edificiosConFases = new Set(faseUpdates.map((update) => update.key.split(".")[1])).size;
 
   // Avance de urbanismo por disciplina: un capítulo del plan puede ser la
   // única fuente de una disciplina completa (p. ej. un archivo dedicado sólo
@@ -368,6 +438,11 @@ export function extractProjectXmlUpdates(
   if (edificioUpdates) {
     resumenPartes.push(
       `${edificioUpdates} edificios actualizados desde ${tareas.length} tareas del plan de Project, ponderadas por duración.`,
+    );
+  }
+  if (edificiosConFases) {
+    resumenPartes.push(
+      `Avance por fase de ${edificiosConFases} edificio${edificiosConFases === 1 ? "" : "s"} para sus apartamentos.`,
     );
   }
   if (disciplinaUpdates.length) {

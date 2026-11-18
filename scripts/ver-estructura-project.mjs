@@ -6,7 +6,9 @@
 // Sirve para decidir a qué fase del modelo (obra común, superestructura,
 // albañilería, instalaciones, acabados) pertenece cada capítulo del plan.
 
-import { buildingCodeFromTaskName, readProjectTasks } from "../lib/project-xml.ts";
+import { buildings as baselineBuildings } from "../app/demo-data.ts";
+import { extractProjectXmlUpdates, phaseForChapter, readProjectTasks } from "../lib/project-xml.ts";
+import { PHASE_WEIGHTS } from "../lib/progress-model.ts";
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 const FILTRO = (process.env.FILTRO ?? "26 edificios").toLowerCase();
@@ -47,7 +49,8 @@ if (!descarga.ok) {
   console.error(`✖ La descarga devolvió ${descarga.status}.`);
   process.exit(1);
 }
-const tareas = readProjectTasks(await descarga.text(), 10_000);
+const texto = await descarga.text();
+const tareas = readProjectTasks(texto, 10_000);
 console.log(`tareas: ${tareas.length}`);
 
 // Resúmenes de los primeros niveles: así se ve cómo está organizado el plan.
@@ -58,48 +61,24 @@ for (const tarea of tareas) {
   console.log(`${sangria}[${tarea.outlineLevel}] ${tarea.name} · ${tarea.percentComplete ?? "-"}%`);
 }
 
-// Avance por (edificio, capítulo): el capítulo es el ancestro de resumen más
-// alto que no nombra un edificio.
-const pila = [];
-const celdas = new Map();
-const capitulos = new Set();
-for (const tarea of tareas) {
-  const nivel = tarea.outlineLevel ?? 0;
-  while (pila.length && pila[pila.length - 1].nivel >= nivel) pila.pop();
-  if (tarea.summary) pila.push({ nivel, name: tarea.name });
-  if (tarea.summary || tarea.percentComplete === null) continue;
-  const edificio = [...pila].reverse().map((item) => buildingCodeFromTaskName(item.name)).find(Boolean)
-    || buildingCodeFromTaskName(tarea.name);
-  if (!edificio) continue;
-  const capitulo = pila.find((item) => !buildingCodeFromTaskName(item.name) && item.nivel >= 1)?.name ?? "(sin capítulo)";
-  capitulos.add(capitulo);
-  const peso = tarea.durationHours > 0 ? tarea.durationHours : 1;
-  const clave = `${edificio}|${capitulo}`;
-  const previo = celdas.get(clave) ?? { suma: 0, peso: 0, hojas: 0 };
-  previo.suma += Math.max(0, Math.min(100, tarea.percentComplete)) * peso;
-  previo.peso += peso;
-  previo.hojas += 1;
-  celdas.set(clave, previo);
-}
-
-console.log("\n=== Capítulos con tareas de edificio (horas totales) ===");
-const horasPorCapitulo = new Map();
-for (const [clave, celda] of celdas) {
-  const capitulo = clave.split("|")[1];
-  horasPorCapitulo.set(capitulo, (horasPorCapitulo.get(capitulo) ?? 0) + celda.peso);
-}
-for (const capitulo of capitulos) {
-  console.log(`   ${capitulo} · ${Math.round(horasPorCapitulo.get(capitulo) ?? 0)} h`);
-}
-
-console.log("\n=== Avance por edificio y capítulo (%) ===");
-const edificios = [...new Set([...celdas.keys()].map((clave) => clave.split("|")[0]))].sort();
-for (const edificio of edificios) {
-  const partes = [...capitulos]
-    .map((capitulo) => {
-      const celda = celdas.get(`${edificio}|${capitulo}`);
-      return celda ? `${capitulo}=${Math.round((celda.suma / celda.peso) * 10) / 10}` : null;
-    })
-    .filter(Boolean);
-  console.log(`   ${edificio}: ${partes.join(" · ")}`);
+// Fases por edificio tal como las publicará el importador, al lado de la línea
+// base de julio (de la que salen hoy los apartamentos).
+const extraccion = extractProjectXmlUpdates(texto, undefined, archivo.originalName);
+const capitulosSinFase = [...new Set(
+  tareas.filter((tarea) => tarea.summary && (tarea.outlineLevel ?? 0) === 3 && !phaseForChapter(tarea.name))
+    .map((tarea) => tarea.name),
+)];
+console.log(`\ncapítulos sin fase asignada: ${capitulosSinFase.length ? capitulosSinFase.join(", ") : "ninguno"}`);
+console.log(`resumen del importador: ${extraccion.summary}`);
+const valores = Object.fromEntries(extraccion.updates.map((update) => [update.key, update.value]));
+const fases = PHASE_WEIGHTS.map((fase) => fase.id);
+console.log(`\n=== Fases por edificio: octubre (julio) · ${fases.join(" / ")} ===`);
+for (const edificio of baselineBuildings.filter((item) => item.phases?.some((fase) => fase.progress > 0) || valores[`buildings.TH-${item.shortName.padStart(2, "0")}.progress`] !== undefined)) {
+  const codigo = `TH-${edificio.shortName.padStart(2, "0")}`;
+  const partes = fases.map((fase, posicion) => {
+    const nuevo = valores[`buildings.${codigo}.phases.${posicion}.progress`];
+    const julio = edificio.phases?.[posicion]?.progress;
+    return `${nuevo ?? "-"} (${julio ?? "-"})`;
+  });
+  console.log(`   ${codigo}: total ${valores[`buildings.${codigo}.progress`] ?? "-"} · ${partes.join(" / ")}`);
 }
