@@ -94,3 +94,18 @@ console.log(`edificios con avance físico publicado: ${edificios.length}`);
 for (const clave of edificios.sort().slice(0, 30)) {
   console.log(`   ${clave}: ${valores[clave]}%`);
 }
+
+// El titular del resumen toma el último "actual" de la Curva S, no
+// projectSnapshot.overallProgress: si la curva se queda en un mes anterior al
+// corte declarado, el panel muestra un avance viejo aunque el informe nuevo
+// esté publicado. Se imprimen ambos para poder cruzarlos.
+const fisicas = Object.keys(valores)
+  .filter((k) => /^(monthlyPlan|projectSnapshot\.(plannedProgress|declaredCutoff|activeBuildingsProgress|urbanismProgress|urbanismPlanned)|urbanismReportAreas\..+\.(progress|planned|name)|constructionDisciplines\..+\.(progress|planned|name)|buildings\..+\.(code|planProgress))/.test(k))
+  .sort();
+console.log(`\n=== Curva S y corte declarado (progreso físico) ===`);
+for (const clave of fisicas) {
+  const valor = valores[clave];
+  const texto = typeof valor === "object" ? JSON.stringify(valor) : String(valor);
+  const origen = provenance[clave] ? ` · rev ${provenance[clave].revision} · ${provenance[clave].sourceName ?? ""}` : "";
+  console.log(`   ${clave}: ${texto.slice(0, 600)}${origen}`);
+}
