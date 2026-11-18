@@ -1154,3 +1154,37 @@ test("un edificio inexistente conserva su clave en vez de inventar una posición
   );
   assert.equal(update.key, "buildings.TH-99.progress");
 });
+
+test("la consulta de D1 no descarta una corrección sin corte posterior a la ganadora fechada", async () => {
+  // Caso real del 18/11/2026: el Project de urbanismo (rev 114) quedó con el
+  // corte del día de carga y una corrección manual sin corte (rev 117) llevó
+  // Vialidad de 7 a 20,4. compareEffectiveRevision() da la razón a la 117,
+  // pero la consulta ordenaba todas las filas de la clave por corte (vacío al
+  // final) y sólo devolvía la primera: la 117 nunca llegaba a compararse.
+  const { DatabaseSync } = await import("node:sqlite");
+  const source = await readFile(new URL("../lib/effective-live-data.ts", import.meta.url), "utf8");
+  const query = source.match(/async function readEffectivePublishedRows\(\)[\s\S]*?sql`([\s\S]*?)`\);/)[1];
+  const db = new DatabaseSync(":memory:");
+  db.exec(`
+    CREATE TABLE live_data_events (id INTEGER PRIMARY KEY, source_file_id TEXT, source_name TEXT, area TEXT, cutoff TEXT,
+      change_count INTEGER, message TEXT, status TEXT, actor_name TEXT, created_at TEXT);
+    CREATE TABLE live_data_history (id INTEGER PRIMARY KEY, event_id INTEGER, key TEXT, value_json TEXT, value_type TEXT,
+      area TEXT, source_file_id TEXT, source_name TEXT, source_currency TEXT, cutoff TEXT, actor_email TEXT, actor_name TEXT, created_at TEXT);
+    CREATE TABLE uploaded_files (id TEXT PRIMARY KEY, deleted_at TEXT, superseded_by_file_id TEXT, area TEXT, document_type TEXT);
+  `);
+  const event = db.prepare("INSERT INTO live_data_events VALUES (?, '', ?, 'urbanismo', ?, 1, '', 'published', '', '')");
+  const history = db.prepare("INSERT INTO live_data_history VALUES (?, ?, 'urbanismReportAreas.6.progress', ?, 'number', 'urbanismo', '', ?, 'DOP', ?, '', '', '')");
+  event.run(111, "Informe Ejecutivo", "2026-10-31");
+  history.run(1, 111, "6.8", "Informe Ejecutivo", "2026-10-31");
+  event.run(114, "Project de urbanismo", "2026-11-18");
+  history.run(2, 114, "7", "Project de urbanismo", "2026-11-18");
+  event.run(117, "Actualización manual", "");
+  history.run(3, 117, "20.4", "Actualización manual", "");
+
+  const rows = db.prepare(query).all().map((fila) => ({ ...fila }));
+  assert.deepEqual(rows.map((fila) => fila.eventId).sort(), [114, 117], "la mejor fechada y la última sin corte");
+
+  const { deriveEffectiveLiveDataSnapshot } = await loadCore();
+  const snapshot = deriveEffectiveLiveDataSnapshot(rows, true);
+  assert.equal(snapshot.values["urbanismReportAreas.6.progress"], 20.4);
+});
