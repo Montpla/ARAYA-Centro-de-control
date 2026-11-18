@@ -223,17 +223,20 @@ function periodFromText(value: string, now: Date) {
     return `${year}-${monthNumbers[monthYear[1]]}`;
   }
   // Un mes sin año ("Cubicacion_11_Araya_Oct.xlsx", "Informe_..._Octubre_...")
-  // es el último mes con ese nombre que no queda en el futuro. Sin esto el
-  // corte caía en el día de la carga, posterior a todo el mes que el
-  // documento describe. Delimitado por algo que no sea letra: "_" cuenta como
-  // carácter de palabra y \b no lo separaría.
+  // es el último mes con ese nombre que no queda en el futuro, cortado en su
+  // último día. Sin esto el corte caía en el día de la carga, posterior a
+  // todo el mes que el documento describe. Delimitado por algo que no sea
+  // letra: "_" cuenta como carácter de palabra y \b no lo separaría.
   const bareMonth = normalized.match(
     /(?:^|[^a-z])(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sept|sep|oct|nov|dic)(?=[^a-z]|$)/,
   );
   if (bareMonth) {
     const month = Number(monthNumbers[bareMonth[1]]);
     const year = month > now.getUTCMonth() + 1 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
-    return `${year}-${String(month).padStart(2, "0")}`;
+    // Un informe mensual corta al final de su mes: con "aaaa-mm" se ordenaría
+    // como el día 1 y perdería frente a cualquier dato de mitad de mes.
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
   }
   return "";
 }
