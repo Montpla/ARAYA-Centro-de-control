@@ -11,7 +11,8 @@ import { extractProjectXmlUpdates, phaseForChapter, readProjectTasks } from "../
 import { PHASE_WEIGHTS } from "../lib/progress-model.ts";
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
-const FILTRO = (process.env.FILTRO ?? "26 edificios").toLowerCase();
+const FILTRO = (process.env.FILTRO || "26 edificios").toLowerCase();
+const NIVELES = Number(process.env.NIVELES || 3);
 
 const email = process.env.DEPLOY_VERIFY_EMAIL;
 const pin = process.env.DEPLOY_VERIFY_PIN;
@@ -54,9 +55,9 @@ const tareas = readProjectTasks(texto, 10_000);
 console.log(`tareas: ${tareas.length}`);
 
 // Resúmenes de los primeros niveles: así se ve cómo está organizado el plan.
-console.log("\n=== Resúmenes de nivel 1 a 3 (nombre · %) ===");
+console.log(`\n=== Resúmenes de nivel 1 a ${NIVELES} (nombre · %) ===`);
 for (const tarea of tareas) {
-  if (!tarea.summary || (tarea.outlineLevel ?? 99) > 3) continue;
+  if (!tarea.summary || (tarea.outlineLevel ?? 99) > NIVELES) continue;
   const sangria = "  ".repeat(Math.max(0, (tarea.outlineLevel ?? 1) - 1));
   console.log(`${sangria}[${tarea.outlineLevel}] ${tarea.name} · ${tarea.percentComplete ?? "-"}%`);
 }

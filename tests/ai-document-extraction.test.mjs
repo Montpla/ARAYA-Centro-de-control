@@ -4,7 +4,11 @@ import { readFile } from "node:fs/promises";
 import ts from "typescript";
 
 const source = await readFile("lib/ai-document-extraction.ts", "utf8");
+const urbanismDisciplinesSource = (await readFile("lib/urbanism-disciplines.ts", "utf8")).replace(/^export /gm, "");
 const executableSource = source.replace(
+  /import \{[^}]*\} from "\.\/urbanism-disciplines";/,
+  urbanismDisciplinesSource,
+).replace(
   /import \{[\s\S]*?\} from "\.\/live-data";/,
   `const LIVE_DATA_ROOTS = [
     "projectSnapshot",
@@ -719,4 +723,50 @@ test("the ingestion agent accepts the lookup fan-out needed by complex workbooks
   assert.equal(result.agentIterations, 2);
   assert.equal(result.agentTrace.length, 13);
   assert.doesNotMatch(result.warnings.join(" "), /límite de herramientas/);
+});
+
+test("una disciplina de urbanismo por posición se dirige por la que nombra su evidencia, o se descarta", async () => {
+  // Caso real del Informe Ejecutivo de octubre: el modelo enumeró las filas del
+  // gráfico por posición y, como el gráfico no trae Telecomunicaciones, desde
+  // la 5.ª fila cada valor cayó en la disciplina de al lado.
+  globalThis.fetch = async () => {
+    const fila = (indice, valor, evidencia) => ({
+      key: `urbanismReportAreas.${indice}.progress`,
+      value_json: String(valor),
+      area: "urbanismo",
+      cutoff: "2026-10-31",
+      source_currency: "DOP",
+      confidence: 0.9,
+      evidence: evidencia,
+    });
+    const output = {
+      updates: [
+        fila(4, 8.3, "Diapositiva 4, gráfico Avance por capítulo: Instalaciones de gas 8,3%"),
+        fila(5, 20.4, "Diapositiva 4: Vialidad 20,4%"),
+        fila(7, 26.1, "Diapositiva 4: Elementos urbanos 26,1%"),
+        fila(2, 26, "Diapositiva 4: Sistemas especiales 26%"),
+        fila(1, 57.1, "Hidrosanitarias (57% vs. 94%) y Gas (8% vs. 28%) concentran la brecha"),
+        fila(6, 6.8, "Diapositiva 4, gráfico de capítulos"),
+      ],
+      summary: "Avances de urbanismo.",
+      warnings: [],
+      confidence: 0.9,
+    };
+    return new Response(JSON.stringify({
+      model: "gpt-5.6-luna",
+      output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(output) }] }],
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+
+  const result = await extraction.extractDocumentWithAI(input("png"));
+  const claves = result.updates.map((update) => update.key).sort();
+
+  assert.deepEqual(claves, [
+    "urbanismReportAreas.ELEMENTOS URBANOS.progress",
+    "urbanismReportAreas.INSTALACIONES DE GAS.progress",
+    "urbanismReportAreas.SISTEMAS ESPECIALES.progress",
+    "urbanismReportAreas.VIALIDAD.progress",
+  ]);
+  assert.equal(result.updates.find((u) => u.key.includes("GAS")).value, 8.3);
+  assert.equal(result.warnings.filter((aviso) => /no nombra una única disciplina/.test(aviso)).length, 2);
 });

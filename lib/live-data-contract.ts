@@ -22,6 +22,9 @@ const APPENDABLE_ARRAY_PATHS = new Set([
   "discoveredSections",
   "safetyWeeklySeries",
   "urbanismAreas",
+  // Un informe puede traer una disciplina de urbanismo que la lista viva aún
+  // no tiene (p. ej. "Elementos urbanos": parque abierto y caminerías).
+  "urbanismReportAreas",
 ]);
 const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
   "discoveredSections.*": {
