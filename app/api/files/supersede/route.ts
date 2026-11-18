@@ -41,7 +41,14 @@ export async function POST(request: Request) {
   if (!replacement || replacement.deletedAt || replacement.supersededAt) {
     return Response.json({ error: "El expediente sustituto no está activo o también fue superado." }, { status: 400 });
   }
-  if (replacement.publicationRevision === null) {
+  // Un derivado del propio archivo (su versión comprimida o convertida) que
+  // se leyó entero también lo sustituye aunque no publicara nada: puede que
+  // todas sus cifras fueran ya anteriores a las vigentes (semana 2 de
+  // Seguridad de octubre frente a la semana 4). Sin esto el original quedaba
+  // abierto para siempre en "extracción en curso".
+  const readDerivative = replacement.derivedFromFileId === source.id &&
+    replacement.processingStage === "sincronizado";
+  if (replacement.publicationRevision === null && !readDerivative) {
     return Response.json({ error: "El sustituto debe estar publicado antes de cerrar la fuente anterior." }, { status: 409 });
   }
   if (source.publicationRevision !== null) {
