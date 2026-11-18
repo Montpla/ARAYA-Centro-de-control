@@ -42,14 +42,14 @@ for (const f of await consulta(`
 console.log("\n=== 4. Archivos de los últimos 60 días ===");
 for (const f of await consulta(`
   WITH ultimo AS (SELECT *, ROW_NUMBER() OVER (PARTITION BY file_id ORDER BY started_at DESC) AS n FROM ingestion_agent_runs)
-  SELECT u.created_at, u.original_name, u.extension, u.area, u.detected_period, u.declared_cutoff,
+  SELECT u.created_at, u.original_name, u.extension, u.size_bytes, u.area, u.detected_period, u.declared_cutoff,
          u.review_status, u.processing_stage, u.publication_revision, u.processing_attempts,
          u.derived_from_file_id <> '' AS derivado, r.status AS run, r.model, r.proposed_count, r.published_count,
          substr(r.error, 1, 160) AS error, substr(u.last_processing_error, 1, 160) AS error_carga
   FROM uploaded_files u LEFT JOIN ultimo r ON r.file_id = u.id AND r.n = 1
   WHERE u.deleted_at = '' AND u.created_at >= datetime('now', '-60 days')
   ORDER BY u.created_at;`)) {
-  console.log(`  ${f.created_at.slice(0, 16)} · ${corto(f.original_name, 90)} [${f.extension}${f.derivado ? ", derivado" : ""}]`);
+  console.log(`  ${f.created_at.slice(0, 16)} · ${corto(f.original_name, 90)} [${f.extension}${f.derivado ? ", derivado" : ""} · ${(Number(f.size_bytes) / 1024 / 1024).toFixed(2)} MB]`);
   console.log(`      área ${f.area} · periodo «${f.detected_period}» · corte declarado «${f.declared_cutoff}» · ${f.review_status}/${f.processing_stage} · rev ${f.publication_revision ?? "-"} · intentos ${f.processing_attempts}`);
   console.log(`      ingesta ${f.run ?? "sin registro"} · ${f.model ?? ""} · propuestos ${f.proposed_count ?? 0} · publicados ${f.published_count ?? 0}`);
   if (f.error || f.error_carga) console.log(`      ERROR: ${corto(f.error || f.error_carga)}`);
