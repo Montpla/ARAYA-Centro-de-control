@@ -26,7 +26,7 @@ import {
   progressBandDefinitions,
   type ProgressBandId,
 } from "../lib/progress-palette";
-import { anchorDeclaredCutoff, clearTrailingMonthlyActualPlaceholders } from "../lib/monthly-plan";
+import { anchorDeclaredCutoff, clearTrailingMonthlyActualPlaceholders, currentPlannedProgress } from "../lib/monthly-plan";
 import {
   technicalPlanCoordinates as planCoordinates,
   visualPlanCoordinates,
@@ -1516,8 +1516,10 @@ function synchronizeDerivedDashboardState() {
   for (let index = 0; index < monthlyPlan.length; index += 1) {
     if (monthlyPlan[index].actual !== null) cutoffIndex = index;
   }
+  // El plan vigente: el reprogramado del mes del corte si existe (ver
+  // currentPlannedProgress), el Plan Operativo si no.
   const cutoffActual = cutoffIndex >= 0 ? monthlyPlan[cutoffIndex].actual : null;
-  const cutoffPlanned = cutoffIndex >= 0 ? monthlyPlan[cutoffIndex].planned : null;
+  const cutoffPlanned = cutoffIndex >= 0 ? currentPlannedProgress(monthlyPlan[cutoffIndex]) : null;
   if (cutoffActual !== null && cutoffPlanned !== null) {
     projectSnapshot.overallProgress = cutoffActual;
     projectSnapshot.plannedProgress = cutoffPlanned;
