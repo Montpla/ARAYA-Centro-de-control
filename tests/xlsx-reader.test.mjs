@@ -12,6 +12,9 @@ import * as progressModel from "../lib/progress-model.ts";
 // Las hojas de prueba se generan con scripts/generar-fixtures-xlsx.py y tienen
 // la forma de las reales: un título de la oficina encima, la cabecera más
 // abajo, celdas vacías y una fila que no nombra ningún edificio.
+// La Curva S de PowerPoint tiene su propio test (tests/pptx-curva-s.test.mjs).
+const pptxCurvaS = { CURVA_S_MONTH_COUNT: 27, readPptxCurvaS: async () => null, curvaSUpdates: () => [] };
+
 async function leerFixture(nombre) {
   const buffer = await readFile(new URL(`./fixtures/${nombre}`, import.meta.url));
   return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
@@ -34,6 +37,7 @@ async function loadIngestion() {
     if (specifier === "./xlsx-reader") return xlsxReader;
     if (specifier === "./ooxml-tables") return ooxml;
     if (specifier === "./pdf-text") return pdfText;
+    if (specifier === "./pptx-curva-s") return pptxCurvaS;
     if (specifier === "./progress-model") return progressModel;
     throw new Error(`Import inesperado: ${specifier}`);
   };

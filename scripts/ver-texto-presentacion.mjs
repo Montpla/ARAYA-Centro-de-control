@@ -92,7 +92,10 @@ try {
       const categorias = new Map(puntos(serie.match(/<c:cat>([\s\S]*?)<\/c:cat>/)?.[1] ?? ""));
       const valores = puntos(serie.match(/<c:val>([\s\S]*?)<\/c:val>/)?.[1] ?? "").map(([idx, v]) => [idx, Number(v)]);
       if (!valores.length || valores.some(([, v]) => !Number.isFinite(v) || v < 0 || v > 100)) continue;
-      if (![...categorias.values()].some((categoria) => PALABRAS.test(categoria)) && !PALABRAS.test(nombre)) continue;
+      // También las series mensuales (Curva S): categorías con mes o fecha.
+      const MESES = /(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic|20\d\d|^\d{5}$)/i;
+      const mensual = [...categorias.values()].filter((categoria) => MESES.test(categoria)).length >= 4;
+      if (!mensual && ![...categorias.values()].some((categoria) => PALABRAS.test(categoria)) && !PALABRAS.test(nombre)) continue;
       lineas.push(`   serie "${nombre}": ${valores.map(([idx, v]) => `${categorias.get(idx) ?? idx}=${Math.round(v * 100) / 100}`).join(" · ")}`);
     }
     if (lineas.length) {

@@ -2,6 +2,7 @@ import { LiveDataUpdate, LiveDataValue, isLiveDataKey, namingToken } from "./liv
 import { buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml } from "./project-xml";
 import { readXlsxSheets, readZipEntries, rowsToRecords } from "./xlsx-reader";
 import { readOfficeTables, readPptxSlideShapes } from "./ooxml-tables";
+import { CURVA_S_MONTH_COUNT, curvaSUpdates, readPptxCurvaS } from "./pptx-curva-s";
 import { findBuildingProgress, findFiduciaryBalanceSheet, readPdfText } from "./pdf-text";
 import {
   PHASE_WEIGHTS,
@@ -1918,7 +1919,28 @@ export async function extractStructuredUpdates(
         // Sin formas legibles se sigue con las tablas.
       }
     }
-    const noTabulares = [...seguridad, ...ventas];
+    // La Curva S del Informe Ejecutivo es un gráfico: se lee directamente.
+    let curvaS: LiveDataUpdate[] = [];
+    if (extension === "pptx") {
+      try {
+        const grafico = await readPptxCurvaS(bytes);
+        if (grafico) {
+          curvaS = curvaSUpdates(grafico, CURVA_S_MONTH_COUNT).map(({ key, value }) => ({
+            key,
+            value,
+            // Igual que los demás lectores del documento: el área del archivo,
+            // para que la publicación automática no lo aísle por área.
+            area: defaults.area,
+            cutoff: defaults.cutoff,
+            sourceCurrency: defaults.sourceCurrency,
+            sourceName: defaults.sourceName,
+          }));
+        }
+      } catch {
+        // Sin gráficos legibles se sigue con el resto.
+      }
+    }
+    const noTabulares = [...seguridad, ...ventas, ...curvaS];
     let tablas;
     try {
       tablas = await readOfficeTables(bytes, extension);

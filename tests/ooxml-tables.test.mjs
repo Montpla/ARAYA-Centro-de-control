@@ -9,6 +9,9 @@ import * as xlsxReader from "../lib/xlsx-reader.ts";
 import * as pdfText from "../lib/pdf-text.ts";
 import * as progressModel from "../lib/progress-model.ts";
 
+// La Curva S de PowerPoint tiene su propio test (tests/pptx-curva-s.test.mjs).
+const pptxCurvaS = { CURVA_S_MONTH_COUNT: 27, readPptxCurvaS: async () => null, curvaSUpdates: () => [] };
+
 async function compilar(ruta, requerir) {
   const source = await readFile(new URL(ruta, import.meta.url), "utf8");
   const output = ts.transpileModule(source, {
@@ -50,6 +53,7 @@ async function cargarIngestion() {
     if (especificador === "./xlsx-reader") return xlsxReader;
     if (especificador === "./ooxml-tables") return ooxml;
     if (especificador === "./pdf-text") return pdfText;
+    if (especificador === "./pptx-curva-s") return pptxCurvaS;
     if (especificador === "./progress-model") return progressModel;
     throw new Error(`Import inesperado: ${especificador}`);
   });

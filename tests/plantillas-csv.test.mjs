@@ -15,6 +15,9 @@ import * as progressModel from "../lib/progress-model.ts";
 // isLiveDataKey de verdad en vez de sustituirlo por () => true: la validación
 // de la clave es justo la que rechazaba los nombres de edificio con guion, así
 // que simularla dejaría sin probar lo único que importa de este recorrido.
+// La Curva S de PowerPoint tiene su propio test (tests/pptx-curva-s.test.mjs).
+const pptxCurvaS = { CURVA_S_MONTH_COUNT: 27, readPptxCurvaS: async () => null, curvaSUpdates: () => [] };
+
 async function loadIngestion() {
   const ooxml = await cargarOoxmlTables();
   const source = await readFile(new URL("../lib/ingestion.ts", import.meta.url), "utf8");
@@ -32,6 +35,7 @@ async function loadIngestion() {
     if (specifier === "./xlsx-reader") return xlsxReader;
     if (specifier === "./ooxml-tables") return ooxml;
     if (specifier === "./pdf-text") return pdfText;
+    if (specifier === "./pptx-curva-s") return pptxCurvaS;
     if (specifier === "./progress-model") return progressModel;
     throw new Error(`Import inesperado: ${specifier}`);
   };

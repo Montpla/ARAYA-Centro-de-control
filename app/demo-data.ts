@@ -297,6 +297,11 @@ export const monthlyPlan = planCurveMonths.map((month, indice) => ({
   month,
   planned: planCurvePlanned[indice],
   actual: indice < planCurveActualsToDate.length ? planCurveActualsToDate[indice] : null,
+  // Plan reprogramado: la nueva línea de programación que el Informe Ejecutivo
+  // dibuja junto al Plan Operativo original desde el mes en que se reprograma
+  // la obra. No sustituye al plan original: son dos cronogramas distintos y la
+  // Curva S muestra los dos. Sin dato hasta que un informe lo publique.
+  reprogrammed: null as number | null,
 }));
 
 export const workPackages: WorkPackage[] = [

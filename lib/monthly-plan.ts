@@ -31,9 +31,8 @@ export function curveMonthIndex(date: string | null | undefined): number | null 
  * El Excel maestro no llega todos los meses, pero el Informe Ejecutivo sí. Sin
  * esto, el resumen seguía mostrando el último mes del Excel (p. ej. agosto)
  * bajo la etiqueta del corte nuevo (octubre), aunque el informe ya estuviera
- * publicado. Como en el punto de julio de la línea base, sólo el mes del corte
- * se ancla al informe, con su ejecutado y su plan operativo juntos, para que
- * resumen y Curva S comparen siempre la misma entrada.
+ * publicado. Sólo se ancla el ejecutado del mes del corte; el plan de ese mes
+ * sigue siendo el del Plan Operativo (ver el comentario del cuerpo).
  *
  * No se ancla nada si el corte no es posterior al último ejecutado (el Excel
  * del mes manda) ni si el valor declarado retrocede respecto al acumulado ya
@@ -53,8 +52,12 @@ export function anchorDeclaredCutoff<T extends MonthlyCurvePoint>(
   if (!finitePercent(actual) || actual <= 0) return false;
   const lastActual = lastActualIndex >= 0 ? points[lastActualIndex].actual : null;
   if (finitePercent(lastActual) && actual < lastActual) return false;
-  const planned = finitePercent(declared.plannedProgress) ? declared.plannedProgress : points[index].planned;
-  points[index] = { ...points[index], actual, planned };
+  // Sólo el ejecutado. El "programado al corte" que declara el informe puede
+  // pertenecer a otro cronograma (el plan reprogramado: 39,8 % en octubre de
+  // 2026 frente al 57,48 % del Plan Operativo original). Escribirlo en la
+  // línea del Plan Operativo la hacía bajar de 45,58 % en septiembre a 39,8 %
+  // en octubre: una curva acumulada que retrocede. Cada plan va en su línea.
+  points[index] = { ...points[index], actual };
   return true;
 }
 
