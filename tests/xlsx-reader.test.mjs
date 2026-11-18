@@ -222,7 +222,26 @@ test("la carátula de cubicación actualiza edificios, urbanismo y total pondera
   assert.equal(porClave.get("urbanismAreas.0.progress").value, 25);
   assert.equal(porClave.get("projectSnapshot.overallProgress").value, 14);
   assert.equal(porClave.get("projectSnapshot.overallProgress").area, "obra");
+  // La cubicación manda en el avance físico: también es el ejecutado de la
+  // Curva S en el mes de su corte (julio 2026 = índice 13).
+  assert.equal(porClave.get("monthlyPlan.13.actual").value, 14);
   assert.deepEqual([...resultado.expectedBuildingCodes].sort(), ["TH-76", "TH-77"]);
+});
+
+test("una cubicación sin periodo propio no toca la Curva S", async () => {
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("cubicacion-caratula-acumulado.xlsx"),
+    "xlsx",
+    {
+      ...defaults,
+      cutoff: new Date().toISOString().slice(0, 10),
+      sourceName: "Cubicacion.xlsx",
+      knownBuildingTokens: new Set(["76", "77"]),
+    },
+  );
+  assert.ok(resultado.updates.some((update) => update.key === "projectSnapshot.overallProgress"));
+  assert.ok(!resultado.updates.some((update) => update.key.startsWith("monthlyPlan.")));
 });
 
 test("el detalle de partidas de la cubicación actualiza el avance por oficio (Albañilería, Instalaciones...)", async () => {

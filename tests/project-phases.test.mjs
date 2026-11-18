@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { buildings } from "../app/demo-data.ts";
 import { extractProjectXmlUpdates, phaseForChapter } from "../lib/project-xml.ts";
-import { syncUnitsWithBuildingPhases, unitOverallProgress } from "../lib/unit-progress.ts";
+import { alignUnitsWithBuildingProgress, syncUnitsWithBuildingPhases, unitOverallProgress } from "../lib/unit-progress.ts";
 
 function tarea(name, nivel, { summary = false, pct = null, horas = 8 } = {}) {
   return `<Task><Name>${name}</Name><OutlineLevel>${nivel}</OutlineLevel><Summary>${summary ? 1 : 0}</Summary>` +
@@ -111,4 +111,34 @@ test("servidor y cliente sincronizan los apartamentos con las fases del edificio
   ]);
   assert.match(servidor, /syncUnitsWithBuildingPhases\(materialized\)/);
   assert.match(cliente, /syncUnitsWithBuildingPhases\(building\)/);
+});
+
+test("los apartamentos suben hasta el avance del edificio que da la cubicación", () => {
+  const edificio = structuredClone(buildings.find((item) => item.shortName === "3"));
+  syncUnitsWithBuildingPhases(edificio);
+  const antes = edificio.units.map((unit) => unitOverallProgress(unit, []));
+  const mediaAntes = antes.reduce((suma, valor) => suma + valor, 0) / antes.length;
+  edificio.progress = Math.min(95, mediaAntes + 25);
+
+  alignUnitsWithBuildingProgress(edificio, []);
+
+  const despues = edificio.units.map((unit) => unitOverallProgress(unit, []));
+  const media = despues.reduce((suma, valor) => suma + valor, 0) / despues.length;
+  assert.ok(Math.abs(media - edificio.progress) < 1, `media ${media} frente a ${edificio.progress}`);
+  despues.forEach((valor, index) => assert.ok(valor >= antes[index]));
+  // Se conserva el orden relativo: el que iba por delante sigue por delante.
+  const orden = (lista) => lista.map((_, i) => i).sort((a, b) => lista[a] - lista[b] || a - b);
+  if (new Set(antes).size === antes.length) assert.deepEqual(orden(despues), orden(antes));
+
+  // Si el edificio baja por debajo de sus apartamentos, no se toca nada.
+  edificio.progress = 1;
+  alignUnitsWithBuildingProgress(edificio, []);
+  assert.deepEqual(edificio.units.map((unit) => unitOverallProgress(unit, [])), antes);
+});
+
+test("el servidor y el panel alinean los apartamentos con el edificio", async () => {
+  const servidor = await readFile("lib/spatial-live-data.ts", "utf8");
+  const cliente = await readFile("app/dashboard-client.tsx", "utf8");
+  assert.match(servidor, /alignUnitsWithBuildingProgress\(building, constructionDisciplines\)/);
+  assert.match(cliente, /alignUnitsWithBuildingProgress\(building, constructionDisciplines\)/);
 });

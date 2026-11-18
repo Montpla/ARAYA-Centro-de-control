@@ -39,7 +39,44 @@ export function unitOverallProgress(
 ): number {
   // Media ponderada por fase de obra, no media simple: unos acabados pendientes
   // pesan más que una estructura pendiente. El reparto vive en progress-model.
-  return weightedUnitProgress(unitDisciplines(unit, constructionDisciplines));
+  const weighted = weightedUnitProgress(unitDisciplines(unit, constructionDisciplines));
+  const aligned = unit.alignedProgress;
+  return typeof aligned === "number" && Number.isFinite(aligned) && aligned > weighted ? aligned : weighted;
+}
+
+/**
+ * Lleva el avance de los apartamentos al del edificio cuando el edificio va
+ * por delante.
+ *
+ * El avance del edificio lo manda la cubicación (decisión de dirección,
+ * 18/11/2026), pero los apartamentos sólo tienen el avance por fase del plan
+ * de Project, que va por detrás: un edificio al 79 % se pintaba con
+ * apartamentos en torno al 50 %, con otro color de la misma leyenda. Se
+ * escala cada apartamento en proporción, de modo que la media del edificio
+ * coincide con su avance y se conserva qué apartamentos van por delante. Sólo
+ * sube: si los apartamentos ya van por encima, no se toca nada. No inventa
+ * disciplinas: sólo fija el avance global con el que se colorea y se cuenta.
+ */
+export function alignUnitsWithBuildingProgress(
+  building: { progress?: number | null; units?: Unit[] },
+  constructionDisciplines: readonly { name: string; progress: number }[],
+) {
+  const units = building.units?.filter(Boolean) ?? [];
+  for (const unit of units) delete unit.alignedProgress;
+  const target = building.progress;
+  if (!units.length || typeof target !== "number" || !Number.isFinite(target) || target <= 0) return 0;
+  const weighted = units.map((unit) => weightedUnitProgress(unitDisciplines(unit, constructionDisciplines)));
+  const average = weighted.reduce((sum, value) => sum + value, 0) / units.length;
+  if (average >= target) return 0;
+  const factor = average > 0 ? target / average : 0;
+  let ajustados = 0;
+  units.forEach((unit, index) => {
+    const value = Math.min(100, factor ? weighted[index] * factor : target);
+    if (value <= weighted[index]) return;
+    unit.alignedProgress = Math.round(value * 100) / 100;
+    ajustados += 1;
+  });
+  return ajustados;
 }
 
 /**
