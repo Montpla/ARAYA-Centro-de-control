@@ -95,6 +95,7 @@ import { readEffectiveLiveData } from "../../../lib/effective-live-data";
 import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-upsert";
 import { nothingExtractedMessage } from "../../../lib/upload-messages";
 import { triggerMppConversion } from "../../../lib/mpp-conversion-trigger";
+import { LARGE_PDF_BYTES, triggerPdfCompression } from "../../../lib/pdf-compression-trigger";
 import { triggerDeferredUploadRetry } from "../../../lib/deferred-upload-retry-trigger";
 import { readUploadAgentToken, resolveUploadAgentToken } from "../../../lib/upload-agent-auth";
 import {
@@ -1326,6 +1327,40 @@ export async function POST(request: Request) {
   // triggerMppConversion). Sin GITHUB_ACTIONS_TOKEN configurado, no hace
   // nada y el cron programado sigue siendo la única vía, como hasta ahora.
   if (extension === "mpp") triggerMppConversion(id);
+
+  // Un PDF muy pesado (fotos escaneadas) no cabe en la memoria del Worker:
+  // leerlo aquí termina en un 503 vacío, una y otra vez. Se pide su
+  // compresión al runner de GitHub (ver triggerPdfCompression) y la versión
+  // ligera entra como archivo derivado por el camino de siempre; este
+  // expediente queda archivado a la espera y después se cierra como histórico.
+  if (extension === "pdf" && candidate.size > LARGE_PDF_BYTES && !derivedFromFileId) {
+    const waitingAt = new Date().toISOString();
+    await db.update(uploadedFiles).set({
+      processingStage: "recibido",
+      processingProgress: 20,
+      processingSummary: `PDF de ${(candidate.size / 1024 / 1024).toFixed(1)} MB: se comprime automáticamente antes de leerlo (los archivos de más de ${Math.round(LARGE_PDF_BYTES / 1024 / 1024)} MB no caben en el lector). No hay que volver a subirlo.`,
+      updatedAt: waitingAt,
+    }).where(eq(uploadedFiles.id, id)).catch(() => undefined);
+    triggerPdfCompression(id);
+    return Response.json({
+      processing: true,
+      file: publicFileRow({ ...row, processingStage: "recibido", updatedAt: waitingAt }, user),
+      receipt: {
+        outcome: "accepted",
+        area: classification.area,
+        areaLabel: areaLabels[classification.area],
+        publishedCount: 0,
+        unchangedCount: 0,
+        ignoredCount: 0,
+        warningCount: 0,
+        warnings: [],
+        newSectionCount: 0,
+        requiresAction: false,
+        nextAction: "No tienes que hacer nada: el archivo se comprime y se lee automáticamente en unos minutos.",
+      },
+      message: "Archivo recibido. Es un PDF muy pesado: se comprime automáticamente y sus datos entrarán en unos minutos.",
+    }, { status: 202 });
+  }
 
   if (deferProcessingRequested && !resumedRow) {
     scheduleBackgroundUploadProcessing({
