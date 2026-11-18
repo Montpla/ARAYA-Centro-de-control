@@ -14,6 +14,7 @@ import type { DashboardBootstrapData } from "../lib/dashboard-bootstrap-types";
 import { mergeFileRegistryRecords } from "../lib/file-registry-pagination";
 import {
   unitDisciplines as sharedUnitDisciplines,
+  syncUnitsWithBuildingPhases,
   unitOverallProgress as sharedUnitOverallProgress,
 } from "../lib/unit-progress";
 import {
@@ -1456,6 +1457,7 @@ function synchronizeDerivedDashboardState() {
   projectSnapshot.forecastFinish = projectDateForDisplay(projectSnapshot.forecastFinish);
   buildings.forEach((building) => {
     building.forecastFinish = projectDateForDisplay(building.forecastFinish);
+    syncUnitsWithBuildingPhases(building);
   });
   projectSnapshot.buildingCount = buildings.length;
   projectSnapshot.unitCount = buildings.reduce((total, building) => total + building.units.length, 0);

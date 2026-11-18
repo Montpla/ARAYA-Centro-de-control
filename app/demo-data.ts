@@ -50,6 +50,9 @@ export type Building = {
   planProgress: number | null;
   deviationDays: number;
   forecastFinish: string;
+  // Avance por fase del edificio (orden de PHASE_WEIGHTS). Los apartamentos
+  // heredan de aquí sus disciplinas cuando llega un plan de obra nuevo.
+  phases?: PhaseProgress[];
   units: Unit[];
   mapCoordinates?: {
     visual: { x: number; y: number };
@@ -241,6 +244,7 @@ export const buildings: Building[] = buildingPhaseRows.map(([code, ...valores]) 
     planProgress: null,
     deviationDays: schedule.deviationDays,
     forecastFinish: schedule.forecastFinish,
+    phases: phases.map((phase) => ({ ...phase })),
     units: makeUnits(code, phases),
     mapCoordinates: buildingMapCoordinates[code],
   };

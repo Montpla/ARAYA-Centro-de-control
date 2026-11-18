@@ -136,6 +136,10 @@ async function loadContractCore() {
         planProgress: null,
         deviationDays: 0,
         forecastFinish: "2027-05-31",
+        phases: [
+          { id: "comun", name: "Obra común", progress: 100 },
+          { id: "superestructura", name: "Superestructura", progress: 90 },
+        ],
         units: [{
           id: "1-101",
           code: "1-101",
@@ -824,6 +828,13 @@ test("central publication contract rejects invalid manual or reviewed domain val
   assert.match(publisher, /assertLiveDataContracts\(input\.normalized, currentLiveData\.values\)/);
   assert.match(manualRoute, /publishLiveDataUpdates\(/);
   assert.match(reviewRoute, /publishLiveDataUpdates\(/);
+});
+
+test("el contrato admite el avance por fase de un edificio y lo acota a 0-100", async () => {
+  const { validateLiveDataContract } = await loadContractCore();
+  assert.equal(validateLiveDataContract("buildings.0.phases.1.progress", "96.5").valid, true);
+  assert.equal(validateLiveDataContract("buildings.0.phases.1.progress", "100.5").valid, false);
+  assert.equal(validateLiveDataContract("buildings.0.phases.1.progress", '"alto"').valid, false);
 });
 
 test("un mes de la Curva S sin ejecutado todavía admite su primer avance real", async () => {

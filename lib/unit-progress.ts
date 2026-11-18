@@ -1,5 +1,5 @@
 import type { Unit, UnitDiscipline } from "../app/demo-data";
-import { weightedUnitProgress } from "./progress-model.ts";
+import { currentPhaseName, weightedUnitProgress, type PhaseProgress } from "./progress-model.ts";
 
 // Shared between the client dashboard (colors, labels) and the server-side
 // spatial live-data materializer (the computed project-wide overallProgress),
@@ -40,4 +40,44 @@ export function unitOverallProgress(
   // Media ponderada por fase de obra, no media simple: unos acabados pendientes
   // pesan más que una estructura pendiente. El reparto vive en progress-model.
   return weightedUnitProgress(unitDisciplines(unit, constructionDisciplines));
+}
+
+/**
+ * Lleva a los apartamentos el avance por fase de su edificio.
+ *
+ * Los apartamentos guardan sus cuatro disciplinas y el plan de obra sólo mide
+ * el edificio por fases, así que sin esto cada plan nuevo movía el edificio y
+ * dejaba sus apartamentos (avance, color y estado) en el corte anterior. Son
+ * acumulados: una disciplina sólo sube, de modo que un avance anotado a mano en
+ * un apartamento y mayor que el del edificio se conserva. Muta las unidades
+ * para que el cliente conserve las referencias que usa su sincronizador.
+ */
+export function syncUnitsWithBuildingPhases(building: {
+  phases?: readonly PhaseProgress[];
+  units?: Unit[];
+}) {
+  const phases = building.phases;
+  if (!phases?.length || !building.units?.length) return 0;
+  let actualizados = 0;
+  for (const unit of building.units) {
+    if (!unit?.disciplines?.length) continue;
+    let subio = false;
+    const disciplines = unit.disciplines.map((discipline) => {
+      const phase = phases.find((item) => item.id === discipline.id);
+      if (!phase || typeof phase.progress !== "number" || !Number.isFinite(phase.progress)) return discipline;
+      if (discipline.progress !== null && discipline.progress >= phase.progress) return discipline;
+      subio = true;
+      return { ...discipline, progress: phase.progress, status: "integrado" as const };
+    });
+    if (!subio) continue;
+    actualizados += 1;
+    unit.disciplines = disciplines;
+    unit.progress = weightedUnitProgress(disciplines);
+    if (unit.status !== "bloqueada") {
+      unit.status = unit.progress >= 100 ? "terminada" : unit.progress > 0 ? "en_curso" : "pendiente";
+    }
+    unit.phase = currentPhaseName([...phases]);
+    unit.source = "Plan de obra Project · avance por fase del edificio";
+  }
+  return actualizados;
 }

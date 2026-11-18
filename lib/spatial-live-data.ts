@@ -19,16 +19,20 @@ import {
 } from "./progress-model";
 import { anchorDeclaredCutoff, clearTrailingMonthlyActualPlaceholders } from "./monthly-plan";
 import { deriveUrbanismMapAreas, reconcileGeneralUrbanism } from "./urbanism-map-progress";
-import { unitOverallProgress } from "./unit-progress";
+import { syncUnitsWithBuildingPhases, unitOverallProgress } from "./unit-progress";
 
 export function materializeSpatialLiveData(values: LiveDataMap) {
   const buildings = compactLiveEntities(
     materializeLiveRoot("buildings", baselineBuildings, values),
-  ).map((building) => ({
-    ...building,
-    forecastFinish: projectDateForDisplay(building.forecastFinish),
-    units: compactLiveEntities(building.units),
-  }));
+  ).map((building) => {
+    const materialized = {
+      ...building,
+      forecastFinish: projectDateForDisplay(building.forecastFinish),
+      units: compactLiveEntities(building.units).map((unit) => ({ ...unit })),
+    };
+    syncUnitsWithBuildingPhases(materialized);
+    return materialized;
+  });
   const spatialUrbanismAreas = compactLiveEntities(
     materializeLiveRoot("urbanismAreas", baselineUrbanismAreas, values),
   );
