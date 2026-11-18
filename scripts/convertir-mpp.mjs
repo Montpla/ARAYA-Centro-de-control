@@ -227,7 +227,8 @@ for (const f of objetivo) {
   form.set("derivedFromFileId", f.id);
   form.set("automationKind", "mpp_to_xml");
   if (f.declaredCutoff) form.set("declaredCutoff", f.declaredCutoff);
-  form.set("description", `Convertido de ${f.originalName} con MPXJ (${new Date().toISOString().slice(0, 10)}).`);
+  // Sin la fecha de conversión: el corte es el del plan, no el del día de carga.
+  form.set("description", `Convertido de ${f.originalName} con MPXJ.`);
 
   const subida = await fetch(`${PRODUCTION_URL}/api/files`, { method: "POST", headers: { Cookie }, body: form });
   const cuerpo = await subida.json().catch(() => ({}));
