@@ -6,6 +6,7 @@ import {
   anchorDeclaredCutoff,
   clearTrailingMonthlyActualPlaceholders,
   curveMonthIndex,
+  currentPlannedProgress,
 } from "../lib/monthly-plan.ts";
 import { reconcileGeneralUrbanism } from "../lib/urbanism-map-progress.ts";
 
@@ -107,4 +108,10 @@ test("servidor y cliente anclan el corte declarado tras limpiar los ceros futuro
   assert.match(cliente, /clearTrailingMonthlyActualPlaceholders\(monthlyPlan\);\s*\n\s*anchorDeclaredCutoff\(monthlyPlan, projectSnapshot\);/);
   assert.match(servidor, /reconcileGeneralUrbanism\(/);
   assert.match(cliente, /reconcileGeneralUrbanism\(/);
+});
+
+test("el plan vigente al corte es el reprogramado cuando ese mes lo tiene", () => {
+  assert.equal(currentPlannedProgress({ planned: 57.48, reprogrammed: 39.8 }), 39.8);
+  assert.equal(currentPlannedProgress({ planned: 35.29 }), 35.29, "antes de la reprogramación manda el Plan Operativo");
+  assert.equal(currentPlannedProgress({ planned: 35.29, reprogrammed: null }), 35.29);
 });

@@ -215,7 +215,7 @@ test("overallProgress and plannedProgress always come from the same monthlyPlan 
   );
   assert.match(
     spatialLiveData,
-    /const plannedProgress = cutoffEntry\?\.planned/,
+    /const plannedProgress = cutoffEntry \? currentPlannedProgress\(cutoffEntry\)/,
     "plannedProgress debe leerse del mismo cutoffEntry que overallProgress (servidor); si esto falta, el KPI puede quedarse comparando un mes distinto al del avance físico (bug real, corregido el 13/08/2026)",
   );
   assert.match(
@@ -227,7 +227,7 @@ test("overallProgress and plannedProgress always come from the same monthlyPlan 
   // Cliente: app/dashboard-client.tsx (synchronizeDerivedDashboardState)
   assert.match(
     dashboard,
-    /cutoffActual = cutoffIndex >= 0 \? monthlyPlan\[cutoffIndex\]\.actual[\s\S]{0,80}cutoffPlanned = cutoffIndex >= 0 \? monthlyPlan\[cutoffIndex\]\.planned/,
+    /cutoffActual = cutoffIndex >= 0 \? monthlyPlan\[cutoffIndex\]\.actual[\s\S]{0,80}cutoffPlanned = cutoffIndex >= 0 \? currentPlannedProgress\(monthlyPlan\[cutoffIndex\]\)/,
     "overallProgress y plannedProgress deben leerse de la misma entrada de monthlyPlan en el espejo cliente",
   );
   assert.match(

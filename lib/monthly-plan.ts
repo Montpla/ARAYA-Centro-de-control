@@ -16,6 +16,19 @@ function finitePercent(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+/**
+ * Plan vigente en un mes de la Curva S: el reprogramado si ese mes lo tiene y,
+ * si no, el Plan Operativo original.
+ *
+ * Desde la reprogramación de septiembre de 2026 el Informe Ejecutivo mide el
+ * desvío oficial contra el plan reprogramado (octubre: 32,06 % frente a
+ * 39,8 %, −7,7 pp) y cita aparte el desvío contra el original (−25,4 pp). La
+ * cabecera del panel muestra el oficial; la Curva S dibuja los dos planes.
+ */
+export function currentPlannedProgress(point: { planned: number; reprogrammed?: number | null }) {
+  return finitePercent(point.reprogrammed) ? point.reprogrammed : point.planned;
+}
+
 /** Índice del calendario de la Curva S (junio 2025 = 0) para una fecha ISO. */
 export function curveMonthIndex(date: string | null | undefined): number | null {
   const match = /^(\d{4})-(\d{2})/.exec(date ?? "");

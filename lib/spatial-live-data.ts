@@ -17,7 +17,7 @@ import {
   activeBuildingsProgress,
   projectDateForDisplay,
 } from "./progress-model";
-import { anchorDeclaredCutoff, clearTrailingMonthlyActualPlaceholders } from "./monthly-plan";
+import { anchorDeclaredCutoff, clearTrailingMonthlyActualPlaceholders, currentPlannedProgress } from "./monthly-plan";
 import { deriveUrbanismMapAreas, reconcileGeneralUrbanism } from "./urbanism-map-progress";
 import { syncUnitsWithBuildingPhases, unitOverallProgress } from "./unit-progress";
 
@@ -73,7 +73,7 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
   // puede sustituir un KPI ponderado por el monto total de obra.
   const cutoffEntry = cutoffIndex >= 0 ? monthlyPlan[cutoffIndex] : null;
   const overallProgress = cutoffEntry?.actual ?? snapshot.overallProgress;
-  const plannedProgress = cutoffEntry?.planned ?? snapshot.plannedProgress;
+  const plannedProgress = cutoffEntry ? currentPlannedProgress(cutoffEntry) : snapshot.plannedProgress;
   const deviationPoints = Math.round((overallProgress - plannedProgress) * 100) / 100;
   // Ritmo de los edificios ya en marcha, aparte del global (que reparte entre
   // los 26). Se recalcula solo con cada cambio de edificio.
