@@ -354,9 +354,10 @@ test("el corte sale del nombre del archivo, no de la fecha de conversión de la 
 
 test("un mes sin año es el último con ese nombre que no queda en el futuro", () => {
   const noviembre2026 = new Date(Date.UTC(2026, 10, 18));
-  assert.equal(ingestion.detectPeriod("Cubicacion_11_Araya_Oct.xlsx", "", "", noviembre2026), "2026-10");
-  assert.equal(ingestion.detectPeriod("Informe_Ejecutivo_ARAYA_Octubre_Definitivo_v5.pptx", "", "", noviembre2026), "2026-10");
-  assert.equal(ingestion.detectPeriod("Avance diciembre.pdf", "", "", noviembre2026), "2025-12");
+  assert.equal(ingestion.detectPeriod("Cubicacion_11_Araya_Oct.xlsx", "", "", noviembre2026), "2026-10-31");
+  assert.equal(ingestion.detectPeriod("Informe_Ejecutivo_ARAYA_Octubre_Definitivo_v5.pptx", "", "", noviembre2026), "2026-10-31");
+  assert.equal(ingestion.detectPeriod("Avance febrero.pdf", "", "", noviembre2026), "2026-02-28");
+  assert.equal(ingestion.detectPeriod("Avance diciembre.pdf", "", "", noviembre2026), "2025-12-31");
   // Una fecha completa sigue mandando sobre el nombre del mes.
   assert.equal(ingestion.detectPeriod("Flujo ENERO CORTE 30-10-2026.xml", "", "", noviembre2026), "2026-10-30");
   // Palabras que contienen un mes no cuentan.

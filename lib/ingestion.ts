@@ -223,17 +223,20 @@ function periodFromText(value: string, now: Date) {
     return `${year}-${monthNumbers[monthYear[1]]}`;
   }
   // Un mes sin año ("Cubicacion_11_Araya_Oct.xlsx", "Informe_..._Octubre_...")
-  // es el último mes con ese nombre que no queda en el futuro. Sin esto el
-  // corte caía en el día de la carga, posterior a todo el mes que el
-  // documento describe. Delimitado por algo que no sea letra: "_" cuenta como
-  // carácter de palabra y \b no lo separaría.
+  // es el último mes con ese nombre que no queda en el futuro, cortado en su
+  // último día. Sin esto el corte caía en el día de la carga, posterior a
+  // todo el mes que el documento describe. Delimitado por algo que no sea
+  // letra: "_" cuenta como carácter de palabra y \b no lo separaría.
   const bareMonth = normalized.match(
     /(?:^|[^a-z])(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sept|sep|oct|nov|dic)(?=[^a-z]|$)/,
   );
   if (bareMonth) {
     const month = Number(monthNumbers[bareMonth[1]]);
     const year = month > now.getUTCMonth() + 1 ? now.getUTCFullYear() - 1 : now.getUTCFullYear();
-    return `${year}-${String(month).padStart(2, "0")}`;
+    // Un informe mensual corta al final de su mes: con "aaaa-mm" se ordenaría
+    // como el día 1 y perdería frente a cualquier dato de mitad de mes.
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
   }
   return "";
 }
@@ -911,11 +914,21 @@ function extractCubicacionCoverProgress(
   const overallProgress = declaredOverall ??
     (measuredRows > 0 && totalBudget > 0 ? (totalAccumulated / totalBudget) * 100 : null);
   if (overallProgress !== null) {
-    updates.push({
-      key: "projectSnapshot.overallProgress",
-      value: Math.round(overallProgress * 100) / 100,
-      ...baseUpdate,
-    });
+    const value = Math.round(overallProgress * 100) / 100;
+    updates.push({ key: "projectSnapshot.overallProgress", value, ...baseUpdate });
+    // La cubicación manda en el avance físico (decisión de dirección,
+    // 18/11/2026: la Nº11 de octubre da 38,01 % frente al 32,06 % del Informe
+    // Ejecutivo). El resumen toma el avance del último "Ejecutado Real" de la
+    // Curva S, así que se escribe también en el mes de su corte; si no, la
+    // cabecera, la curva y el desvío seguían en la cifra del Informe. Sin un
+    // periodo propio (el corte es el día de carga) no se sabe a qué mes
+    // pertenece y la curva no se toca.
+    const cutoffMatch = /^(\d{4})-(\d{2})/.exec(defaults.cutoff ?? "");
+    const isUploadDay = defaults.cutoff === new Date().toISOString().slice(0, 10);
+    const monthIndex = cutoffMatch ? (Number(cutoffMatch[1]) - 2025) * 12 + (Number(cutoffMatch[2]) - 6) : -1;
+    if (!isUploadDay && monthIndex >= 0 && monthIndex < CURVA_S_MONTH_COUNT) {
+      updates.push({ key: `monthlyPlan.${monthIndex}.actual`, value, ...baseUpdate });
+    }
   }
 
   return {

@@ -15,6 +15,7 @@ import { mergeFileRegistryRecords } from "../lib/file-registry-pagination";
 import {
   unitDisciplines as sharedUnitDisciplines,
   syncUnitsWithBuildingPhases,
+  alignUnitsWithBuildingProgress,
   unitOverallProgress as sharedUnitOverallProgress,
 } from "../lib/unit-progress";
 import {
@@ -1458,6 +1459,7 @@ function synchronizeDerivedDashboardState() {
   buildings.forEach((building) => {
     building.forecastFinish = projectDateForDisplay(building.forecastFinish);
     syncUnitsWithBuildingPhases(building);
+    alignUnitsWithBuildingProgress(building, constructionDisciplines);
   });
   projectSnapshot.buildingCount = buildings.length;
   projectSnapshot.unitCount = buildings.reduce((total, building) => total + building.units.length, 0);

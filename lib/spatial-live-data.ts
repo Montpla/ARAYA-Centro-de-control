@@ -19,7 +19,7 @@ import {
 } from "./progress-model";
 import { anchorDeclaredCutoff, clearTrailingMonthlyActualPlaceholders, currentPlannedProgress } from "./monthly-plan";
 import { deriveUrbanismMapAreas, reconcileGeneralUrbanism } from "./urbanism-map-progress";
-import { syncUnitsWithBuildingPhases, unitOverallProgress } from "./unit-progress";
+import { alignUnitsWithBuildingProgress, syncUnitsWithBuildingPhases, unitOverallProgress } from "./unit-progress";
 
 export function materializeSpatialLiveData(values: LiveDataMap) {
   const buildings = compactLiveEntities(
@@ -59,6 +59,7 @@ export function materializeSpatialLiveData(values: LiveDataMap) {
   // avance físico global: el equipo de obra lleva su control real en el
   // Excel maestro (Curva S / plan operativo), así que es el último
   // "Ejecutado Real" que ese Excel declare el que decide overallProgress.
+  for (const building of buildings) alignUnitsWithBuildingProgress(building, constructionDisciplines);
   const allUnits = buildings.flatMap((building) => building.units);
   const apartmentAverageProgress = allUnits.length
     ? allUnits.reduce((sum, unit) => sum + unitOverallProgress(unit, constructionDisciplines), 0) / allUnits.length

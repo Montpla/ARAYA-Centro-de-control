@@ -40,6 +40,8 @@ export type Unit = {
   source?: string;
   disciplines?: UnitDiscipline[];
   issues?: UnitIssue[];
+  /** Avance del apartamento llevado al del edificio (cubicación); ver alignUnitsWithBuildingProgress. */
+  alignedProgress?: number;
 };
 
 export type Building = {
