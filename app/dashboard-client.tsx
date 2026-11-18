@@ -3190,7 +3190,7 @@ function ProgressChart({ data = monthlyPlan }: { data?: Array<{ month: string; p
       <div className="s-curve-reconciliation-note">
         <strong>Fuente del avance físico global:</strong>
         <span>
-          {" "}El {number.format(projectSnapshot.overallProgress)}% que se muestra en todo el tablero es el “Ejecutado Real” declarado por el equipo de obra en el Excel maestro (Curva S), no un promedio calculado aquí.
+          {" "}El {number.format(projectSnapshot.overallProgress)}% que se muestra en todo el tablero es el “Ejecutado Real” de la Curva S en el mes del corte: el avance físico total de la última cubicación certificada (carátula, ponderado por el presupuesto de cada edificio y de urbanismo), no un promedio calculado aquí.
           Como referencia de apoyo, el cálculo apartamento a apartamento (4 disciplinas por unidad) da {number.format(projectSnapshot.apartmentAverageProgress)}%.
         </span>
       </div>
