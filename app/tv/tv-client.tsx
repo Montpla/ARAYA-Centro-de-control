@@ -36,7 +36,7 @@ type TvSnapshot = {
   latestEvent: { revision: number; sourceName: string; area: string; createdAt: string } | null;
   planning: TvPlanning;
   spatial: TvSpatial;
-  monthlyPlan: Array<{ month: string; planned: number; actual: number | null }>;
+  monthlyPlan: Array<{ month: string; planned: number; actual: number | null; reprogrammed?: number | null }>;
   urbanism: { executed: number | null; planned: number | null };
   actions: {
     open: number;
@@ -72,6 +72,21 @@ function CurveChart({ plan }: { plan: TvSnapshot["monthlyPlan"] }) {
     .map((entry, index) => ({ ...entry, index }))
     .filter((entry) => entry.actual !== null && entry.actual !== undefined);
   const actualPath = actualEntries.map((entry, position) => `${position === 0 ? "M" : "L"}${x(entry.index).toFixed(1)},${y(entry.actual as number).toFixed(1)}`).join(" ");
+  // Plan reprogramado: sólo los meses que lo tienen (desde la reprogramación).
+  const reprogrammedEntries = plan
+    .map((entry, index) => ({ value: entry.reprogrammed, index }))
+    .filter((entry): entry is { value: number; index: number } => typeof entry.value === "number" && Number.isFinite(entry.value));
+  const reprogrammedPath = reprogrammedEntries.map((entry, position) => `${position === 0 ? "M" : "L"}${x(entry.index).toFixed(1)},${y(entry.value).toFixed(1)}`).join(" ");
+  // Sombreado del desvío entre el plan operativo y el ejecutado, tramo a tramo
+  // entre meses con ejecutado consecutivos (igual que en el panel).
+  const gapAreas = actualEntries.slice(0, -1).map((entry, position) => {
+    const next = actualEntries[position + 1];
+    const plannedEdge = plan.slice(entry.index, next.index + 1)
+      .map((point, offset) => `${x(entry.index + offset).toFixed(1)},${y(point.planned).toFixed(1)}`);
+    const points = [...plannedEdge, `${x(next.index).toFixed(1)},${y(next.actual as number).toFixed(1)}`, `${x(entry.index).toFixed(1)},${y(entry.actual as number).toFixed(1)}`].join(" ");
+    const gap = ((entry.actual as number) - entry.planned + (next.actual as number) - next.planned) / 2;
+    return { key: `${entry.month}-${entry.index}`, points, tone: gap >= 0 ? "good" : gap >= -5 ? "warn" : "danger" };
+  });
   return (
     <svg className="tv-curve" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Curva S: plan operativo frente a ejecutado real">
       {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((tick) => (
@@ -91,12 +106,14 @@ function CurveChart({ plan }: { plan: TvSnapshot["monthlyPlan"] }) {
               textAnchor="end"
               transform={`rotate(-35 ${x(index)} ${height - margin.bottom + 40})`}
             >
-              {entry.month}
+              {entry.month.slice(0, 7)}
             </text>
           )
           : null
       ))}
+      {gapAreas.map((area) => <polygon key={area.key} points={area.points} className={`tv-curve-gap ${area.tone}`} />)}
       <path d={plannedPath} className="tv-curve-planned" />
+      {reprogrammedPath ? <path d={reprogrammedPath} className="tv-curve-reprogrammed" /> : null}
       {actualPath ? <path d={actualPath} className="tv-curve-actual" /> : null}
       {actualEntries.map((entry) => (
         <circle key={`actual-${entry.index}`} cx={x(entry.index)} cy={y(entry.actual as number)} r={7} className="tv-curve-actual-dot" />
@@ -256,11 +273,14 @@ export function TvClient({ initialToken }: { initialToken: string }) {
 
       {slide === 1 ? (
         <section className="tv-slide" aria-label="Curva S">
-          <h2>Curva S · plan operativo frente a ejecutado real</h2>
+          <h2>Curva S · plan operativo, plan reprogramado y ejecutado real</h2>
           <CurveChart plan={snapshot.monthlyPlan} />
           <div className="tv-legend">
             <span className="tv-legend-planned">Plan operativo</span>
             <span className="tv-legend-actual">Ejecutado real</span>
+            {snapshot.monthlyPlan.some((entry) => typeof entry.reprogrammed === "number") ? (
+              <span className="tv-legend-reprogrammed">Plan reprogramado</span>
+            ) : null}
           </div>
         </section>
       ) : null}
