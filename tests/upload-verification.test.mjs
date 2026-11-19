@@ -73,6 +73,18 @@ test("un avance que retrocede más de un punto es un aviso; más de 15, anomalí
   assert.equal(evaluate({ regressions: [{ key: "buildings.3.progress", before: 55.32, after: 55 }] }).verdict, "ok");
 });
 
+test("sin datos porque ya estaba todo publicado no es un aviso", () => {
+  const result = evaluate({
+    run: { status: "no_data", proposedCount: 0, publishedCount: 0, error: "" },
+    file: {
+      publicationRevision: 132,
+      extractionSummary: "Los indicadores del reporte de la semana 26/10/2026 al 31/10/2026 ya coinciden con los valores vivos publicados; no se emiten duplicados.",
+    },
+  });
+  assert.equal(result.verdict, "ok");
+  assert.equal(result.checks[0].id, "ya_publicado");
+});
+
 test("sin datos extraídos es un aviso, no una anomalía", () => {
   const result = evaluate({ run: { status: "no_data", proposedCount: 0, publishedCount: 0, error: "" }, file: { publicationRevision: null } });
   assert.equal(result.verdict, "aviso");

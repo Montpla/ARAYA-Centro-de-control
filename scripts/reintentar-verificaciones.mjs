@@ -7,6 +7,8 @@
 // 2. Incidencias "🔎 Revisar carga" en las que la revisión de Claude no llegó
 //    a terminar (límite de uso de la suscripción agotado o un error): se
 //    vuelve a lanzar, como mucho MAX_REINTENTOS veces por incidencia.
+// 3. PR de arreglo automático abiertos que no llegaron a fusionarse: se
+//    retoma su circuito, también como mucho MAX_REINTENTOS veces.
 //
 // Sólo lanza workflows; no publica ni toca datos. No imprime importes.
 
@@ -111,5 +113,31 @@ for (const issue of incidencias) {
       body: JSON.stringify({ body: `${MARCA} ${reintentos + 1} de ${MAX_REINTENTOS}: la revisión anterior no terminó; se vuelve a lanzar.` }),
     });
   }
+}
+// 3. Arreglos de Claude con PR abierto que no llegaron a fusionarse (el
+//    circuito se cortó: CI lenta, despliegue fallido…). Se retoma su circuito
+//    con fusionar_pr, sin volver a gastar una revisión de Claude.
+console.log("\n=== PR de arreglo automático abiertos sin fusionar ===");
+const prs = await github("/pulls?state=open&per_page=50");
+for (const pr of prs) {
+  const fileId = String(pr.head?.ref ?? "").match(/^claude\/arreglo-carga-([0-9a-f-]{36})-\d+$/)?.[1];
+  if (!fileId) continue;
+  if (Date.now() - Date.parse(pr.updated_at) < ESPERA_MINIMA_MS) continue;
+  const comentarios = await github(`/issues/${pr.number}/comments?per_page=100`);
+  const reintentos = comentarios.filter((c) => (c.body ?? "").startsWith(MARCA)).length;
+  if (reintentos >= MAX_REINTENTOS) {
+    console.log(`  #${pr.number}: ya se reintentó ${reintentos} veces; queda para revisión.`);
+    continue;
+  }
+  console.log(`  → #${pr.number}: retomar su circuito (archivo ${fileId})`);
+  if (!APLICAR) continue;
+  await github("/actions/workflows/verificar-carga.yml/dispatches", {
+    method: "POST",
+    body: JSON.stringify({ ref: "main", inputs: { file_id: fileId, notificar: "1", arreglar: "1", fusionar_pr: String(pr.number) } }),
+  });
+  await github(`/issues/${pr.number}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ body: `${MARCA} ${reintentos + 1} de ${MAX_REINTENTOS}: el arreglo no llegó a fusionarse; se retoma su circuito.` }),
+  });
 }
 console.log("\nHecho.");

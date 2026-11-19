@@ -437,6 +437,13 @@ test("Terra escalation is limited to uncertain, non-operational Luna readings", 
     classificationConfidence: 0.9,
     hasDeterministicUpdates: true,
   }), false);
+  // Caso real del reporte de Seguridad de la semana 4: nada que proponer
+  // porque ya estaba publicado. No es una lectura fallida y no se escala.
+  assert.equal(extraction.shouldEscalateDocumentExtraction({
+    ...base,
+    summary: "Los indicadores y hallazgos explícitos del reporte de la semana 26/10/2026 al 31/10/2026 ya coinciden con los valores vivos publicados; no se emiten duplicados.",
+    warnings: [],
+  }, { classificationConfidence: 0.9 }), false);
 });
 
 test("the ingestion agent executes a bounded tool loop and returns an auditable trajectory", async () => {

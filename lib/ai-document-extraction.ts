@@ -292,6 +292,10 @@ function emptyResult(
   };
 }
 
+// Frases con las que la lectura asistida dice que no propone nada porque los
+// datos del documento ya coinciden con los publicados.
+export const ALREADY_PUBLISHED_PATTERN = /ya coincid|no se emiten duplicados|ya (?:estaban |estan |están )?(?:vigentes|publicad)|sin cambios respecto/i;
+
 export function shouldEscalateDocumentExtraction(
   result: ExtractionResult,
   context: { classificationConfidence?: number; hasDeterministicUpdates?: boolean } = {},
@@ -302,6 +306,11 @@ export function shouldEscalateDocumentExtraction(
     return false;
   }
   if (/contradic|discrep|ilegible|ambig|incomplet|no cuadra/.test(diagnostic)) return true;
+  // Sin propuestas porque todo lo que trae el documento ya está publicado: no
+  // es una lectura fallida y escalar sólo gasta otra lectura (la del reporte de
+  // Seguridad de la semana 4 terminó en un JSON inválido y dejó el archivo como
+  // "sin datos").
+  if (result.updates.length === 0 && ALREADY_PUBLISHED_PATTERN.test(diagnostic)) return false;
   if (result.updates.length === 0) return (context.classificationConfidence ?? 0) >= 0.75;
   if (result.confidence > 0 && result.confidence < 0.72) return true;
   return result.updateConfidences.some((confidence) => confidence > 0 && confidence < 0.65);

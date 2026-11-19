@@ -134,6 +134,7 @@ export async function POST(request: Request) {
       deletedAt: file.deletedAt,
       publicationRevision: file.publicationRevision,
       createdAt: file.createdAt,
+      extractionSummary: `${file.extractionSummary} ${file.processingSummary}`,
     },
     run: run ? { status: run.status, proposedCount: run.proposedCount, publishedCount: run.publishedCount, error: run.error } : null,
     // Sólo el descarte del último procesamiento: uno de un intento anterior ya
