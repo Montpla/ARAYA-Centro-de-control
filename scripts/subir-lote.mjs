@@ -12,6 +12,21 @@
 
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+
+// Preparación temporal del original: el transporte en partes evita que una
+// conexión interrumpida deje incompleta la transferencia de un DWG grande.
+// Se reconstruyen y verifican los bytes antes de usar la ingesta habitual.
+if (process.env.DIRECTORIO === "scratch-uploads/masterplan-original") {
+  const chunks = [];
+  for (let i = 0; i < 10; i += 1) chunks.push(await readFile(`scratch-uploads/masterplan-partes/plano.${String(i).padStart(2, "0")}.parte`));
+  const bytes = Buffer.concat(chunks);
+  if (createHash("sha256").update(bytes).digest("hex") !== "490f6438b05035240797f3a979eb4809b483b3a5a9deb151d92e40d8786382c5") throw new Error("El original reconstruido no coincide con el DWG de origen.");
+  await mkdir(process.env.DIRECTORIO, { recursive: true });
+  await writeFile(path.join(process.env.DIRECTORIO, "ROA-E00-URB-A101-MASTER_PLAN cambio estaciomientos.dwg"), bytes);
+  console.log("DWG reconstruido: identidad del original confirmada.");
+}
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 const email = process.env.DEPLOY_VERIFY_EMAIL;
