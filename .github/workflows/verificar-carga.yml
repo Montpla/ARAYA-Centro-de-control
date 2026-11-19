@@ -159,7 +159,7 @@ jobs:
           if [ -f .verificacion/decision.json ]; then
             echo "accion=$(jq -r '.accion // "sin_decision"' .verificacion/decision.json)" >> "$GITHUB_OUTPUT"
             echo "pr=$(jq -r '.pr // ""' .verificacion/decision.json)" >> "$GITHUB_OUTPUT"
-            echo "resumen=$(jq -r '.resumen // ""' .verificacion/decision.json | tr '\n' ' ' | cut -c1-300)" >> "$GITHUB_OUTPUT"
+            echo "resumen=$(jq -r '.resumen // ""' .verificacion/decision.json | tr '\n' ' ' | cut -c1-1500)" >> "$GITHUB_OUTPUT"
           else
             echo "accion=sin_decision" >> "$GITHUB_OUTPUT"
             echo "resumen=La revisión automática no terminó (posible límite de uso de la suscripción o error)." >> "$GITHUB_OUTPUT"
@@ -213,6 +213,10 @@ jobs:
             sin_accion) NOTA="Claude lo ha revisado y la carga está bien: $RESUMEN" ;;
             *) NOTA="$RESUMEN" ;;
           esac
+          # Un arreglo subido a la rama sin marcarse como tal no debe perderse.
+          if [ "$ACCION" != "arreglado" ] && git ls-remote --exit-code origin "refs/heads/$RAMA" >/dev/null 2>&1; then
+            NOTA="$NOTA Hay un arreglo propuesto en la rama $RAMA pendiente de revisar."
+          fi
           sleep 60
           NOTIFICAR=1 NOTA="$NOTA" node scripts/verificar-carga.mjs || true
           if [ -n "${ISSUE:-}" ]; then
