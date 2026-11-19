@@ -117,6 +117,8 @@ const EXTRACTION_LEASE_MS = 5 * 60 * 1_000;
 const BACKGROUND_PROCESSING_HEADER = "x-araya-background-processing";
 const BACKGROUND_PROCESSING_ATTEMPTS = 3;
 const allowedExtensions = new Set([
+  "html",
+  "htm",
   "csv",
   "doc",
   "docx",
@@ -1513,6 +1515,7 @@ export async function POST(request: Request) {
     // menor. Ver extractProjectXmlUpdates.
     const currentLiveData = await readEffectiveLiveData(true);
     const deterministicExtraction = await extractStructuredUpdates(bytes, extension, {
+      sourceFileId: id,
       area: classification.area,
       cutoff: effectiveCutoff,
       sourceCurrency: sourceCurrency === "USD" ? "USD" : "DOP",

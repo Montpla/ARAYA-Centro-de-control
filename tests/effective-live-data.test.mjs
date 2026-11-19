@@ -1,3 +1,4 @@
+import * as ganttData from "../lib/gantt-data.ts";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
@@ -116,6 +117,7 @@ async function loadContractCore() {
   }).outputText;
   const compiledModule = { exports: {} };
   const bootstrap = {
+    schedules: { ganttSchedules: ganttData.ganttSchedules },
     operations: {
       projectSnapshot: {
         overallProgress: 18,
@@ -173,6 +175,7 @@ async function loadContractCore() {
   };
   const require = (specifier) => {
     if (specifier === "server-only") return {};
+    if (specifier === "./gantt-data") return ganttData;
     if (specifier === "./dashboard-bootstrap") {
       return { buildDashboardBootstrap: () => bootstrap };
     }
@@ -180,6 +183,7 @@ async function loadContractCore() {
       return {
         LIVE_DATA_ROOTS: [
           "projectSnapshot",
+          "ganttSchedules",
           "apartments",
           "monthlyPlan",
           "buildings",
@@ -1201,6 +1205,16 @@ test("la consulta de D1 no descarta una corrección sin corte posterior a la gan
   const { deriveEffectiveLiveDataSnapshot } = await loadCore();
   const snapshot = deriveEffectiveLiveDataSnapshot(rows, true);
   assert.equal(snapshot.values["urbanismReportAreas.6.progress"], 20.4);
+});
+
+test("el contrato de los cronogramas completos admite tareas y conserva sus límites de dominio", async () => {
+  const { validateLiveDataContract } = await loadContractCore();
+  const value = { title: "Gantt", sourceName: "gantt.html", cutoff: "2026-10-31", scope: "Proyecto P1", tasks: [{ ...ganttData.ganttTaskTemplate, code: "EDI-1", name: "Ventanería", progress: 50, originalData: "{}" }] };
+  assert.equal(validateLiveDataContract("ganttSchedules.buildings", JSON.stringify(value)).valid, true);
+  value.tasks[0].progress = 101;
+  assert.equal(validateLiveDataContract("ganttSchedules.buildings", JSON.stringify(value)).valid, false);
+  value.tasks[0].progress = 50; value.tasks.push({ ...value.tasks[0] });
+  assert.equal(validateLiveDataContract("ganttSchedules.buildings", JSON.stringify(value)).valid, false, "los códigos de tarea no se duplican");
 });
 
 test("el plan reprogramado de la Curva S se publica mes a mes como campo opcional", async () => {

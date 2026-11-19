@@ -5,6 +5,7 @@ import * as june from "../app/june-report-data";
 import * as antonely from "../app/antonely-finance-data";
 import * as procurement from "../app/procurement-data";
 import * as reprogrammedFlow from "../app/reprogrammed-flow-data";
+import { ganttSchedules } from "./gantt-data";
 import * as fiduciary from "../app/fiduciary-statements-data";
 import * as governance from "../app/data-governance";
 import type { DashboardBootstrapData } from "./dashboard-bootstrap-types";
@@ -46,6 +47,7 @@ function demoData(financeAccess: boolean) {
     customMetrics: financeAccess ? demo.customMetrics : [],
     dataSources: visibleSources,
     monthlyPlan: demo.monthlyPlan,
+    ganttSchedules,
     projectSnapshot: financeAccess
       ? demo.projectSnapshot
       : {

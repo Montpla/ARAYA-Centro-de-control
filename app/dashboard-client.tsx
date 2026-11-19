@@ -36,6 +36,7 @@ import {
   type MasterPlanFeature,
 } from "../lib/site-plan-layout";
 import { computedView } from "../lib/computed-view";
+import { GanttSchedulePanel } from "./gantt-schedule-panel";
 import {
   STAT_CARD_FRESHNESS_KEYS,
   readFreshness,
@@ -71,6 +72,7 @@ let initialSuppliers: DashboardBootstrapData["demo"]["suppliers"] = [];
 let timeline: DashboardBootstrapData["demo"]["timeline"] = [];
 let urbanismAreas: DashboardBootstrapData["demo"]["urbanismAreas"] = [];
 let workPackages: DashboardBootstrapData["demo"]["workPackages"] = [];
+let ganttSchedules: DashboardBootstrapData["demo"]["ganttSchedules"] = { buildings: { title: "", cutoff: "", sourceName: "", scope: "", tasks: [] }, urbanism: { title: "", cutoff: "", sourceName: "", scope: "", tasks: [] } };
 
 let advances: DashboardBootstrapData["june"]["advances"] = [];
 let antonelyFinanceSource = {} as DashboardBootstrapData["june"]["antonelyFinanceSource"];
@@ -233,6 +235,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     urbanismAreas,
     workPackages,
   } = bootstrap.demo);
+  ganttSchedules = bootstrap.demo.ganttSchedules;
   ({
     advances,
     antonelyFinanceSource,
@@ -329,6 +332,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     liveDataGovernanceSummary(baseDataGovernanceSummary, dataAuthorityMatrix));
 
   liveDataTargets = {
+    ganttSchedules,
     advances,
     antonelyAdvances,
     antonelyBalanceLines,
@@ -3805,6 +3809,7 @@ function Planning() {
       <section className="panel schedule-card">
         <ProgressChart />
       </section>
+      <GanttSchedulePanel schedules={ganttSchedules} />
       <section className="panel">
         <div className="panel-heading">
           <div>
@@ -5326,14 +5331,14 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
         <section className="financial-detail-stack work-flow-stack">
           <article className="panel">
             <div className="panel-heading">
-              <div><span className="section-kicker">FASE I · CORTE 31/07/2026</span><h3>Flujo de obra real y reprogramado</h3></div>
-              <a className="button secondary" href="/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx">Abrir Excel</a>
+              <div><span className="section-kicker">FASE I · CORTE {reprogrammedFlowAudit.cutoff}</span><h3>Flujo de obra real y reprogramado</h3></div>
+              <a className="button secondary" href={reprogrammedFlowAudit.sourceFileId ? `/api/files?download=${encodeURIComponent(reprogrammedFlowAudit.sourceFileId)}` : "/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx"}>Abrir Excel vigente</a>
             </div>
             <div className="budget-summary-grid compact work-flow-summary">
               <span><small>Alcance total</small><strong>{rd(reprogrammedFlowAudit.reprogrammedTotalDop)}</strong></span>
-              <span><small>Real · dic-25 a jul-26</small><strong>{rd(reprogrammedFlowAudit.actualPeriodDop)}</strong></span>
+              <span><small>Real del periodo al corte</small><strong>{rd(reprogrammedFlowAudit.actualPeriodDop)}</strong></span>
               <span><small>Real acumulado al corte</small><strong>{rd(reprogrammedFlowAudit.actualToCutoffDop)}</strong></span>
-              <span><small>Por ejecutar · ago-26 a jul-27</small><strong>{rd(reprogrammedFlowAudit.remainingForecastDop)}</strong></span>
+              <span><small>Previsión pendiente de ejecutar</small><strong>{rd(reprogrammedFlowAudit.remainingForecastDop)}</strong></span>
             </div>
             <div className="callout">
               <strong>Alcance separado del flujo de caja global</strong>
@@ -5384,17 +5389,17 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
             </div>
             <div className="chart-legend work-flow-legend">
               <span><i className="work-flow-original" />Presupuesto original</span>
-              <span><i className="work-flow-current" />Real hasta julio · reprogramado desde agosto</span>
+              <span><i className="work-flow-current" />Real hasta {reprogrammedFlowMonths.filter((month) => month.status === "actual").at(-1)?.month ?? "el corte"} · previsión en meses posteriores</span>
             </div>
             <div className="callout warn">
-              <strong>Agosto y septiembre concentran la recuperación</strong>
-              <p>La desviación acumulada de {rd(reprogrammedFlowAudit.cumulativeVarianceRedistributedDop)} se añade por mitades: {rd(reprogrammedFlowAudit.augustAdjustmentDop)} en agosto y la misma cantidad en septiembre de 2026.</p>
+              <strong>Redistribución del flujo según el Excel vigente</strong>
+              <p>La previsión recoge la redistribución declarada en el documento. Los meses cerrados se muestran como reales y los futuros como previsión; los anticipos acumulados se presentan por separado del gasto mensual.</p>
             </div>
           </article>
 
           <article className="panel">
             <div className="panel-heading">
-              <div><span className="section-kicker">REAL VS. PRESUPUESTO · DIC-25 A JUL-26</span><h3>Lectura por ámbito</h3></div>
+              <div><span className="section-kicker">REAL VS. PRESUPUESTO · CORTE {reprogrammedFlowAudit.cutoff}</span><h3>Lectura por ámbito</h3></div>
               <span className="data-note">Variación positiva = remanente · negativa = sobregiro</span>
             </div>
             <div className="financial-detail-scroll">
@@ -5413,7 +5418,10 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
                 ))}
               </div>
             </div>
-            <p className="quality-note">El real de julio de este flujo es {rd(reprogrammedFlowAudit.julyScopedActualDop)}, solo de Urbanismo y Edificios de la Fase I. No incluye terreno, diseño, gerencia, indirectos, inspección, permisos ni gastos financieros, así que no es el flujo de caja completo del proyecto.</p>
+            <p className="quality-note">Este flujo comprende Urbanismo y Edificios de la Fase I. Terreno, diseño, gerencia, indirectos, inspección, permisos y gastos financieros quedan fuera de su alcance.</p>
+            {reprogrammedFlowScopes.some((item) => typeof item.advancesAccumulatedDop === "number") && <details className="flow-advances"><summary>Anticipos acumulados y real con anticipos del resumen</summary>
+              {reprogrammedFlowScopes.map((item) => <p key={item.id}><strong>{item.label}:</strong> anticipos acumulados {rd(item.advancesAccumulatedDop ?? 0)} · real con anticipos según el resumen {rd(item.actualWithAdvancesDop ?? 0)}</p>)}
+            </details>}
           </article>
 
           <article className="panel physical-progress-lock">
@@ -8526,7 +8534,7 @@ function AgentPanel({
             <span>Adjuntar archivo</span>
             <input
               type="file"
-              accept=".xlsx,.xls,.csv,.json,.xml,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
+              accept=".html,.htm,.xlsx,.xls,.csv,.json,.xml,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
               onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
             />
           </label>
@@ -9284,7 +9292,7 @@ function UploadModal({
             type="file"
             required
             multiple
-            accept=".xlsx,.xls,.csv,.json,.xml,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
+            accept=".html,.htm,.xlsx,.xls,.csv,.json,.xml,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
             onChange={(event) => chooseFiles(Array.from(event.target.files ?? []))}
           />
           {previewUrl && (
