@@ -97,6 +97,8 @@ import { nothingExtractedMessage } from "../../../lib/upload-messages";
 import { triggerMppConversion } from "../../../lib/mpp-conversion-trigger";
 import { LARGE_PDF_BYTES, triggerPdfCompression } from "../../../lib/pdf-compression-trigger";
 import { triggerXlsConversion } from "../../../lib/xls-conversion-trigger";
+import { triggerUploadVerification } from "../../../lib/upload-verification-trigger";
+import { uploadNeedsVerification } from "../../../lib/upload-verification";
 import { triggerDeferredUploadRetry } from "../../../lib/deferred-upload-retry-trigger";
 import { readUploadAgentToken, resolveUploadAgentToken } from "../../../lib/upload-agent-auth";
 import {
@@ -1326,6 +1328,16 @@ export async function POST(request: Request) {
     actorName: user.displayName,
   }).catch(() => undefined);
   scheduleNotificationDispatch();
+  // Cada carga nueva queda comprobada sola en cuanto termina de procesarse
+  // (ver triggerUploadVerification): el flujo de GitHub espera a que acabe y
+  // avisa si algo no entró bien. Un reintento en segundo plano o un reproceso
+  // no la vuelven a pedir.
+  if (!resumedRow && !backgroundProcessing && !reprocessRequested && uploadNeedsVerification({
+    extension,
+    derivedFromFileId,
+    sizeBytes: candidate.size,
+    largePdfBytes: LARGE_PDF_BYTES,
+  })) triggerUploadVerification(id);
   // El .mpp no se lee dentro del Worker: pide la conversión ahora mismo al
   // runner de GitHub en vez de esperar al siguiente tick del cron (ver
   // triggerMppConversion). Sin GITHUB_ACTIONS_TOKEN configurado, no hace

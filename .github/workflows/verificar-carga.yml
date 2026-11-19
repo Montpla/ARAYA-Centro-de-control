@@ -1,0 +1,66 @@
+name: Verificar carga
+
+# El Centro de Control lo lanza en cuanto se sube un archivo
+# (lib/upload-verification-trigger.ts). Espera a que el archivo termine de
+# procesarse y comprueba que entró bien: que se leyó y publicó, que no se
+# descartaron datos por un motivo sospechoso, que la fecha de corte es
+# coherente y que ningún avance retrocede sin explicación. Avisa a los
+# administradores en el panel y en el móvil con el resultado; si hay algo que
+# arreglar, abre además un issue con el diagnóstico.
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_id:
+        description: "ID exacto del archivo (o un texto de su nombre, al lanzarlo a mano)"
+        required: true
+        type: string
+      notificar:
+        description: "Avisar con el resultado (1) o sólo comprobar (0)"
+        required: false
+        default: "1"
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: verificar-carga-${{ inputs.file_id }}
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Esperar al procesamiento y verificar
+        id: verificacion
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+          FILE_ID: ${{ inputs.file_id }}
+          NOTIFICAR: ${{ inputs.notificar }}
+          VERIFICACION_MD: ${{ runner.temp }}/verificacion.md
+        run: node scripts/verificar-carga.mjs
+      - name: Abrir issue si hay algo que arreglar
+        if: ${{ steps.verificacion.outputs.veredicto == 'anomalia' && inputs.notificar != '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOMBRE: ${{ steps.verificacion.outputs.nombre }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          VERIFICACION_MD: ${{ runner.temp }}/verificacion.md
+        run: |
+          set -euo pipefail
+          TITLE="🔎 Revisar carga: ${NOMBRE}"
+          BODY="$(cat "$VERIFICACION_MD")"$'\n\n'"Registro de la verificación: ${RUN_URL}"
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"${TITLE}\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
+          fi
