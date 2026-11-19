@@ -127,22 +127,44 @@ Auditoría de producción del 19/11/2026, revisión 141:
   y diagnóstico se retiraron. Los originales están archivados en el Centro de
   Control y no se añadieron a `main`.
 
-### Seis guías de usuario: revisión pendiente de edición
+### Seis guías actualizadas: edición 19.11.2026
 
-Se le confirmó al usuario que las seis guías necesitan ajustes. **No se han
-regenerado ni publicado versiones nuevas**; aquella intervención fue una revisión,
-no un encargo de actualización de los seis PDF.
+El usuario encargó expresamente actualizar las seis guías y guardar después
+todo para continuar desde otros LLM. Esta entrega sustituye la revisión pendiente
+que figuraba antes: las seis guías están regeneradas y su catálogo actualizado.
 
-- Mensual: corregir la prioridad de la cubicación e incorporar Gantt y curva Excel.
-- Formatos: incorporar Gantt HTML y distinguir conversión DWG de adaptación del plano.
-- Financiera: reales, previsiones, anticipos separados y prioridad del Excel.
-- Corporativa: plano, Gantt y distinción entre Seguridad mensual y semanal.
-- Envío Project: guardar el plan no garantiza sustituir avances certificados.
-- Avisos: explicar los resultados de integración y revisión de cargas.
+| Guía | Páginas | Contenido revisado |
+| --- | --- | --- |
+| Corporativa | 8 | Vista del plano vigente, Gantt, 77 edificios y 462 apartamentos; 26 avances publicados y 51 valores iniciales. Desgloses por oficio y porcentajes derivados; Seguridad mensual separada de la semanal. |
+| Actualización mensual | 4 | Cubicación prioritaria, flujo y curvas Excel, Project, Gantt e Informe Ejecutivo. Cargar documentos no equivale a cerrar el periodo. |
+| Formatos | 5 | Gantt HTML sin ejecución; conversión MPP, DWG y XLS. Convertir un DWG no recoloca automáticamente el plano interactivo. No suplir cargas pendientes con cambios manuales. |
+| Envío Project | 5 | Fechas y fases del plan, recibo y prioridad de fuentes. La recepción no garantiza cambiar un avance certificado ni crear mediciones por apartamento. |
+| Financiera | 4 | Real frente a previsión, anticipos separados, prioridad y descarga del Excel vigente. Comas, puntos y números nativos sin inventar decimales. |
+| Avisos | 4 | Resultados «Integrado» y «Revisar carga», procesamiento y motivos correctos de «sin cambios». |
 
-Sus PDF viven en `historical/data-center/guias/`; sus fuentes son los scripts
-`scripts/generate_*guide_pdf.py`. Mantener sincronizados generador, PDF y copia
-publicada si el usuario encarga su actualización, con revisión visual.
+- PDF publicados: `historical/data-center/guias/`; copias de salida:
+  `output/pdf/`. Las rutas de descarga se conservan y el catálogo muestra la
+  edición y el número real de páginas.
+- Fuentes: `scripts/generate_staff_guide_pdf.py` (marca y corporativa),
+  `generate_monthly_update_guide_pdf.py`, `generate_formats_guide_pdf.py`,
+  `generate_macro_guide_pdf.py`, `generate_financial_guide_pdf.py` y
+  `generate_notifications_guide_pdf.py`, todos dentro de `scripts/`.
+- Regeneración: instalar `reportlab` y `PyMuPDF`, y ejecutar con Python cada
+  script desde la raíz del repositorio. El generador corporativo toma la vista
+  del SVG vigente. Cada script actualiza su salida y su copia publicada.
+- Revisión visual: 30 páginas renderizadas; sin texto fuera de página ni
+  glifos nulos. Mantener la revisión visual si se vuelve a generar un PDF.
+- `tests/guias-vigentes.test.mjs` abre los seis PDF con PDF.js y contrasta
+  páginas, edición, catálogo y las afirmaciones principales. La validación
+  completa de esta entrega suma **559 pruebas correctas**, tipos y compilación;
+  lint sin errores y 16 avisos preexistentes.
+- Publicación por PR, CI `verificar` y `deploy.yml`. El diagnóstico oficial
+  `comprobar-cargas.yml` con `detalle=0` contrasta las seis huellas SHA-256
+  de `/data-center/guias/` contra los PDF del repositorio. Consultar su última
+  ejecución correcta antes de afirmar un estado de producción posterior.
+- Esta actualización documental no requiere volver a publicar las fuentes
+  de octubre ni modificar datos vivos a mano. Las limitaciones de apartamentos
+  y edificios sin medición siguen vigentes.
 
 ## Historial de esta sesión
 

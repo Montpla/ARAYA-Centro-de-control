@@ -6,7 +6,7 @@ plan de obra se envíe solo al Centro de Control cada vez que se guarda, sin
 volver a exportar ni subir nada a mano.
 
 El macro vive dentro de Project, en el equipo donde se edita el plan, así que
-—a diferencia de la web— no se despliega desde el Centro de Control: se instala
+-a diferencia de la web- no se despliega desde el Centro de Control: se instala
 una vez en ese ordenador. El token, en cambio, es central: se genera y se
 revoca desde el panel de administración.
 
@@ -31,6 +31,7 @@ from reportlab.pdfgen import canvas
 
 from generate_staff_guide_pdf import (
     BLUE_PALE,
+    GUIDE_EDITION,
     BOTTOM,
     CREAM,
     INK,
@@ -49,6 +50,7 @@ from generate_staff_guide_pdf import (
     draw_bullets,
     draw_contain,
     draw_page_frame,
+    draw_reference_page,
     draw_section_title,
     draw_wrapped,
     font_name,
@@ -100,9 +102,9 @@ def cover(c: canvas.Canvas) -> None:
 
     draw_wrapped(
         c,
-        "Con esto, cada vez que guardas el plan en Microsoft Project, el avance "
-        "de la obra llega solo al Centro de Control. Sin exportar a mano, sin "
-        "subir archivos, sin entrar en la aplicación.",
+        "Cada vez que guardas en Microsoft Project, el plan se envía al Centro "
+        "de Control. Los datos compatibles se incorporan respetando el corte y "
+        "la prioridad de las fuentes. El recibo confirma el resultado.",
         MARGIN_X,
         PAGE_H - 308,
         CONTENT_W * 0.66,
@@ -143,7 +145,7 @@ def cover(c: canvas.Canvas) -> None:
     c.setFont(font_name("Body"), 8)
     c.drawString(MARGIN_X, 96, "Guía interna para el planificador de obra")
     c.setFillColor(MUTED)
-    c.drawString(MARGIN_X, 80, "4 páginas  ·  10 minutos, una sola vez")
+    c.drawString(MARGIN_X, 80, "5 páginas  ·  edición " + GUIDE_EDITION)
 
 
 def page_antes(c: canvas.Canvas) -> None:
@@ -168,7 +170,7 @@ def page_antes(c: canvas.Canvas) -> None:
         (
             "El token de carga",
             "araya_up_…",
-            "También te lo da el administrador, desde Usuarios y accesos → "
+            "También te lo da el administrador, desde Usuarios y accesos  /  "
             "Cargas automáticas. Es una credencial: identifica a este equipo y "
             "se puede revocar si hace falta. No lo compartas por correo.",
             NAVY, BLUE_PALE,
@@ -238,13 +240,13 @@ def page_instalar(c: canvas.Canvas) -> None:
     y -= 14
 
     top = draw_step(c, y, "1", "Abre el editor de macros", 84)
-    draw_wrapped(c, "En Project, pestaña Vista → Macros → Visual Basic. O directamente:",
+    draw_wrapped(c, "En Project, pestaña Vista  /  Macros  /  Visual Basic. O directamente:",
                  MARGIN_X + 56, top + 42, CONTENT_W - 76, size=9, leading=12, color=MUTED)
     mono(c, "Alt + F11", MARGIN_X + 56, top + 30, 90)
     y = top - 12
 
     top = draw_step(c, y, "2", "Importa el archivo del macro", 62)
-    draw_wrapped(c, "En el editor, menú Archivo → Importar archivo… y elige araya-project-autoenvio.bas.",
+    draw_wrapped(c, "En el editor, menú Archivo  /  Importar archivo… y elige araya-project-autoenvio.bas.",
                  MARGIN_X + 56, top + 22, CONTENT_W - 76, size=9, leading=12, color=MUTED)
     y = top - 12
 
@@ -285,13 +287,14 @@ def page_despues(c: canvas.Canvas) -> None:
     y = draw_bullets(
         c,
         [
-            "Comprueba que llega: guarda el plan y mira el Centro de Control. En "
-            "menos de cinco segundos los avances de los edificios se actualizan.",
+            "Comprueba que llega: guarda el plan y abre su recibo en el Centro de "
+            "Control. La recepción no garantiza que cambien los avances: pueden "
+            "coincidir o estar fijados por una fuente prioritaria.",
             "Si un día falla la red o el servidor, el guardado del proyecto no se "
             "ve afectado: se pierde ese envío, no tu trabajo. El siguiente guardado "
             "vuelve a intentarlo.",
             "Puedes enviarlo también a mano en cualquier momento, sin guardar, "
-            "desde Vista → Macros → EnviarPlanAlCentroDeControl.",
+            "desde Vista  /  Macros  /  EnviarPlanAlCentroDeControl.",
             "Si molesta el aviso en cada guardado, se puede poner en silencio "
             "(ARAYA_AVISAR = False); los avisos seguirán en el propio Centro de Control.",
         ],
@@ -311,7 +314,7 @@ def page_despues(c: canvas.Canvas) -> None:
     draw_wrapped(
         c,
         "El token identifica a este ordenador. Si se pierde o deja de usarse, el "
-        "administrador lo revoca desde Usuarios y accesos → Cargas automáticas y "
+        "administrador lo revoca desde Usuarios y accesos  /  Cargas automáticas y "
         "deja de funcionar al instante, sin que haya que tocar la máquina. Los "
         "demás equipos con su propio token siguen funcionando.",
         MARGIN_X + 18,
@@ -330,7 +333,7 @@ def page_despues(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X + 18, y - 24, "SI ALGÚN DÍA NO PUEDES INSTALARLO")
     draw_wrapped(
         c,
-        "El mismo resultado se consigue a mano: Archivo → Guardar como → XML y "
+        "El mismo resultado se consigue a mano: Archivo  /  Guardar como  /  XML y "
         "subir ese archivo al Centro de Control. El macro sólo quita ese paso. "
         "En ambos casos, el recibo confirma la revisión y las vistas comprobadas.",
         MARGIN_X + 18,
@@ -349,6 +352,16 @@ def page_despues(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X, BOTTOM + 16, "¿Dudas con la instalación? Pregunta al administrador del Centro de Control.")
 
 
+def page_alcance(c: canvas.Canvas) -> None:
+    draw_reference_page(c, 5, "Qué actualiza el plan",
+        "Enviar, procesar y publicar son pasos distintos. Comprueba el recibo antes de dar el plan por incorporado.", [
+        ("Cronograma y fechas", "Project aporta tareas, fases, porcentajes y fechas que existan en el plan. El XML conserva su jerarquía; el MPP se convierte antes. La previsión de fin requiere fechas reales del propio plan, no una estimación añadida al subirlo."),
+        ("Fuente prioritaria y corte", "Para el mismo periodo, la cubicación y el Excel de avance prevalecen sobre Project en el avance físico. Un corte anterior no pisa uno posterior. Sin cambios puede indicar una coincidencia o que se conserva la fuente prioritaria."),
+        ("Apartamentos", "Las fases medidas en el edificio pueden alimentar porcentajes derivados de sus apartamentos. Eso no crea mediciones individuales por vivienda. Conserva el alcance original y no certifiques un apartamento a partir del porcentaje global del edificio."),
+        ("Gantt HTML e incidencias", "Los Gantt HTML de edificaciones y urbanismo se cargan como documentos propios y se consultan en Planificación. Si el envío falla, conserva el plan y el recibo; pide revisión del expediente antes de generar copias o cambiar porcentajes a mano."),
+    ], "Las credenciales se administran desde el programa. No incluyas una credencial real en una guía, captura o mensaje.")
+
+
 def build_pdf() -> Path:
     register_fonts()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
@@ -358,7 +371,7 @@ def build_pdf() -> Path:
     c.setSubject("Cómo instalar el envío automático del plan de obra desde Project")
     c.setKeywords("Bricket Control, ARAYA, Project, macro, envío automático, obra")
 
-    pages = [cover, page_antes, page_instalar, page_despues]
+    pages = [cover, page_antes, page_instalar, page_despues, page_alcance]
     for index, page in enumerate(pages):
         page(c)
         if index < len(pages) - 1:

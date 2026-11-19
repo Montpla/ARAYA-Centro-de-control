@@ -6,8 +6,8 @@ archivos y el envío del plan; ésta responde la pregunta que llega en cuanto se
 activan los avisos automáticos: «¿qué tengo que hacer yo para que me lleguen al
 teléfono, como los de WhatsApp?».
 
-La respuesta cabe en dos gestos —dar permiso una vez y, en iPhone, instalar la
-app—, así que la guía es corta y va directa a esos dos pasos. El motivo de que
+La respuesta cabe en dos gestos -dar permiso una vez y, en iPhone, instalar la
+app-, así que la guía es corta y va directa a esos dos pasos. El motivo de que
 en iPhone haga falta instalarla es de Apple, no del Centro de Control, y se
 explica para que nadie lo lea como un fallo.
 
@@ -32,6 +32,7 @@ from reportlab.pdfgen import canvas
 
 from generate_staff_guide_pdf import (
     BLUE_PALE,
+    GUIDE_EDITION,
     BOTTOM,
     CREAM,
     INK,
@@ -50,6 +51,7 @@ from generate_staff_guide_pdf import (
     draw_bullets,
     draw_contain,
     draw_page_frame,
+    draw_reference_page,
     draw_section_title,
     draw_wrapped,
     font_name,
@@ -91,8 +93,8 @@ def cover(c: canvas.Canvas) -> None:
 
     draw_wrapped(
         c,
-        "El Centro de Control puede avisarte cuando hay novedades —una revisión "
-        "nueva, un documento, una comprobación fallida, un vencimiento o una conexión— con un globo en el teléfono o el "
+        "El Centro de Control puede avisarte cuando hay novedades -una revisión "
+        "nueva, un documento, una comprobación fallida, un vencimiento o una conexión- con un globo en el teléfono o el "
         "ordenador, aunque no lo tengas abierto. Esta guía dice qué hacer para "
         "empezar a recibirlos.",
         MARGIN_X,
@@ -135,7 +137,7 @@ def cover(c: canvas.Canvas) -> None:
     c.setFont(font_name("Body"), 8)
     c.drawString(MARGIN_X, 96, "Guía interna para el personal de obra y oficina")
     c.setFillColor(MUTED)
-    c.drawString(MARGIN_X, 80, "3 páginas  ·  3 minutos de lectura")
+    c.drawString(MARGIN_X, 80, "4 páginas  ·  edición " + GUIDE_EDITION)
 
 
 def draw_step(
@@ -233,7 +235,7 @@ def page_activar(c: canvas.Canvas) -> None:
     draw_wrapped(
         c,
         "A partir de ese momento, los avisos llegan solos como un globo del "
-        "sistema —igual que WhatsApp— aunque tengas el Centro de Control "
+        "sistema -igual que WhatsApp- aunque tengas el Centro de Control "
         "cerrado. No hace falta volver a activar nada ni entrar a mirar.",
         MARGIN_X + 18,
         y - 42,
@@ -309,9 +311,9 @@ def page_dudas(c: canvas.Canvas) -> None:
             "Los avisos no llevan cifras económicas ni nada confidencial: "
             "sólo dicen que hay novedades. El detalle se ve al entrar, con "
             "los permisos de cada persona.",
-            "Si una comprobación posterior falla, Finanzas y administración "
-            "reciben un aviso con la revisión afectada; el original sigue "
-            "guardado y no hace falta subirlo otra vez.",
+            "Si una comprobación posterior falla, abre el aviso del expediente "
+            "y su revisión. El original sigue guardado; no subas otra copia "
+            "sin revisar el diagnóstico.",
             "Si dejas de querer avisos, se desactivan desde los ajustes del "
             "navegador o del teléfono, cuando quieras.",
         ],
@@ -353,6 +355,16 @@ def page_dudas(c: canvas.Canvas) -> None:
     )
 
 
+def page_resultados(c: canvas.Canvas) -> None:
+    draw_reference_page(c, 4, "Leer el resultado de una carga",
+        "Un aviso comunica el estado del expediente. El detalle permanece en el Centro de Control, con los permisos de cada persona.", [
+        ("Integrado", "La carga ha terminado de procesarse y la comprobación ha confirmado su integración. Abre el recibo para ver qué cambió. También puede quedar sincronizada sin cambios si los datos ya coincidían."),
+        ("Revisar carga", "Abre el aviso y el diagnóstico del archivo. Puede haber un fallo de lectura, un dato aislado o una diferencia entre fuentes. Conserva el original y la revisión; el administrador puede revisar el expediente por el circuito previsto."),
+        ("Procesamiento y reintentos", "Una conversión o una lectura asistida puede seguir en segundo plano. No cierres el caso por no ver un cambio inmediato ni repitas la subida. El expediente conserva su estado, los intentos y el resultado de la comprobación."),
+        ("Qué significa que una cifra no cambie", "Un corte antiguo, una fuente con menor prioridad o un valor ya coincidente pueden dejar el dato vigente intacto. Los avisos no deben incluir importes económicos ni credenciales; consulta siempre el detalle dentro del programa."),
+    ], "Si el diagnóstico se corrige, vuelve a consultar el resultado de la verificación del mismo expediente.")
+
+
 def build_pdf() -> Path:
     register_fonts()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
@@ -362,7 +374,7 @@ def build_pdf() -> Path:
     c.setSubject("Cómo recibir las notificaciones en el móvil y el ordenador")
     c.setKeywords("Bricket Control, ARAYA, avisos, notificaciones, móvil, obra")
 
-    pages = [cover, page_activar, page_dudas]
+    pages = [cover, page_activar, page_dudas, page_resultados]
     for index, page in enumerate(pages):
         page(c)
         if index < len(pages) - 1:

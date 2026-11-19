@@ -28,16 +28,20 @@ Repositorio: <https://github.com/Montpla/ARAYA-Centro-de-control>.
 ## Situación al guardar este punto de continuidad
 
 Los documentos de octubre y el nuevo plano están integrados. La corrección de
-las etiquetas del tanque elevado y de mascotas está desplegada. Se verificaron
-553 pruebas y las comprobaciones de producción indicadas en `HANDOFF.md`.
+las etiquetas del tanque elevado y de mascotas está desplegada. Las seis guías
+se actualizaron a la edición 19.11.2026. La validación de esta entrega incluye
+559 pruebas, compilación, tipos y revisión visual de las 30 páginas de los PDF.
+Las evidencias de producción se conservan en `HANDOFF.md` y GitHub Actions.
 
 Hay 77 edificios y 462 apartamentos representados; 26 edificios con avance
 publicado y 234 desgloses por edificio/oficio. No existen mediciones publicadas
 propias de cada apartamento: sus colores y porcentajes son derivados.
 
-Las seis guías PDF se revisaron, pero todavía no se actualizaron. No repetir las
-cargas ya cerradas ni iniciar su regeneración por confundir una revisión con un
-encargo. El siguiente trabajo concreto lo determina el mensaje del usuario.
+Las guías incorporan fuentes y prioridades, Gantt HTML, plano y alcance de los
+avances, flujo reprogramado, Project y resultados de las cargas. Sus generadores,
+PDF y catálogo están sincronizados. `HANDOFF.md` explica cómo regenerarlas y
+contrastar sus huellas publicadas. No repetir las cargas ya cerradas.
+El siguiente trabajo concreto lo determina el mensaje del usuario.
 
 ## Mensaje de inicio que puede usar el usuario
 
