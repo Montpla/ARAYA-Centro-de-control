@@ -67,7 +67,11 @@ Decisión del dueño: «deben mandar los edificios y la cubicación».
 ## 4. Curva S
 
 - Plan operativo: el Excel maestro de gráficos (`GRAFICOS ARAYA FASE II…`).
-- Plan reprogramado: el del Informe Ejecutivo del mes.
+- Plan reprogramado: el del Informe Ejecutivo del mes, completado por el Excel
+  de curva reprogramada cuando el dueño lo aporte para su integración. Las
+  series de edificios y urbanismo conservan su alcance agregado.
+- La fila «Original» de ese Excel se conserva como comparación del documento;
+  no sustituye automáticamente el plan operativo del Excel maestro.
 - Ejecutado: según la regla 1 (la cubicación del mes manda).
 
 ## 5. Documentos con errores de origen
@@ -84,7 +88,7 @@ la fecha, la incidencia y la regla resultante.
 <!-- Claude: añade las nuevas decisiones debajo de esta línea, una por punto. -->
 
 - 19/11/2026, encargo directo del dueño: hacer coincidir el centro de control con
-  el Excel de octubre, respetando comas y n?meros sin separadores. Conservar
-  las celdas num?ricas nativas del XLSX; en texto porcentual, la coma es decimal.
+  el Excel de octubre, respetando comas y números sin separadores. Conservar
+  las celdas numéricas nativas del XLSX; en texto porcentual, la coma es decimal.
   No deducir decimales ausentes ni eliminar partidas de rectificación por su signo.
   Los desgloses por edificio conservan ese alcance; no implican avance por vivienda.

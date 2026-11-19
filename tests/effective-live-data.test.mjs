@@ -1209,6 +1209,11 @@ test("el plan reprogramado de la Curva S se publica mes a mes como campo opciona
   // porque el campo era null en todas las filas de la línea base y un null
   // común se exige para siempre. Es un campo opcional numérico.
   const { validateLiveDataContract } = await loadContractCore();
+  for (const field of ["reprogrammedBuildingsProgress", "reprogrammedUrbanismProgress", "originalDocumentProgress"]) {
+    assert.equal(validateLiveDataContract(`monthlyPlan.1.${field}`, "43.29").valid, true);
+    assert.equal(validateLiveDataContract(`monthlyPlan.1.${field}`, "101").valid, false);
+    assert.equal(validateLiveDataContract(`monthlyPlan.1.${field}`, "-1").valid, false);
+  }
   assert.equal(validateLiveDataContract("monthlyPlan.1.reprogrammed", "39.8").valid, true);
   assert.equal(validateLiveDataContract("monthlyPlan.1.reprogrammed", "140").valid, false, "sigue siendo un porcentaje");
   assert.equal(validateLiveDataContract("monthlyPlan.1.planned", "57.48").valid, true);

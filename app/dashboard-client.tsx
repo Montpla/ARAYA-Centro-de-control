@@ -2948,7 +2948,7 @@ function DynamicAreaSections({
   );
 }
 
-function ProgressChart({ data = monthlyPlan }: { data?: Array<{ month: string; planned: number; actual: number | null; reprogrammed?: number | null }> }) {
+function ProgressChart({ data = monthlyPlan }: { data?: typeof monthlyPlan }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const width = 1180;
   const height = 410;
@@ -3194,6 +3194,25 @@ function ProgressChart({ data = monthlyPlan }: { data?: Array<{ month: string; p
           Como referencia de apoyo, el cálculo apartamento a apartamento (4 disciplinas por unidad) da {number.format(projectSnapshot.apartmentAverageProgress)}%.
         </span>
       </div>
+      {data.some((point) => typeof point.reprogrammedBuildingsProgress === "number") && (
+        <details className="s-curve-monthly-detail">
+          <summary>Detalle mensual de la curva reprogramada</summary>
+          <p>Porcentajes acumulados. La serie original corresponde a este documento; el plan operativo y el ejecutado mantienen sus fuentes vigentes.</p>
+          <div className="table-scroll">
+            <table>
+              <thead><tr><th>Mes</th><th>Edificios reprogramados</th><th>Urbanismo reprogramado</th><th>Conjunto reprogramado</th><th>Original del documento</th></tr></thead>
+              <tbody>{data.filter((point) => typeof point.reprogrammedBuildingsProgress === "number").map((point) => (
+                <tr key={point.month}>
+                  <th scope="row">{point.month.slice(0, 7)}</th>
+                  {[point.reprogrammedBuildingsProgress, point.reprogrammedUrbanismProgress, point.reprogrammed, point.originalDocumentProgress].map((value, index) => (
+                    <td key={index}>{typeof value === "number" ? `${number.format(value)}%` : "Sin dato"}</td>
+                  ))}
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </details>
+      )}
     </div>
   );
 }

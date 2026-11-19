@@ -306,7 +306,8 @@ export const monthlyPlan = planCurveMonths.map((month, indice) => ({
   // Ejecutivo. No va en la línea base: un campo null en todas las filas
   // haría que el contrato exigiera null para siempre (ver
   // OPTIONAL_OBJECT_FIELDS en lib/live-data-contract.ts).
-}) as { month: string; planned: number; actual: number | null; reprogrammed?: number | null });
+}) as { month: string; planned: number; actual: number | null; reprogrammed?: number | null;
+  reprogrammedBuildingsProgress?: number; reprogrammedUrbanismProgress?: number; originalDocumentProgress?: number });
 
 export const workPackages: WorkPackage[] = [
   { name: "Infraestructura", progress: 55, finish: "07/10/2026", baselineFinish: "10/08/2026", deviationDays: 58, critical: false },

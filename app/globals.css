@@ -1268,6 +1268,39 @@ button {
   font-size: 9px;
 }
 
+.s-curve-monthly-detail {
+  margin: 16px 18px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.s-curve-monthly-detail summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.s-curve-monthly-detail .table-scroll {
+  overflow-x: auto;
+}
+
+.s-curve-monthly-detail table {
+  width: 100%;
+  min-width: 650px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.s-curve-monthly-detail th,
+.s-curve-monthly-detail td {
+  padding: 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--line);
+}
+
+.s-curve-monthly-detail th:first-child {
+  text-align: left;
+}
+
 .s-curve-nav {
   display: block;
   margin: 12px 8px 0 auto;
