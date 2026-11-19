@@ -14,6 +14,8 @@ const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 // Un identificador exacto, o un texto del nombre (para lanzarlo a mano).
 let FILE_ID = (process.env.FILE_ID ?? "").trim();
 const NOTIFICAR = process.env.NOTIFICAR !== "0";
+// Nota opcional para el aviso (la usa el paso de arreglo automático).
+const NOTA = (process.env.NOTA ?? "").trim();
 const ESPERA_MAXIMA_MS = Number(process.env.ESPERA_MAXIMA_MS ?? 25 * 60 * 1000);
 const INTERVALO_MS = Number(process.env.INTERVALO_MS ?? 30 * 1000);
 
@@ -58,7 +60,7 @@ async function verificar(notify) {
   const response = await fetch(`${PRODUCTION_URL}/api/files/verification`, {
     method: "POST",
     headers: { Cookie, "Content-Type": "application/json" },
-    body: JSON.stringify({ fileId: FILE_ID, notify }),
+    body: JSON.stringify({ fileId: FILE_ID, notify, note: notify ? NOTA : "" }),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`/api/files/verification devolvió ${response.status}: ${body.error ?? ""}`);
@@ -101,6 +103,7 @@ if (process.env.VERIFICACION_MD) await writeFile(process.env.VERIFICACION_MD, ma
 if (process.env.GITHUB_OUTPUT) {
   await appendFile(process.env.GITHUB_OUTPUT, [
     `veredicto=${resultado.verdict}`,
+    `file_id=${FILE_ID}`,
     `nombre=${String(nombre).replace(/[\r\n]+/g, " ").slice(0, 200)}`,
     "",
   ].join("\n"));

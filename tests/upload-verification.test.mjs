@@ -59,10 +59,12 @@ test("un error ya superado de un intento anterior no cuenta si el archivo está 
   assert.equal(evaluate({ file: { lastProcessingError: "Respuesta 404." } }).verdict, "ok");
 });
 
-test("un avance que retrocede más de un punto es un aviso; el redondeo no", () => {
-  const baja = evaluate({ regressions: [{ key: "buildings.3.progress", before: 55.32, after: 40.1 }] });
+test("un avance que retrocede más de un punto es un aviso; más de 15, anomalía; el redondeo no", () => {
+  const baja = evaluate({ regressions: [{ key: "buildings.3.progress", before: 55.32, after: 48.1 }] });
   assert.equal(baja.verdict, "aviso");
-  assert.match(baja.checks[0].detail, /55\.32% a 40\.1%/);
+  assert.match(baja.checks[0].detail, /55\.32% a 48\.1%/);
+  // El caso real de la Cubicación de octubre: Superestructura de 84,6 a 23,36.
+  assert.equal(evaluate({ regressions: [{ key: "constructionDisciplines.1.progress", before: 84.6, after: 23.36 }] }).verdict, "anomalia");
   assert.equal(evaluate({ regressions: [{ key: "buildings.3.progress", before: 55.32, after: 55 }] }).verdict, "ok");
 });
 

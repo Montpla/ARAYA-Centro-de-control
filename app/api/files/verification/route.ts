@@ -20,7 +20,9 @@ export const runtime = "edge";
 // en el historial del archivo y avisa a los administradores en el panel y en
 // el móvil. Sólo devuelve claves, motivos y porcentajes, nunca importes.
 
-type VerificationPayload = { fileId?: string; notify?: boolean };
+// note: texto opcional que sustituye al resumen en el aviso (lo usa el paso de
+// arreglo automático para contar qué hizo).
+type VerificationPayload = { fileId?: string; notify?: boolean; note?: string };
 
 const KEY_CHUNK = 50;
 
@@ -43,6 +45,7 @@ export async function POST(request: Request) {
   }
   const fileId = String(payload.fileId ?? "").trim().slice(0, 160);
   if (!fileId) return Response.json({ error: "Indica el archivo a verificar." }, { status: 400 });
+  const note = String(payload.note ?? "").trim().slice(0, 400);
 
   const db = getDb();
   const [file] = await db.select().from(uploadedFiles).where(eq(uploadedFiles.id, fileId)).limit(1);
@@ -124,7 +127,7 @@ export async function POST(request: Request) {
     await db.insert(fileActivity).values({
       fileId,
       eventType: "verificacion_carga",
-      message: `${result.verdict}: ${result.checks.map((check) => `[${check.severity}] ${check.detail}`).join(" · ")}`.slice(0, 1900),
+      message: `${note ? `${note} · ` : ""}${result.verdict}: ${result.checks.map((check) => `[${check.severity}] ${check.detail}`).join(" · ")}`.slice(0, 1900),
       actorEmail: "sistema@araya",
       actorName: "Verificación automática",
     }).catch(() => undefined);
@@ -136,11 +139,11 @@ export async function POST(request: Request) {
       actorEmail: "sistema@araya",
       actorName: "Verificación automática",
       subjectType: "upload_verification",
-      subjectId: `${fileId}:${file.updatedAt}`,
+      subjectId: `${fileId}:${file.updatedAt}${note ? `:${note.length}:${note.slice(0, 40)}` : ""}`,
       title: ok
         ? `✔ Integrado: ${file.originalName}`.slice(0, 160)
         : `⚠ Revisar carga: ${file.originalName}`.slice(0, 160),
-      body: result.summary.slice(0, 400),
+      body: (note || result.summary).slice(0, 400),
       view: "fuentes",
       payload: { fileId, verdict: result.verdict },
     }]).catch(() => undefined);
