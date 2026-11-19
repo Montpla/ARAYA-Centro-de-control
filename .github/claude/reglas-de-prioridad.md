@@ -82,3 +82,9 @@ Cada decisión tomada al responder a una incidencia de carga se añade aquí con
 la fecha, la incidencia y la regla resultante.
 
 <!-- Claude: añade las nuevas decisiones debajo de esta línea, una por punto. -->
+
+- 19/11/2026, encargo directo del dueño: hacer coincidir el centro de control con
+  el Excel de octubre, respetando comas y n?meros sin separadores. Conservar
+  las celdas num?ricas nativas del XLSX; en texto porcentual, la coma es decimal.
+  No deducir decimales ausentes ni eliminar partidas de rectificación por su signo.
+  Los desgloses por edificio conservan ese alcance; no implican avance por vivienda.

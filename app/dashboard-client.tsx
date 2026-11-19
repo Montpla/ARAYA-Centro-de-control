@@ -3944,7 +3944,7 @@ function BuildingsView({
             <h3>{selected.name}</h3>
           </div>
           <div className="inline-stats">
-            <span><strong>{number.format(selected.progress)}%</strong> índice de frentes</span>
+            <span><strong>{number.format(selected.progress)}%</strong> avance acumulado</span>
             <span><strong>{selected.forecastFinish}</strong> fin previsto</span>
             <span className={selected.deviationDays > 0 ? "danger-text" : ""}>
               <strong>{selected.deviationDays > 0 ? `+${selected.deviationDays}` : selected.deviationDays}</strong> días
@@ -3952,7 +3952,7 @@ function BuildingsView({
           </div>
         </div>
         <p className="section-intro">
-          El porcentaje del edificio es el promedio simple de 32 frentes del MPP.
+          El porcentaje del edificio procede de la fuente vigente de avance; la cubicación tiene prioridad para el mismo corte.
           Pulsa un apartamento para abrir su ficha y consultar los datos ya disponibles.
         </p>
         <div className="building-apartment-summary">
@@ -3961,6 +3961,23 @@ function BuildingsView({
           <span><strong>{selected.units.filter((unit) => visualUnitStatus(unit) === "terminada").length}</strong>Terminados</span>
           <span><strong>{selected.units.reduce((total, unit) => total + (unit.issues ?? []).filter((issue) => issue.status === "abierta").length, 0)}</strong>Incidencias</span>
         </div>
+        {Boolean(selected.constructionDisciplines?.length) && (
+          <section className="unit-operational-section">
+            <div className="unit-section-heading">
+              <span>OFICIOS DE ESTE EDIFICIO</span>
+              <small>Acumulados de la cubicación · alcance del edificio</small>
+            </div>
+            <div className="unit-discipline-list">
+              {selected.constructionDisciplines?.map((discipline) => (
+                <div key={discipline.name}>
+                  <span>{discipline.name}</span>
+                  <i><b style={{ width: `${discipline.progress}%` }} /></i>
+                  <strong>{number.format(discipline.progress)}%</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
         <div className="filter-row">
           {["todos", "en_curso", "pendiente", "terminada", "bloqueada"].map((filter) => (
             <button
@@ -4044,7 +4061,7 @@ function BuildingsView({
               </button>
             ))}
           </div>
-          <p className="quality-note">14 edificios tienen pedidos de materiales vencidos. Carpintería, ventanas y piezas sanitarias permanecen en 0% en los 26 edificios.</p>
+          <p className="quality-note">Consulta el avance acumulado de cada oficio en el desglose del edificio seleccionado y los pedidos pendientes en la tabla de compras.</p>
         </article>
       </section>
     </div>

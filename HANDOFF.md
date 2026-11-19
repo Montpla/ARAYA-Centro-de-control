@@ -9,6 +9,29 @@ Zona horaria del usuario: Europe/Madrid
 > anteriores**. Las secciones fechadas más abajo son historial; si contradicen a
 > esta, manda esta.
 
+## Conciliación de la cubicación de octubre (19/11/2026)
+
+Esta revisión amplía el estado vigente de abajo. La comparación con el original
+ha confirmado que los avances generales coincidían, pero faltaban el desglose
+por edificio y las correcciones de varios capítulos de urbanismo.
+
+- Lector completo: 11 capítulos de urbanismo, 9 oficios globales y 234 desgloses
+  propios de los 26 edificios. Se incluyen las partidas de rectificación con signo.
+- Se conserva el valor nativo del XLSX. Los porcentajes escritos con coma se
+  interpretan como decimales; un entero sin separadores no se reescala.
+- Los oficios se publican con la precisión existente de dos decimales. Los
+  pequeños excesos del cierre de partidas sólo se aceptan si redondean al 100 %;
+  cualquier exceso visible a esa precisión se rechaza con aviso.
+- El panel muestra los oficios del edificio seleccionado. No se atribuyen los
+  desgloses del edificio a apartamentos individuales.
+- El Excel original contiene errores de fórmula ajenos a las columnas de
+  acumulados utilizadas. No se modifica el documento ni se inventan sus valores.
+- Para cerrar la actualización: CI, fusión squash, despliegue y reprocesado del
+  expediente vigente mediante `reprocesar.yml`; después `comprobar-cargas.yml`
+  contrasta los porcentajes, la huella del original y la carátula en memoria.
+  Este texto describe el cambio preparado; el resultado de producción se confirma
+  con las ejecuciones oficiales, no con la lectura local.
+
 ## Estado vigente (19/11/2026)
 
 ### Producción
