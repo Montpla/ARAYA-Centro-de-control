@@ -327,6 +327,20 @@ test("un número de Excel con tres decimales no se toma como miles", async () =>
   assert.equal(ingestion.numeroDeCelda("1.234.567"), 1234567);
 });
 
+test("los números de la oficina de Dominicana se leen con coma de miles y punto decimal", async () => {
+  const ingestion = await loadIngestion();
+  assert.equal(ingestion.numeroDeCelda("1,234,567.89"), 1234567.89);
+  assert.equal(ingestion.numeroDeCelda("1,234.5"), 1234.5);
+  assert.equal(ingestion.numeroDeCelda("45,000"), 45000);
+  assert.equal(ingestion.numeroDeCelda("45.5%"), 45.5);
+  assert.equal(ingestion.numeroDeCelda("-2,500.75"), -2500.75);
+  // El formato español y el de máquina siguen leyéndose bien.
+  assert.equal(ingestion.numeroDeCelda("12,5"), 12.5);
+  assert.equal(ingestion.numeroDeCelda("1.234.567,89"), 1234567.89);
+  assert.equal(ingestion.numeroDeCelda("53771.928"), 53771.928);
+  assert.equal(ingestion.numeroDeCelda("texto"), null);
+});
+
 test("el lector de Excel lee hojas de más de 5.000 filas", () => {
   assert.ok(xlsxReader.XLSX_MAX_ROWS >= 20_000);
 });
