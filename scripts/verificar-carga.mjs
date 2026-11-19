@@ -9,6 +9,7 @@
 // imprime importes: el endpoint sólo devuelve claves, motivos y porcentajes.
 
 import { appendFile, writeFile } from "node:fs/promises";
+import { evaluatePanelCoherence } from "../lib/panel-coherence.ts";
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 // Un identificador exacto, o un texto del nombre (para lanzarlo a mano).
@@ -56,11 +57,11 @@ if (!/^[0-9a-f-]{36}$/i.test(FILE_ID)) {
   console.log(`Archivo: ${encontrados[0].originalName} (${FILE_ID})`);
 }
 
-async function verificar(notify) {
+async function verificar(notify, extraChecks = []) {
   const response = await fetch(`${PRODUCTION_URL}/api/files/verification`, {
     method: "POST",
     headers: { Cookie, "Content-Type": "application/json" },
-    body: JSON.stringify({ fileId: FILE_ID, notify, note: notify ? NOTA : "" }),
+    body: JSON.stringify({ fileId: FILE_ID, notify, note: notify ? NOTA : "", extraChecks }),
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`/api/files/verification devolvió ${response.status}: ${body.error ?? ""}`);
@@ -74,6 +75,28 @@ while (resultado.verdict === "pendiente" && Date.now() - inicio < ESPERA_MAXIMA_
   await new Promise((resolve) => setTimeout(resolve, INTERVALO_MS));
   resultado = await verificar(false);
 }
+// Coherencia del panel tras la carga: los números que pinta el Centro de
+// Control deben cuadrar entre sí (ver lib/panel-coherence.ts).
+async function coherenciaDelPanel() {
+  try {
+    const [controlRoom, live] = await Promise.all([
+      fetch(`${PRODUCTION_URL}/api/control-room`, { headers: { Cookie } }).then((r) => (r.ok ? r.json() : null)),
+      fetch(`${PRODUCTION_URL}/api/live-data`, { headers: { Cookie } }).then((r) => (r.ok ? r.json() : null)),
+    ]);
+    if (!controlRoom || !live) return [];
+    return evaluatePanelCoherence({
+      cutoff: controlRoom.cutoff ?? "",
+      planning: controlRoom.planning ?? {},
+      reconciliationCritical: controlRoom.reconciliationSummary?.critical ?? 0,
+      liveValues: live.values ?? {},
+      expectedBuildings: controlRoom.spatial?.integratedBuildings ?? 0,
+    });
+  } catch (error) {
+    console.log(`(No se pudo comprobar la coherencia del panel: ${error instanceof Error ? error.message : error})`);
+    return [];
+  }
+}
+
 if (resultado.verdict === "pendiente") {
   // Lleva más de lo normal: se trata como algo a revisar.
   resultado = {
@@ -82,8 +105,9 @@ if (resultado.verdict === "pendiente") {
     summary: `El archivo sigue sin terminar de procesarse tras ${Math.round(ESPERA_MAXIMA_MS / 60000)} minutos.`,
     checks: [{ id: "atascado", severity: "anomalia", detail: resultado.summary }],
   };
-} else if (NOTIFICAR) {
-  resultado = await verificar(true);
+} else {
+  const coherencia = await coherenciaDelPanel();
+  resultado = await verificar(NOTIFICAR, coherencia);
 }
 
 const icono = { ok: "✔", aviso: "⚠", anomalia: "✖" }[resultado.verdict] ?? "·";

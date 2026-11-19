@@ -5,9 +5,17 @@ import ts from "typescript";
 
 const source = await readFile("lib/ai-document-extraction.ts", "utf8");
 const urbanismDisciplinesSource = (await readFile("lib/urbanism-disciplines.ts", "utf8")).replace(/^export /gm, "");
+const constructionDisciplinesSource = (await readFile("lib/construction-disciplines.ts", "utf8"))
+  .replace(/^export /gm, "")
+  // Los dos módulos declaran su propio normalizedText y DISCIPLINES.
+  .replace(/\bnormalizedText\b/g, "tradeNormalizedText")
+  .replace(/\bDISCIPLINES\b/g, "TRADE_DISCIPLINES");
 const executableSource = source.replace(
   /import \{[^}]*\} from "\.\/urbanism-disciplines";/,
   urbanismDisciplinesSource,
+).replace(
+  /import \{[^}]*\} from "\.\/construction-disciplines";/,
+  constructionDisciplinesSource,
 ).replace(
   /import \{[\s\S]*?\} from "\.\/live-data";/,
   `const LIVE_DATA_ROOTS = [
@@ -16,11 +24,12 @@ const executableSource = source.replace(
     "buildings",
     "urbanismAreas",
     "urbanismReportAreas",
+    "constructionDisciplines",
     "reprogrammedFlowMonths",
     "fiduciaryStatementSummary",
     "fiduciaryBalanceSections",
   ];
-  const isLiveDataKey = (key) => /^(projectSnapshot|monthlyPlan|buildings|urbanismAreas|urbanismReportAreas|reprogrammedFlowMonths|fiduciaryStatementSummary|fiduciaryBalanceSections)(?:\\.(?:[A-Za-z][A-Za-z0-9]*|\\d+))*$/.test(key);`,
+  const isLiveDataKey = (key) => /^(projectSnapshot|monthlyPlan|buildings|urbanismAreas|urbanismReportAreas|constructionDisciplines|reprogrammedFlowMonths|fiduciaryStatementSummary|fiduciaryBalanceSections)(?:\\.(?:[A-Za-z][A-Za-z0-9]*|\\d+))*$/.test(key);`,
 ).replace(
   /import \{ getContractRootsSnapshot \} from "\.\/live-data-contract";/,
   `const getContractRootsSnapshot = () => ({
@@ -769,4 +778,46 @@ test("una disciplina de urbanismo por posición se dirige por la que nombra su e
   ]);
   assert.equal(result.updates.find((u) => u.key.includes("GAS")).value, 8.3);
   assert.equal(result.warnings.filter((aviso) => /no nombra una única disciplina/.test(aviso)).length, 2);
+});
+
+test("un oficio de construcción por posición se dirige por el que nombra su evidencia, o se descarta", async () => {
+  // Caso real del Informe Ejecutivo de octubre (issue #266): el modelo escribió
+  // el gráfico "Avance por capítulo" por posición y dejó Carpintería al 96,2 %.
+  globalThis.fetch = async () => {
+    const fila = (indice, valor, evidencia) => ({
+      key: `constructionDisciplines.${indice}.progress`,
+      value_json: String(valor),
+      area: "obra",
+      cutoff: "2026-10-31",
+      source_currency: "DOP",
+      confidence: 0.9,
+      evidence: evidencia,
+    });
+    const output = {
+      updates: [
+        fila(0, 96.2, "Diapositiva 5, Avance por capítulo: Infraestructura 96,2%"),
+        fila(1, 84.6, "Diapositiva 5: Superestructura 84,6%"),
+        fila(3, 55.9, "Diapositiva 5: Instalaciones eléctricas y sanitarias 55,9%"),
+        fila(5, 27.9, "Diapositiva 5, gráfico de capítulos"),
+        fila(6, 1.2, "Herrería y carpintería apenas arrancan"),
+      ],
+      summary: "Avance por capítulo.",
+      warnings: [],
+      confidence: 0.9,
+    };
+    return new Response(JSON.stringify({
+      model: "gpt-5.6-luna",
+      output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(output) }] }],
+    }), { status: 200, headers: { "content-type": "application/json" } });
+  };
+
+  const result = await extraction.extractDocumentWithAI(input("png"));
+  const claves = result.updates.map((update) => update.key).sort();
+  assert.deepEqual(claves, [
+    "constructionDisciplines.Infraestructura.progress",
+    "constructionDisciplines.Inst eléctricas, sanitarias y gas.progress",
+    "constructionDisciplines.Superestructura.progress",
+  ]);
+  assert.equal(result.updates.find((u) => u.key.includes("Infraestructura")).value, 96.2);
+  assert.equal(result.warnings.filter((aviso) => /no nombra un único oficio/.test(aviso)).length, 2);
 });

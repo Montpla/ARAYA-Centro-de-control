@@ -7,6 +7,7 @@ import {
 } from "./live-data";
 import { getContractRootsSnapshot } from "./live-data-contract";
 import { urbanismDisciplineInText, urbanismDisciplineLabel } from "./urbanism-disciplines";
+import { constructionDisciplineInText, constructionDisciplineLabel } from "./construction-disciplines";
 import type { DocumentTemplateHint, IngestionAgentTrace } from "./ingestion-agent";
 import {
   addAiTokenUsage,
@@ -153,6 +154,7 @@ ESPACIAL, EDIFICIOS, APARTAMENTOS Y URBANISMO
 - NUNCA uses un numero suelto como identidad de un edificio: en una clave, un segmento que solo tiene digitos significa POSICION EN LA LISTA, no numero de edificio, y las dos cosas no coinciden. El edificio TH-14 ocupa la posicion 13, asi que buildings.14 apunta a otro edificio distinto. Escribe siempre el nombre tal y como aparece en el documento —buildings.TH-14— y deja que el servidor lo traduzca.
 - Para un dato suelto de una entidad que ya existe (un avance, un estado, una fecha), la forma correcta es la ruta hija con nombre: buildings.TH-14.progress, buildings.TH-14.units.14-101.status o urbanismAreas.<identidad>.progress. Reserva el objeto completo (buildings.TH-14 = {...}) para dar de alta una entidad nueva o cambiar varios campos suyos a la vez.
 - Las disciplinas del informe de urbanismo (urbanismReportAreas) se dirigen SIEMPRE por su nombre, nunca por posición: urbanismReportAreas.Paisajismo.progress, urbanismReportAreas.Instalaciones de gas.progress. El orden de la lista viva no coincide con el de ningún informe, y la evidencia debe nombrar la disciplina de esa fila.
+- Los oficios de construcción de los edificios (constructionDisciplines) también se dirigen SIEMPRE por su nombre, nunca por posición: constructionDisciplines.Carpintería.progress, constructionDisciplines.Herrería.progress. En un gráfico de "avance por capítulo" lee la etiqueta de cada barra y emparéjala con SU porcentaje; la evidencia debe nombrar el oficio de esa barra.
 - Conserva exactamente los identificadores visibles de edificios, apartamentos y zonas urbanas.
 - No adivines coordenadas, geometrías, posiciones, índices de arrays, relaciones entre edificios y apartamentos, estados ni porcentajes a partir del color o la proximidad visual.
 - No reemplaces una raíz espacial completa con una lista parcial. Solo emite buildings, urbanismAreas o urbanismReportAreas como raíz completa si la fuente contiene el inventario completo y compatible.
@@ -1204,6 +1206,17 @@ function validateModelOutput(
         return;
       }
       key = `urbanismReportAreas.${urbanismDisciplineLabel(discipline)}.${positionalUrbanism[2]}`;
+    }
+    // Lo mismo con los oficios de construcción: escritos por posición, el
+    // Informe Ejecutivo de octubre dejó Carpintería al 96,2 % (issue #266).
+    const positionalTrade = key.match(/^constructionDisciplines\.(\d+)\.(.+)$/);
+    if (positionalTrade) {
+      const trade = constructionDisciplineInText(evidence);
+      if (!trade) {
+        addWarning(warnings, `Se descartó ${key}: su evidencia no nombra un único oficio de construcción y la posición no basta para saber cuál es.`);
+        return;
+      }
+      key = `constructionDisciplines.${constructionDisciplineLabel(trade)}.${positionalTrade[2]}`;
     }
     if (candidate.value_json.length > MAX_VALUE_JSON_LENGTH) {
       addWarning(warnings, `Se descartó ${key} porque su valor supera el tamaño permitido.`);
