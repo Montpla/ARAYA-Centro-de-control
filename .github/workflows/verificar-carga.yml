@@ -33,6 +33,11 @@ on:
         required: false
         default: "1"
         type: string
+      fusionar_pr:
+        description: "Número de un PR de arreglo ya hecho por Claude para terminar su circuito (comprobar, fusionar, desplegar, reprocesar y avisar) sin volver a revisarlo"
+        required: false
+        default: ""
+        type: string
       encargo:
         description: "Tarea concreta para Claude (opcional): se hace aunque la carga esté bien, con el mismo circuito de pruebas, fusión, despliegue, reproceso y aviso"
         required: false
@@ -93,7 +98,7 @@ jobs:
 
   arreglar:
     needs: verificar
-    if: ${{ (needs.verificar.outputs.veredicto == 'anomalia' || inputs.encargo != '') && inputs.arreglar != '0' }}
+    if: ${{ (needs.verificar.outputs.veredicto == 'anomalia' || inputs.encargo != '' || inputs.fusionar_pr != '') && inputs.arreglar != '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -146,7 +151,7 @@ jobs:
           git checkout -b "$RAMA"
       - name: Claude revisa y, si es un fallo del programa, lo corrige
         id: claude
-        if: ${{ steps.token.outputs.hay == '1' }}
+        if: ${{ steps.token.outputs.hay == '1' && inputs.fusionar_pr == '' }}
         continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
@@ -164,8 +169,14 @@ jobs:
       - name: Leer la decisión
         id: decision
         if: ${{ always() && steps.token.outputs.hay == '1' }}
+        env:
+          FUSIONAR_PR: ${{ inputs.fusionar_pr }}
         run: |
-          if [ -f .verificacion/decision.json ]; then
+          if [ -n "$FUSIONAR_PR" ]; then
+            echo "accion=arreglado" >> "$GITHUB_OUTPUT"
+            echo "pr=$FUSIONAR_PR" >> "$GITHUB_OUTPUT"
+            echo "resumen=$(gh pr view "$FUSIONAR_PR" --json title -q .title | cut -c1-300)" >> "$GITHUB_OUTPUT"
+          elif [ -f .verificacion/decision.json ]; then
             echo "accion=$(jq -r '.accion // "sin_decision"' .verificacion/decision.json)" >> "$GITHUB_OUTPUT"
             echo "pr=$(jq -r '.pr // ""' .verificacion/decision.json)" >> "$GITHUB_OUTPUT"
             echo "resumen=$(jq -r '.resumen // ""' .verificacion/decision.json | tr '\n' ' ' | cut -c1-1500)" >> "$GITHUB_OUTPUT"
@@ -197,6 +208,22 @@ jobs:
             # pruebas revisan el código compilado de la web).
             npm test
             gh pr ready "$PR" || true
+            # main exige que la CI pase en el PR, y un PR abierto desde un
+            # workflow no la lanza solo: se lanza sobre su rama y se espera.
+            CABEZA=$(gh pr view "$PR" --json headRefName,headRefOid -q '.headRefName + " " + .headRefOid')
+            RAMA_PR=${CABEZA% *}; SHA_PR=${CABEZA#* }
+            gh workflow run ci.yml --ref "$RAMA_PR"
+            CI_OK=0
+            for i in $(seq 1 60); do
+              sleep 20
+              CI=$(gh run list --workflow ci.yml --branch "$RAMA_PR" --limit 5 --json headSha,status,conclusion \
+                --jq "[.[] | select(.headSha == \"$SHA_PR\")][0] // empty")
+              [ -z "$CI" ] && continue
+              [ "$(echo "$CI" | jq -r .status)" != "completed" ] && continue
+              if [ "$(echo "$CI" | jq -r .conclusion)" = "success" ]; then CI_OK=1; fi
+              break
+            done
+            if [ "$CI_OK" != "1" ]; then echo "La CI del PR #$PR no terminó en verde"; exit 1; fi
             gh pr merge "$PR" --squash --delete-branch
             echo "como=el PR #$PR" >> "$GITHUB_OUTPUT"
           elif git ls-remote --exit-code origin "refs/heads/$RAMA" >/dev/null; then
