@@ -93,6 +93,7 @@ import { assertLiveDataContracts, getContractRootsSnapshot, validateLiveDataCont
 import { normalizeLiveDataUpdates, publishLiveDataUpdates } from "../../../lib/publish-live-data";
 import { publicationKeyConflict } from "../../../lib/live-data-publication-recovery";
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
+import { complementaryNarrativeUpdateAllowed, executiveSafetySummary, prepareNarrativeUpdate } from "../../../lib/narrative-update-scope";
 import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-upsert";
 import { nothingExtractedMessage } from "../../../lib/upload-messages";
 import { triggerMppConversion } from "../../../lib/mpp-conversion-trigger";
@@ -1727,7 +1728,8 @@ export async function POST(request: Request) {
         const complemento = iaExtraction.updates
           .map((update, indice) => ({ update, confianza: iaExtraction.updateConfidences[indice] ?? iaExtraction.confidence }))
           .filter(({ update, confianza }) =>
-            !complementoChocaConLector(update.key) && Number.isFinite(confianza) && confianza > 0);
+            !complementoChocaConLector(update.key) && Number.isFinite(confianza) && confianza > 0 &&
+            complementaryNarrativeUpdateAllowed(update.key, candidate.name, clavesDeterministas));
         extraction = {
           ...iaExtraction,
           updates: [...deterministicExtraction.updates, ...complemento.map(({ update }) => update)],
@@ -1752,6 +1754,29 @@ export async function POST(request: Request) {
         ],
       };
     }
+    const resumenMensualSeguridad = executiveSafetySummary(extraction.updates, candidate.name);
+    if (resumenMensualSeguridad) {
+      // Los indicadores del mes se muestran como bloque documental propio.
+      // La foto y la serie semanales siguen perteneciendo al reporte semanal.
+      const retained = extraction.updates.map((update, index) => ({ update, confidence: extraction.updateConfidences[index] ?? extraction.confidence }))
+        .filter(({ update }) => update.key !== "safetyMetrics");
+      extraction = {
+        ...extraction,
+        updates: retained.map(({ update }) => update),
+        updateConfidences: retained.map(({ confidence }) => confidence),
+        unmappedCandidates: [...extraction.unmappedCandidates, {
+          label: `Seguridad mensual · ${resumenMensualSeguridad.cutoff.slice(0, 7)}`,
+          description: "Indicadores del periodo mensual del Informe Ejecutivo; alcance distinto de la fotografía semanal.",
+          valueJson: JSON.stringify(resumenMensualSeguridad.metrics.map((metric) =>
+            metric && typeof metric === "object" && !Array.isArray(metric)
+              ? { label: metric.label, value: `${metric.value} · ${metric.detail || "Dato del periodo mensual"}` }
+              : metric)),
+          suggestedArea: "seguridad",
+          confidence: 1,
+          evidence: "Bloque Seguridad y Salud en el Trabajo del Informe Ejecutivo, leído directamente del documento.",
+        }],
+      };
+    }
     agentModel = extraction.model;
     agentPromptVersion = extraction.promptVersion;
     agentIterations = extraction.agentIterations;
@@ -1767,7 +1792,7 @@ export async function POST(request: Request) {
     // traducción tropezara con una entrada rara, se sigue con las claves tal
     // cual en vez de tumbar toda la ingesta: la normalización posterior ya
     // descarta dato a dato lo que no encaje.
-    let identityResolvedUpdates = extraction.updates;
+    let identityResolvedUpdates = extraction.updates.map(prepareNarrativeUpdate);
     // Una cubicación puede traer importes en la carátula y el avance físico de
     // varios edificios en otra hoja. El lector devuelve el alcance que vio y
     // aquí se comprueba que cada edificio nombrado haya generado al menos su
@@ -1796,12 +1821,12 @@ export async function POST(request: Request) {
     if (currentLiveData) {
       try {
         identityResolvedUpdates = resolveSpatialIdentityUpdates(
-          extraction.updates,
+          identityResolvedUpdates,
           currentLiveData.values,
           getContractRootsSnapshot(),
         );
       } catch {
-        identityResolvedUpdates = extraction.updates;
+        identityResolvedUpdates = extraction.updates.map(prepareNarrativeUpdate);
       }
     }
     // Un bloque que la lectura descubre y para el que no existe ningún campo ya
@@ -2250,6 +2275,13 @@ export async function POST(request: Request) {
       !staleCutoffKeySet.has(update.key) &&
       !lowerPriorityKeySet.has(update.key) &&
       (update.area === resolvedArea ||
+        // El resumen ejecutivo contiene Seguridad aunque su área mayoritaria
+        // sea Planificación. La clave canónica y todas las guardas de abajo
+        // siguen siendo obligatorias.
+        (update.area === "seguridad" && (
+          /^safety(?:Metrics|Findings|FindingTracking|WeeklySeries)(?:\.|$)/.test(update.key) ||
+          (/^discoveredSections\.\d+$/.test(update.key) && JSON.parse(update.valueJson).area === "seguridad")
+        )) ||
         // El archivo en conjunto no se pudo etiquetar, pero este dato puntual
         // sí trae su propia área (la que detectó la extracción, no la del
         // archivo). El resto de condiciones de abajo —acceso financiero,
