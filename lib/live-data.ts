@@ -378,6 +378,28 @@ export function namingToken(value: string) {
   return withoutPrefix.replace(/^0+(?=\d)/, "") || withoutPrefix;
 }
 
+// Los oficios de construcción se rotulan distinto según quién los escriba: la
+// cubicación dice "Carpintería", "Revestimientos y cerámica" e "Inst.
+// eléctricas, sanitarias y gas", mientras que la lista viva (heredada de un
+// informe ejecutivo) trae "Carpintería (puertas/closets)", "Revestimientos /
+// Cerámica" e "Instalaciones (elec./sanit./gas)". Sin esta equivalencia esos
+// tres oficios no se encontraban y la carga los aislaba como entradas no
+// válidas, dejando en pantalla el valor antiguo. Sólo se unifican variantes
+// conocidas del mismo oficio; ningún otro nombre cambia.
+const ENTITY_TOKEN_ALIASES: Record<string, string> = {
+  carpinteriapuertascloset: "carpinteria",
+  carpinteriapuertasclosets: "carpinteria",
+  revestimientoyceramica: "revestimientosceramica",
+  revestimientosyceramica: "revestimientosceramica",
+  instalacioneselecsanitgas: "instalacioneselectricassanitariasygas",
+  instelectricassanitariasygas: "instalacioneselectricassanitariasygas",
+  instalacioneselectricassanitariasygas: "instalacioneselectricassanitariasygas",
+};
+
+function canonicalEntityToken(token: string) {
+  return ENTITY_TOKEN_ALIASES[token] ?? token;
+}
+
 // Resuelve qué posición de una colección viva nombra un segmento de clave.
 //
 // Hasta ahora sólo se aceptaba el índice numérico (`buildings.13.progress`),
@@ -390,7 +412,7 @@ export function namingToken(value: string) {
 // llega a su sitio. Devuelve -1 si no corresponde a ninguna entidad viva.
 function resolveArrayIndex(cursor: unknown[], segment: string) {
   if (/^\d+$/.test(segment)) return Number(segment);
-  const wanted = namingToken(segment);
+  const wanted = canonicalEntityToken(namingToken(segment));
   if (!wanted) return -1;
   let found = -1;
   for (let index = 0; index < cursor.length; index += 1) {
@@ -399,7 +421,7 @@ function resolveArrayIndex(cursor: unknown[], segment: string) {
     const record = item as Record<string, unknown>;
     const matches = ENTITY_NAMING_KEYS.some((key) => {
       const raw = record[key];
-      return typeof raw === "string" && namingToken(raw) === wanted;
+      return typeof raw === "string" && canonicalEntityToken(namingToken(raw)) === wanted;
     });
     if (!matches) continue;
     // Un nombre que señala a dos entidades no señala a ninguna. Escribir en la
