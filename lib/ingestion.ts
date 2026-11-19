@@ -490,22 +490,52 @@ function detectedBuildingProgressScope(
   return [...codes];
 }
 
-// Norma del dueño: «es real si lo dice el Excel». Un .xlsx entrega cada número
-// en formato de máquina (punto decimal: 53771.928), así que el punto sólo es
-// separador de miles cuando el número viene escrito en formato español de
-// verdad: con coma decimal («1.234,56») o con varios grupos de miles
-// («1.234.567»). Antes cualquier punto seguido de tres cifras se tomaba como
-// miles y un acumulado de 53771.928 se leía como 53.771.928: la cubicación de
-// octubre dejó Revestimientos al 100 % cuando el Excel dice 25,62 %.
+// Lectura de números escritos como texto (PDF, CSV, presentaciones, celdas de
+// texto en un Excel). La oficina de la obra está en República Dominicana y
+// escribe con coma de miles y punto decimal («1,234,567.89»); en España se
+// escribe al revés («1.234.567,89»); y un .xlsx guarda el número en formato de
+// máquina («53771.928»). Norma del dueño: «es real si lo dice el Excel», así
+// que el número se lee como lo escribió quien lo hizo:
+//
+// - Con punto y coma a la vez, el último separador es el decimal.
+// - Sólo comas: en grupos de tres cifras («45,000», «1,234,567») son miles,
+//   como en la oficina; si no («12,5»), es coma decimal.
+// - Sólo puntos: uno es decimal («53771.928», «45.5»); varios en grupos de
+//   tres («1.234.567») son miles.
+//
+// Caso ambiguo: «1,234» se lee 1234 (formato de la oficina) y «1.234» se lee
+// 1,234 (formato de máquina y de la oficina).
+export function parseLocalizedNumber(raw: string): number | null {
+  let text = String(raw ?? "").replace(/[%\s]/g, "").replace(/^\$|^RD\$|^US\$/i, "");
+  if (!text) return null;
+  const negative = /^-/.test(text);
+  text = text.replace(/^[-+]/, "");
+  if (!/^[\d.,]+$/.test(text)) return null;
+  const lastComma = text.lastIndexOf(",");
+  const lastDot = text.lastIndexOf(".");
+  let normalized: string;
+  if (lastComma >= 0 && lastDot >= 0) {
+    normalized = lastComma > lastDot
+      ? text.replace(/\./g, "").replace(",", ".")
+      : text.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    normalized = /^\d{1,3}(,\d{3})+$/.test(text) ? text.replace(/,/g, "") : text.replace(",", ".");
+  } else if (lastDot >= 0 && text.indexOf(".") !== lastDot) {
+    normalized = /^\d{1,3}(\.\d{3})+$/.test(text) ? text.replace(/\./g, "") : "";
+  } else {
+    normalized = text;
+  }
+  if (!normalized) return null;
+  const number = Number(normalized);
+  if (!Number.isFinite(number)) return null;
+  return negative ? -number : number;
+}
+
 export function numeroDeCelda(valor: string) {
-  const sinPorcentaje = valor.replace(/%/g, "").trim();
-  const formatoEspanol = /^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(sinPorcentaje) &&
-    (sinPorcentaje.includes(",") || (sinPorcentaje.match(/\./g)?.length ?? 0) > 1);
-  const limpio = formatoEspanol
-    ? sinPorcentaje.replace(/\./g, "").replace(",", ".")
-    : sinPorcentaje.replace(",", ".");
-  const numero = Number(limpio);
-  return Number.isFinite(numero) ? numero : null;
+  // Una celda vacía vale 0, como siempre: una partida sin nada ejecutado sigue
+  // contando en el presupuesto de su oficio.
+  if (!String(valor ?? "").replace(/[%\s]/g, "")) return 0;
+  return parseLocalizedNumber(valor);
 }
 
 // El lector de .xlsx entrega la celda de fecha tal cual la guarda Excel: un
@@ -1410,14 +1440,8 @@ function mesDeFlujo(valor: string): string {
 
 /** Importe con separadores de miles y coma o punto decimal → número. */
 function importeDeCelda(valor: string): number | null {
-  const limpio = valor.replace(/[^\d,.\-]/g, "");
-  if (!limpio) return null;
-  // Se quita el separador de miles y se deja el punto decimal.
-  const normalizado = limpio.includes(",") && limpio.lastIndexOf(",") > limpio.lastIndexOf(".")
-    ? limpio.replace(/\./g, "").replace(",", ".")
-    : limpio.replace(/,/g, "");
-  const numero = Number(normalizado);
-  return Number.isFinite(numero) ? numero : null;
+  // Misma regla que numeroDeCelda (formato de la oficina, español o de máquina).
+  return parseLocalizedNumber(valor.replace(/[^\d,.\-]/g, ""));
 }
 
 /**

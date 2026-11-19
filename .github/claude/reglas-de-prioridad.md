@@ -19,8 +19,13 @@ cada lector debe reproducir los totales del propio documento:
   con el total del capítulo «EDIFICIOS» del propio Excel. Si no cuadra, los
   oficios no se publican y la verificación lo trata como anomalía para
   arreglar el lector (`lib/ingestion.ts`, `extractCubicacionDisciplineProgress`).
-- Los números de un Excel se leen en su formato real (punto decimal); el punto
-  sólo es separador de miles en un texto con formato español («1.234,56»).
+- Los números se leen como los escribió quien hizo el documento
+  (`parseLocalizedNumber` en `lib/ingestion.ts`). La oficina de la obra
+  (República Dominicana) escribe coma de miles y punto decimal
+  («1,234,567.89»); en España, al revés («1.234.567,89»); un .xlsx guarda el
+  número en formato de máquina («53771.928»). Con los dos separadores, el último
+  es el decimal; sólo comas en grupos de tres («45,000») son miles; una sola
+  coma suelta («12,5») es decimal.
 - Las hojas se leen enteras (hasta 50.000 filas); nunca se publica una lectura
   parcial como si fuera completa.
 - Al arreglar cualquier lector, compara su resultado con los totales del propio
