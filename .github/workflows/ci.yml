@@ -22,9 +22,13 @@ name: Verificación de pull requests
 on:
   pull_request:
     branches: [main]
+  # Los PR que abre un workflow (el arreglo automático de cargas) no lanzan
+  # pull_request por sí solos; verificar-carga.yml lanza esta CI a mano sobre
+  # la rama del arreglo y espera a que pase antes de fusionar.
+  workflow_dispatch: {}
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
