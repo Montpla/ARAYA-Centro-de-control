@@ -1769,7 +1769,7 @@ export async function POST(request: Request) {
           description: "Indicadores del periodo mensual del Informe Ejecutivo; alcance distinto de la fotografía semanal.",
           valueJson: JSON.stringify(resumenMensualSeguridad.metrics.map((metric) =>
             metric && typeof metric === "object" && !Array.isArray(metric)
-              ? { Indicador: metric.label, Valor: metric.value, Detalle: metric.detail }
+              ? { label: metric.label, value: `${metric.value} · ${metric.detail || "Dato del periodo mensual"}` }
               : metric)),
           suggestedArea: "seguridad",
           confidence: 1,
