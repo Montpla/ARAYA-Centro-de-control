@@ -175,18 +175,44 @@ jobs:
           fi
       - name: Comprobar, fusionar, desplegar y reprocesar
         id: fusion
-        if: ${{ steps.decision.outputs.accion == 'arreglado' && steps.decision.outputs.pr != '' }}
+        if: ${{ steps.decision.outputs.accion == 'arreglado' }}
         env:
           PR: ${{ steps.decision.outputs.pr }}
+          RESUMEN: ${{ steps.decision.outputs.resumen }}
         run: |
           set -euo pipefail
-          # Comprobación independiente de la de Claude, sobre lo que hay en el PR.
-          gh pr checkout "$PR"
-          npm ci --no-audit --no-fund
-          npm run typecheck
-          node --test tests/*.mjs
-          gh pr ready "$PR"
-          gh pr merge "$PR" --squash --delete-branch
+          git fetch origin main
+          # Si Claude no pudo abrir el PR (GitHub no deja que los workflows los
+          # creen salvo que se active en Settings → Actions), se intenta aquí.
+          if [ -z "$PR" ] && git ls-remote --exit-code origin "refs/heads/$RAMA" >/dev/null; then
+            PR=$(gh pr create --base main --head "$RAMA" --title "Arreglo automático de la carga $FILE_ID" \
+              --body "$RESUMEN"$'\n\n'"Registro: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" 2>/dev/null \
+              | grep -oE '[0-9]+$' || true)
+          fi
+          if [ -n "$PR" ]; then
+            # Comprobación independiente de la de Claude, sobre lo que hay en el PR.
+            gh pr checkout "$PR"
+            npm ci --no-audit --no-fund
+            npm run typecheck
+            node --test tests/*.mjs
+            gh pr ready "$PR" || true
+            gh pr merge "$PR" --squash --delete-branch
+            echo "como=el PR #$PR" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code origin "refs/heads/$RAMA" >/dev/null; then
+            # Sin permiso para PR: misma comprobación y fusión directa en main.
+            git fetch origin "$RAMA"
+            git checkout -B fusion-automatica origin/main
+            git merge --squash "origin/$RAMA"
+            npm ci --no-audit --no-fund
+            npm run typecheck
+            node --test tests/*.mjs
+            git commit -m "Arreglo automático de la carga $FILE_ID"$'\n\n'"$RESUMEN"$'\n\n'"Rama: $RAMA"
+            git push origin HEAD:main
+            git push origin --delete "$RAMA" || true
+            echo "como=la rama $RAMA fusionada directamente en main ($(git rev-parse --short HEAD))" >> "$GITHUB_OUTPUT"
+          else
+            echo "Claude marcó el arreglo pero no subió ninguna rama."; exit 1
+          fi
           # Una fusión hecha con el token del workflow no dispara deploy.yml por
           # sí sola: se lanza a mano y se espera a que termine bien.
           INICIO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -210,14 +236,15 @@ jobs:
           PR: ${{ steps.decision.outputs.pr }}
           RESUMEN: ${{ steps.decision.outputs.resumen }}
           FUSION: ${{ steps.fusion.outcome }}
+          COMO: ${{ steps.fusion.outputs.como }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           VERIFICACION_MD: ${{ runner.temp }}/final.md
         run: |
           set -uo pipefail
           case "$ACCION" in
             arreglado)
-              if [ "$FUSION" = "success" ]; then NOTA="Claude lo ha arreglado (PR #$PR) y la carga se ha reprocesado: $RESUMEN"
-              else NOTA="Claude propuso un arreglo (PR #$PR) pero no pasó las comprobaciones o el despliegue; queda sin fusionar: $RESUMEN"; fi ;;
+              if [ "$FUSION" = "success" ]; then NOTA="Claude lo ha arreglado ($COMO), desplegado y la carga se ha reprocesado: $RESUMEN"
+              else NOTA="Claude propuso un arreglo pero no pasó las comprobaciones, la fusión o el despliegue; queda sin fusionar en la rama $RAMA: $RESUMEN"; fi ;;
             dudoso) NOTA="Claude lo ha revisado y necesita tu decisión: $RESUMEN" ;;
             sin_accion) NOTA="Claude lo ha revisado y la carga está bien: $RESUMEN" ;;
             *) NOTA="$RESUMEN" ;;

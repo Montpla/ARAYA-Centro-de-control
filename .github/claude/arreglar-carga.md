@@ -72,6 +72,12 @@ corte anterior al ya publicado no debe pisar al vigente.
      explicando en español qué fallaba, por qué y qué cambia.
    - Escribe `.verificacion/decision.json`:
      `{"accion": "arreglado", "pr": <número>, "resumen": "<una frase>"}`.
+   - Si GitHub no te deja abrir el PR, no pasa nada: deja la rama subida y
+     escribe la decisión con `"pr": ""`. El workflow abre el PR o fusiona la
+     rama él mismo después de repetir las pruebas.
+   - No puedes modificar archivos de `.github/workflows/` (GitHub no lo permite
+     a este token). Si el arreglo lo exigiera, usa `"dudoso"` y explica el
+     cambio necesario.
 
 2. **Dudoso o fuera de tu alcance** (el propio documento está mal, dos
    fuentes se contradicen y no sabes cuál vale, hace falta una decisión del
