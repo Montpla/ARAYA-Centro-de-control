@@ -8,6 +8,7 @@ import * as projectXml from "../lib/project-xml.ts";
 import * as xlsxReader from "../lib/xlsx-reader.ts";
 import * as pdfText from "../lib/pdf-text.ts";
 import * as progressModel from "../lib/progress-model.ts";
+import * as urbanismDisciplines from "../lib/urbanism-disciplines.ts";
 
 // Las hojas de prueba se generan con scripts/generar-fixtures-xlsx.py y tienen
 // la forma de las reales: un título de la oficina encima, la cabecera más
@@ -39,6 +40,7 @@ async function loadIngestion() {
     if (specifier === "./pdf-text") return pdfText;
     if (specifier === "./pptx-curva-s") return pptxCurvaS;
     if (specifier === "./progress-model") return progressModel;
+    if (specifier === "./urbanism-disciplines") return urbanismDisciplines;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {
@@ -343,6 +345,84 @@ test("los números de la oficina de Dominicana se leen con coma de miles y punto
 
 test("el lector de Excel lee hojas de más de 5.000 filas", () => {
   assert.ok(xlsxReader.XLSX_MAX_ROWS >= 20_000);
+});
+
+test("distingue coma decimal de agrupación y no inventa separadores ausentes", async () => {
+  const ingestion = await loadIngestion();
+  assert.equal(ingestion.parseLocalizedNumber("31,891%"), 31.891);
+  assert.equal(ingestion.parseLocalizedNumber("31,891", { decimalSeparator: "," }), 31.891);
+  assert.equal(ingestion.parseLocalizedNumber("0,318"), 0.318);
+  assert.equal(ingestion.parseLocalizedNumber("31891"), 31891);
+  assert.equal(ingestion.parseLocalizedNumber("3.1891e-1"), 0.31891);
+  assert.equal(ingestion.parseLocalizedNumber("(2,5)"), -2.5);
+  assert.equal(ingestion.parseLocalizedNumber("1,23,4.5"), null);
+  assert.equal(ingestion.parseLocalizedNumber("1.23.4,5"), null);
+});
+
+const cabeceraDetalle = { A: "N° Partida.", B: "Descripción de partida:", F: "Total", H: "MONTO", K: "MONTO" };
+
+test("los ajustes negativos concilian el oficio y su desglose por edificio", async () => {
+  const ingestion = await loadIngestion();
+  // Pesos sintéticos normalizados: no contienen datos económicos de la obra.
+  const result = ingestion.extractCubicacionDisciplineProgress([
+    cabeceraDetalle,
+    { A: "CAP", B: "CAPITULO: EDIFICIOS", F: "5", K: "2.5" },
+    { A: "ARAYA-E01", B: "EDIFICIO 1" },
+    { A: "SUPERESTRUCTURA." },
+    { A: "1", F: "4", K: "3" },
+    { A: "2.", F: "1", K: "-0.5" },
+  ], { ...defaults, knownBuildingTokens: new Set(["1"]) });
+  assert.equal(result.warnings.length, 0);
+  assert.equal(result.updates.find((u) => u.key === "constructionDisciplines.Superestructura.progress").value, 50);
+  const detail = result.updates.find((u) => u.key === "buildings.TH-01.constructionDisciplines");
+  assert.equal(detail.value.length, 1);
+  assert.equal(detail.value[0].name, "Superestructura");
+  assert.equal(detail.value[0].progress, 50);
+  assert.ok(!result.updates.some((u) => /\.units\./.test(u.key)));
+});
+
+test("un acumulado inválido se avisa y nunca se recorta al cien por ciento", async () => {
+  const ingestion = await loadIngestion();
+  const result = ingestion.extractCubicacionDisciplineProgress([
+    cabeceraDetalle, { A: "SUPERESTRUCTURA." }, { A: "1", F: "1", K: "2" },
+  ], defaults);
+  assert.equal(result.updates.length, 0);
+  assert.ok(result.warnings.some((text) => /fuera del intervalo/.test(text)));
+});
+
+test("el cierre de partidas respeta las centésimas sin ocultar un exceso visible", async () => {
+  const ingestion = await loadIngestion();
+  for (const [acumulado, valido] of [["1.000011725", true], ["1.0001", false]]) {
+    const result = ingestion.extractCubicacionDisciplineProgress([
+      cabeceraDetalle, { B: "EDIFICIO 1" }, { A: "INFRAESTRUCTURA." },
+      { A: "1", F: "1", K: acumulado },
+    ], { ...defaults, knownBuildingTokens: new Set(["1"]) });
+    const detalle = result.updates.find((u) => u.key === "buildings.TH-01.constructionDisciplines");
+    assert.equal(Boolean(detalle), valido);
+    if (valido) assert.equal(detalle.value[0].progress, 100);
+    else assert.ok(result.warnings.length > 0);
+  }
+});
+
+test("urbanismo toma el acumulado por nombre y mantiene la corrección del plano", async () => {
+  const ingestion = await loadIngestion();
+  const result = ingestion.extractCubicacionUrbanismProgress([
+    cabeceraDetalle,
+    { A: "URB", B: "URBANISMO" },
+    { A: "OP", B: "OBRAS PRELIMINARES", F: "1", K: "1" },
+    { A: "VIAL", B: "VIALIDAD", F: "4", K: "1", I: "449,26%" },
+    { A: "PAIS", B: "PAISAJISMO", F: "10", K: "1,25" },
+    { A: "1", B: "Partida de instalaciones de gas", F: "1", K: "1" },
+    { A: "CAP", B: "CAPITULO: EDIFICIOS", F: "1", K: "1" },
+  ], { ...defaults, currentUrbanismReportAreas: [{ name: "Paisajismo", progress: 80 }, { name: "Vialidad", progress: 80 }] });
+  const byKey = new Map(result.updates.map((u) => [u.key, u.value]));
+  assert.equal(byKey.get("urbanismReportAreas.VIALIDAD.progress"), 25);
+  assert.equal(byKey.get("urbanismReportAreas.PAISAJISMO.progress"), 12.5);
+  assert.equal(byKey.get("urbanismAreas.urban-roads.progress"), 25);
+  assert.equal(byKey.get("urbanismAreas.urban-landscape.progress"), 12.5);
+  assert.equal(byKey.get("urbanismReportAreas.2").name, "OBRAS PRELIMINARES");
+  assert.equal(byKey.get("urbanismReportAreas.2").progress, 100);
+  assert.ok(!result.updates.some((u) => /GAS/.test(u.key)));
 });
 
 test("una celda vacía-con-estilo no le roba el valor a la celda siguiente", async () => {

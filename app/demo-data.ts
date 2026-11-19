@@ -55,6 +55,8 @@ export type Building = {
   // Avance por fase del edificio (orden de PHASE_WEIGHTS). Los apartamentos
   // heredan de aquí sus disciplinas cuando llega un plan de obra nuevo.
   phases?: PhaseProgress[];
+  // Mediciones de la cubicación del edificio, sin atribuirlas a viviendas.
+  constructionDisciplines?: Array<{ name: string; progress: number }>;
   units: Unit[];
   mapCoordinates?: {
     visual: { x: number; y: number };

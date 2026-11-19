@@ -839,6 +839,20 @@ test("el contrato admite el avance por fase de un edificio y lo acota a 0-100", 
   assert.equal(validateLiveDataContract("buildings.0.phases.1.progress", '"alto"').valid, false);
 });
 
+test("el desglose de oficios se resuelve por edificio y valida cada porcentaje", async () => {
+  const resolve = await loadSpatialIdentityResolver();
+  const { validateLiveDataContract } = await loadContractCore();
+  const current = { buildings: [{ ...demoData.buildings[0], id: "edificio-1", name: "Edificio 1", shortName: "1" }] };
+  const detail = [{ name: "Superestructura", progress: 84.59 }, { name: "Carpintería", progress: 0 }];
+  const updates = resolve([{ key: "buildings.TH-01.constructionDisciplines", value: detail, area: "obra" }], current);
+  assert.equal(updates[0].key, "buildings.0.constructionDisciplines");
+  assert.equal(validateLiveDataContract(updates[0].key, JSON.stringify(detail)).valid, true);
+  assert.equal(validateLiveDataContract(updates[0].key, JSON.stringify([{ name: "Superestructura", progress: -1 }])).valid, false);
+  assert.equal(validateLiveDataContract(updates[0].key, JSON.stringify([{ name: "Superestructura", progress: 101 }])).valid, false);
+  const materialized = liveData.materializeLiveRoot("buildings", current.buildings, { [updates[0].key]: detail });
+  assert.equal(materialized[0].constructionDisciplines[0].progress, 84.59);
+});
+
 test("un mes de la Curva S sin ejecutado todavía admite su primer avance real", async () => {
   // Antes de esta prueba, publicar "monthlyPlan.<mes>.actual" para un mes que
   // aún no tenía avance (null en la fila de ese mes) se rechazaba siempre,

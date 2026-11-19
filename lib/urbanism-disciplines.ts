@@ -9,6 +9,7 @@
  * 111). Por eso toda escritura sobre esta lista se dirige por nombre.
  */
 export type UrbanismDisciplineId =
+  | "obras-preliminares"
   | "movimiento-tierra"
   | "hidrosanitarias"
   | "sistemas-especiales"
@@ -21,6 +22,7 @@ export type UrbanismDisciplineId =
   | "obras-exteriores";
 
 const DISCIPLINES: Array<{ id: UrbanismDisciplineId; label: string; pattern: RegExp }> = [
+  { id: "obras-preliminares", label: "OBRAS PRELIMINARES", pattern: /\bobras preliminares\b/ },
   { id: "movimiento-tierra", label: "MOVIMIENTO DE TIERRA", pattern: /\bmovimientos? de tierras?\b/ },
   { id: "hidrosanitarias", label: "HIDROSANITARIAS", pattern: /\bhidro ?sanitari[ao]s?\b/ },
   { id: "sistemas-especiales", label: "SISTEMAS ESPECIALES", pattern: /\bsist(?:emas?|\.)? especiales\b/ },

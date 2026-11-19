@@ -1,6 +1,7 @@
 import { LiveDataUpdate, LiveDataValue, isLiveDataKey, namingToken } from "./live-data";
 import { buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml } from "./project-xml";
 import { readXlsxSheets, readZipEntries, rowsToRecords } from "./xlsx-reader";
+import { urbanismDisciplineInText, urbanismDisciplineLabel, findUrbanismDisciplineIndex } from "./urbanism-disciplines";
 import { readOfficeTables, readPptxSlideShapes } from "./ooxml-tables";
 import { CURVA_S_MONTH_COUNT, curvaSUpdates, readPptxCurvaS } from "./pptx-curva-s";
 import { findBuildingProgress, findFiduciaryBalanceSheet, readPdfText } from "./pdf-text";
@@ -505,9 +506,17 @@ function detectedBuildingProgressScope(
 //
 // Caso ambiguo: «1,234» se lee 1234 (formato de la oficina) y «1.234» se lee
 // 1,234 (formato de máquina y de la oficina).
-export function parseLocalizedNumber(raw: string): number | null {
+export function parseLocalizedNumber(raw: string, options: { decimalSeparator?: "," | "." } = {}): number | null {
+  const percentage = /%/.test(String(raw ?? ""));
   let text = String(raw ?? "").replace(/[%\s]/g, "").replace(/^\$|^RD\$|^US\$/i, "");
   if (!text) return null;
+  // Las celdas numéricas de XLSX también pueden guardar notación científica.
+  // Un entero sin separadores conserva su escala: nunca se inventa una coma.
+  if (/^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/.test(text)) {
+    const value = Number(text);
+    return Number.isFinite(value) ? value : null;
+  }
+  if (/^\([\d.,]+\)$/.test(text)) text = `-${text.slice(1, -1)}`;
   const negative = /^-/.test(text);
   text = text.replace(/^[-+]/, "");
   if (!/^[\d.,]+$/.test(text)) return null;
@@ -515,11 +524,17 @@ export function parseLocalizedNumber(raw: string): number | null {
   const lastDot = text.lastIndexOf(".");
   let normalized: string;
   if (lastComma >= 0 && lastDot >= 0) {
+    const decimal = lastComma > lastDot ? "," : ".";
+    const integer = text.slice(0, Math.max(lastComma, lastDot));
+    const fraction = text.slice(Math.max(lastComma, lastDot) + 1);
+    const grouped = decimal === "," ? /^\d{1,3}(\.\d{3})+$/ : /^\d{1,3}(,\d{3})+$/;
+    if (!grouped.test(integer) || !/^\d+$/.test(fraction)) return null;
     normalized = lastComma > lastDot
       ? text.replace(/\./g, "").replace(",", ".")
       : text.replace(/,/g, "");
   } else if (lastComma >= 0) {
-    normalized = /^\d{1,3}(,\d{3})+$/.test(text) ? text.replace(/,/g, "") : text.replace(",", ".");
+    const commaDecimal = options.decimalSeparator === "," || percentage || /^0,/.test(text);
+    normalized = !commaDecimal && /^\d{1,3}(,\d{3})+$/.test(text) ? text.replace(/,/g, "") : text.replace(",", ".");
   } else if (lastDot >= 0 && text.indexOf(".") !== lastDot) {
     normalized = /^\d{1,3}(\.\d{3})+$/.test(text) ? text.replace(/\./g, "") : "";
   } else {
@@ -908,7 +923,7 @@ function extractCubicacionCoverProgress(
     const label = row[buildingColumn] ?? "";
     const normalizedLabel = normalizarCabecera(label);
     const code = buildingCodeFromTaskName(label);
-    const rawProgress = numeroDeCelda(row[progressColumn] ?? "");
+    const rawProgress = parseLocalizedNumber(row[progressColumn] ?? "", { decimalSeparator: "," });
     if (rawProgress === null || rawProgress < 0) continue;
     const progress = rawProgress <= 1 ? rawProgress * 100 : rawProgress;
     if (progress > 100) continue;
@@ -1029,9 +1044,9 @@ const CUBICACION_DISCIPLINE_TOKENS: ReadonlyArray<{ token: RegExp; canonicalName
 // Excel: por debajo es redondeo y partidas sin oficio (preliminares).
 const CUBICACION_SELF_CHECK_POINTS = 1;
 
-function extractCubicacionDisciplineProgress(
+export function extractCubicacionDisciplineProgress(
   filas: Array<Record<string, string>>,
-  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string },
+  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string; knownBuildingTokens?: Set<string> },
 ): StructuredExtraction | null {
   let partidaColumn = "";
   let totalColumn = "";
@@ -1060,6 +1075,8 @@ function extractCubicacionDisciplineProgress(
 
   const budgetByDiscipline = new Map<string, number>();
   const accumulatedByDiscipline = new Map<string, number>();
+  const byBuilding = new Map<string, Map<string, { budget: number; accumulated: number }>>();
+  let currentBuilding = "";
   let currentDiscipline = "";
   let partidaRowCount = 0;
   // Total del capítulo de edificios que trae el propio Excel: sirve para
@@ -1069,6 +1086,10 @@ function extractCubicacionDisciplineProgress(
 
   for (const row of filas) {
     const label = (row[partidaColumn] ?? "").trim();
+    const description = row[descripcionColumn] ?? "";
+    if (/^edificio\s+\d+/i.test(description.trim())) {
+      currentBuilding = buildingCodeFromTaskName(description) ?? "";
+    }
     if (!label) continue;
     if (chapterBudget === null && descripcionColumn &&
       /^capitulo:?\s*edificios$/.test(normalizarCabecera(row[descripcionColumn] ?? ""))) {
@@ -1093,9 +1114,21 @@ function extractCubicacionDisciplineProgress(
     if (!currentDiscipline) continue;
     const budget = numeroDeCelda(row[totalColumn] ?? "");
     const accumulated = numeroDeCelda(row[montoAcumuladoColumn] ?? "");
-    if (budget === null || budget <= 0 || accumulated === null || accumulated < 0) continue;
+    // Las rectificaciones firmadas del detalle participan en la suma. Se
+    // valida el acumulado del oficio, no el signo de cada partida aislada.
+    if (budget === null || accumulated === null) continue;
     budgetByDiscipline.set(currentDiscipline, (budgetByDiscipline.get(currentDiscipline) ?? 0) + budget);
     accumulatedByDiscipline.set(currentDiscipline, (accumulatedByDiscipline.get(currentDiscipline) ?? 0) + accumulated);
+    if (currentBuilding && (!defaults.knownBuildingTokens || defaults.knownBuildingTokens.has(
+      currentBuilding.replace(/^TH-/i, "").replace(/^0+(?=\d)/, ""),
+    ))) {
+      const disciplines = byBuilding.get(currentBuilding) ?? new Map<string, { budget: number; accumulated: number }>();
+      const amounts = disciplines.get(currentDiscipline) ?? { budget: 0, accumulated: 0 };
+      amounts.budget += budget;
+      amounts.accumulated += accumulated;
+      disciplines.set(currentDiscipline, amounts);
+      byBuilding.set(currentBuilding, disciplines);
+    }
     partidaRowCount += 1;
   }
   if (!partidaRowCount) return null;
@@ -1126,10 +1159,15 @@ function extractCubicacionDisciplineProgress(
     sourceName: defaults.sourceName,
   } as const;
   const updates: LiveDataUpdate[] = [];
+  const warnings: string[] = [];
   for (const [name, budget] of budgetByDiscipline) {
     if (budget <= 0) continue;
     const accumulated = accumulatedByDiscipline.get(name) ?? 0;
-    const progress = Math.min(100, Math.max(0, (accumulated / budget) * 100));
+    const progress = Math.round((accumulated / budget) * 10_000) / 100;
+    if (!Number.isFinite(progress) || progress < 0 || progress > 100) {
+      warnings.push(`El acumulado de ${name} queda fuera del intervalo de avance; se conserva el diagnóstico sin recortarlo.`);
+      continue;
+    }
     updates.push({
       // El punto de "Inst." partiría la clave en un segmento de más: las
       // claves vivas se separan por ".", y el nombre canónico de esa
@@ -1140,13 +1178,93 @@ function extractCubicacionDisciplineProgress(
       ...baseUpdate,
     });
   }
-  if (!updates.length) return null;
+  for (const [code, disciplines] of byBuilding) {
+    const values: Array<{ name: string; progress: number }> = [];
+    let valid = true;
+    for (const [name, amounts] of disciplines) {
+      if (amounts.budget <= 0) { valid = false; break; }
+      // La suma de partidas redondeadas puede sobrepasar el cierre por
+      // milésimas de punto. Validar con la misma precisión de los oficios
+      // publicados; un exceso que alcance una centésima sigue rechazándose.
+      const progress = Math.round(amounts.accumulated / amounts.budget * 10_000) / 100;
+      if (!Number.isFinite(progress) || progress < 0 || progress > 100) { valid = false; break; }
+      values.push({ name, progress });
+    }
+    if (!valid || !values.length) {
+      warnings.push(`No se publica el desglose de oficios de ${code}: contiene un acumulado no válido.`);
+      continue;
+    }
+    // Una lista por edificio mantiene la publicación atómica bajo el límite
+    // de cambios; no se atribuye este avance a apartamentos individuales.
+    updates.push({ key: `buildings.${code}.constructionDisciplines`, value: values, ...baseUpdate });
+  }
+  if (!updates.length && !warnings.length) return null;
 
   return {
     updates,
-    summary: `${updates.length} oficio(s) de construcción actualizados desde el detalle de partidas de la cubicación.`,
-    warnings: [],
+    summary: `${updates.filter((update) => update.key.startsWith("constructionDisciplines.")).length} oficio(s) de construcción actualizados desde el detalle de partidas de la cubicación; ${updates.filter((update) => update.key.startsWith("buildings.")).length} edificios con desglose propio.`,
+    warnings,
   };
+}
+
+/** Capítulos del urbanismo: cociente acumulado, sin usar el % del periodo. */
+export function extractCubicacionUrbanismProgress(
+  filas: Array<Record<string, string>>,
+  defaults: {
+    cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string;
+    currentUrbanismReportAreas?: ReadonlyArray<{ name: string; progress: number }>;
+  },
+): StructuredExtraction | null {
+  const header = filas.slice(0, 60).find((row) =>
+    Object.values(row).some((value) => /^n[°ºo]?\s*partida\.?$/.test(normalizarCabecera(value))) &&
+    Object.values(row).filter((value) => /^monto$/.test(normalizarCabecera(value))).length >= 2,
+  );
+  if (!header) return null;
+  const entries = Object.entries(header);
+  const description = entries.find(([, value]) => /^descripcion/.test(normalizarCabecera(value)))?.[0];
+  const budgetColumn = entries.find(([, value]) => /^total$/.test(normalizarCabecera(value)))?.[0];
+  const amountColumns = entries.filter(([, value]) => /^monto$/.test(normalizarCabecera(value)));
+  const accumulatedColumn = amountColumns[amountColumns.length - 1]?.[0];
+  if (!description || !budgetColumn || !accumulatedColumn) return null;
+  const updates: LiveDataUpdate[] = [];
+  const warnings: string[] = [];
+  const seen = new Set<string>();
+  const current = defaults.currentUrbanismReportAreas ? [...defaults.currentUrbanismReportAreas] : null;
+  let inUrbanism = false;
+  for (const row of filas) {
+    const name = normalizarCabecera(row[description] ?? "");
+    if (/^capitulo:?\s*edificios$|^edificio\s+\d+/.test(name)) break;
+    if (/^urbanismo$/.test(name)) { inUrbanism = true; continue; }
+    if (!inUrbanism) continue;
+    const id = urbanismDisciplineInText(name);
+    if (!id || seen.has(id)) continue;
+    // Sólo encabezados de capítulo, no partidas cuyo texto mencione un oficio.
+    const firstColumn = entries.find(([, value]) => /^n[°ºo]?\s*partida\.?$/.test(normalizarCabecera(value)))?.[0];
+    if (!firstColumn || /^\d+\.?$/.test((row[firstColumn] ?? "").trim())) continue;
+    const budget = parseLocalizedNumber(row[budgetColumn] ?? "");
+    const accumulated = parseLocalizedNumber(row[accumulatedColumn] ?? "");
+    if (budget === null || budget <= 0 || accumulated === null) continue;
+    const progress = accumulated / budget * 100;
+    if (!Number.isFinite(progress) || progress < 0 || progress > 100) {
+      warnings.push(`El acumulado de urbanismo ${urbanismDisciplineLabel(id)} no es un porcentaje válido.`);
+      continue;
+    }
+    seen.add(id);
+    const label = urbanismDisciplineLabel(id);
+    const base = { area: "obra", cutoff: defaults.cutoff, sourceCurrency: defaults.sourceCurrency, sourceName: defaults.sourceName };
+    const index = current ? findUrbanismDisciplineIndex(current, label) : -1;
+    if (current && index < 0) {
+      updates.push({ key: `urbanismReportAreas.${current.length}`, value: { name: label, progress }, ...base });
+      current.push({ name: label, progress });
+    } else {
+      updates.push({ key: `urbanismReportAreas.${label}.progress`, value: progress, ...base });
+    }
+    // La ficha espacial y el desglose reciben también las correcciones a la
+    // baja: su conciliación histórica conserva el mayor de ambos valores.
+    const spatial = id === "vialidad" ? "urban-roads" : id === "paisajismo" ? "urban-landscape" : null;
+    if (spatial) updates.push({ key: `urbanismAreas.${spatial}.progress`, value: progress, ...base });
+  }
+  return updates.length ? { updates, warnings, summary: `${seen.size} capítulos de urbanismo actualizados desde la cubicación.` } : null;
 }
 
 /**
@@ -2222,6 +2340,8 @@ export async function extractStructuredUpdates(
       // filas de partida bajo un encabezado de oficio, sin columna de
       // avance por edificio- podría, si no se reconoce primero, colarse por
       // extractSheetProgress/extractMatrixProgress y leerse mal.
+      const urbanismoCubicacion = extractCubicacionUrbanismProgress(filas, defaults);
+      if (urbanismoCubicacion) results.push(urbanismoCubicacion);
       const disciplinas = extractCubicacionDisciplineProgress(filas, defaults);
       if (disciplinas) {
         results.push(disciplinas);

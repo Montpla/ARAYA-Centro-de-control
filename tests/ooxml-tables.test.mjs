@@ -8,6 +8,7 @@ import * as projectXml from "../lib/project-xml.ts";
 import * as xlsxReader from "../lib/xlsx-reader.ts";
 import * as pdfText from "../lib/pdf-text.ts";
 import * as progressModel from "../lib/progress-model.ts";
+import * as urbanismDisciplines from "../lib/urbanism-disciplines.ts";
 
 // La Curva S de PowerPoint tiene su propio test (tests/pptx-curva-s.test.mjs).
 const pptxCurvaS = { CURVA_S_MONTH_COUNT: 27, readPptxCurvaS: async () => null, curvaSUpdates: () => [] };
@@ -55,6 +56,7 @@ async function cargarIngestion() {
     if (especificador === "./pdf-text") return pdfText;
     if (especificador === "./pptx-curva-s") return pptxCurvaS;
     if (especificador === "./progress-model") return progressModel;
+    if (especificador === "./urbanism-disciplines") return urbanismDisciplines;
     throw new Error(`Import inesperado: ${especificador}`);
   });
 }

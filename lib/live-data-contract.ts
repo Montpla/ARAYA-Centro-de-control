@@ -42,6 +42,7 @@ const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
     // Avance por fase del plan de obra. Un edificio dado de alta por un
     // informe no lo trae: llega después con el primer plan de Project.
     phases: [{ id: "", name: "", progress: 0 }],
+    constructionDisciplines: [{ name: "", progress: 0 }],
   },
   "monthlyPlan.*": {
     // Plan reprogramado: sólo existe desde el mes de la reprogramación y lo

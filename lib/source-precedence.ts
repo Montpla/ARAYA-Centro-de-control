@@ -20,7 +20,7 @@ const PHYSICAL_PROGRESS_SOURCES: SourceRule[] = [
   { pattern: /informe[ _-]*ejecutivo|\.pptx?\b/i, rank: 10, label: "Informe Ejecutivo o presentación" },
 ];
 
-export const PHYSICAL_PROGRESS_KEY = /^(buildings\.[^.]+\.progress|buildings\.[^.]+\.units\.[^.]+\.(progress|disciplines\.[^.]+)|constructionDisciplines\.[^.]+\.progress|urbanismAreas\.[^.]+\.progress|urbanismReportAreas\.[^.]+\.progress|projectSnapshot\.(overallProgress|urbanismProgress|activeBuildingsProgress)|monthlyPlan\.\d+\.actual)$/;
+export const PHYSICAL_PROGRESS_KEY = /^(buildings\.[^.]+\.(progress|constructionDisciplines(?:\.\d+\.progress)?)|buildings\.[^.]+\.units\.[^.]+\.(progress|disciplines\.[^.]+)|constructionDisciplines\.[^.]+\.progress|urbanismAreas\.[^.]+\.progress|urbanismReportAreas\.[^.]+(?:\.progress)?|projectSnapshot\.(overallProgress|urbanismProgress|activeBuildingsProgress)|monthlyPlan\.\d+\.actual)$/;
 
 /** Prioridad de un documento para el avance físico (0 si no tiene regla). */
 export function physicalProgressRank(sourceName: string) {

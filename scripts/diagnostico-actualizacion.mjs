@@ -7,9 +7,11 @@
 // procedencia —nunca valores—, así que es seguro en un registro.
 
 import { buildings as baselineBuildings, urbanismAreas as baselineUrbanismAreas } from "../app/demo-data.ts";
-import { urbanismReportAreas as baselineUrbanismReportAreas } from "../app/june-report-data.ts";
+import { urbanismReportAreas as baselineUrbanismReportAreas, constructionDisciplines as baselineConstructionDisciplines } from "../app/june-report-data.ts";
 import { materializeLiveRoot } from "../lib/live-data.ts";
 import { deriveUrbanismMapAreas, reconcileGeneralUrbanism } from "../lib/urbanism-map-progress.ts";
+import { readXlsxSheets } from "../lib/xlsx-reader.ts";
+import { createHash } from "node:crypto";
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 
@@ -141,4 +143,59 @@ const areasPlano = reconcileGeneralUrbanism(
 console.log("\n=== Áreas del plano (id · nombre · avance · plan · estado · fuente) ===");
 for (const area of areasPlano) {
   console.log(`   ${area.id} · ${area.name} · ${area.progress ?? "sin dato"} · ${area.planned ?? "-"} · ${area.status} · ${area.source}`);
+}
+
+// El índice no identifica un oficio: se imprime la lista materializada por
+// nombre para detectar una asignación incorrecta aunque los números existan.
+console.log("\n=== Oficios del conjunto (nombre · porcentaje) ===");
+const oficios = materializeLiveRoot("constructionDisciplines", baselineConstructionDisciplines, valores);
+for (const oficio of oficios) console.log(`   ${oficio.name}: ${oficio.progress}%`);
+console.log("\n=== Oficios propios de cada edificio ===");
+const edificiosVivos = materializeLiveRoot("buildings", baselineBuildings, valores);
+let desgloses = 0;
+for (const edificio of edificiosVivos) {
+  for (const oficio of edificio.constructionDisciplines ?? []) {
+    console.log(`   ${edificio.name} · ${oficio.name}: ${oficio.progress}%`);
+    desgloses += 1;
+  }
+}
+console.log(`Desgloses publicados: ${desgloses}`);
+
+// Contraste de la cubicación vigente más reciente. Los originales y los
+// valores financieros sólo se comparan en memoria: se informa igualdad,
+// corte y huella, nunca importes ni credenciales.
+const fileResponse = await fetch(`${PRODUCTION_URL}/api/files?limit=200`, { headers: { Cookie } });
+if (fileResponse.ok) {
+  const { files = [] } = await fileResponse.json();
+  const file = files.filter((entry) => !entry.deletedAt && !entry.supersededByFileId &&
+    entry.extension === "xlsx" && /cubicaci[oó]n/i.test(entry.originalName))
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+  if (file) {
+    const response = await fetch(`${PRODUCTION_URL}/api/files?download=${encodeURIComponent(file.id)}`, { headers: { Cookie } });
+    if (!response.ok) throw new Error(`No se pudo contrastar el original de la cubicación (${response.status}).`);
+    const bytes = await response.arrayBuffer();
+    console.log(`\n=== Original contrastado: ${file.originalName} ===`);
+    console.log(`Huella SHA-256: ${createHash("sha256").update(new Uint8Array(bytes)).digest("hex")}`);
+    let numero = "";
+    let certificado = null;
+    for (const sheet of await readXlsxSheets(bytes)) {
+      for (const row of sheet.slice(0, 20)) {
+        const cells = Object.values(row);
+        for (const cell of cells) {
+          const match = cell.match(/^cubicacion\s+n(?:ro\.?|[o°º]\.?)?\.?\s*(\d+)/i);
+          if (match) numero = match[1];
+        }
+        if (cells.some((cell) => /^monto\s+cubicaci[oó]n:?$/i.test(cell.trim()))) {
+          const numeric = cells.filter((cell) => /^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(cell));
+          if (numeric.length === 1) certificado = Number(numeric[0]);
+        }
+      }
+    }
+    const entries = valores.cubicacionCaratula;
+    const entry = Array.isArray(entries) ? entries.find((item) => new RegExp(`N[º°o]?\\s*${numero}$`, "i").test(item.label ?? "")) : null;
+    const coincide = numero && Number.isFinite(certificado) && entry && typeof entry.montoDop === "number"
+      ? Math.abs(entry.montoDop - Math.round(certificado * 100) / 100) < 0.005 : null;
+    console.log(`Carátula financiera frente al original: ${coincide === null ? "no verificable" : coincide ? "coincide" : "NO coincide"}`);
+    console.log(`Corte de la carátula: ${entry?.cutoff ?? "no disponible"}`);
+  }
 }
