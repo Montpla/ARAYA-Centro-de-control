@@ -361,6 +361,51 @@ test("distingue coma decimal de agrupación y no inventa separadores ausentes", 
 
 const cabeceraDetalle = { A: "N° Partida.", B: "Descripción de partida:", F: "Total", H: "MONTO", K: "MONTO" };
 
+function curvaReprogramadaSintetica() {
+  const serial = (date) => String((Date.parse(date) - Date.UTC(1899, 11, 30)) / 86_400_000);
+  return [
+    { B: "Concepto", D: serial("2026-09-30"), E: serial("2026-10-31") },
+    { B: "Reprogramado" },
+    { A: "0.6", B: "Edificios", D: "0.2", E: "40,125%" },
+    { A: "0,4", B: "Urbanismo", D: "0.1", E: "20,125%" },
+    { B: "Conjunto", D: "0.16", E: "32,125%" },
+    { B: "EJECUTADOS MES OCTUBRE" },
+    { B: "Edificios", D: "0.1" }, { B: "Urbanismo", D: "0.1" }, { B: "Conjunto", D: "0.1" },
+    { B: "Original", D: "0.5", E: "0.7" },
+    { D: "0.9", E: "0.99" },
+  ];
+}
+
+test("la curva reprogramada conserva cuatro series y no sustituye el ejecutado ni el plan operativo", async () => {
+  const ingestion = await loadIngestion();
+  const result = ingestion.extractReprogrammedCurve(curvaReprogramadaSintetica(), defaults);
+  assert.equal(result.warnings.length, 0);
+  assert.equal(result.updates.length, 8);
+  const values = new Map(result.updates.map((u) => [u.key, u.value]));
+  assert.equal(values.get("monthlyPlan.16.reprogrammed"), 32.125);
+  assert.equal(values.get("monthlyPlan.16.reprogrammedBuildingsProgress"), 40.125);
+  assert.equal(values.get("monthlyPlan.16.reprogrammedUrbanismProgress"), 20.125);
+  assert.equal(values.get("monthlyPlan.16.originalDocumentProgress"), 70);
+  assert.ok(result.updates.every((u) => u.cutoff === "2026-10-31"));
+  assert.ok(result.updates.every((u) => !/\.(actual|planned)$/.test(u.key)));
+});
+
+test("la curva reprogramada rechaza ponderaciones, meses y series inconsistentes sin publicar parcialmente", async () => {
+  const ingestion = await loadIngestion();
+  for (const mutate of [
+    (rows) => { rows[2].A = "0.7"; },
+    (rows) => { rows[4].E = "0.8"; },
+    (rows) => { delete rows[3].E; },
+    (rows) => { rows[2].E = "101%"; },
+    (rows) => { rows[0].E = rows[0].D; },
+  ]) {
+    const rows = curvaReprogramadaSintetica(); mutate(rows);
+    const result = ingestion.extractReprogrammedCurve(rows, defaults);
+    assert.equal(result.updates.length, 0);
+    assert.ok(result.warnings.length > 0);
+  }
+});
+
 test("los ajustes negativos concilian el oficio y su desglose por edificio", async () => {
   const ingestion = await loadIngestion();
   // Pesos sintéticos normalizados: no contienen datos económicos de la obra.

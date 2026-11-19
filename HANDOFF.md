@@ -9,6 +9,28 @@ Zona horaria del usuario: Europe/Madrid
 > anteriores**. Las secciones fechadas más abajo son historial; si contradicen a
 > esta, manda esta.
 
+## Curva reprogramada en Excel (19/11/2026)
+
+- La conciliación de la cubicación quedó desplegada con el PR #282 y publicada
+  en la revisión 135. Se contrastaron los 234 desgloses, los 11 capítulos de
+  urbanismo y la identidad del original, sin diferencias.
+- Nuevo encargo del dueño: integrar `Curva repogramada Araya.xlsx`. Tiene una
+  hoja, 101 celdas con contenido y 14 fórmulas comprobadas, sin errores. Aporta
+  doce meses, de septiembre de 2026 a agosto de 2027, y cuatro series de plan:
+  edificios, urbanismo, conjunto reprogramado y original del documento.
+- El ejecutado de octubre de ese documento es 32,05606 %, distinto del 38,01 %
+  certificado. Se conserva en el original; el lector sólo publica planificación
+  y no sustituye el avance real ni el plan operativo. Las dos filas sin rótulo
+  quedan en el original sin inventarles un significado.
+- Los 48 valores del lector coinciden con el cálculo independiente y pasan el
+  contrato. Los desgloses se consultan bajo la Curva S en «Detalle mensual de la
+  curva reprogramada». El mes explícito de ejecutados fecha la planificación;
+  el horizonte futuro no adelanta el corte real.
+- Publicación prevista por el circuito habitual: CI y despliegue del lector,
+  subida del original mediante `subir-lote.yml` desde una rama temporal, y
+  comprobación posterior de porcentajes y huella mediante `comprobar-cargas.yml`.
+  El archivo original no se incorpora a `main`.
+
 ## Conciliación de la cubicación de octubre (19/11/2026)
 
 Esta revisión amplía el estado vigente de abajo. La comparación con el original

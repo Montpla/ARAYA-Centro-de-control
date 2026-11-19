@@ -644,6 +644,77 @@ function extractCurvaSMonthlyProgress(
   };
 }
 
+/** Curva reprogramada con edificios, urbanismo y conjunto ponderado. */
+export function extractReprogrammedCurve(
+  filas: Array<Record<string, string>>,
+  defaults: ExtractionDefaults,
+): StructuredExtraction | null {
+  const start = filas.findIndex((row) => Object.values(row).some((v) => /^reprogramad[oa]$/.test(normalizarCabecera(v))));
+  if (start < 0) return null;
+  const labelCol = Object.entries(filas[start]).find(([, v]) => /^reprogramad[oa]$/.test(normalizarCabecera(v)))![0];
+  const findRow = (label: string, from: number, end: number) => filas.slice(from, end).find((row) => normalizarCabecera(row[labelCol] ?? "") === label);
+  const buildings = findRow("edificios", start + 1, start + 5);
+  const urbanism = findRow("urbanismo", start + 1, start + 5);
+  const combined = findRow("conjunto", start + 1, start + 5);
+  if (!buildings || !urbanism || !combined) return null;
+  const original = findRow("original", start + 1, filas.length);
+  const dates = filas.slice(Math.max(0, start - 4), start).reverse().map((row) =>
+    Object.entries(row).flatMap(([col, value]) => {
+      const date = excelSerialToDate(Number(value));
+      return date ? [{ col, date, index: (date.getUTCFullYear() - 2025) * 12 + date.getUTCMonth() - 5 }] : [];
+    }),
+  ).find((entries) => entries.length >= 2);
+  if (!dates) return null;
+  const invalid = (reason: string): StructuredExtraction => ({ updates: [], summary: "Curva reprogramada identificada, pendiente de corrección.", warnings: [reason] });
+  if (dates.some((entry, index) => entry.index < 0 || entry.index >= CURVA_S_MONTH_COUNT || (index > 0 && entry.index <= dates[index - 1].index))) {
+    return invalid("La curva reprogramada contiene meses repetidos, desordenados o ajenos al calendario del panel.");
+  }
+  const percent = (raw: string) => {
+    const value = parseLocalizedNumber(raw, { decimalSeparator: "," });
+    if (value === null) return null;
+    const result = /%/.test(raw) || value > 1 ? value : value * 100;
+    return Number.isFinite(result) && result >= 0 && result <= 100 ? result : null;
+  };
+  const weight = (row: Record<string, string>) => {
+    const entries = Object.entries(row);
+    const before = entries.slice(0, entries.findIndex(([col]) => col === labelCol));
+    return before.length === 1 ? percent(before[0][1]) : null;
+  };
+  const buildingWeight = weight(buildings);
+  const urbanismWeight = weight(urbanism);
+  if (buildingWeight === null || urbanismWeight === null || Math.abs(buildingWeight + urbanismWeight - 100) > 0.000001) {
+    return invalid("Las ponderaciones de edificios y urbanismo no suman el cien por ciento.");
+  }
+  // El mes explícito de ejecutados fecha el documento; los meses futuros
+  // describen planificación y nunca adelantan el corte del avance real.
+  const actualTitle = filas.flatMap((row) => Object.values(row)).map(normalizarCabecera).find((v) => /^ejecutados?\s+mes\s+/.test(v));
+  const month = actualTitle?.replace(/^ejecutados?\s+mes\s+/, "").split(/\s+/)[0];
+  const matchingDates = month ? dates.filter(({ date }) => date.getUTCMonth() + 1 === Number(monthNumbers[month])) : [];
+  const cutoff = matchingDates.length === 1 ? matchingDates[0].date.toISOString().slice(0, 10) : defaults.cutoff;
+  const base = { area: "obra", cutoff, sourceCurrency: defaults.sourceCurrency, sourceName: defaults.sourceName };
+  const updates: LiveDataUpdate[] = [];
+  for (const { col, index } of dates) {
+    const b = percent(buildings[col] ?? "");
+    const u = percent(urbanism[col] ?? "");
+    const c = percent(combined[col] ?? "");
+    const o = original ? percent(original[col] ?? "") : null;
+    if (b === null || u === null || c === null || (original && o === null)) {
+      return invalid("Falta un porcentaje válido en una serie de la curva reprogramada; no se publica una lectura parcial.");
+    }
+    if (Math.abs(c - (b * buildingWeight + u * urbanismWeight) / 100) > 0.01) {
+      return invalid("El conjunto reprogramado no coincide con las ponderaciones de edificios y urbanismo.");
+    }
+    for (const [field, value] of [["reprogrammed", c], ["reprogrammedBuildingsProgress", b], ["reprogrammedUrbanismProgress", u], ...(o === null ? [] : [["originalDocumentProgress", o]])] as Array<[string, number]>) {
+      updates.push({ key: `monthlyPlan.${index}.${field}`, value, ...base });
+    }
+  }
+  return {
+    updates,
+    summary: `Curva reprogramada: ${dates.length} meses de edificios, urbanismo y conjunto ponderado${original ? ", con la serie original del documento" : ""}. El bloque de ejecutados queda como referencia en el original; el avance real conserva la prioridad de la cubicación.`,
+    warnings: [],
+  };
+}
+
 /**
  * Lee una tabla de avance por edificio de una hoja corriente.
  *
@@ -2321,6 +2392,11 @@ export async function extractStructuredUpdates(
         }
       }
 
+      const reprogramada = extractReprogrammedCurve(filas, defaults);
+      if (reprogramada) {
+        results.push(reprogramada);
+        continue;
+      }
       const curvaS = extractCurvaSMonthlyProgress(filas, defaults);
       if (curvaS) {
         results.push(curvaS);

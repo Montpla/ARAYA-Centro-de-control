@@ -167,6 +167,16 @@ console.log(`Desgloses publicados: ${desgloses}`);
 const fileResponse = await fetch(`${PRODUCTION_URL}/api/files?limit=200`, { headers: { Cookie } });
 if (fileResponse.ok) {
   const { files = [] } = await fileResponse.json();
+  const curve = files.filter((entry) => !entry.deletedAt && !entry.supersededByFileId &&
+    entry.extension === "xlsx" && /curva.*rep.*gram/i.test(entry.originalName))
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+  if (curve) {
+    const response = await fetch(`${PRODUCTION_URL}/api/files?download=${encodeURIComponent(curve.id)}`, { headers: { Cookie } });
+    if (!response.ok) throw new Error(`No se pudo contrastar el original de la curva (${response.status}).`);
+    const bytes = await response.arrayBuffer();
+    console.log(`Original de curva contrastado: ${curve.originalName}`);
+    console.log(`Huella SHA-256 de curva: ${createHash("sha256").update(new Uint8Array(bytes)).digest("hex")}`);
+  }
   const file = files.filter((entry) => !entry.deletedAt && !entry.supersededByFileId &&
     entry.extension === "xlsx" && /cubicaci[oó]n/i.test(entry.originalName))
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];

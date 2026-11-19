@@ -48,6 +48,9 @@ const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
     // Plan reprogramado: sólo existe desde el mes de la reprogramación y lo
     // publica el Informe Ejecutivo desde su gráfico de Curva S.
     reprogrammed: 0,
+    reprogrammedBuildingsProgress: 0,
+    reprogrammedUrbanismProgress: 0,
+    originalDocumentProgress: 0,
   },
   "urbanismAreas.*": {
     mapCoordinates: {
