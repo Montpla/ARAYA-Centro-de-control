@@ -232,6 +232,31 @@ export async function selectLivePointCutoffs(
   return (result.results ?? []) as Array<{ key: string; cutoff: string }>;
 }
 
+export const SELECT_LIVE_POINT_SOURCES_SQL = `
+SELECT key, cutoff, source_name AS sourceName
+FROM live_data_points
+WHERE key IN (
+  SELECT CAST(value AS TEXT) FROM json_each(?)
+)
+`;
+
+/**
+ * Corte y documento de origen con que está publicado cada clave: lo usan las
+ * reglas de prioridad entre fuentes (lib/source-precedence.ts).
+ */
+export async function selectLivePointSources(
+  database: D1JsonDatabase,
+  keys: readonly string[],
+) {
+  if (!keys.length) return [] as Array<{ key: string; cutoff: string; sourceName: string }>;
+  const payload = encodeBoundedJsonArray(keys, {
+    label: "La consulta de fuentes publicadas",
+    maxItems: MAX_DOCUMENT_PROPOSALS,
+  });
+  const result = await database.prepare(SELECT_LIVE_POINT_SOURCES_SQL).bind(payload).all();
+  return (result.results ?? []) as Array<{ key: string; cutoff: string; sourceName: string }>;
+}
+
 export async function deleteExpiredReviewReservations(
   database: D1JsonDatabase,
   input: {

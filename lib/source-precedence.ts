@@ -1,0 +1,58 @@
+// Reglas de prioridad entre fuentes: qué documento manda cuando dos dicen
+// cosas distintas del mismo dato. Son decisiones del dueño del proyecto; la
+// versión legible y completa está en .github/claude/reglas-de-prioridad.md, y
+// cada regla nueva que él decida se añade allí y, si se puede aplicar sola,
+// aquí.
+//
+// Hoy se aplica al avance físico (edificios, oficios, urbanismo, avance total y
+// el ejecutado de la Curva S): "deben mandar los edificios y la cubicación".
+// Un documento de menos prioridad no pisa lo que ya fijó uno de más prioridad
+// para el mismo periodo (el Informe Ejecutivo de octubre dejó Carpintería al
+// 96,2 % por encima de la cubicación); sí puede adelantar un periodo nuevo,
+// que la siguiente cubicación corregirá.
+
+type SourceRule = { pattern: RegExp; rank: number; label: string };
+
+const PHYSICAL_PROGRESS_SOURCES: SourceRule[] = [
+  { pattern: /cubicaci[oó]n/i, rank: 40, label: "Cubicación" },
+  { pattern: /avance[ _-]*(de[ _-]*)?(edificios?|urbanismo)/i, rank: 30, label: "Excel de avance de edificios o urbanismo" },
+  { pattern: /convertido de mpp|\.mpp\b|\.xml\b/i, rank: 20, label: "Plan de Project" },
+  { pattern: /informe[ _-]*ejecutivo|\.pptx?\b/i, rank: 10, label: "Informe Ejecutivo o presentación" },
+];
+
+export const PHYSICAL_PROGRESS_KEY = /^(buildings\.[^.]+\.progress|buildings\.[^.]+\.units\.[^.]+\.(progress|disciplines\.[^.]+)|constructionDisciplines\.[^.]+\.progress|urbanismAreas\.[^.]+\.progress|urbanismReportAreas\.[^.]+\.progress|projectSnapshot\.(overallProgress|urbanismProgress|activeBuildingsProgress)|monthlyPlan\.\d+\.actual)$/;
+
+/** Prioridad de un documento para el avance físico (0 si no tiene regla). */
+export function physicalProgressRank(sourceName: string) {
+  const name = String(sourceName ?? "");
+  return PHYSICAL_PROGRESS_SOURCES.find((rule) => rule.pattern.test(name))?.rank ?? 0;
+}
+
+export function physicalProgressSourceLabel(sourceName: string) {
+  const name = String(sourceName ?? "");
+  return PHYSICAL_PROGRESS_SOURCES.find((rule) => rule.pattern.test(name))?.label ?? "otro documento";
+}
+
+const month = (cutoff: string) => String(cutoff ?? "").slice(0, 7);
+
+/**
+ * ¿Debe apartarse este dato porque una fuente con más prioridad ya fijó la
+ * misma clave para el mismo periodo (o uno posterior)?
+ */
+export function blockedByHigherPrioritySource(input: {
+  key: string;
+  incomingSource: string;
+  incomingCutoff: string;
+  liveSource?: string | null;
+  liveCutoff?: string | null;
+}) {
+  if (!PHYSICAL_PROGRESS_KEY.test(input.key)) return false;
+  const liveSource = String(input.liveSource ?? "");
+  if (!liveSource || liveSource === input.incomingSource) return false;
+  if (physicalProgressRank(liveSource) <= physicalProgressRank(input.incomingSource)) return false;
+  const incomingMonth = month(input.incomingCutoff);
+  const liveMonth = month(input.liveCutoff ?? "");
+  // Un periodo nuevo sí entra aunque venga de una fuente de menos prioridad.
+  if (/^\d{4}-\d{2}$/.test(incomingMonth) && /^\d{4}-\d{2}$/.test(liveMonth) && incomingMonth > liveMonth) return false;
+  return true;
+}

@@ -793,6 +793,7 @@ test("un dato financiero se publica aunque el área del archivo sea otra", () =>
     "individualUpdateContractIsSafe",
     "liveValues",
     "staleCutoffKeySet",
+    "lowerPriorityKeySet",
     `${snippet}\nreturn updateIsAutoPublishable;`,
   );
   const build = (overrides = {}) => factory(
@@ -807,6 +808,7 @@ test("un dato financiero se publica aunque el área del archivo sea otra", () =>
     overrides.individualUpdateContractIsSafe ?? (() => true),
     overrides.liveValues ?? {},
     overrides.staleCutoffKeySet ?? new Set(),
+    overrides.lowerPriorityKeySet ?? new Set(),
   );
 
   // El dato financiero, con un área distinta a la del archivo, se publica:

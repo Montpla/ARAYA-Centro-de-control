@@ -85,6 +85,7 @@ import { emitMissingNotifications } from "../../../lib/notifications";
 import {
   D1JsonDatabase,
   selectLivePointCutoffs,
+  selectLivePointSources,
   selectLivePointValues,
   upsertDocumentProposalRows,
 } from "../../../lib/d1-json-bulk";
@@ -99,6 +100,7 @@ import { LARGE_PDF_BYTES, triggerPdfCompression } from "../../../lib/pdf-compres
 import { triggerXlsConversion } from "../../../lib/xls-conversion-trigger";
 import { triggerUploadVerification } from "../../../lib/upload-verification-trigger";
 import { uploadNeedsVerification } from "../../../lib/upload-verification";
+import { blockedByHigherPrioritySource, physicalProgressSourceLabel } from "../../../lib/source-precedence";
 import { triggerDeferredUploadRetry } from "../../../lib/deferred-upload-retry-trigger";
 import { readUploadAgentToken, resolveUploadAgentToken } from "../../../lib/upload-agent-auth";
 import {
@@ -2210,8 +2212,40 @@ export async function POST(request: Request) {
       };
     }
     const staleCutoffKeySet = new Set(staleCutoffKeys);
+    // Reglas de prioridad entre fuentes (lib/source-precedence.ts): un
+    // documento de menos prioridad no pisa lo que ya fijó otro de más
+    // prioridad para el mismo periodo.
+    const publishedSources = new Map(
+      (await selectLivePointSources(
+        getD1JsonDatabase(),
+        normalizedUpdates.map((update) => update.key),
+      ).catch(() => [])).map((row) => [row.key, row]),
+    );
+    const lowerPriorityKeySet = new Set(normalizedUpdates
+      .filter((update) => {
+        const live = publishedSources.get(update.key);
+        return !staleCutoffKeySet.has(update.key) && blockedByHigherPrioritySource({
+          key: update.key,
+          incomingSource: candidate.name,
+          incomingCutoff: update.cutoff,
+          liveSource: live?.sourceName,
+          liveCutoff: live?.cutoff,
+        });
+      })
+      .map((update) => update.key));
+    if (lowerPriorityKeySet.size) {
+      const fuente = physicalProgressSourceLabel(publishedSources.get([...lowerPriorityKeySet][0])?.sourceName ?? "");
+      extraction = {
+        ...extraction,
+        warnings: [
+          ...extraction.warnings,
+          `${lowerPriorityKeySet.size} dato(s) de avance físico ya los fijó una fuente con más prioridad (${fuente}) para este periodo y se conservan: ${[...lowerPriorityKeySet].slice(0, 5).join(", ")}${lowerPriorityKeySet.size > 5 ? "…" : ""}.`,
+        ],
+      };
+    }
     const updateIsAutoPublishable = (update: ReturnType<typeof normalizeLiveDataUpdates>[number]) =>
       !staleCutoffKeySet.has(update.key) &&
+      !lowerPriorityKeySet.has(update.key) &&
       (update.area === resolvedArea ||
         // El archivo en conjunto no se pudo etiquetar, pero este dato puntual
         // sí trae su propia área (la que detectó la extracción, no la del
@@ -2260,6 +2294,7 @@ export async function POST(request: Request) {
     const rejectionReason = (update: ReturnType<typeof normalizeLiveDataUpdates>[number]) => {
       if (!batchPreconditions) return "el lote no cumple las condiciones previas de publicación automática";
       if (staleCutoffKeySet.has(update.key)) return "su corte es anterior al ya publicado";
+      if (lowerPriorityKeySet.has(update.key)) return "una fuente con más prioridad ya fijó este dato";
       if (!publicationActor.financeAccess && isFinancialLiveKey(update.key)) return "dato financiero sin permiso de Finanzas";
       if (unsafeAgentKeys.has(update.key)) return "la validación de la IA lo marcó como dudoso";
       if ((confidenceByKey.get(update.key) ?? 0) <= 0) return "confianza nula en la extracción";

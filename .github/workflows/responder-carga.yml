@@ -1,0 +1,67 @@
+name: Responder a una incidencia de carga
+
+# El dueño decide desde el móvil comentando en una incidencia "🔎 Revisar
+# carga" de GitHub:
+#   /A, /B, /C…      elige una de las opciones que propuso Claude
+#   /deshacer        deshace el último arreglo automático de esa carga
+#   /decido <frase>  cualquier otra decisión, con sus palabras
+# La respuesta se convierte en un encargo para Claude (verificar-carga.yml),
+# que la aplica con el circuito de siempre (pruebas, fusión, despliegue,
+# reproceso y aviso) y la apunta como regla en
+# .github/claude/reglas-de-prioridad.md para no volver a preguntarla.
+# Sólo atiende comentarios del dueño del repositorio.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: write
+  actions: write
+
+jobs:
+  responder:
+    if: >-
+      ${{ !github.event.issue.pull_request &&
+          startsWith(github.event.issue.title, '🔎 Revisar carga:') &&
+          github.event.comment.author_association == 'OWNER' &&
+          startsWith(github.event.comment.body, '/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Convertir la respuesta en un encargo
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          CUERPO: ${{ github.event.issue.body }}
+          RESPUESTA: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          FILE_ID=$(printf '%s' "$CUERPO" | grep -oE '\*\*Identificador:\*\* `[^`]+`' | head -1 | sed -E 's/.*`([^`]+)`/\1/')
+          if [ -z "$FILE_ID" ]; then
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "No encuentro el identificador del archivo en esta incidencia; no puedo aplicar la respuesta."
+            exit 0
+          fi
+          LINEA=$(printf '%s' "$RESPUESTA" | head -1 | tr -d '\r')
+          ORDEN=$(printf '%s' "$LINEA" | awk '{print $1}')
+          RESTO=$(printf '%s' "${LINEA#"$ORDEN"}" | sed -E 's/^[[:space:]]+//')
+          # Lo último que dijo Claude en la incidencia (opciones, decisión tomada, PR).
+          CONTEXTO=$(gh issue view "$ISSUE" --repo "$GITHUB_REPOSITORY" --json comments \
+            --jq '[.comments[] | select(.body | test("Claude (lo ha|propuso|necesita)"))] | last | .body // ""' | head -c 3000)
+          case "$ORDEN" in
+            /deshacer)
+              PR=$(printf '%s' "$CONTEXTO" | grep -oE 'PR #[0-9]+' | head -1 | tr -dc '0-9')
+              ENCARGO="Decisión del dueño en la incidencia #$ISSUE: deshacer el último arreglo automático de esta carga${PR:+ (PR #$PR)}. Revierte ese cambio con git revert en tu rama y apunta en .github/claude/reglas-de-prioridad.md que esa decisión se descartó y cuál vale en su lugar. Contexto de la incidencia: $CONTEXTO" ;;
+            /decido)
+              ENCARGO="Decisión del dueño en la incidencia #$ISSUE: $RESTO. Aplícala y apréndela como regla. Contexto de la incidencia: $CONTEXTO" ;;
+            /[A-Za-z])
+              OPCION=$(printf '%s' "${ORDEN#/}" | tr '[:lower:]' '[:upper:]')
+              ENCARGO="Decisión del dueño en la incidencia #$ISSUE: opción $OPCION de las que propusiste${RESTO:+ ($RESTO)}. Aplícala y apréndela como regla. Contexto de la incidencia: $CONTEXTO" ;;
+            *)
+              gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "No entiendo «$ORDEN». Responde con /A, /B…, /deshacer o /decido seguido de tu decisión."
+              exit 0 ;;
+          esac
+          gh workflow run verificar-carga.yml --repo "$GITHUB_REPOSITORY" --ref main \
+            -f file_id="$FILE_ID" -f notificar=1 -f arreglar=1 -f incidencia="$ISSUE" -f encargo="$(printf '%s' "$ENCARGO" | head -c 6000)"
+          gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body "Recibido ($ORDEN). Claude lo aplica ahora con el circuito de siempre y te avisará al terminar."

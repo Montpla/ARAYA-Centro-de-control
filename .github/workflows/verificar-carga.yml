@@ -38,6 +38,11 @@ on:
         required: false
         default: ""
         type: string
+      incidencia:
+        description: "Número de la incidencia de GitHub a la que pertenece este encargo (lo rellena responder-carga.yml)"
+        required: false
+        default: ""
+        type: string
       encargo:
         description: "Tarea concreta para Claude (opcional): se hace aunque la carga esté bien, con el mismo circuito de pruebas, fusión, despliegue, reproceso y aviso"
         required: false
@@ -115,7 +120,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       FILE_ID: ${{ needs.verificar.outputs.file_id }}
-      ISSUE: ${{ needs.verificar.outputs.issue }}
+      ISSUE: ${{ needs.verificar.outputs.issue || inputs.incidencia }}
       DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
       DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
       # El identificador del archivo va en el nombre de la rama para que la
@@ -187,6 +192,9 @@ jobs:
             echo "accion=$(jq -r '.accion // "sin_decision"' .verificacion/decision.json)" >> "$GITHUB_OUTPUT"
             echo "pr=$(jq -r '.pr // ""' .verificacion/decision.json)" >> "$GITHUB_OUTPUT"
             echo "resumen=$(jq -r '.resumen // ""' .verificacion/decision.json | tr '\n' ' ' | cut -c1-1500)" >> "$GITHUB_OUTPUT"
+            echo "decision=$(jq -r '.decision_tomada // ""' .verificacion/decision.json | tr '\n' ' ' | cut -c1-400)" >> "$GITHUB_OUTPUT"
+            echo "alternativa=$(jq -r '.alternativa // ""' .verificacion/decision.json | tr '\n' ' ' | cut -c1-400)" >> "$GITHUB_OUTPUT"
+            echo "opciones=$(jq -r '[.opciones[]? | "/\(.id): \(.texto)"] | join(" · ")' .verificacion/decision.json | tr '\n' ' ' | cut -c1-900)" >> "$GITHUB_OUTPUT"
           else
             echo "accion=sin_decision" >> "$GITHUB_OUTPUT"
             echo "resumen=La revisión automática no terminó (posible límite de uso de la suscripción o error)." >> "$GITHUB_OUTPUT"
@@ -273,18 +281,35 @@ jobs:
           RESUMEN: ${{ steps.decision.outputs.resumen }}
           FUSION: ${{ steps.fusion.outcome }}
           COMO: ${{ steps.fusion.outputs.como }}
+          DECISION: ${{ steps.decision.outputs.decision }}
+          ALTERNATIVA: ${{ steps.decision.outputs.alternativa }}
+          OPCIONES: ${{ steps.decision.outputs.opciones }}
+          NOMBRE: ${{ needs.verificar.outputs.nombre }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           VERIFICACION_MD: ${{ runner.temp }}/final.md
         run: |
           set -uo pipefail
+          # Si hay algo que el dueño pueda responder (una decisión tomada por
+          # Claude o unas opciones), tiene que haber una incidencia donde hacerlo.
+          if [ -z "${ISSUE:-}" ] && { [ -n "$DECISION" ] || [ "$ACCION" = "dudoso" ]; }; then
+            URL=$(gh issue create --title "🔎 Revisar carga: $NOMBRE" \
+              --body "**Archivo:** $NOMBRE"$'\n'"**Identificador:** \`$FILE_ID\`"$'\n\n'"Registro: $RUN_URL" || true)
+            ISSUE=${URL##*/}
+          fi
           case "$ACCION" in
             arreglado)
               if [ "$FUSION" = "success" ]; then NOTA="Claude lo ha arreglado ($COMO), desplegado y la carga se ha reprocesado: $RESUMEN"
               else NOTA="Claude propuso un arreglo pero no pasó las comprobaciones, la fusión o el despliegue; queda sin fusionar en la rama $RAMA: $RESUMEN"; fi ;;
-            dudoso) NOTA="Claude lo ha revisado y necesita tu decisión: $RESUMEN" ;;
+            dudoso)
+              NOTA="Claude necesita tu decisión: $RESUMEN"
+              [ -n "$OPCIONES" ] && NOTA="$NOTA Opciones: $OPCIONES."
+              NOTA="$NOTA Responde en la incidencia #$ISSUE de GitHub con /A, /B o una frase." ;;
             sin_accion) NOTA="Claude lo ha revisado y la carga está bien: $RESUMEN" ;;
             *) NOTA="$RESUMEN" ;;
           esac
+          if [ "$ACCION" = "arreglado" ] && [ "$FUSION" = "success" ] && [ -n "$DECISION" ]; then
+            NOTA="$NOTA He decidido: $DECISION (la otra opción era: $ALTERNATIVA). Si prefieres la otra, responde /deshacer en la incidencia #$ISSUE de GitHub."
+          fi
           # Un arreglo subido a la rama sin marcarse como tal no debe perderse.
           if [ "$ACCION" != "arreglado" ] && git ls-remote --exit-code origin "refs/heads/$RAMA" >/dev/null 2>&1; then
             NOTA="$NOTA Hay un arreglo propuesto en la rama $RAMA pendiente de revisar."

@@ -60,6 +60,33 @@ Piezas del programa que suelen estar implicadas:
 Motivos de descarte que son **correctos** y no hay que "arreglar": un dato con
 corte anterior al ya publicado no debe pisar al vigente.
 
+## Conflictos entre fuentes: decide, no preguntes
+
+Si dos documentos dicen cosas distintas del mismo dato, **no es un caso
+dudoso**:
+
+1. Consulta `.github/claude/reglas-de-prioridad.md` y aplica la regla que lo
+   cubra. Si la regla aún no está en el código y se puede aplicar sola,
+   llévala al código (por ejemplo, a `lib/source-precedence.ts`) con su prueba.
+2. Si ninguna regla lo cubre, **elige tú la opción más razonable** (la fuente
+   más específica y más reciente, la que cuadra con el resto del panel),
+   aplícala con código y prueba como cualquier arreglo, y explica en la
+   decisión qué elegiste y cuál era la alternativa (campos `decision_tomada` y
+   `alternativa`). El dueño podrá deshacerlo con una palabra.
+
+## Respuestas del dueño (encargos que empiezan por «Decisión del dueño»)
+
+Cuando el encargo trae una decisión del dueño sobre una incidencia:
+
+1. Aplícala como cualquier arreglo (código + prueba + PR).
+2. **Apréndela**: añádela como regla en `.github/claude/reglas-de-prioridad.md`,
+   en «Decisiones del dueño» (fecha, incidencia y regla), y si se puede aplicar
+   sola, también en el código. Así el mismo tipo de duda no vuelve a
+   preguntarse.
+3. Si el encargo pide **deshacer** un arreglo anterior, revierte ese PR con
+   `git revert` en tu rama (código + PR como siempre) y apunta en las reglas
+   que esa decisión se descartó.
+
 ## Qué hacer según lo que encuentres
 
 1. **Fallo del programa claro** (un lector que no reconoce un formato, una
@@ -79,12 +106,18 @@ corte anterior al ya publicado no debe pisar al vigente.
      a este token). Si el arreglo lo exigiera, usa `"dudoso"` y explica el
      cambio necesario.
 
-2. **Dudoso o fuera de tu alcance** (el propio documento está mal, dos
-   fuentes se contradicen y no sabes cuál vale, hace falta una decisión del
-   negocio, o el arreglo sería un cambio grande de arquitectura):
+   - Si para arreglarlo tuviste que elegir entre dos opciones razonables
+     (ver «Conflictos entre fuentes»), añade a la decisión
+     `"decision_tomada": "<qué elegiste>", "alternativa": "<la otra opción>"`.
+
+2. **Dudoso**: sólo cuando el propio documento viene mal de origen (ver regla 5
+   de las reglas de prioridad), cuando no hay ninguna opción razonable, o
+   cuando el arreglo sería un cambio grande de arquitectura:
    - No cambies código.
-   - Escribe `.verificacion/decision.json`:
-     `{"accion": "dudoso", "resumen": "<qué pasa y qué decisión hace falta, en dos o tres frases>"}`.
+   - Escribe `.verificacion/decision.json` con las opciones entre las que
+     debe elegir el dueño (dos o tres, concretas):
+     `{"accion": "dudoso", "resumen": "<qué pasa, en dos frases>", "opciones": [{"id": "A", "texto": "<qué se haría>"}, {"id": "B", "texto": "<qué se haría>"}]}`.
+     El dueño responderá desde el móvil con `/A`, `/B` o una frase.
 
 3. **Falsa alarma** (la verificación se equivocó y la carga está bien):
    - Si la regla de la verificación es la que falla, corrígela como en el
