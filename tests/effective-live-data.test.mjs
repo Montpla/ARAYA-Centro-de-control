@@ -1153,6 +1153,13 @@ test("un dato suelto de apartamento traduce edificio y unidad a la vez", async (
   assert.equal(update.key, "buildings.13.units.0.progress");
 });
 
+test("el alias E del informe señala al edificio existente, sin inventar altas ni índices", async () => {
+  const resolve = await loadSpatialIdentityResolver();
+  const updates=resolve([{key:"buildings.E14.progress",value:62.5},{key:"buildings.E99.progress",value:10}],{});
+  assert.equal(updates[0].key,"buildings.13.progress");
+  assert.equal(updates[1].key,"buildings.E99.progress");
+});
+
 test("una clave que ya viene por posición no se toca", async () => {
   const resolveSpatialIdentityUpdates = await loadSpatialIdentityResolver();
   const [update] = resolveSpatialIdentityUpdates(

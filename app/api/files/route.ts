@@ -93,6 +93,7 @@ import { assertLiveDataContracts, getContractRootsSnapshot, validateLiveDataCont
 import { normalizeLiveDataUpdates, publishLiveDataUpdates } from "../../../lib/publish-live-data";
 import { publicationKeyConflict } from "../../../lib/live-data-publication-recovery";
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
+import { complementaryNarrativeUpdateAllowed, prepareNarrativeUpdate } from "../../../lib/narrative-update-scope";
 import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-upsert";
 import { nothingExtractedMessage } from "../../../lib/upload-messages";
 import { triggerMppConversion } from "../../../lib/mpp-conversion-trigger";
@@ -1727,7 +1728,8 @@ export async function POST(request: Request) {
         const complemento = iaExtraction.updates
           .map((update, indice) => ({ update, confianza: iaExtraction.updateConfidences[indice] ?? iaExtraction.confidence }))
           .filter(({ update, confianza }) =>
-            !complementoChocaConLector(update.key) && Number.isFinite(confianza) && confianza > 0);
+            !complementoChocaConLector(update.key) && Number.isFinite(confianza) && confianza > 0 &&
+            complementaryNarrativeUpdateAllowed(update.key, candidate.name, clavesDeterministas));
         extraction = {
           ...iaExtraction,
           updates: [...deterministicExtraction.updates, ...complemento.map(({ update }) => update)],
@@ -1767,7 +1769,7 @@ export async function POST(request: Request) {
     // traducción tropezara con una entrada rara, se sigue con las claves tal
     // cual en vez de tumbar toda la ingesta: la normalización posterior ya
     // descarta dato a dato lo que no encaje.
-    let identityResolvedUpdates = extraction.updates;
+    let identityResolvedUpdates = extraction.updates.map(prepareNarrativeUpdate);
     // Una cubicación puede traer importes en la carátula y el avance físico de
     // varios edificios en otra hoja. El lector devuelve el alcance que vio y
     // aquí se comprueba que cada edificio nombrado haya generado al menos su
@@ -1796,12 +1798,12 @@ export async function POST(request: Request) {
     if (currentLiveData) {
       try {
         identityResolvedUpdates = resolveSpatialIdentityUpdates(
-          extraction.updates,
+          identityResolvedUpdates,
           currentLiveData.values,
           getContractRootsSnapshot(),
         );
       } catch {
-        identityResolvedUpdates = extraction.updates;
+        identityResolvedUpdates = extraction.updates.map(prepareNarrativeUpdate);
       }
     }
     // Un bloque que la lectura descubre y para el que no existe ningún campo ya
@@ -2250,6 +2252,10 @@ export async function POST(request: Request) {
       !staleCutoffKeySet.has(update.key) &&
       !lowerPriorityKeySet.has(update.key) &&
       (update.area === resolvedArea ||
+        // El resumen ejecutivo contiene Seguridad aunque su área mayoritaria
+        // sea Planificación. La clave canónica y todas las guardas de abajo
+        // siguen siendo obligatorias.
+        (update.area === "seguridad" && /^safety(?:Metrics|Findings|FindingTracking|WeeklySeries)(?:\.|$)/.test(update.key)) ||
         // El archivo en conjunto no se pudo etiquetar, pero este dato puntual
         // sí trae su propia área (la que detectó la extracción, no la del
         // archivo). El resto de condiciones de abajo —acceso financiero,

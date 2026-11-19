@@ -11,6 +11,15 @@ Zona horaria del usuario: Europe/Madrid
 
 ## Cuatro documentos de octubre (19/11/2026)
 
+- PR #288 desplegado. Los dos Gantt quedaron publicados en las revisiones
+  137 y 138 y verificados sin anomalías. El Excel financiero publicó 65 cambios
+  y confirmó otros 67 datos ya coincidentes.
+- La verificación del informe detectó un fallo de integración entre áreas:
+  Seguridad quedaba fuera por clasificarse el conjunto en Planificación.
+  Se corrige la asignación de esas claves, el alias del corte y los nombres
+  de edificio E frente a TH. El resumen mensual no sustituye la serie semanal.
+  Se mantienen las validaciones y la prioridad de las fuentes.
+
 - Nuevo encargo: integrar los dos Gantt HTML, el Informe Ejecutivo definitivo
   v8 y el flujo reprogramado de octubre v4. Esta sección amplía el estado
   vigente; conserva la cubicación, la curva y el plano ya contrastados.

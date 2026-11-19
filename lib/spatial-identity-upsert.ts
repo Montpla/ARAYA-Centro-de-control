@@ -137,7 +137,7 @@ function resolveDeepSpatialKey(segments: string[], workingValues: LiveDataMap) {
     const current = materializeLiveRoot("buildings", buildings, workingValues) as Building[];
     const buildingIndex = /^\d+$/.test(segments[1])
       ? Number(segments[1])
-      : ownEntityIndex(current, identityToken(segments[1]));
+      : ownEntityIndex(current, identityToken(segments[1].replace(/^e[- ]?0*(\d+)$/i, "TH-$1")));
     if (buildingIndex < 0 || !current[buildingIndex]) return null;
     if (segments[2] === "units" && segments.length > 4) {
       const units = current[buildingIndex].units ?? [];
