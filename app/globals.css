@@ -2229,6 +2229,22 @@ button {
   background: #f4f1e8;
 }
 
+.plan-layer-switch { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.plan-layer-switch button { padding: 10px 14px; border: 1px solid var(--line); border-radius: 7px; background: white; cursor: pointer; font-size: 12px; }
+.plan-layer-switch button.active { color: white; border-color: #425c55; background: #425c55; }
+.plan-feature-point { position: absolute; z-index: 4; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; transform: translate(-50%, -50%); border: 2px solid white; border-radius: 50%; color: white; background: #596b49; font-size: 11px; font-weight: 800; cursor: pointer; box-shadow: 0 1px 4px #26332855; }
+.plan-feature-point.feature-water { background: #167a98; }
+.plan-feature-point small { display: none; position: absolute; left: 28px; padding: 5px 8px; border-radius: 4px; color: #25342a; background: #fffef5; white-space: nowrap; font-size: 11px; }
+.plan-feature-point:hover, .plan-feature-point:focus-visible { z-index: 6; outline: 2px solid #283e36; outline-offset: 2px; }
+.plan-feature-point:hover small, .plan-feature-point:focus-visible small { display: block; }
+.plan-feature-index { margin: 18px 0; padding: 14px; border: 1px solid var(--line); border-radius: 9px; font-size: 13px; }
+.plan-feature-index summary { cursor: pointer; font-weight: 700; }
+.plan-feature-index > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin-top: 14px; }
+.plan-feature-index button { display: grid; grid-template-columns: 26px 1fr; gap: 3px 8px; padding: 10px; text-align: left; border: 1px solid var(--line); border-radius: 6px; background: white; cursor: pointer; }
+.plan-feature-index button > span { grid-row: span 2; align-self: center; font-weight: 800; color: #49614e; }
+.plan-feature-index button small { color: #666; }
+.plan-feature-index > p { margin-top: 12px; color: #666; font-size: 11px; line-height: 1.5; }
+
 .architectural-note {
   position: absolute;
   z-index: 2;
