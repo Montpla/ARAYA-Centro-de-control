@@ -4,14 +4,14 @@ import test from "node:test";
 import { evaluatePanelCoherence } from "../lib/panel-coherence.ts";
 import { mergeVerificationChecks } from "../lib/upload-verification.ts";
 
-const edificios = Object.fromEntries(Array.from({ length: 26 }, (_, index) => [`buildings.${index}.progress`, 30 + index]));
+// 77 edificios del plano: 26 con avance publicado y el resto con el de partida.
+const edificios = Array.from({ length: 77 }, (_, index) => ({ name: `Edificio ${index + 1}`, progress: index < 26 ? 30 + index : 0 }));
 // Estado real de producción el 19/11/2026: todo cuadra.
 const real = {
   cutoff: "2026-10-31",
   planning: { physicalActual: 38.01, kpiPlan: 39.8, curveActualAtCutoff: 38.01, curvePlanAtCutoff: 39.8, curveCutoffLabel: "2026-10-01" },
-  reconciliationCritical: 0,
-  liveValues: { ...edificios, "projectSnapshot.overallProgress": 38.01, "urbanismAreas.0.progress": 31.89, "projectSnapshot.urbanismProgress": 31.89 },
-  expectedBuildings: 26,
+  liveValues: { "projectSnapshot.overallProgress": 38.01, "urbanismAreas.0.progress": 31.89, "projectSnapshot.urbanismProgress": 31.89 },
+  buildings: edificios,
 };
 
 test("el panel de producción de hoy es coherente", () => {
@@ -30,11 +30,12 @@ test("una Curva S que se queda en un mes anterior al corte es una anomalía", ()
 });
 
 test("un edificio sin avance válido no se puede colorear: anomalía", () => {
-  const { "buildings.7.progress": _quitado, ...resto } = real.liveValues;
-  const checks = evaluatePanelCoherence({ ...real, liveValues: { ...resto, "buildings.9.progress": 140 } });
+  const rotos = edificios.map((edificio, index) =>
+    index === 7 ? { name: edificio.name } : index === 9 ? { ...edificio, progress: 140 } : edificio);
+  const checks = evaluatePanelCoherence({ ...real, buildings: rotos });
   const fallo = checks.find((check) => check.id === "edificios_sin_avance");
   assert.equal(fallo.severity, "anomalia");
-  assert.match(fallo.detail, /2 edificio/);
+  assert.match(fallo.detail, /2 edificio\(s\).*Edificio 8, Edificio 10/);
 });
 
 test("plan y urbanismo que no cuadran son avisos", () => {

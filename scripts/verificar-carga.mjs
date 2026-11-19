@@ -9,6 +9,8 @@
 // imprime importes: el endpoint sólo devuelve claves, motivos y porcentajes.
 
 import { appendFile, writeFile } from "node:fs/promises";
+import { buildings as baselineBuildings } from "../app/demo-data.ts";
+import { materializeLiveRoot } from "../lib/live-data.ts";
 import { evaluatePanelCoherence } from "../lib/panel-coherence.ts";
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
@@ -87,9 +89,8 @@ async function coherenciaDelPanel() {
     return evaluatePanelCoherence({
       cutoff: controlRoom.cutoff ?? "",
       planning: controlRoom.planning ?? {},
-      reconciliationCritical: controlRoom.reconciliationSummary?.critical ?? 0,
       liveValues: live.values ?? {},
-      expectedBuildings: controlRoom.spatial?.integratedBuildings ?? 0,
+      buildings: materializeLiveRoot("buildings", baselineBuildings, live.values ?? {}),
     });
   } catch (error) {
     console.log(`(No se pudo comprobar la coherencia del panel: ${error instanceof Error ? error.message : error})`);
