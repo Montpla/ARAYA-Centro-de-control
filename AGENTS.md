@@ -3,6 +3,9 @@
 Este archivo es la puerta de entrada para cualquier asistente (Claude, ChatGPT/Codex,
 Gemini, Copilot, Cursor…) que continúe el trabajo. Léelo entero antes de tocar nada.
 El estado más reciente y el historial están al principio de `HANDOFF.md`.
+Para cambiar de asistente o de LLM, `CONTINUAR.md` contiene el punto de entrada;
+el bloque canónico inicial de `HANDOFF.md` distingue lo publicado de lo pendiente.
+Antes de proponer cambios, explica al usuario qué has entendido del estado actual.
 
 ## Normas que no se rompen
 
@@ -25,10 +28,15 @@ El estado más reciente y el historial están al principio de `HANDOFF.md`.
 
 ## Qué es
 
-Panel de control de la obra ARAYA (26 edificios, urbanismo, Curva S, seguridad,
-finanzas). El equipo sube archivos (Excel, PDF, PowerPoint, Project `.mpp`, planos
+Panel de control de la obra ARAYA (77 edificios representados, 26 con avance
+publicado en el último corte comprobado; urbanismo, Curva S, seguridad y finanzas).
+El equipo sube archivos (Excel, PDF, PowerPoint, Gantt HTML, Project `.mpp`, planos
 DWG); el programa los lee, publica sus datos como "datos vivos" y el panel recalcula
 solo gráficos, colores de edificios y porcentajes.
+
+Los apartamentos tienen porcentajes derivados del edificio/Project: su presencia
+en el plano no acredita una medición individual. El alcance y la procedencia
+deben conservarse al interpretar, mostrar o actualizar un avance.
 
 - **Producción:** https://araya-centro-control.grupobricket.workers.dev
 - **Repositorio:** `Montpla/ARAYA-Centro-de-control` (rama principal `main`).
@@ -53,10 +61,22 @@ solo gráficos, colores de edificios y porcentajes.
 - `lib/upload-verification.ts`, `lib/panel-coherence.ts`,
   `app/api/files/verification/route.ts` — verificación automática de cada carga.
 - `app/dashboard-client.tsx` — el panel; `app/tv/` — modo TV.
+- `lib/gantt-html.ts`, `lib/gantt-data.ts`, `app/gantt-schedule-panel.tsx` —
+  cronogramas documentales, sin ejecutar el HTML de los archivos recibidos.
+- `lib/masterplan-layout.json`, `lib/site-plan-layout.ts` — geometría del plano;
+  `lib/unit-progress.ts` — avances derivados de apartamentos y alineación visual.
+- `lib/narrative-update-scope.ts`, `lib/ingestion-change-set.ts` — alcance de
+  resúmenes mensuales e identidades estables de los bloques descubiertos.
 - `scripts/` — diagnóstico y mantenimiento (se ejecutan desde GitHub Actions).
 - `tests/` — batería de pruebas (`node --test`), más de 500 casos.
 
 ## Cómo trabajar
+
+Para descubrir código, preferir las herramientas MCP del grafo cuando estén
+disponibles: `search_graph`, `trace_path`, `get_code_snippet`, `query_graph` y
+`get_architecture`. El proyecto local indexado es `araya-auditoria-20261119`;
+indexarlo si falta o está desactualizado. Usar búsquedas habituales para literales,
+configuración y documentos, o si el grafo no ofrece resultados suficientes.
 
 1. Parte de `main` actualizado y crea una rama propia.
 2. Antes de subir: `npm run typecheck`, `npm run lint` y `node --test tests/*.mjs`
