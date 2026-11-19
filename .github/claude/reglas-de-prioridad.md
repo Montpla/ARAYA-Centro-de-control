@@ -9,6 +9,23 @@ no volver a preguntarla.
 Las reglas marcadas con **[en código]** ya las aplica el propio programa al
 publicar o al verificar; el resto las aplica Claude al revisar una carga.
 
+## 0. Es real si lo dice el documento **[en código]**
+
+Norma del dueño (19/11/2026): «es real si lo dice el Excel». El programa publica
+exactamente lo que dice el documento, sin estimar ni redondear por su cuenta, y
+cada lector debe reproducir los totales del propio documento:
+
+- La cubicación se autocomprueba: la suma de sus oficios debe cuadrar (±1 punto)
+  con el total del capítulo «EDIFICIOS» del propio Excel. Si no cuadra, los
+  oficios no se publican y la verificación lo trata como anomalía para
+  arreglar el lector (`lib/ingestion.ts`, `extractCubicacionDisciplineProgress`).
+- Los números de un Excel se leen en su formato real (punto decimal); el punto
+  sólo es separador de miles en un texto con formato español («1.234,56»).
+- Las hojas se leen enteras (hasta 50.000 filas); nunca se publica una lectura
+  parcial como si fuera completa.
+- Al arreglar cualquier lector, compara su resultado con los totales del propio
+  documento antes de dar el arreglo por bueno.
+
 ## 1. Avance físico (edificios, apartamentos, oficios, urbanismo, avance total y ejecutado de la Curva S) **[en código: `lib/source-precedence.ts`]**
 
 Decisión del dueño: «deben mandar los edificios y la cubicación».

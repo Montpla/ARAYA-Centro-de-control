@@ -490,8 +490,20 @@ function detectedBuildingProgressScope(
   return [...codes];
 }
 
-function numeroDeCelda(valor: string) {
-  const limpio = valor.replace(/%/g, "").trim().replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
+// Norma del dueño: «es real si lo dice el Excel». Un .xlsx entrega cada número
+// en formato de máquina (punto decimal: 53771.928), así que el punto sólo es
+// separador de miles cuando el número viene escrito en formato español de
+// verdad: con coma decimal («1.234,56») o con varios grupos de miles
+// («1.234.567»). Antes cualquier punto seguido de tres cifras se tomaba como
+// miles y un acumulado de 53771.928 se leía como 53.771.928: la cubicación de
+// octubre dejó Revestimientos al 100 % cuando el Excel dice 25,62 %.
+export function numeroDeCelda(valor: string) {
+  const sinPorcentaje = valor.replace(/%/g, "").trim();
+  const formatoEspanol = /^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(sinPorcentaje) &&
+    (sinPorcentaje.includes(",") || (sinPorcentaje.match(/\./g)?.length ?? 0) > 1);
+  const limpio = formatoEspanol
+    ? sinPorcentaje.replace(/\./g, "").replace(",", ".")
+    : sinPorcentaje.replace(",", ".");
   const numero = Number(limpio);
   return Number.isFinite(numero) ? numero : null;
 }
@@ -983,6 +995,10 @@ const CUBICACION_DISCIPLINE_TOKENS: ReadonlyArray<{ token: RegExp; canonicalName
  * "Instalaciones" en cada apartamento llevaban semanas sin moverse aunque el
  * edificio sí avanzara.
  */
+// Margen entre la suma de los oficios y el total de edificios del propio
+// Excel: por debajo es redondeo y partidas sin oficio (preliminares).
+const CUBICACION_SELF_CHECK_POINTS = 1;
+
 function extractCubicacionDisciplineProgress(
   filas: Array<Record<string, string>>,
   defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string },
@@ -990,10 +1006,12 @@ function extractCubicacionDisciplineProgress(
   let partidaColumn = "";
   let totalColumn = "";
   let montoAcumuladoColumn = "";
+  let descripcionColumn = "";
 
   for (let index = 0; index < Math.min(filas.length, 60); index += 1) {
     const cells = Object.entries(filas[index]);
     const partidaIndex = cells.findIndex(([, value]) => /^n[°ºo]?\s*partida\.?$/.test(normalizarCabecera(value)));
+    descripcionColumn = cells.find(([, value]) => /^descripcion/.test(normalizarCabecera(value)))?.[0] ?? descripcionColumn;
     if (partidaIndex < 0) continue;
     const totalIndex = cells.findIndex(([, value]) => /^total$/.test(normalizarCabecera(value)));
     const montoIndexes = cells
@@ -1014,16 +1032,27 @@ function extractCubicacionDisciplineProgress(
   const accumulatedByDiscipline = new Map<string, number>();
   let currentDiscipline = "";
   let partidaRowCount = 0;
+  // Total del capítulo de edificios que trae el propio Excel: sirve para
+  // comprobar que la suma de oficios reproduce lo que dice el documento.
+  let chapterBudget: number | null = null;
+  let chapterAccumulated: number | null = null;
 
   for (const row of filas) {
     const label = (row[partidaColumn] ?? "").trim();
     if (!label) continue;
+    if (chapterBudget === null && descripcionColumn &&
+      /^capitulo:?\s*edificios$/.test(normalizarCabecera(row[descripcionColumn] ?? ""))) {
+      chapterBudget = numeroDeCelda(row[totalColumn] ?? "");
+      chapterAccumulated = numeroDeCelda(row[montoAcumuladoColumn] ?? "");
+      continue;
+    }
     // Una fila de partida real siempre trae su número; el encabezado de
     // oficio ("SUPERESTRUCTURA.") y los subgrupos internos ("Hormigón.") no.
     // Distinguir así evita depender de que las demás columnas del encabezado
     // estén en blanco: algunas traen una fórmula cacheada en 0 en vez de
     // vacío, y sumar eso duplicaría lo que ya suman sus propias partidas.
-    if (!/^\d+$/.test(label)) {
+    // El número de partida puede venir con punto («80.»): también es partida.
+    if (!/^\d+\.?$/.test(label)) {
       const normalized = normalizarCabecera(label);
       const match = CUBICACION_DISCIPLINE_TOKENS.find((entry) => entry.token.test(normalized));
       // Un subgrupo que no es ninguno de los 9 oficios no cierra el oficio en
@@ -1040,6 +1069,25 @@ function extractCubicacionDisciplineProgress(
     partidaRowCount += 1;
   }
   if (!partidaRowCount) return null;
+
+  // Norma del dueño: «es real si lo dice el Excel». Si la suma de los oficios
+  // no reproduce el total del capítulo de edificios del propio documento, la
+  // lectura está mal (columnas, filas cortadas, números mal interpretados) y
+  // no se publica: la verificación lo trata como anomalía y lo arregla.
+  if (chapterBudget !== null && chapterAccumulated !== null && chapterBudget > 0) {
+    const totalBudget = [...budgetByDiscipline.values()].reduce((sum, value) => sum + value, 0);
+    const totalAccumulated = [...accumulatedByDiscipline.values()].reduce((sum, value) => sum + value, 0);
+    const read = totalBudget > 0 ? (totalAccumulated / totalBudget) * 100 : 0;
+    const declared = (chapterAccumulated / chapterBudget) * 100;
+    if (Math.abs(read - declared) > CUBICACION_SELF_CHECK_POINTS) {
+      const detalle = `la suma de los oficios da ${read.toFixed(2)} % de avance de edificios y el propio Excel dice ${declared.toFixed(2)} %`;
+      return {
+        updates: [],
+        summary: `Autocomprobación fallida en los oficios de la cubicación: ${detalle}; no se publican hasta que cuadren.`,
+        warnings: [`Autocomprobación fallida: ${detalle}.`],
+      };
+    }
+  }
 
   const baseUpdate = {
     area: "obra",

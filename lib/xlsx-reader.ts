@@ -216,7 +216,13 @@ function parseSheet(sheetXml: string, shared: string[], maxRows: number): SheetR
  * Leer sólo la primera dejaba fuera justo la tabla que actualiza el panel, así
  * que aquí se leen todas y quien llama decide en cuál está lo que busca.
  */
-export async function readXlsxSheets(bytes: ArrayBuffer, maxRows = 5_000): Promise<SheetRow[][]> {
+// Una cubicación de 26 edificios tiene casi 6.000 filas en su detalle de
+// partidas; con el antiguo tope de 5.000 se quedaban sin leer los últimos
+// edificios y los oficios salían inflados. El tope sólo protege la memoria del
+// Worker frente a un libro desmesurado.
+export const XLSX_MAX_ROWS = 50_000;
+
+export async function readXlsxSheets(bytes: ArrayBuffer, maxRows = XLSX_MAX_ROWS): Promise<SheetRow[][]> {
   const entries = await readZipEntries(bytes, (name) =>
     name === "xl/sharedStrings.xml" || /^xl\/worksheets\/sheet\d+\.xml$/.test(name));
 
@@ -242,7 +248,7 @@ export async function readXlsxSheets(bytes: ArrayBuffer, maxRows = 5_000): Promi
 }
 
 /** Las filas de la primera hoja del libro (compatibilidad con quien lee una sola). */
-export async function readXlsxRows(bytes: ArrayBuffer, maxRows = 5_000) {
+export async function readXlsxRows(bytes: ArrayBuffer, maxRows = XLSX_MAX_ROWS) {
   const hojas = await readXlsxSheets(bytes, maxRows);
   return hojas[0] ?? [];
 }

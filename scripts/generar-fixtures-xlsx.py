@@ -223,6 +223,31 @@ construir(SALIDA / "cubicacion-detalle-partidas.xlsx", [
     [5, "Vaciado de losa edificio 2", "M2", 5, 100, 500, 0, 0, 0, 5, 500, 100],
 ])
 
+# El caso real de la Cubicación Nº11 (octubre 2026): importes acumulados con
+# tres decimales (500.125 se leía como 500125 y Revestimientos llegaba al
+# 100 %), un número de partida con punto («2.») que se saltaba y una partida
+# sin nada ejecutado. Trae la fila «CAPITULO: EDIFICIOS» con los totales del
+# propio Excel, contra la que se autocomprueba la suma de los oficios:
+# (500.125 + 250.5 + 0) / 3000 = 25,02 %.
+FILAS_OCTUBRE = [
+    ["Nº Partida.", "Descripción de partida:", "Unidad", "Cantidad", "Precio Unitario", "Total",
+     "CANTIDAD", "MONTO", "%", "CANTIDAD", "MONTO", "%"],
+    ["ARAYA-EDIF", "CAPITULO: EDIFICIOS", "", "", "", 3000, "", "", "", "", 750.625, ""],
+    ["ARAYA-E01", "EDIFICIO 1", "", "", "", 3000, "", "", "", "", 750.625, ""],
+    ["REVESTIMIENTOS.", "", "", "", "", "", "", "", "", "", "", ""],
+    ["Ceramica y Otros", "", "", "", "", "", "", "", "", "", "", ""],
+    [1, "Cerámica en piso de baño", "M2", 10, 100, 1000, 0, 0, 0, 5.001, 500.125, 50.0125],
+    ["2.", "Tablilla en fachada", "M2", 10, 100, 1000, 0, 0, 0, 2.505, 250.5, 25.05],
+    [3, "Cerámica en pared de cocina", "M2", 10, 100, 1000, 0, 0, 0, "", "", ""],
+]
+construir(SALIDA / "cubicacion-detalle-octubre.xlsx", FILAS_OCTUBRE)
+
+# La misma hoja con un total de capítulo que no cuadra con sus partidas: la
+# lectura no reproduce lo que dice el Excel y los oficios no se publican.
+FILAS_DESCUADRE = [list(fila) for fila in FILAS_OCTUBRE]
+FILAS_DESCUADRE[1][10] = 2000
+construir(SALIDA / "cubicacion-detalle-descuadre.xlsx", FILAS_DESCUADRE)
+
 # El resumen "Monto Cubicación" de una cubicación mensual: otra hoja del mismo
 # libro que la carátula y el detalle de partidas, con el número de cubicación
 # y su monto certificado. Reproduce "Avance edificio.xlsx" (Cubicación 9):

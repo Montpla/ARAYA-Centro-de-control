@@ -73,6 +73,12 @@ test("un avance que retrocede más de un punto es un aviso; más de 15, anomalí
   assert.equal(evaluate({ regressions: [{ key: "buildings.3.progress", before: 55.32, after: 55 }] }).verdict, "ok");
 });
 
+test("una autocomprobación fallida del lector es una anomalía", () => {
+  const result = evaluate({ file: { extractionSummary: "Autocomprobación fallida en los oficios de la cubicación: la suma de los oficios da 60.00 % y el propio Excel dice 40.82 %; no se publican hasta que cuadren." } });
+  assert.equal(result.verdict, "anomalia");
+  assert.equal(result.checks[0].id, "autocomprobacion");
+});
+
 test("sin datos porque ya estaba todo publicado no es un aviso", () => {
   const result = evaluate({
     run: { status: "no_data", proposedCount: 0, publishedCount: 0, error: "" },

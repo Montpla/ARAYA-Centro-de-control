@@ -100,6 +100,13 @@ export function evaluateUploadVerification(input: VerificationInput): Verificati
     return { verdict: "pendiente", checks: [{ id: "en_proceso", severity: "ok", detail: `Todavía en proceso (etapa ${file.processingStage}).` }], summary: "Todavía se está procesando." };
   }
 
+  // Norma del dueño: «es real si lo dice el Excel». Si un lector no reproduce
+  // los totales del propio documento, se niega a publicar y lo deja escrito.
+  const selfCheck = String(file.extractionSummary ?? "").match(/Autocomprobación fallida[^.]*\./i)?.[0];
+  if (selfCheck) {
+    checks.push({ id: "autocomprobacion", severity: "anomalia", detail: selfCheck.slice(0, 280) });
+  }
+
   if (run?.status === "failed" || (file.lastProcessingError && file.processingStage !== "sincronizado")) {
     checks.push({
       id: "fallo_tecnico",

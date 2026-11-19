@@ -288,6 +288,49 @@ test("el detalle de partidas de la cubicación no confunde un subgrupo con el ci
   assert.ok(!claves.some((key) => /hormigon|edificio/i.test(key)));
 });
 
+test("es real si lo dice el Excel: los oficios reproducen la cubicación de octubre", async () => {
+  // Caso real (Cubicación Nº11): los acumulados con tres decimales se leían
+  // como miles (500.125 → 500125) y Revestimientos salía al 100 % cuando el
+  // Excel decía un 25-28 %; además se saltaba la partida «2.» y la hoja de
+  // ~6.000 filas se cortaba en la 5.000.
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("cubicacion-detalle-octubre.xlsx"),
+    "xlsx",
+    { ...defaults, sourceName: "Cubicacion_11_Araya_Oct.xlsx" },
+  );
+  const porClave = new Map(resultado.updates.map((update) => [update.key, update]));
+  // (500.125 + 250.5 + 0) / 3000 = 25,02 %.
+  assert.equal(porClave.get("constructionDisciplines.Revestimientos y cerámica.progress").value, 25.02);
+  assert.ok(!resultado.warnings.some((aviso) => /autocomprobación/i.test(aviso)));
+});
+
+test("si los oficios no cuadran con el total del propio Excel, no se publican", async () => {
+  const ingestion = await loadIngestion();
+  const resultado = await ingestion.extractStructuredUpdates(
+    await leerFixture("cubicacion-detalle-descuadre.xlsx"),
+    "xlsx",
+    { ...defaults, sourceName: "Cubicacion_11_Araya_Oct.xlsx" },
+  );
+  assert.ok(!resultado.updates.some((update) => update.key.startsWith("constructionDisciplines.")));
+  assert.match(resultado.summary, /Autocomprobación fallida/);
+});
+
+test("un número de Excel con tres decimales no se toma como miles", async () => {
+  const ingestion = await loadIngestion();
+  assert.equal(ingestion.numeroDeCelda("53771.928"), 53771.928);
+  assert.equal(ingestion.numeroDeCelda("0.31891109856590744"), 0.31891109856590744);
+  // Formato español de verdad: coma decimal o varios grupos de miles.
+  assert.equal(ingestion.numeroDeCelda("1.234.567,89"), 1234567.89);
+  assert.equal(ingestion.numeroDeCelda("1.234,5"), 1234.5);
+  assert.equal(ingestion.numeroDeCelda("12,5%"), 12.5);
+  assert.equal(ingestion.numeroDeCelda("1.234.567"), 1234567);
+});
+
+test("el lector de Excel lee hojas de más de 5.000 filas", () => {
+  assert.ok(xlsxReader.XLSX_MAX_ROWS >= 20_000);
+});
+
 test("una celda vacía-con-estilo no le roba el valor a la celda siguiente", async () => {
   // Bug real encontrado con "Costo Ago-26.xlsx": el patrón `<c r="X" s="1"/>`
   // -una celda vacía pero con estilo, la forma real en que Excel escribe una
