@@ -95,6 +95,11 @@ jobs:
             URL=$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY")
             echo "numero=${URL##*/}" >> "$GITHUB_OUTPUT"
           fi
+      - name: Avisar si falló
+        if: failure()
+        uses: ./.github/actions/avisar-fallo-cron
+        with:
+          workflow-name: "Verificar carga"
 
   arreglar:
     needs: verificar
@@ -113,7 +118,9 @@ jobs:
       ISSUE: ${{ needs.verificar.outputs.issue }}
       DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
       DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
-      RAMA: claude/arreglo-carga-${{ github.run_id }}
+      # El identificador del archivo va en el nombre de la rama para que la
+      # tarea de reintentos sepa qué carga terminar si el PR se queda abierto.
+      RAMA: claude/arreglo-carga-${{ needs.verificar.outputs.file_id }}-${{ github.run_id }}
     steps:
       - name: Comprobar que hay token de Claude
         id: token

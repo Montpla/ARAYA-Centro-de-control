@@ -31,6 +31,9 @@ export type VerificationInput = {
     deletedAt: string;
     publicationRevision: number | null;
     createdAt: string;
+    // Resumen de la lectura: dice, por ejemplo, si no se propuso nada porque
+    // todo ya estaba publicado.
+    extractionSummary?: string;
   };
   run: { status: string; proposedCount: number; publishedCount: number; error: string } | null;
   // Mensajes de las entradas "datos_descartados" de file_activity, con el
@@ -119,7 +122,15 @@ export function evaluateUploadVerification(input: VerificationInput): Verificati
     });
   }
 
-  if (run?.status === "no_data") {
+  const alreadyPublished = /ya coincid|no se emiten duplicados|ya (?:estaban |estan |están )?(?:vigentes|publicad)|sin cambios respecto/i
+    .test(String(file.extractionSummary ?? ""));
+  if (run?.status === "no_data" && alreadyPublished) {
+    checks.push({
+      id: "ya_publicado",
+      severity: "ok",
+      detail: "La lectura no propuso datos nuevos porque los que trae el archivo ya están publicados en el Centro de Control.",
+    });
+  } else if (run?.status === "no_data") {
     checks.push({
       id: "sin_datos",
       severity: "aviso",
