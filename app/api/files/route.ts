@@ -50,6 +50,7 @@ import {
 } from "../../../lib/ingestion-agent";
 import {
   partitionChangedLiveUpdates,
+  dynamicSectionSlotId,
   planDynamicSectionSlots,
   resolveNormalizedUpdateConfidences,
 } from "../../../lib/ingestion-change-set";
@@ -89,7 +90,7 @@ import {
   selectLivePointValues,
   upsertDocumentProposalRows,
 } from "../../../lib/d1-json-bulk";
-import { assertLiveDataContracts, getContractRootsSnapshot, validateLiveDataContract } from "../../../lib/live-data-contract";
+import { assertLiveDataContracts, getContractRootsSnapshot, selectContractSafeUpdates, validateLiveDataContract } from "../../../lib/live-data-contract";
 import { normalizeLiveDataUpdates, publishLiveDataUpdates } from "../../../lib/publish-live-data";
 import { publicationKeyConflict } from "../../../lib/live-data-publication-recovery";
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
@@ -1871,7 +1872,7 @@ export async function POST(request: Request) {
           return {
             key: slot.key,
             value: buildDynamicSectionBlock({
-              id: `descubierto-${id}-${posicion}`,
+              id: dynamicSectionSlotId(id, slot),
               existingId: slot.existingId,
               title: candidato.label,
               description: candidato.description,
@@ -2267,11 +2268,11 @@ export async function POST(request: Request) {
         ...extraction,
         warnings: [
           ...extraction.warnings,
-          `${lowerPriorityKeySet.size} dato(s) de avance físico ya los fijó una fuente con más prioridad (${fuente}) para este periodo y se conservan: ${[...lowerPriorityKeySet].slice(0, 5).join(", ")}${lowerPriorityKeySet.size > 5 ? "…" : ""}.`,
+          `${lowerPriorityKeySet.size} dato(s) ya los fijó una fuente con más prioridad (${fuente}) para este periodo y se conservan: ${[...lowerPriorityKeySet].slice(0, 5).join(", ")}${lowerPriorityKeySet.size > 5 ? "…" : ""}.`,
         ],
       };
     }
-    const updateIsAutoPublishable = (update: ReturnType<typeof normalizeLiveDataUpdates>[number]) =>
+    const updateIsAutoPublishable = (update: ReturnType<typeof normalizeLiveDataUpdates>[number], contractValues = liveValues) =>
       !staleCutoffKeySet.has(update.key) &&
       !lowerPriorityKeySet.has(update.key) &&
       (update.area === resolvedArea ||
@@ -2308,7 +2309,7 @@ export async function POST(request: Request) {
       !unsafeAgentKeys.has(update.key) &&
       (confidenceByKey.get(update.key) ?? 0) > 0 &&
       isSafeAutomaticStructuredUpdate(update) &&
-      individualUpdateContractIsSafe(update, liveValues);
+      individualUpdateContractIsSafe(update, contractValues);
     // Si todo el lote encaja (además, como lote atómico en el contrato), se
     // publica entero —cero cambio de comportamiento cuando todo cuadra—. Si no,
     // se publican los datos que individualmente son seguros y el resto se
@@ -2316,12 +2317,12 @@ export async function POST(request: Request) {
     const wholeBatchSafe = batchPreconditions &&
       extractionConfidenceIsSafe &&
       agentValidation.safe &&
-      normalizedUpdates.every(updateIsAutoPublishable) &&
+      normalizedUpdates.every((update) => updateIsAutoPublishable(update)) &&
       automaticContractIsSafe(normalizedUpdates, liveValues);
     const autoPublishable = wholeBatchSafe
       ? normalizedUpdates
       : batchPreconditions
-        ? normalizedUpdates.filter(updateIsAutoPublishable)
+        ? selectContractSafeUpdates(normalizedUpdates, liveValues, updateIsAutoPublishable)
         : [];
     // Por qué se queda fuera cada dato descartado. Antes sólo se contaban
     // ("2 entradas no válidas se aislaron") y no había forma de saber si se

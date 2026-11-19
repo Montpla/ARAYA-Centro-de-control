@@ -558,6 +558,21 @@ export function assertLiveDataContracts(
   return workingValues;
 }
 
+/** Conserva sólo datos seguros y valida cada alta después de las anteriores. */
+export function selectContractSafeUpdates<T extends { key: string; valueJson: string }>(
+  updates: T[], currentValues: LiveDataMap,
+  eligible: (update: T, workingValues: LiveDataMap) => boolean,
+) {
+  const workingValues: LiveDataMap = { ...currentValues };
+  const accepted: T[] = [];
+  for (const update of [...updates].sort((left,right) => compareContractKeys(left.key,right.key))) {
+    if (!eligible(update,workingValues) || !validateLiveDataContract(update.key,update.valueJson,workingValues).valid) continue;
+    accepted.push(update);
+    workingValues[update.key] = JSON.parse(update.valueJson) as LiveDataValue;
+  }
+  return accepted;
+}
+
 /** Automatic extraction remains path-only, but shares the same central rule. */
 export function matchesAutomaticLiveDataContract(
   key: string,

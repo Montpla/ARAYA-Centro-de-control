@@ -4,7 +4,8 @@ import type { LiveDataUpdate } from "./live-data";
 export function prepareNarrativeUpdate(update: LiveDataUpdate): LiveDataUpdate {
   return {
     ...update,
-    key: update.key === "projectSnapshot.declaredCutoff" ? "projectSnapshot.cutoff" : update.key,
+    key: update.key === "projectSnapshot.cutoff" ? "projectSnapshot.declaredCutoff" : update.key,
+    ...(/^projectSnapshot\.(?:declaredCutoff|cutoff)$/.test(update.key) && /^\d{4}-\d{2}-\d{2}$/.test(update.cutoff ?? "") ? { value: update.cutoff! } : {}),
     ...(/^safety(?:Metrics|Findings|FindingTracking|WeeklySeries)(?:\.|$)/.test(update.key) ? { area: "seguridad" } : {}),
   };
 }

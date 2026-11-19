@@ -7,6 +7,14 @@ import { blockedByHigherPrioritySource, physicalProgressRank } from "../lib/sour
 const informe = "Informe_Ejecutivo_ARAYA_Octubre_Definitivo_v5.pptx";
 const cubicacion = "Cubicacion_11_Araya_Oct.xlsx";
 
+test("el Excel del flujo prevalece sobre el informe del mismo corte",()=>{
+  const base={incomingSource:informe,incomingCutoff:"2026-10-31",liveSource:"ARAYA_Flujo_I_reprogramado_Oct2026_v4.xlsx",liveCutoff:"2026-10-31"};
+  for(const key of ["reprogrammedFlowAudit.sourceName","reprogrammedFlowAudit.actualPeriodDop","reprogrammedFlowMonths.10.currentDop"]){
+    assert.equal(blockedByHigherPrioritySource({key,...base}),true);
+    assert.equal(blockedByHigherPrioritySource({key,...base,incomingSource:base.liveSource}),false);
+  }
+});
+
 test("el informe conserva la línea base del maestro y la precisión del Excel reprogramado", () => {
   assert.equal(blockedByHigherPrioritySource({ key: "monthlyPlan.16.planned", incomingSource: informe, incomingCutoff: "2026-10-31", liveSource: "01 GRAFICOS ARAYA FASE II.xlsx", liveCutoff: "2026-08-31" }), true);
   assert.equal(blockedByHigherPrioritySource({ key: "monthlyPlan.16.reprogrammed", incomingSource: informe, incomingCutoff: "2026-10-31", liveSource: "Curva repogramada Araya.xlsx", liveCutoff: "2026-10-31" }), true);

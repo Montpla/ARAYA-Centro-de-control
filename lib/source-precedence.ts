@@ -35,6 +35,8 @@ export function physicalProgressSourceLabel(sourceName: string) {
 
 const month = (cutoff: string) => String(cutoff ?? "").slice(0, 7);
 const PLANNING_CURVE_KEY = /^monthlyPlan\.\d+\.(planned|reprogrammed|originalDocumentProgress|reprogrammedBuildingsProgress|reprogrammedUrbanismProgress)$/;
+const FINANCIAL_FLOW_KEY = /^reprogrammedFlow(?:Months|Scopes|Audit)(?:\.|$)/;
+const financialFlowRank = (source: string) => /flujo.*reprogram.*\.xlsx\b/i.test(source) ? 40 : /\.pptx?\b/i.test(source) ? 10 : 0;
 const masterCurve = /graficos[ _-]*araya|plan[ _-]*operativo/i;
 function planningRank(source: string, key: string) {
   if (/\.planned$/.test(key) && masterCurve.test(source) && /\.xlsx\b/i.test(source)) return 40;
@@ -54,11 +56,12 @@ export function blockedByHigherPrioritySource(input: {
   liveCutoff?: string | null;
 }) {
   const planning = PLANNING_CURVE_KEY.test(input.key);
-  if (!PHYSICAL_PROGRESS_KEY.test(input.key) && !planning) return false;
+  const financialFlow = FINANCIAL_FLOW_KEY.test(input.key);
+  if (!PHYSICAL_PROGRESS_KEY.test(input.key) && !planning && !financialFlow) return false;
   const liveSource = String(input.liveSource ?? "");
   if (!liveSource || liveSource === input.incomingSource) return false;
-  const liveRank = planning ? planningRank(liveSource, input.key) : physicalProgressRank(liveSource);
-  const incomingRank = planning ? planningRank(input.incomingSource, input.key) : physicalProgressRank(input.incomingSource);
+  const liveRank = financialFlow ? financialFlowRank(liveSource) : planning ? planningRank(liveSource, input.key) : physicalProgressRank(liveSource);
+  const incomingRank = financialFlow ? financialFlowRank(input.incomingSource) : planning ? planningRank(input.incomingSource, input.key) : physicalProgressRank(input.incomingSource);
   if (liveRank <= incomingRank) return false;
   // La serie «Original» de un informe no sustituye la línea base operativa
   // del Excel maestro, aunque el informe se publique en un mes posterior.

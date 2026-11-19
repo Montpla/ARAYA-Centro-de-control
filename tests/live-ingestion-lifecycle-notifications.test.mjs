@@ -135,7 +135,7 @@ test("multiformat ingestion publishes valid facts and closes isolated diagnostic
     /partitionChangedLiveUpdates\(/,
     /const batchPreconditions =/,
     /const updateIsAutoPublishable = /,
-    /normalizedUpdates\.filter\(updateIsAutoPublishable\)/,
+    /selectContractSafeUpdates\(normalizedUpdates, liveValues, updateIsAutoPublishable\)/,
     /status: ["']descartado_automatico["']/,
     /publishLiveDataUpdates\(/,
     /reviewClosure: \{[\s\S]*?mode: ["']insert["'][\s\S]*?completedAction: ["']aprobado_automatico["']/,
@@ -770,11 +770,11 @@ test("un dato financiero se publica aunque el área del archivo sea otra", () =>
   const start = filesRoute.indexOf("const updateIsAutoPublishable = (update");
   assert.ok(start >= 0, "no se encontró updateIsAutoPublishable en la ruta");
   const markerEnd = filesRoute.indexOf(
-    "individualUpdateContractIsSafe(update, liveValues);",
+    "individualUpdateContractIsSafe(update, contractValues);",
     start,
   );
   assert.ok(markerEnd >= 0, "no se encontró el final de updateIsAutoPublishable");
-  const rawSnippet = filesRoute.slice(start, markerEnd + "individualUpdateContractIsSafe(update, liveValues);".length);
+  const rawSnippet = filesRoute.slice(start, markerEnd + "individualUpdateContractIsSafe(update, contractValues);".length);
   // El snippet trae anotaciones de tipo (el parámetro de la arrow function);
   // new Function sólo entiende JS, así que se transpila igual que el resto
   // de los módulos que esta suite evalúa directamente.

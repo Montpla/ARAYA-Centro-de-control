@@ -388,6 +388,8 @@ export function namingToken(value: string) {
 // válidas, dejando en pantalla el valor antiguo. Sólo se unifican variantes
 // conocidas del mismo oficio; ningún otro nombre cambia.
 const ENTITY_TOKEN_ALIASES: Record<string, string> = {
+  instalaciones: "instalacioneselectricassanitariasygas",
+  revestimientos: "revestimientosceramica",
   carpinteriapuertascloset: "carpinteria",
   carpinteriapuertasclosets: "carpinteria",
   revestimientoyceramica: "revestimientosceramica",

@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { projectSnapshot } from "../app/demo-data.ts";
 import { prepareNarrativeUpdate, complementaryNarrativeUpdateAllowed, executiveSafetySummary } from "../lib/narrative-update-scope.ts";
 
 test("el informe mixto conserva Seguridad y traduce sólo el alias conocido del corte", () => {
   assert.deepEqual(prepareNarrativeUpdate({key:"safetyMetrics",value:[],area:"sin_clasificar"}), {key:"safetyMetrics",value:[],area:"seguridad"});
-  assert.equal(prepareNarrativeUpdate({key:"projectSnapshot.declaredCutoff",value:"2026-10-31"}).key,"projectSnapshot.cutoff");
+  const cutoff=prepareNarrativeUpdate({key:"projectSnapshot.cutoff",value:"31/10/2026",cutoff:"2026-10-31"});
+  assert.equal(cutoff.key,"projectSnapshot.declaredCutoff");
+  assert.equal(cutoff.value,"2026-10-31");
+  assert.equal(Object.hasOwn(projectSnapshot,cutoff.key.split(".")[1]),true);
   const financial={key:"reprogrammedFlowAudit.cutoff",value:"2026-10-31",area:"finanzas"};
   assert.deepEqual(prepareNarrativeUpdate(financial),financial);
 });
