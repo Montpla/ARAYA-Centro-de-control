@@ -22,9 +22,10 @@ export type CoherenceInput = {
     curvePlanAtCutoff?: number | null;
     curveCutoffLabel?: string | null;
   };
-  reconciliationCritical?: number;
   liveValues: Record<string, unknown>;
-  expectedBuildings: number;
+  // Los edificios tal como los pinta el panel (base + datos publicados): su
+  // avance es lo que decide el color de cada uno.
+  buildings: Array<{ name?: unknown; progress?: unknown }>;
 };
 
 // Medio punto: por debajo es redondeo entre fuentes.
@@ -69,10 +70,10 @@ export function evaluatePanelCoherence(input: CoherenceInput): CoherenceCheck[] 
   }
 
   const invalid: string[] = [];
-  for (let index = 0; index < input.expectedBuildings; index += 1) {
-    const value = asNumber(liveValues[`buildings.${index}.progress`]);
-    if (value === null || value < 0 || value > 100) invalid.push(`buildings.${index}.progress`);
-  }
+  input.buildings.forEach((building, index) => {
+    const value = asNumber(building?.progress);
+    if (value === null || value < 0 || value > 100) invalid.push(String(building?.name ?? `buildings.${index}`));
+  });
   if (invalid.length) {
     checks.push({
       id: "edificios_sin_avance",
@@ -93,14 +94,6 @@ export function evaluatePanelCoherence(input: CoherenceInput): CoherenceCheck[] 
       id: "urbanismo_vs_plano",
       severity: "aviso",
       detail: `El urbanismo del resumen (${pct(urbanismSummary)}) no coincide con el del plano (${pct(urbanismMap)}).`,
-    });
-  }
-
-  if ((input.reconciliationCritical ?? 0) > 0) {
-    checks.push({
-      id: "conciliaciones_criticas",
-      severity: "aviso",
-      detail: `El Centro de Control marca ${input.reconciliationCritical} conciliación(es) crítica(s) entre fuentes.`,
     });
   }
 
