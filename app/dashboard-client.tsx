@@ -3471,7 +3471,7 @@ function SitePlan({
               );
             })}
             {planLayer === "servicios" && masterPlan.features.map((feature, index) => (
-              <button type="button" key={feature.id} className={`plan-feature-point feature-${feature.category === "Piscinas" ? "water" : "common"}`}
+              <button type="button" key={feature.id} className={`plan-feature-point feature-${feature.category === "Piscinas" ? "water" : "common"} ${feature.x >= 50 ? "label-left" : ""}`}
                 style={{ left: `${feature.x}%`, top: `${feature.y}%` }}
                 title={feature.name} aria-label={`Abrir ${feature.name}`} onClick={() => {
                   setPlanExpanded(false); setPlanBuilding(null); setSelectedUnit(null); setSelectedUrbanism(null); setSelectedFeature(feature);

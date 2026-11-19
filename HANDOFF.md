@@ -9,6 +9,17 @@ Zona horaria del usuario: Europe/Madrid
 > anteriores**. Las secciones fechadas más abajo son historial; si contradicen a
 > esta, manda esta.
 
+## Etiquetas de los servicios del plano (19/11/2026)
+
+- El tanque elevado y la zona de mascotas abrían su rótulo hacia el borde
+  derecho y quedaban recortados. Los puntos de la mitad derecha abren ahora
+  la etiqueta hacia la izquierda; el texto puede partirse y su ancho se limita
+  al espacio disponible en la imagen, también al ampliar el plano.
+- Comprobación en navegador con el marcado y los estilos reales: 20 servicios,
+  dos modos y seis anchos, incluidas pantallas estrechas y ampliación. Las 240
+  comprobaciones quedan dentro del marco; antes había 46 desbordamientos.
+- Typecheck, compilación y 553 pruebas correctas; lint sin errores.
+
 ## Cuatro documentos de octubre (19/11/2026)
 
 - PR #288 desplegado. Los dos Gantt quedaron publicados en las revisiones
