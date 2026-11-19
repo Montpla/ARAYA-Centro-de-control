@@ -1,7 +1,94 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 23/08/2026
+Actualizado: 19/11/2026
 Zona horaria del usuario: Europe/Madrid
+
+> **Para cualquier asistente (Claude, ChatGPT/Codex, Gemini, Copilot, Cursor…):**
+> lee primero `AGENTS.md` (normas, arquitectura y automatización) y después esta
+> sección, que es el estado canónico vigente y **sustituye a todas las
+> anteriores**. Las secciones fechadas más abajo son historial; si contradicen a
+> esta, manda esta.
+
+## Estado vigente (19/11/2026)
+
+### Producción
+
+- `main` desplegado y en verde: último cambio **#277** (`f8f78db`).
+  https://araya-centro-control.grupobricket.workers.dev
+- Sin PR abiertos ni incidencias abiertas en GitHub.
+- Expediente: 48 documentos vigentes, 48 resueltos, 0 pendientes, 0 propuestas
+  pendientes.
+- Avance físico 38,01 % frente a plan 39,8 % (desvío −1,79 puntos). Curva S con
+  el ejecutado de octubre de 2026 (38,01 %). Urbanismo 31,89 %. Fin previsto
+  06/07/2027 (base 31/05/2027). Corte vigente: 31/10/2026.
+- El avance de los 26 edificios sale de `Cubicacion_11_Araya_Oct.xlsx`
+  (Edificio 16 al 0 %, que es correcto). El panel queda coherente según la
+  verificación automática (resumen = último punto de la Curva S, curva al día,
+  todos los edificios con avance válido).
+
+### Qué se hizo el 18 y 19/11/2026 (PR #239–#277)
+
+1. **Ingesta en segundo plano (#245):** las cargas desde la web recibían un 404
+   al llamarse a sí mismas y no se procesaban hasta reprocesarlas a mano. Se
+   arregló con la vinculación de servicio `SELF` del Worker.
+2. **Fechas de corte (#252, #253, #262):** el corte sale del nombre del
+   documento (en un rango, la fecha final; «CORTE dd-mm-aaaa» manda) y no de la
+   fecha de carga. `scripts/migrar-cortes.mjs` corrigió los cortes guardados.
+3. **La cubicación manda en el avance físico (#253–#255, #267, #269):** decisión
+   del dueño. Edificios, apartamentos, oficios, urbanismo del resumen y
+   ejecutado de la Curva S salen de la cubicación. Los oficios se resuelven por
+   nombre aunque el Informe Ejecutivo los rotule distinto.
+4. **Formatos (#251, #261):** PDF de más de 15 MB se comprimen en GitHub; Excel
+   antiguos `.xls` se convierten a `.xlsx` con LibreOffice. Descartes con motivo
+   (`datos_descartados`).
+5. **Seguridad (#262):** la serie semanal se publica (un `null` legítimo la
+   descartaba entera); cortes de los reportes semanales corregidos.
+6. **Plano visual (#257–#260):** salón común con tejado, piscinas de adultos e
+   infantil, pista de baloncesto, etiqueta EQ recolocada, tejado en el edificio
+   del eje central norte. Imagen `public/araya-visual-masterplan-v4.png`.
+7. **Automatización completa de cargas (#264–#277):** verificación de cada carga,
+   coherencia del panel, avisos directos al dueño, arreglo automático con Claude
+   (probado de principio a fin con el PR #274), reintentos cada 3 h, reglas de
+   prioridad entre fuentes, "aplica y avisa", respuestas desde el móvil
+   (`/A`, `/B`, `/deshacer`, `/decido`) y aprendizaje de decisiones. Detalle en
+   `AGENTS.md`.
+
+### Configuración que ya hizo el dueño
+
+- Secreto `CLAUDE_CODE_OAUTH_TOKEN` en GitHub (suscripción de Claude del dueño).
+- Ajuste de GitHub «Allow GitHub Actions to create and approve pull requests»
+  activado.
+
+### Pendiente o a vigilar
+
+- Confirmar con el dueño las reglas de `.github/claude/reglas-de-prioridad.md`
+  (las de avance físico, cortes y Seguridad son decisiones suyas ya tomadas; las
+  de Curva S y documentos con errores se redactaron a partir del comportamiento
+  actual).
+- La prueba completa de una respuesta del dueño (`/A` → arreglo aplicado) no se
+  ha ejecutado para no gastar su plan; sí se probó el reconocimiento del dueño y
+  el circuito de arreglo es el mismo que ya funcionó con el PR #274.
+- Quedan tres ramas viejas sin uso: `claude/arreglo-carga-44487359664`,
+  `claude/arreglo-carga-44494416118` y `claude/arreglo-carga-44495901989`. Se
+  pueden borrar.
+- Hay una conciliación crítica fija en el panel ("Centro de Control marca 1
+  conciliación crítica") que no se ha investigado; no entra en el veredicto de
+  la verificación.
+- Los cron de GitHub se retrasaron varias horas el 19/11; las cargas no dependen
+  de ellos (se lanzan al subir), sólo las redes de seguridad.
+- Este archivo contiene, más abajo, secciones antiguas con importes de dinero
+  escritos por agentes anteriores. No añadas más; si se reorganiza, conviene
+  quitarlos.
+
+### Tareas programadas que viven en la cuenta de Claude del dueño
+
+No están en el repositorio ni las ve otro asistente: "Vigilar workflow Convertir
+DWG" (cada hora, avisa si falla) y "Revisión de pendientes" (diaria). La
+automatización de cargas no depende de ellas.
+
+---
+
+## Historial anterior (hasta el 23/08/2026)
 
 ## Cierre GitHub: conversor MPP estabilizado (23/08/2026)
 
