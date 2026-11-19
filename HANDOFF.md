@@ -17,7 +17,8 @@ Zona horaria del usuario: Europe/Madrid
 - La verificación del informe detectó un fallo de integración entre áreas:
   Seguridad quedaba fuera por clasificarse el conjunto en Planificación.
   Se corrige la asignación de esas claves, el alias del corte y los nombres
-  de edificio E frente a TH. El resumen mensual no sustituye la serie semanal.
+  de edificio E frente a TH. El resumen mensual se conserva como bloque propio
+  en Centro de datos; no sustituye la foto ni la serie semanales.
   Se mantienen las validaciones y la prioridad de las fuentes.
 
 - Nuevo encargo: integrar los dos Gantt HTML, el Informe Ejecutivo definitivo

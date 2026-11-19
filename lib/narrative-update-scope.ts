@@ -13,3 +13,10 @@ export function prepareNarrativeUpdate(update: LiveDataUpdate): LiveDataUpdate {
 export function complementaryNarrativeUpdateAllowed(key: string, sourceName: string, deterministicKeys: string[]) {
   return !(/^safetyWeeklySeries(?:\.|$)/.test(key) && /informe[ _-]*ejecutivo.*\.pptx$/i.test(sourceName) && deterministicKeys.includes("safetyMetrics"));
 }
+
+/** Los totales mensuales se conservan aparte de la fotografía semanal vigente. */
+export function executiveSafetySummary(updates: LiveDataUpdate[], sourceName: string) {
+  if (!/informe[ _-]*ejecutivo.*\.pptx$/i.test(sourceName)) return null;
+  const update = updates.find((item) => item.key === "safetyMetrics");
+  return update && Array.isArray(update.value) ? { metrics: update.value, cutoff: update.cutoff ?? "" } : null;
+}

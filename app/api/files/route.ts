@@ -93,7 +93,7 @@ import { assertLiveDataContracts, getContractRootsSnapshot, validateLiveDataCont
 import { normalizeLiveDataUpdates, publishLiveDataUpdates } from "../../../lib/publish-live-data";
 import { publicationKeyConflict } from "../../../lib/live-data-publication-recovery";
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
-import { complementaryNarrativeUpdateAllowed, prepareNarrativeUpdate } from "../../../lib/narrative-update-scope";
+import { complementaryNarrativeUpdateAllowed, executiveSafetySummary, prepareNarrativeUpdate } from "../../../lib/narrative-update-scope";
 import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-upsert";
 import { nothingExtractedMessage } from "../../../lib/upload-messages";
 import { triggerMppConversion } from "../../../lib/mpp-conversion-trigger";
@@ -1754,6 +1754,26 @@ export async function POST(request: Request) {
         ],
       };
     }
+    const resumenMensualSeguridad = executiveSafetySummary(extraction.updates, candidate.name);
+    if (resumenMensualSeguridad) {
+      // Los indicadores del mes se muestran como bloque documental propio.
+      // La foto y la serie semanales siguen perteneciendo al reporte semanal.
+      const retained = extraction.updates.map((update, index) => ({ update, confidence: extraction.updateConfidences[index] ?? extraction.confidence }))
+        .filter(({ update }) => update.key !== "safetyMetrics");
+      extraction = {
+        ...extraction,
+        updates: retained.map(({ update }) => update),
+        updateConfidences: retained.map(({ confidence }) => confidence),
+        unmappedCandidates: [...extraction.unmappedCandidates, {
+          label: `Seguridad mensual · ${resumenMensualSeguridad.cutoff.slice(0, 7)}`,
+          description: "Indicadores del periodo mensual del Informe Ejecutivo; alcance distinto de la fotografía semanal.",
+          valueJson: JSON.stringify(resumenMensualSeguridad.metrics),
+          suggestedArea: "seguridad",
+          confidence: 1,
+          evidence: "Bloque Seguridad y Salud en el Trabajo del Informe Ejecutivo, leído directamente del documento.",
+        }],
+      };
+    }
     agentModel = extraction.model;
     agentPromptVersion = extraction.promptVersion;
     agentIterations = extraction.agentIterations;
@@ -2255,7 +2275,10 @@ export async function POST(request: Request) {
         // El resumen ejecutivo contiene Seguridad aunque su área mayoritaria
         // sea Planificación. La clave canónica y todas las guardas de abajo
         // siguen siendo obligatorias.
-        (update.area === "seguridad" && /^safety(?:Metrics|Findings|FindingTracking|WeeklySeries)(?:\.|$)/.test(update.key)) ||
+        (update.area === "seguridad" && (
+          /^safety(?:Metrics|Findings|FindingTracking|WeeklySeries)(?:\.|$)/.test(update.key) ||
+          (/^discoveredSections\.\d+$/.test(update.key) && JSON.parse(update.valueJson).area === "seguridad")
+        )) ||
         // El archivo en conjunto no se pudo etiquetar, pero este dato puntual
         // sí trae su propia área (la que detectó la extracción, no la del
         // archivo). El resto de condiciones de abajo —acceso financiero,
