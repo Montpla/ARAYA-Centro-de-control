@@ -193,8 +193,9 @@ jobs:
             # Comprobación independiente de la de Claude, sobre lo que hay en el PR.
             gh pr checkout "$PR"
             npm ci --no-audit --no-fund
-            npm run typecheck
-            node --test tests/*.mjs
+            # Lo mismo que la CI: typecheck, compilación y pruebas (algunas
+            # pruebas revisan el código compilado de la web).
+            npm test
             gh pr ready "$PR" || true
             gh pr merge "$PR" --squash --delete-branch
             echo "como=el PR #$PR" >> "$GITHUB_OUTPUT"
@@ -204,8 +205,9 @@ jobs:
             git checkout -B fusion-automatica origin/main
             git merge --squash "origin/$RAMA"
             npm ci --no-audit --no-fund
-            npm run typecheck
-            node --test tests/*.mjs
+            # Lo mismo que la CI: typecheck, compilación y pruebas (algunas
+            # pruebas revisan el código compilado de la web).
+            npm test
             git commit -m "Arreglo automático de la carga $FILE_ID"$'\n\n'"$RESUMEN"$'\n\n'"Rama: $RAMA"
             git push origin HEAD:main
             git push origin --delete "$RAMA" || true
