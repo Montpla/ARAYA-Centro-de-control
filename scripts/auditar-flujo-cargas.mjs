@@ -52,7 +52,11 @@ for (const f of await consulta(`
   console.log(`  ${f.created_at.slice(0, 16)} · ${corto(f.original_name, 90)} [${f.extension}${f.derivado ? ", derivado" : ""} · ${(Number(f.size_bytes) / 1024 / 1024).toFixed(2)} MB]`);
   console.log(`      área ${f.area} · periodo «${f.detected_period}» · corte declarado «${f.declared_cutoff}» · ${f.review_status}/${f.processing_stage} · rev ${f.publication_revision ?? "-"} · intentos ${f.processing_attempts}`);
   console.log(`      ingesta ${f.run ?? "sin registro"} · ${f.model ?? ""} · propuestos ${f.proposed_count ?? 0} · publicados ${f.published_count ?? 0}`);
-  if (f.error || f.error_carga) console.log(`      ERROR: ${corto(f.error || f.error_carga)}`);
+  // Un error de un intento en segundo plano anterior (p. ej. el 404 de antes de
+  // la vinculación SELF, #245) se queda escrito aunque un reproceso posterior
+  // lo haya resuelto: si el archivo ya está sincronizado, no es un fallo vivo.
+  const superado = f.processing_stage === "sincronizado" && f.run !== "failed";
+  if (f.error || f.error_carga) console.log(`      ${superado ? "error ya superado" : "ERROR"}: ${corto(f.error || f.error_carga)}`);
 }
 
 console.log("\n=== 5. Publicaciones: automáticas desde archivo frente a manuales ===");
