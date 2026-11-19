@@ -1,8 +1,13 @@
 # Arreglar una carga que no entró bien en el Centro de Control
 
 Te lanza `.github/workflows/verificar-carga.yml` porque la verificación automática
-de un archivo recién subido encontró una **anomalía**. El diagnóstico está en
+de un archivo recién subido encontró una **anomalía**, o porque el dueño te ha
+dejado un **encargo** concreto. El diagnóstico está en
 `.verificacion/diagnostico.md` (en la raíz del repositorio). Léelo primero.
+
+Si el diagnóstico termina con una sección **Encargo**, esa es tu tarea: hazla
+igual que arreglarías un fallo del programa (código + prueba + PR, decisión
+`"arreglado"`), aunque la verificación de la carga haya salido bien.
 
 Trabajas solo y sin nadie mirando: el dueño del proyecto está en España y la
 obra en República Dominicana. Tu trabajo es averiguar por qué el archivo no

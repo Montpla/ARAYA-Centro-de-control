@@ -202,3 +202,19 @@ export function uploadNeedsVerification(input: {
   if (extension === "pdf" && input.sizeBytes > input.largePdfBytes) return false;
   return true;
 }
+
+/**
+ * Suma al veredicto de un archivo otras comprobaciones (la coherencia del
+ * panel tras la carga, ver lib/panel-coherence.ts) y recalcula el veredicto.
+ */
+export function mergeVerificationChecks(result: VerificationResult, extra: VerificationCheck[]): VerificationResult {
+  const problems = extra.filter((check) => check.severity !== "ok");
+  if (!problems.length || result.verdict === "pendiente") return result;
+  const checks = [...result.checks.filter((check) => check.severity !== "ok"), ...problems];
+  const verdict: VerificationVerdict = checks.some((check) => check.severity === "anomalia") ? "anomalia" : "aviso";
+  return {
+    verdict,
+    checks,
+    summary: `${checks.length} punto(s) a revisar: ${checks.map((check) => check.id).join(", ")}.`,
+  };
+}

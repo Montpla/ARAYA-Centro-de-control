@@ -10,19 +10,39 @@ import {
 import { requireApiUser } from "../../../../lib/access-control";
 import { scheduleNotificationDispatch } from "../../../../lib/notification-dispatch";
 import { emitMissingNotifications } from "../../../../lib/notifications";
-import { evaluateUploadVerification, PROGRESS_KEY } from "../../../../lib/upload-verification";
+import {
+  evaluateUploadVerification,
+  mergeVerificationChecks,
+  PROGRESS_KEY,
+  type VerificationCheck,
+} from "../../../../lib/upload-verification";
 
 export const runtime = "edge";
 
 // Comprueba si una carga entró bien en el Centro de Control (ver
 // lib/upload-verification.ts). La llama .github/workflows/verificar-carga.yml
 // en cuanto termina de procesarse un archivo. Con notify=true deja el veredicto
-// en el historial del archivo y avisa a los administradores en el panel y en
-// el móvil. Sólo devuelve claves, motivos y porcentajes, nunca importes.
+// en el historial del archivo y avisa en el panel y en el móvil a la cuenta que
+// ejecuta la verificación. Sólo devuelve claves, motivos y porcentajes, nunca importes.
 
 // note: texto opcional que sustituye al resumen en el aviso (lo usa el paso de
 // arreglo automático para contar qué hizo).
-type VerificationPayload = { fileId?: string; notify?: boolean; note?: string };
+// extraChecks: comprobaciones hechas fuera (la coherencia del panel, que el
+// workflow calcula con lo que sirve producción) que se suman al veredicto.
+type VerificationPayload = { fileId?: string; notify?: boolean; note?: string; extraChecks?: unknown };
+
+function sanitizeExtraChecks(value: unknown): VerificationCheck[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 12).flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const record = item as Record<string, unknown>;
+    const severity = record.severity;
+    if (severity !== "ok" && severity !== "aviso" && severity !== "anomalia") return [];
+    const id = String(record.id ?? "").replace(/[^a-z0-9_]/gi, "").slice(0, 40);
+    const detail = String(record.detail ?? "").slice(0, 300);
+    return id && detail ? [{ id, severity, detail }] : [];
+  });
+}
 
 const KEY_CHUNK = 50;
 
@@ -99,7 +119,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const result = evaluateUploadVerification({
+  const fileResult = evaluateUploadVerification({
     file: {
       originalName: file.originalName,
       extension: file.extension,
@@ -124,6 +144,8 @@ export async function POST(request: Request) {
     regressions,
   });
 
+  const result = mergeVerificationChecks(fileResult, sanitizeExtraChecks(payload.extraChecks));
+
   if (payload.notify && result.verdict !== "pendiente") {
     await db.insert(fileActivity).values({
       fileId,
@@ -136,7 +158,9 @@ export async function POST(request: Request) {
     await emitMissingNotifications([{
       kind: ok ? "upload_verified" : "upload_verification_attention",
       area: "direccion",
-      audience: "admin",
+      // Directo a quien ejecuta la verificación (la cuenta del dueño en el
+      // workflow), no a todos los administradores.
+      audience: `user:${auth.user.email}`,
       actorEmail: "sistema@araya",
       actorName: "Verificación automática",
       subjectType: "upload_verification",

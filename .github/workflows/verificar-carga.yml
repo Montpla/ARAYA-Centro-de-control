@@ -33,6 +33,11 @@ on:
         required: false
         default: "1"
         type: string
+      encargo:
+        description: "Tarea concreta para Claude (opcional): se hace aunque la carga esté bien, con el mismo circuito de pruebas, fusión, despliegue, reproceso y aviso"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -88,7 +93,7 @@ jobs:
 
   arreglar:
     needs: verificar
-    if: ${{ needs.verificar.outputs.veredicto == 'anomalia' && inputs.arreglar != '0' }}
+    if: ${{ (needs.verificar.outputs.veredicto == 'anomalia' || inputs.encargo != '') && inputs.arreglar != '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     permissions:
@@ -126,12 +131,16 @@ jobs:
         if: ${{ steps.token.outputs.hay == '1' }}
         env:
           NOTIFICAR: "0"
+          ENCARGO: ${{ inputs.encargo }}
           VERIFICACION_MD: ${{ github.workspace }}/.verificacion/diagnostico.md
         run: |
           set -euo pipefail
           npm ci --no-audit --no-fund
           mkdir -p .verificacion
           node scripts/verificar-carga.mjs
+          if [ -n "$ENCARGO" ]; then
+            printf '\n\n## Encargo\n\n%s\n' "$ENCARGO" >> .verificacion/diagnostico.md
+          fi
           git config user.name "claude[bot]"
           git config user.email "claude[bot]@users.noreply.github.com"
           git checkout -b "$RAMA"
