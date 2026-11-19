@@ -34,8 +34,22 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: "22"
+      # Un espejo de apt lento dejó una ejecución colgada aquí 20 minutos: cada
+      # intento tiene su propio límite y se reintenta antes de rendirse.
       - name: Instalar LibreOffice Calc
-        run: command -v soffice || (sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends libreoffice-calc)
+        timeout-minutes: 12
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          command -v soffice && exit 0
+          for intento in 1 2 3; do
+            if timeout 240 sudo -E apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=30 update -qq &&
+               timeout 300 sudo -E apt-get -o Acquire::Retries=3 install -y -qq --no-install-recommends libreoffice-calc; then
+              exit 0
+            fi
+            echo "Intento $intento fallido; reintento."
+          done
+          exit 1
       - name: Convertir y (opcional) subir
         env:
           DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
