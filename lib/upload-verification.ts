@@ -39,7 +39,7 @@ export type VerificationInput = {
   pendingProposals: number;
   // Claves de avance (porcentajes) que esta carga dejó más bajas que el valor
   // anterior publicado por otro archivo.
-  regressions: Array<{ key: string; before: number; after: number }>;
+  regressions: Array<{ key: string; before: number; after: number; beforeSource?: string }>;
   now?: Date;
 };
 
@@ -137,10 +137,18 @@ export function evaluateUploadVerification(input: VerificationInput): Verificati
   for (const item of input.regressions) {
     const drop = item.before - item.after;
     if (drop <= REGRESSION_TOLERANCE_POINTS) continue;
+    // Decisión del negocio: el avance físico lo mandan la cubicación y los
+    // edificios. Si una cubicación corrige a la baja un valor que puso otra
+    // fuente (p. ej. un informe ejecutivo que colocó cifras en la fila
+    // equivocada), es una corrección esperada, no un fallo de lectura.
+    const authorityCorrection = isCubicacion(file.originalName) &&
+      item.beforeSource !== undefined && !isCubicacion(item.beforeSource);
     checks.push({
       id: "retroceso",
-      severity: drop > REGRESSION_ANOMALY_POINTS ? "anomalia" : "aviso",
-      detail: `${item.key} baja de ${round(item.before)}% a ${round(item.after)}%. Puede ser una corrección legítima o una lectura equivocada.`,
+      severity: drop > REGRESSION_ANOMALY_POINTS && !authorityCorrection ? "anomalia" : "aviso",
+      detail: authorityCorrection
+        ? `${item.key} baja de ${round(item.before)}% (${item.beforeSource}) a ${round(item.after)}%: la cubicación corrige un valor de otra fuente.`
+        : `${item.key} baja de ${round(item.before)}% a ${round(item.after)}%. Puede ser una corrección legítima o una lectura equivocada.`,
     });
   }
 
@@ -163,6 +171,10 @@ export function evaluateUploadVerification(input: VerificationInput): Verificati
     ? checks[0].detail
     : `${problems} punto(s) a revisar: ${checks.filter((check) => check.severity !== "ok").map((check) => check.id).join(", ")}.`;
   return { verdict, checks, summary };
+}
+
+function isCubicacion(name: string) {
+  return /cubicaci[oó]n/i.test(String(name ?? ""));
 }
 
 function round(value: number) {

@@ -63,8 +63,13 @@ test("un avance que retrocede más de un punto es un aviso; más de 15, anomalí
   const baja = evaluate({ regressions: [{ key: "buildings.3.progress", before: 55.32, after: 48.1 }] });
   assert.equal(baja.verdict, "aviso");
   assert.match(baja.checks[0].detail, /55\.32% a 48\.1%/);
-  // El caso real de la Cubicación de octubre: Superestructura de 84,6 a 23,36.
-  assert.equal(evaluate({ regressions: [{ key: "constructionDisciplines.1.progress", before: 84.6, after: 23.36 }] }).verdict, "anomalia");
+  // Un retroceso grande entre dos cubicaciones sí es sospechoso.
+  assert.equal(evaluate({ regressions: [{ key: "buildings.3.progress", before: 84.6, after: 23.36, beforeSource: "Cubicacion 10 Araya Sep.xlsx" }] }).verdict, "anomalia");
+  // El caso real de la Cubicación de octubre: corrige cifras que el Informe
+  // Ejecutivo había colocado en la fila equivocada (Carpintería al 96,2 %).
+  const correccion = evaluate({ regressions: [{ key: "constructionDisciplines.0.progress", before: 96.2, after: 5.43, beforeSource: "Informe_Ejecutivo_ARAYA_Octubre_Definitivo_v5.pptx" }] });
+  assert.equal(correccion.verdict, "aviso");
+  assert.match(correccion.checks[0].detail, /la cubicación corrige un valor de otra fuente/);
   assert.equal(evaluate({ regressions: [{ key: "buildings.3.progress", before: 55.32, after: 55 }] }).verdict, "ok");
 });
 

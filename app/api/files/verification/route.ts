@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     const current = latestByKey.get(row.key);
     if (!current || row.id > current.id) latestByKey.set(row.key, { id: row.id, value });
   }
-  const regressions: Array<{ key: string; before: number; after: number }> = [];
+  const regressions: Array<{ key: string; before: number; after: number; beforeSource: string }> = [];
   const keys = [...latestByKey.keys()];
   for (let index = 0; index < keys.length; index += KEY_CHUNK) {
     const chunk = keys.slice(index, index + KEY_CHUNK);
@@ -86,6 +86,7 @@ export async function POST(request: Request) {
       key: liveDataHistory.key,
       valueJson: liveDataHistory.valueJson,
       sourceFileId: liveDataHistory.sourceFileId,
+      sourceName: liveDataHistory.sourceName,
     }).from(liveDataHistory)
       .where(and(inArray(liveDataHistory.key, chunk), lt(liveDataHistory.id, maxId)))
       .orderBy(desc(liveDataHistory.id));
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
       const before = previous.find((row) => row.key === key && row.id < mine.id && row.sourceFileId !== fileId);
       if (!before) continue;
       const beforeValue = Number(JSON.parse(before.valueJson));
-      if (Number.isFinite(beforeValue)) regressions.push({ key, before: beforeValue, after: mine.value });
+      if (Number.isFinite(beforeValue)) regressions.push({ key, before: beforeValue, after: mine.value, beforeSource: before.sourceName });
     }
   }
 
