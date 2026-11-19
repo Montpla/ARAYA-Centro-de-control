@@ -844,4 +844,7 @@ test("un dato financiero se publica aunque el área del archivo sea otra", () =>
   assert.equal(informe({key:"safetyMetrics",area:"seguridad"}),true);
   assert.equal(informe({key:"safetyMetrics",area:"finanzas"}),false);
   assert.equal(build({resolvedArea:"planificacion"})({key:"buildings.TH-9.progress",area:"seguridad"}),false);
+  const resumen=build({resolvedArea:"planificacion",confidenceByKey:new Map([["discoveredSections.3",1]])});
+  assert.equal(resumen({key:"discoveredSections.3",area:"seguridad",valueJson:'{"area":"seguridad"}'}),true);
+  assert.equal(resumen({key:"discoveredSections.3",area:"seguridad",valueJson:'{"area":"finanzas"}'}),false);
 });
