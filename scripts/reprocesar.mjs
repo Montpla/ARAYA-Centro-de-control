@@ -18,8 +18,10 @@ import { join } from "node:path";
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 const APLICAR = process.env.APLICAR === "1";
-const FILTRO = (process.env.FILTRO ?? "jul").toLowerCase();
 const FILE_ID = String(process.env.FILE_ID ?? "").trim();
+// Con un FILE_ID exacto el filtro por nombre no se aplica: GitHub rellena el
+// filtro por defecto («jul») aunque se haya dejado vacío y no casaría nada.
+const FILTRO = FILE_ID ? "" : (process.env.FILTRO ?? "jul").toLowerCase();
 // FORMATOS restringe por extensión (p. ej. "pptx" o "pptx,docx"). Sirve para
 // reprocesar sólo los informes narrativos que leyó la IA y dejó a medias, sin
 // tocar los Excel que ya leyeron bien los lectores propios.
@@ -74,7 +76,8 @@ const objetivo = files.filter((f) => {
 });
 
 const sufijoFormato = FORMATOS.length ? ` y formato ${FORMATOS.join("/")}` : "";
-console.log(`=== ${objetivo.length} archivo(s) que contienen "${FILTRO}"${sufijoFormato} ===`);
+const descripcionFiltro = FILE_ID ? `con id ${FILE_ID}` : `que contienen "${FILTRO}"`;
+console.log(`=== ${objetivo.length} archivo(s) ${descripcionFiltro}${sufijoFormato} ===`);
 for (const f of objetivo) {
   console.log(`  · ${f.originalName} · área ${f.areaLabel} · subido ${f.createdAt} · rev publicada ${f.publicationRevision || "—"}`);
 }
