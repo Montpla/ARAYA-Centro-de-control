@@ -1,6 +1,7 @@
 import "server-only";
 
 import { buildDashboardBootstrap } from "./dashboard-bootstrap";
+import { ganttTaskTemplate } from "./gantt-data";
 import {
   LIVE_DATA_ROOTS,
   LiveDataMap,
@@ -27,6 +28,8 @@ const APPENDABLE_ARRAY_PATHS = new Set([
   "urbanismReportAreas",
 ]);
 const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
+  "reprogrammedFlowAudit": { sourceFileId: "", sourceName: "" },
+  "reprogrammedFlowScopes.*": { advancesAccumulatedDop: 0, actualWithAdvancesDop: 0 },
   "discoveredSections.*": {
     // Legacy blocks did not carry visualization metadata. A later report may
     // upgrade the same stable section without changing its identity.
@@ -61,6 +64,8 @@ const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
 };
 
 const EMPTY_ARRAY_ITEM_TEMPLATES: Record<string, unknown> = {
+  "ganttSchedules.buildings.tasks": ganttTaskTemplate,
+  "ganttSchedules.urbanism.tasks": ganttTaskTemplate,
   // Empty legacy arrays may grow when a later weekly/monthly report adds the
   // missing detail to the same discovered concept.
   "discoveredSections.*.values": { label: "", value: "" },
@@ -92,6 +97,7 @@ export function getContractRootsSnapshot(): LiveDataMap {
 }
 
 function fallbackArrayItem(path: string) {
+  if (/^ganttSchedules\.(buildings|urbanism)\.tasks$/.test(path)) return ganttTaskTemplate;
   // Los bloques descubiertos empiezan sin ningún elemento, así que no hay de
   // dónde deducir su forma cuando llega el primero. Esta plantilla es la que
   // permite que el contenedor crezca solo desde vacío: sin ella, el primer

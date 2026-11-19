@@ -9,6 +9,8 @@ export type ReprogrammedFlowMonth = {
 };
 
 export type FlowScopeLine = {
+  advancesAccumulatedDop?: number;
+  actualWithAdvancesDop?: number;
   id: "urbanism" | "buildings" | "total";
   label: string;
   budgetPeriodDop: number;
@@ -89,6 +91,8 @@ export const reprogrammedFlowScopes: FlowScopeLine[] = [
 ];
 
 export const reprogrammedFlowAudit = {
+  sourceFileId: "",
+  sourceName: "",
   cutoff: "31/07/2026",
   workbookSheetCount: 6,
   formulaCount: 1228,

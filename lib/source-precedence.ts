@@ -34,6 +34,13 @@ export function physicalProgressSourceLabel(sourceName: string) {
 }
 
 const month = (cutoff: string) => String(cutoff ?? "").slice(0, 7);
+const PLANNING_CURVE_KEY = /^monthlyPlan\.\d+\.(planned|reprogrammed|originalDocumentProgress|reprogrammedBuildingsProgress|reprogrammedUrbanismProgress)$/;
+const masterCurve = /graficos[ _-]*araya|plan[ _-]*operativo/i;
+function planningRank(source: string, key: string) {
+  if (/\.planned$/.test(key) && masterCurve.test(source) && /\.xlsx\b/i.test(source)) return 40;
+  if (!/\.planned$/.test(key) && /curva.*rep.*gram.*\.xlsx\b/i.test(source)) return 40;
+  return /\.pptx?\b|informe[ _-]*ejecutivo/i.test(source) ? 10 : 0;
+}
 
 /**
  * ¿Debe apartarse este dato porque una fuente con más prioridad ya fijó la
@@ -46,10 +53,16 @@ export function blockedByHigherPrioritySource(input: {
   liveSource?: string | null;
   liveCutoff?: string | null;
 }) {
-  if (!PHYSICAL_PROGRESS_KEY.test(input.key)) return false;
+  const planning = PLANNING_CURVE_KEY.test(input.key);
+  if (!PHYSICAL_PROGRESS_KEY.test(input.key) && !planning) return false;
   const liveSource = String(input.liveSource ?? "");
   if (!liveSource || liveSource === input.incomingSource) return false;
-  if (physicalProgressRank(liveSource) <= physicalProgressRank(input.incomingSource)) return false;
+  const liveRank = planning ? planningRank(liveSource, input.key) : physicalProgressRank(liveSource);
+  const incomingRank = planning ? planningRank(input.incomingSource, input.key) : physicalProgressRank(input.incomingSource);
+  if (liveRank <= incomingRank) return false;
+  // La serie «Original» de un informe no sustituye la línea base operativa
+  // del Excel maestro, aunque el informe se publique en un mes posterior.
+  if (planning && /\.planned$/.test(input.key) && liveRank === 40) return true;
   const incomingMonth = month(input.incomingCutoff);
   const liveMonth = month(input.liveCutoff ?? "");
   // Un periodo nuevo sí entra aunque venga de una fuente de menos prioridad.

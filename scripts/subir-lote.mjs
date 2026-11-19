@@ -12,6 +12,7 @@
 
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { readGanttHtml } from "../lib/gantt-html.ts";
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 const email = process.env.DEPLOY_VERIFY_EMAIL;
@@ -39,6 +40,9 @@ if (!session) {
 const Cookie = `araya_session=${session}`;
 
 const extensionToMime = {
+  html: "text/html",
+  htm: "text/html",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   pdf: "application/pdf",
   xls: "application/vnd.ms-excel",
   xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -58,6 +62,14 @@ for (const nombre of nombres) {
   form.append("area", "auto");
   form.append("source", "agent");
   form.append("processNow", "true");
+  if (extension === "html" || extension === "htm") {
+    try {
+      const gantt = readGanttHtml(bytes.toString("utf8"), nombre);
+      if (gantt) form.set("declaredCutoff", gantt.schedule.cutoff);
+    } catch {
+      // El original se conserva y el lector de la API registra el diagnóstico.
+    }
+  }
   if (process.env.REPROCESO === "true") form.append("reprocess", "true");
 
   console.log(`→ Subiendo "${nombre}" (${bytes.length} bytes)...`);

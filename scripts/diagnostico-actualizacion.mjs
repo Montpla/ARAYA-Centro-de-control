@@ -14,6 +14,7 @@ import { readXlsxSheets } from "../lib/xlsx-reader.ts";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import masterplan from "../lib/masterplan-layout.json" with { type: "json" };
+import { auditOctoberDocuments } from "./diagnostico-documentos-octubre.mjs";
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 
@@ -183,6 +184,7 @@ console.log(`Desgloses publicados: ${desgloses}`);
 const fileResponse = await fetch(`${PRODUCTION_URL}/api/files?limit=200`, { headers: { Cookie } });
 if (fileResponse.ok) {
   const { files = [] } = await fileResponse.json();
+  await auditOctoberDocuments({ files, values: valores, Cookie, productionUrl: PRODUCTION_URL });
   const drawing = files.find((entry) => !entry.deletedAt && !entry.supersededByFileId && entry.originalName === masterplan.source);
   if (drawing) {
     const response = await fetch(`${PRODUCTION_URL}/api/files?download=${encodeURIComponent(drawing.id)}`, { headers: { Cookie } });

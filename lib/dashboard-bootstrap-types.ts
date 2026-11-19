@@ -13,7 +13,8 @@ type Widen<T> = T extends readonly (infer Item)[]
     : T;
 
 export type DashboardBootstrapData = {
-  demo: Widen<Pick<
+  // Cronogramas completos, con alcance propio y separados del avance certificado.
+  demo: { ganttSchedules: typeof import("./gantt-data").ganttSchedules } & Widen<Pick<
     DemoModule,
     | "buildings"
     | "cubicacionCaratula"

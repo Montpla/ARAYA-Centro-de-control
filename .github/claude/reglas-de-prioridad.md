@@ -64,7 +64,7 @@ Decisión del dueño: «deben mandar los edificios y la cubicación».
 - La serie semanal (`safetyWeeklySeries`) acumula todas las semanas; cada
   reporte sustituye sólo su propia fila.
 
-## 4. Curva S
+## 4. Curva S **[en código: `lib/source-precedence.ts`]**
 
 - Plan operativo: el Excel maestro de gráficos (`GRAFICOS ARAYA FASE II…`).
 - Plan reprogramado: el del Informe Ejecutivo del mes, completado por el Excel
@@ -72,6 +72,9 @@ Decisión del dueño: «deben mandar los edificios y la cubicación».
   series de edificios y urbanismo conservan su alcance agregado.
 - La fila «Original» de ese Excel se conserva como comparación del documento;
   no sustituye automáticamente el plan operativo del Excel maestro.
+- Una presentación no sustituye el plan operativo del Excel maestro. Para el
+  mismo corte, la curva reprogramada del Excel aportado prevalece sobre la
+  presentación; una presentación de un corte posterior puede adelantarlo.
 - Ejecutado: según la regla 1 (la cubicación del mes manda).
 
 ## 5. Documentos con errores de origen

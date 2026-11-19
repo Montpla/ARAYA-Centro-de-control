@@ -42,6 +42,7 @@ export const LIVE_DATA_ROOTS = [
   "delayedUrbanismStarts",
   "discoveredSections",
   "financialProjection",
+  "ganttSchedules",
   "financingProcesses",
   "fiduciaryBalanceSections",
   "fiduciaryManagementReconciliation",

@@ -1,3 +1,4 @@
+import * as ganttHtml from "../lib/gantt-html.ts";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -41,6 +42,7 @@ async function loadIngestion() {
     if (specifier === "./pptx-curva-s") return pptxCurvaS;
     if (specifier === "./progress-model") return progressModel;
     if (specifier === "./urbanism-disciplines") return urbanismDisciplines;
+    if (specifier === "./gantt-html") return ganttHtml;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {
@@ -591,6 +593,24 @@ test("el monto certificado no se roba la carátula de avance físico que sigue e
   ]));
   assert.equal(porClave.get("buildings.TH-76.progress")?.value, 8);
   assert.equal(porClave.get("buildings.TH-77.progress")?.value, 9);
+});
+
+test("el flujo incorpora la previsión futura de ambos ámbitos y no mezcla meses cerrados", async () => {
+  const ingestion = await loadIngestion();
+  // Pesos normalizados para comprobar la agregación, ajenos a cifras de la obra.
+  const result = ingestion.extractReprogrammedFlowUpdates([
+    [{ A: "Mes", B: "Total Real", C: "Urb Real", D: "Edi Real", E: "Total Presupuestado" }, { A: "Oct-26", B: "3", C: "1", D: "2", E: "4" }],
+    [{ A: "URBANISMO" }, { A: "Mes", B: "Presupuesto Original", C: "Presupuesto Reprogramado" }, { A: "Oct-26", B: "8", C: "9" }, { A: "Nov-26", B: "4", C: "5" },
+      { A: "EDIFICIOS" }, { A: "Mes", B: "Presupuesto Original", C: "Presupuesto Reprogramado" }, { A: "Nov-26", B: "6", C: "8" }],
+  ], defaults);
+  const values = new Map(result.updates.map((u) => [u.key, u.value]));
+  assert.equal(values.get("reprogrammedFlowMonths.10.status"), "actual");
+  assert.equal(values.get("reprogrammedFlowMonths.10.currentDop"), 3);
+  assert.equal(values.get("reprogrammedFlowMonths.11.status"), "forecast");
+  assert.equal(values.get("reprogrammedFlowMonths.11.currentDop"), 13);
+  assert.equal(values.get("reprogrammedFlowMonths.11.originalDop"), 10);
+  assert.equal(values.get("reprogrammedFlowMonths.11.varianceDop"), 3);
+  assert.ok(result.updates.every((u) => u.cutoff === "2026-10-31"));
 });
 
 test("el Excel de finanzas actualiza el flujo reprogramado mes a mes", async () => {

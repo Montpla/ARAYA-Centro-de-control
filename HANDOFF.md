@@ -9,6 +9,35 @@ Zona horaria del usuario: Europe/Madrid
 > anteriores**. Las secciones fechadas más abajo son historial; si contradicen a
 > esta, manda esta.
 
+## Cuatro documentos de octubre (19/11/2026)
+
+- Nuevo encargo: integrar los dos Gantt HTML, el Informe Ejecutivo definitivo
+  v8 y el flujo reprogramado de octubre v4. Esta sección amplía el estado
+  vigente; conserva la cubicación, la curva y el plano ya contrastados.
+- Los Gantt contienen 86 tareas de edificaciones y 172 de urbanismo. Se lee
+  exclusivamente su bloque JSON, sin ejecutar el HTML. Planificación muestra
+  filtros, avances declarados, calendario vigente, línea base y detalles de
+  recursos, materiales y dependencias. Las tareas agregadas conservan su alcance;
+  no se atribuyen a edificios o viviendas individuales.
+- El informe tiene 33 diapositivas, 13 gráficos y 13 libros incrustados. Dos
+  gráficos difieren de sus libros internos: se conserva el original y no se
+  utiliza esa discrepancia para sustituir el Excel maestro, la curva aportada
+  o la cubicación. La lectura narrativa completa las áreas que no cubren los
+  lectores deterministas; el flujo se procesa después desde el Excel financiero.
+- El libro financiero tiene ocho hojas y 1.380 fórmulas, contrastadas contra
+  un cálculo independiente sin diferencias. El lector incorpora once meses
+  reales y nueve de previsión, además de los resúmenes por alcance. Los anticipos
+  acumulados se presentan separados del gasto mensual. El enlace de descarga
+  abre el original vigente, en lugar de una copia antigua de julio.
+- Se respetan los valores numéricos nativos y los formatos locales. Las metas
+  parciales de los Gantt no sustituyen el horizonte general del proyecto.
+- Validación local: typecheck, compilación y 544 pruebas correctas; lint sin
+  errores. El diagnóstico oficial contrasta las cuatro huellas, las 258 tareas
+  completas y los campos mensuales y resúmenes financieros sin registrar importes.
+- La publicación requiere CI, PR con squash, despliegue y carga mediante
+  `subir-lote.yml`, con el Excel financiero al final. La comprobación posterior
+  de producción es la evidencia de cierre; las pruebas locales no la sustituyen.
+
 ## Master plan actualizado (19/11/2026)
 
 - Encargo del dueño: adaptar el plano visual e interactivo al DWG

@@ -65,7 +65,7 @@ export const reviewStatusLabels: Record<string, string> = {
 
 const areaKeywords: Record<Exclude<ClassifiedArea, "sin_clasificar">, string[]> = {
   direccion: ["direccion", "directivo", "comite", "resumen ejecutivo", "consolidado"],
-  planificacion: ["cronograma", "planificacion", "programacion", "mpp", "project", "linea base", "curva s", "graficos araya", "plan operativo"],
+  planificacion: ["cronograma", "gantt", "planificacion", "programacion", "mpp", "project", "linea base", "curva s", "graficos araya", "plan operativo"],
   // "avance" es demasiado genérico -aparece en "avance de urbanismo", "avance
   // comercial"...- y aquí empataba con "urbanismo" en archivos como "Avance
   // urbanismo.xlsx", que el empate por orden de declaración mandaba a Obra en

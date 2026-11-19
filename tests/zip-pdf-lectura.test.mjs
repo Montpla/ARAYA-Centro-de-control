@@ -1,3 +1,4 @@
+import * as ganttHtml from "../lib/gantt-html.ts";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -47,6 +48,7 @@ async function cargarIngestion(pdfReader = pdfText) {
     if (especificador === "./pptx-curva-s") return pptxCurvaS;
     if (especificador === "./progress-model") return progressModel;
     if (especificador === "./urbanism-disciplines") return urbanismDisciplines;
+    if (especificador === "./gantt-html") return ganttHtml;
     throw new Error(`Import inesperado: ${especificador}`);
   });
 }
