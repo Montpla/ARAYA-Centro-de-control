@@ -15,6 +15,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { filtroEfectivo, seleccionarObjetivo } from "./reprocesar-filtro.mjs";
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 const APLICAR = process.env.APLICAR === "1";
@@ -59,22 +60,13 @@ const Cookie = `araya_session=${sessionMatch[1]}`;
 const filesResponse = await fetch(`${PRODUCTION_URL}/api/files?limit=200`, { headers: { Cookie } });
 const { files = [] } = await filesResponse.json();
 
-// Se eligen los archivos cuyo nombre contiene el filtro (por defecto "jul") y
-// que no están eliminados; sólo los formatos que la ingesta procesa.
-const procesables = new Set(["pptx", "docx", "pdf", "xlsx", "xls", "csv", "xml", "zip", "json"]);
-const permitidos = FORMATOS.length ? new Set(FORMATOS) : procesables;
-const objetivo = files.filter((f) => {
-  const ext = String(f.extension).toLowerCase();
-  return !f.deletedAt &&
-    !f.supersededByFileId &&
-    (!FILE_ID || f.id === FILE_ID) &&
-    f.originalName.toLowerCase().includes(FILTRO) &&
-    procesables.has(ext) &&
-    permitidos.has(ext);
-});
+// Se eligen los archivos cuyo nombre contiene el filtro (por defecto "jul"),
+// salvo que se indique FILE_ID, que ignora el filtro, y que no están eliminados; sólo los formatos que la ingesta procesa.
+const objetivo = seleccionarObjetivo(files, { fileId: FILE_ID, filtro: FILTRO, formatos: FORMATOS });
 
 const sufijoFormato = FORMATOS.length ? ` y formato ${FORMATOS.join("/")}` : "";
-console.log(`=== ${objetivo.length} archivo(s) que contienen "${FILTRO}"${sufijoFormato} ===`);
+const descripcionFiltro = FILE_ID ? `con el id ${FILE_ID}` : `que contienen "${filtroEfectivo(FILE_ID, FILTRO)}"`;
+console.log(`=== ${objetivo.length} archivo(s) ${descripcionFiltro}${sufijoFormato} ===`);
 for (const f of objetivo) {
   console.log(`  · ${f.originalName} · área ${f.areaLabel} · subido ${f.createdAt} · rev publicada ${f.publicationRevision || "—"}`);
 }

@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [filesRoute, reviewRoute, prompt, reprocessWorkflow, reprocessScript] = await Promise.all([
+const [filesRoute, reviewRoute, prompt, reprocessWorkflow, reprocessScript, reprocessFilter] = await Promise.all([
   readFile("app/api/files/route.ts", "utf8"),
   readFile("app/api/files/review/route.ts", "utf8"),
   readFile("lib/ai-document-extraction.ts", "utf8"),
   readFile(".github/workflows/reprocesar.yml", "utf8"),
   readFile("scripts/reprocesar.mjs", "utf8"),
+  readFile("scripts/reprocesar-filtro.mjs", "utf8"),
 ]);
 
 test("un Excel conocido se resuelve con el lector directo sin gastar IA", () => {
@@ -55,8 +56,8 @@ test("safetyMetrics no se pisa con un reporte semanal más antiguo que el ya pub
 test("el reproceso puede apuntar al expediente exacto sin tocar copias homónimas", () => {
   assert.match(reprocessWorkflow, /file_id:/);
   assert.match(reprocessWorkflow, /FILE_ID: \$\{\{ inputs\.file_id \}\}/);
-  assert.match(reprocessScript, /!FILE_ID \|\| f\.id === FILE_ID/);
-  assert.match(reprocessScript, /!f\.supersededByFileId/);
+  assert.match(reprocessFilter, /!id \|\| f\.id === id/);
+  assert.match(reprocessFilter, /!f\.supersededByFileId/);
   assert.match(reprocessScript, /form\.set\("reprocessFileId", f\.id\)/);
 });
 
