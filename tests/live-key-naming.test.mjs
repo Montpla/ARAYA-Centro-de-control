@@ -152,3 +152,20 @@ test("los nombres de negocio no se recortan por empezar como un tipo", () => {
   assert.equal(resultado[0].amount, 10, "Torres del Este no debe verse afectada");
   assert.equal(resultado[1].amount, 55);
 });
+
+test("los oficios de la cubicación encuentran su fila aunque la lista viva los rotule distinto", () => {
+  // Caso real de la Cubicación 11: tres oficios no se resolvían y se aislaban.
+  const lista = [
+    { name: "Carpintería (puertas/closets)", progress: 96.2 },
+    { name: "Herrería", progress: 0.66 },
+    { name: "Revestimientos / Cerámica", progress: 55.9 },
+    { name: "Instalaciones (elec./sanit./gas)", progress: 27.9 },
+  ];
+  const resultado = materializeLiveRoot("constructionDisciplines", lista, {
+    "constructionDisciplines.Carpintería.progress": 5.43,
+    "constructionDisciplines.Revestimientos y cerámica.progress": 100,
+    "constructionDisciplines.Inst eléctricas, sanitarias y gas.progress": 29.77,
+    "constructionDisciplines.Herrería.progress": 23.36,
+  });
+  assert.deepEqual(resultado.map((item) => item.progress), [5.43, 23.36, 100, 29.77]);
+});
