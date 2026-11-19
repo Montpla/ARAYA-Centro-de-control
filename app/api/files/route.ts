@@ -96,6 +96,7 @@ import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-ups
 import { nothingExtractedMessage } from "../../../lib/upload-messages";
 import { triggerMppConversion } from "../../../lib/mpp-conversion-trigger";
 import { LARGE_PDF_BYTES, triggerPdfCompression } from "../../../lib/pdf-compression-trigger";
+import { triggerXlsConversion } from "../../../lib/xls-conversion-trigger";
 import { triggerDeferredUploadRetry } from "../../../lib/deferred-upload-retry-trigger";
 import { readUploadAgentToken, resolveUploadAgentToken } from "../../../lib/upload-agent-auth";
 import {
@@ -1333,6 +1334,37 @@ export async function POST(request: Request) {
   // compresión al runner de GitHub (ver triggerPdfCompression) y la versión
   // ligera entra como archivo derivado por el camino de siempre; este
   // expediente queda archivado a la espera y después se cierra como histórico.
+  // Un .xls antiguo no se lee en el Worker: se convierte a .xlsx en GitHub y la
+  // copia entra por la ingesta normal (ver triggerXlsConversion).
+  if (extension === "xls" && !derivedFromFileId) {
+    const waitingAt = new Date().toISOString();
+    await db.update(uploadedFiles).set({
+      processingStage: "recibido",
+      processingProgress: 20,
+      processingSummary: "Libro de Excel antiguo (.xls): se convierte automáticamente a .xlsx antes de leerlo. No hay que volver a subirlo.",
+      updatedAt: waitingAt,
+    }).where(eq(uploadedFiles.id, id)).catch(() => undefined);
+    triggerXlsConversion(id);
+    return Response.json({
+      processing: true,
+      file: publicFileRow({ ...row, processingStage: "recibido", updatedAt: waitingAt }, user),
+      receipt: {
+        outcome: "accepted",
+        area: classification.area,
+        areaLabel: areaLabels[classification.area],
+        publishedCount: 0,
+        unchangedCount: 0,
+        ignoredCount: 0,
+        warningCount: 0,
+        warnings: [],
+        newSectionCount: 0,
+        requiresAction: false,
+        nextAction: "No tienes que hacer nada: el libro se convierte a .xlsx y se lee automáticamente en unos minutos.",
+      },
+      message: "Archivo recibido. Es un Excel antiguo (.xls): se convierte automáticamente y sus datos entrarán en unos minutos.",
+    }, { status: 202 });
+  }
+
   if (extension === "pdf" && candidate.size > LARGE_PDF_BYTES && !derivedFromFileId) {
     const waitingAt = new Date().toISOString();
     await db.update(uploadedFiles).set({
@@ -2207,6 +2239,37 @@ export async function POST(request: Request) {
       : batchPreconditions
         ? normalizedUpdates.filter(updateIsAutoPublishable)
         : [];
+    // Por qué se queda fuera cada dato descartado. Antes sólo se contaban
+    // ("2 entradas no válidas se aislaron") y no había forma de saber si se
+    // perdía algo que debía publicarse. Sólo claves y motivos, nunca valores.
+    const rejectionReason = (update: ReturnType<typeof normalizeLiveDataUpdates>[number]) => {
+      if (!batchPreconditions) return "el lote no cumple las condiciones previas de publicación automática";
+      if (staleCutoffKeySet.has(update.key)) return "su corte es anterior al ya publicado";
+      if (!publicationActor.financeAccess && isFinancialLiveKey(update.key)) return "dato financiero sin permiso de Finanzas";
+      if (unsafeAgentKeys.has(update.key)) return "la validación de la IA lo marcó como dudoso";
+      if ((confidenceByKey.get(update.key) ?? 0) <= 0) return "confianza nula en la extracción";
+      if (!isSafeAutomaticStructuredUpdate(update)) return "clave no admitida para publicación automática";
+      if (!individualUpdateContractIsSafe(update, liveValues)) return "no encaja en el contrato del dato vivo";
+      return "su área no coincide con la del archivo";
+    };
+    const rejectedUpdates = wholeBatchSafe ? [] : normalizedUpdates.filter((update) => !autoPublishable.includes(update));
+    if (rejectedUpdates.length) {
+      const grouped = new Map<string, string[]>();
+      for (const update of rejectedUpdates) {
+        const reason = rejectionReason(update);
+        grouped.set(reason, [...(grouped.get(reason) ?? []), update.key]);
+      }
+      await db.insert(fileActivity).values({
+        fileId: id,
+        eventType: "datos_descartados",
+        message: [...grouped.entries()]
+          .map(([reason, keys]) => `${keys.length} por ${reason}: ${keys.slice(0, 12).join(", ")}${keys.length > 12 ? " …" : ""}`)
+          .join(" · ")
+          .slice(0, 1900),
+        actorEmail: user.email,
+        actorName: user.displayName,
+      }).catch(() => undefined);
+    }
     let publicationVerification: Awaited<ReturnType<typeof publishLiveDataUpdates>>["verification"] | null = null;
     if (autoPublishable.length) {
       publicationStarted = true;

@@ -13493,6 +13493,18 @@ button.financial-detail-row:focus-visible {
 
 .tv-legend-planned::before { background: #3ad0e0; }
 .tv-legend-actual::before { background: #f0b429; }
+.tv-legend-reprogrammed::before { background: #c9a7ff; }
+.tv-curve-reprogrammed {
+  fill: none;
+  stroke: #c9a7ff;
+  stroke-width: 4;
+  stroke-dasharray: 14 10;
+  stroke-linecap: round;
+}
+.tv-curve-gap { stroke: none; }
+.tv-curve-gap.good { fill: rgba(84, 184, 140, 0.35); }
+.tv-curve-gap.warn { fill: rgba(221, 164, 74, 0.38); }
+.tv-curve-gap.danger { fill: rgba(232, 96, 72, 0.4); }
 
 .tv-action-list {
   list-style: none;

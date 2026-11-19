@@ -78,3 +78,11 @@ for (const f of await consulta(`
   ORDER BY e.id;`)) {
   console.log(`  rev ${f.id} · publicado ${f.created_at.slice(0, 10)} · corte ${f.cutoff} · ${f.change_count} datos · ${f.fuente}`);
 }
+
+console.log("\n=== 8. Datos descartados en la publicación automática (claves y motivo) ===");
+for (const f of await consulta(`
+  SELECT a.created_at, substr(u.original_name, 1, 90) AS archivo, substr(a.message, 1, 600) AS m
+  FROM file_activity a LEFT JOIN uploaded_files u ON u.id = a.file_id
+  WHERE a.event_type = 'datos_descartados' ORDER BY a.created_at DESC LIMIT 60;`)) {
+  console.log(`  ${String(f.created_at).slice(0, 16)} · ${f.archivo}\n      ${corto(f.m, 600)}`);
+}
