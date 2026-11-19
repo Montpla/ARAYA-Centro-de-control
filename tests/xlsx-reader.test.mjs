@@ -393,6 +393,13 @@ test("la curva reprogramada conserva cuatro series y no sustituye el ejecutado n
   assert.ok(result.updates.every((u) => !/\.(actual|planned)$/.test(u.key)));
 });
 
+test("la curva reprogramada hereda el área del archivo para no ser descartada por área distinta", async () => {
+  const ingestion = await loadIngestion();
+  const result = ingestion.extractReprogrammedCurve(curvaReprogramadaSintetica(), { ...defaults, area: "planificacion" });
+  assert.ok(result.updates.length > 0);
+  assert.ok(result.updates.every((u) => u.area === "planificacion"));
+});
+
 test("la curva reprogramada rechaza ponderaciones, meses y series inconsistentes sin publicar parcialmente", async () => {
   const ingestion = await loadIngestion();
   for (const mutate of [
