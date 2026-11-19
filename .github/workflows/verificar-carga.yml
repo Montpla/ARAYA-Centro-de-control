@@ -5,8 +5,16 @@ name: Verificar carga
 # procesarse y comprueba que entró bien: que se leyó y publicó, que no se
 # descartaron datos por un motivo sospechoso, que la fecha de corte es
 # coherente y que ningún avance retrocede sin explicación. Avisa a los
-# administradores en el panel y en el móvil con el resultado; si hay algo que
-# arreglar, abre además un issue con el diagnóstico.
+# administradores en el panel y en el móvil con el resultado.
+#
+# Si encuentra una anomalía, el segundo trabajo pone a Claude a revisarla con
+# la suscripción del dueño (secreto CLAUDE_CODE_OAUTH_TOKEN), siguiendo
+# .github/claude/arreglar-carga.md:
+#   - fallo del programa → Claude lo corrige con su prueba en una rama y abre
+#     un PR; este workflow repite typecheck y pruebas, fusiona, despliega,
+#     reprocesa el archivo y vuelve a verificarlo, y avisa del resultado;
+#   - caso dudoso → no toca nada y avisa con lo que hace falta decidir.
+# Sin el secreto, sólo se avisa y queda el issue con el diagnóstico.
 
 on:
   workflow_dispatch:
@@ -17,6 +25,11 @@ on:
         type: string
       notificar:
         description: "Avisar con el resultado (1) o sólo comprobar (0)"
+        required: false
+        default: "1"
+        type: string
+      arreglar:
+        description: "Si hay anomalía, que Claude intente arreglarla (1) o no (0)"
         required: false
         default: "1"
         type: string
@@ -33,6 +46,11 @@ jobs:
   verificar:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    outputs:
+      veredicto: ${{ steps.verificacion.outputs.veredicto }}
+      file_id: ${{ steps.verificacion.outputs.file_id }}
+      nombre: ${{ steps.verificacion.outputs.nombre }}
+      issue: ${{ steps.issue.outputs.numero }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,6 +66,7 @@ jobs:
           VERIFICACION_MD: ${{ runner.temp }}/verificacion.md
         run: node scripts/verificar-carga.mjs
       - name: Abrir issue si hay algo que arreglar
+        id: issue
         if: ${{ steps.verificacion.outputs.veredicto == 'anomalia' && inputs.notificar != '0' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -61,6 +80,144 @@ jobs:
           EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"${TITLE}\" in:title" --json number --jq '.[0].number // empty')
           if [ -n "$EXISTING" ]; then
             gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+            echo "numero=$EXISTING" >> "$GITHUB_OUTPUT"
           else
-            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
+            URL=$(gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY")
+            echo "numero=${URL##*/}" >> "$GITHUB_OUTPUT"
+          fi
+
+  arreglar:
+    needs: verificar
+    if: ${{ needs.verificar.outputs.veredicto == 'anomalia' && inputs.arreglar != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      actions: write
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FILE_ID: ${{ needs.verificar.outputs.file_id }}
+      ISSUE: ${{ needs.verificar.outputs.issue }}
+      DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+      DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+      RAMA: claude/arreglo-carga-${{ github.run_id }}
+    steps:
+      - name: Comprobar que hay token de Claude
+        id: token
+        env:
+          TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then echo "hay=1" >> "$GITHUB_OUTPUT"; else
+            echo "hay=0" >> "$GITHUB_OUTPUT"
+            echo "Sin CLAUDE_CODE_OAUTH_TOKEN: la anomalía queda avisada y en el issue, sin arreglo automático."
+          fi
+      - uses: actions/checkout@v4
+        if: ${{ steps.token.outputs.hay == '1' }}
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        if: ${{ steps.token.outputs.hay == '1' }}
+        with:
+          node-version: "22"
+      - name: Preparar el diagnóstico y la rama
+        if: ${{ steps.token.outputs.hay == '1' }}
+        env:
+          NOTIFICAR: "0"
+          VERIFICACION_MD: ${{ github.workspace }}/.verificacion/diagnostico.md
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          mkdir -p .verificacion
+          node scripts/verificar-carga.mjs
+          git config user.name "claude[bot]"
+          git config user.email "claude[bot]@users.noreply.github.com"
+          git checkout -b "$RAMA"
+      - name: Claude revisa y, si es un fallo del programa, lo corrige
+        id: claude
+        if: ${{ steps.token.outputs.hay == '1' }}
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            Sigue al pie de la letra las instrucciones de `.github/claude/arreglar-carga.md`.
+            Archivo afectado: ${{ needs.verificar.outputs.nombre }} (identificador ${{ needs.verificar.outputs.file_id }}).
+            Diagnóstico de la verificación: `.verificacion/diagnostico.md`.
+            Trabaja en la rama `${{ env.RAMA }}` (ya creada y activa). Repositorio: ${{ github.repository }}.
+            Termina siempre escribiendo `.verificacion/decision.json`.
+          claude_args: >-
+            --max-turns 80
+            --allowedTools "Edit,MultiEdit,Write,Read,Glob,Grep,LS,Bash(git:*),Bash(npm:*),Bash(npx:*),Bash(node:*),Bash(gh pr:*),Bash(curl:*),Bash(jq:*),Bash(ls:*),Bash(cat:*),Bash(mkdir:*)"
+      - name: Leer la decisión
+        id: decision
+        if: ${{ always() && steps.token.outputs.hay == '1' }}
+        run: |
+          if [ -f .verificacion/decision.json ]; then
+            echo "accion=$(jq -r '.accion // "sin_decision"' .verificacion/decision.json)" >> "$GITHUB_OUTPUT"
+            echo "pr=$(jq -r '.pr // ""' .verificacion/decision.json)" >> "$GITHUB_OUTPUT"
+            echo "resumen=$(jq -r '.resumen // ""' .verificacion/decision.json | tr '\n' ' ' | cut -c1-300)" >> "$GITHUB_OUTPUT"
+          else
+            echo "accion=sin_decision" >> "$GITHUB_OUTPUT"
+            echo "resumen=La revisión automática no terminó (posible límite de uso de la suscripción o error)." >> "$GITHUB_OUTPUT"
+          fi
+      - name: Comprobar, fusionar, desplegar y reprocesar
+        id: fusion
+        if: ${{ steps.decision.outputs.accion == 'arreglado' && steps.decision.outputs.pr != '' }}
+        env:
+          PR: ${{ steps.decision.outputs.pr }}
+        run: |
+          set -euo pipefail
+          # Comprobación independiente de la de Claude, sobre lo que hay en el PR.
+          gh pr checkout "$PR"
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          node --test tests/*.mjs
+          gh pr ready "$PR"
+          gh pr merge "$PR" --squash --delete-branch
+          # Una fusión hecha con el token del workflow no dispara deploy.yml por
+          # sí sola: se lanza a mano y se espera a que termine bien.
+          INICIO=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          gh workflow run deploy.yml --ref main
+          DESPLEGADO=0
+          for i in $(seq 1 60); do
+            sleep 20
+            RUN=$(gh run list --workflow deploy.yml --limit 5 --json databaseId,createdAt,status,conclusion \
+              --jq "[.[] | select(.createdAt >= \"$INICIO\")][0] // empty")
+            [ -z "$RUN" ] && continue
+            [ "$(echo "$RUN" | jq -r .status)" != "completed" ] && continue
+            if [ "$(echo "$RUN" | jq -r .conclusion)" = "success" ]; then DESPLEGADO=1; fi
+            break
+          done
+          if [ "$DESPLEGADO" != "1" ]; then echo "El despliegue no terminó bien"; exit 1; fi
+          FILTRO="" APLICAR=1 node scripts/reprocesar.mjs
+      - name: Avisar del resultado
+        if: ${{ always() && steps.token.outputs.hay == '1' }}
+        env:
+          ACCION: ${{ steps.decision.outputs.accion }}
+          PR: ${{ steps.decision.outputs.pr }}
+          RESUMEN: ${{ steps.decision.outputs.resumen }}
+          FUSION: ${{ steps.fusion.outcome }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          VERIFICACION_MD: ${{ runner.temp }}/final.md
+        run: |
+          set -uo pipefail
+          case "$ACCION" in
+            arreglado)
+              if [ "$FUSION" = "success" ]; then NOTA="Claude lo ha arreglado (PR #$PR) y la carga se ha reprocesado: $RESUMEN"
+              else NOTA="Claude propuso un arreglo (PR #$PR) pero no pasó las comprobaciones o el despliegue; queda sin fusionar: $RESUMEN"; fi ;;
+            dudoso) NOTA="Claude lo ha revisado y necesita tu decisión: $RESUMEN" ;;
+            sin_accion) NOTA="Claude lo ha revisado y la carga está bien: $RESUMEN" ;;
+            *) NOTA="$RESUMEN" ;;
+          esac
+          sleep 60
+          NOTIFICAR=1 NOTA="$NOTA" node scripts/verificar-carga.mjs || true
+          if [ -n "${ISSUE:-}" ]; then
+            gh issue comment "$ISSUE" --body "$NOTA"$'\n\n'"$(cat "$VERIFICACION_MD" 2>/dev/null)"$'\n\n'"Registro: $RUN_URL"
+            if [ "$ACCION" = "sin_accion" ] || { [ "$ACCION" = "arreglado" ] && [ "$FUSION" = "success" ]; }; then
+              gh issue close "$ISSUE" --reason completed || true
+            fi
           fi

@@ -58,6 +58,9 @@ const IN_PROGRESS_STAGES = new Set(["recibido", "extraccion_en_curso", "en_cola"
 
 // Un descenso menor que esto es redondeo, no un retroceso.
 const REGRESSION_TOLERANCE_POINTS = 1;
+// Un descenso mayor que esto casi nunca es una corrección: suele ser un dato
+// leído con otra base o de otra columna.
+const REGRESSION_ANOMALY_POINTS = 15;
 
 export function parseDiscardMessage(message: string) {
   return message.split(" · ").map((part) => {
@@ -132,10 +135,11 @@ export function evaluateUploadVerification(input: VerificationInput): Verificati
   }
 
   for (const item of input.regressions) {
-    if (item.before - item.after <= REGRESSION_TOLERANCE_POINTS) continue;
+    const drop = item.before - item.after;
+    if (drop <= REGRESSION_TOLERANCE_POINTS) continue;
     checks.push({
       id: "retroceso",
-      severity: "aviso",
+      severity: drop > REGRESSION_ANOMALY_POINTS ? "anomalia" : "aviso",
       detail: `${item.key} baja de ${round(item.before)}% a ${round(item.after)}%. Puede ser una corrección legítima o una lectura equivocada.`,
     });
   }
