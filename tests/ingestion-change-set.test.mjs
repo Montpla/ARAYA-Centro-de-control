@@ -62,3 +62,11 @@ test("recurring dynamic concepts update their existing visual section", () => {
     { key: "discoveredSections.3", existingId: "" },
   ]);
 });
+
+test("un reproceso puede descubrir otro concepto sin reutilizar el identificador del anterior", () => {
+  const slots=changeSet.planDynamicSectionSlots([{title:"Concepto nuevo",area:"seguridad"},{title:"Tema anterior",area:"seguridad"}],{
+    "discoveredSections.0":{id:"descubierto-informe-0",title:"Tema anterior",area:"seguridad"},
+  });
+  assert.notEqual(changeSet.dynamicSectionSlotId("informe",slots[0]),"descubierto-informe-0");
+  assert.equal(changeSet.dynamicSectionSlotId("informe",slots[1]),"descubierto-informe-0");
+});

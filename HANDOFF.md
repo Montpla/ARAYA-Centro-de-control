@@ -9,6 +9,82 @@ Zona horaria del usuario: Europe/Madrid
 > anteriores**. Las secciones fechadas más abajo son historial; si contradicen a
 > esta, manda esta.
 
+## Cuatro documentos de octubre (19/11/2026)
+
+- PR #288 desplegado. Los dos Gantt quedaron publicados en las revisiones
+  137 y 138 y verificados sin anomalías. El Excel financiero publicó 65 cambios
+  y confirmó otros 67 datos ya coincidentes.
+- La verificación del informe detectó un fallo de integración entre áreas:
+  Seguridad quedaba fuera por clasificarse el conjunto en Planificación.
+  Se corrige la asignación de esas claves, el alias del corte y los nombres
+  de edificio E frente a TH. El resumen mensual se conserva como bloque propio
+  en Centro de datos; no sustituye la foto ni la serie semanales.
+  Se mantienen las validaciones y la prioridad de las fuentes.
+- El diagnóstico posterior confirmó los cuatro originales, las 258 tareas y
+  132 campos financieros sin diferencias. El reproceso del informe detectó
+  colisiones de identidad al aparecer conceptos nuevos y validaciones aisladas
+  que impedían añadir varios bloques seguidos. Se usan identidades por hueco
+  estable y se valida cada alta tras las anteriores aceptadas, sin reutilizar
+  identificadores ni apoyar un dato en otro rechazado. El corte canónico real es
+  `projectSnapshot.declaredCutoff`; se contrasta con el modelo del panel.
+  Este cierre supera typecheck, compilación, lint sin errores y 552 pruebas.
+
+- Nuevo encargo: integrar los dos Gantt HTML, el Informe Ejecutivo definitivo
+  v8 y el flujo reprogramado de octubre v4. Esta sección amplía el estado
+  vigente; conserva la cubicación, la curva y el plano ya contrastados.
+- Los Gantt contienen 86 tareas de edificaciones y 172 de urbanismo. Se lee
+  exclusivamente su bloque JSON, sin ejecutar el HTML. Planificación muestra
+  filtros, avances declarados, calendario vigente, línea base y detalles de
+  recursos, materiales y dependencias. Las tareas agregadas conservan su alcance;
+  no se atribuyen a edificios o viviendas individuales.
+- El informe tiene 33 diapositivas, 13 gráficos y 13 libros incrustados. Dos
+  gráficos difieren de sus libros internos: se conserva el original y no se
+  utiliza esa discrepancia para sustituir el Excel maestro, la curva aportada
+  o la cubicación. La lectura narrativa completa las áreas que no cubren los
+  lectores deterministas; el flujo se procesa después desde el Excel financiero.
+- El libro financiero tiene ocho hojas y 1.380 fórmulas, contrastadas contra
+  un cálculo independiente sin diferencias. El lector incorpora once meses
+  reales y nueve de previsión, además de los resúmenes por alcance. Los anticipos
+  acumulados se presentan separados del gasto mensual. El enlace de descarga
+  abre el original vigente, en lugar de una copia antigua de julio.
+- Se respetan los valores numéricos nativos y los formatos locales. Las metas
+  parciales de los Gantt no sustituyen el horizonte general del proyecto.
+- Validación local: typecheck, compilación y 544 pruebas correctas; lint sin
+  errores. El diagnóstico oficial contrasta las cuatro huellas, las 258 tareas
+  completas y los campos mensuales y resúmenes financieros sin registrar importes.
+- La publicación requiere CI, PR con squash, despliegue y carga mediante
+  `subir-lote.yml`, con el Excel financiero al final. La comprobación posterior
+  de producción es la evidencia de cierre; las pruebas locales no la sustituyen.
+
+## Master plan actualizado (19/11/2026)
+
+- Encargo del dueño: adaptar el plano visual e interactivo al DWG
+  `ROA-E00-URB-A101-MASTER_PLAN cambio estaciomientos.dwg`.
+- Se han extraído y contrastado los rótulos de los 77 edificios con los centros
+  de sus bloques arquitectónicos, 700 plazas de aparcamiento y 305 elementos
+  de vegetación. El plano es ortogonal: las anclas antiguas de la imagen en
+  perspectiva ya no sirven para estas vistas.
+- El eje central identifica, de norte a sur, cancha múltiple, salón social,
+  parque infantil, gimnasio, piscina deportiva, edificación auxiliar sin uso
+  rotulado inequívoco, piscina recreativa y parque abierto. También se sitúan
+  zona PET, tanque elevado, comercio, portería, plazoleta, accesos y servicios.
+- Dos fondos SVG trazados desde la geometría del CAD sustituyen las imágenes
+  anteriores en la implantación. El tratamiento visual simplifica las cubiertas
+  a sus envolventes; los trazados técnicos, viales y mobiliario proceden del DWG.
+  Los polígonos de relleno cierran discontinuidades a un decímetro y son sólo
+  tratamiento gráfico; no son un levantamiento para replanteo o medición.
+- Fuente geométrica reproducible: `scripts/data/masterplan-20261119.json` y
+  `scripts/generar-masterplan.py`. Coordenadas y fichas: `lib/masterplan-layout.json`.
+  Hay 20 fichas, sin inventar avance específico para una piscina o servicio.
+- Las capas separan edificios y apartamentos, servicios y avance de urbanismo.
+  Las anclas del nuevo DWG mandan en estas vistas sobre coordenadas antiguas
+  guardadas en datos vivos. Las entidades nuevas conservan su alternativa dinámica.
+- Validación local: typecheck, compilación y 538 pruebas correctas. Se revisan
+  las 77 coordenadas contra sus contornos, las plazas y el orden de los servicios.
+  La publicación se completa por PR, despliegue y carga oficial del original.
+- La curva reprogramada anterior quedó publicada en la revisión 136: 48 valores
+  contrastados con el Excel, 46 cambios y dos ya coincidentes; avance real 38,01 %.
+
 ## Curva reprogramada en Excel (19/11/2026)
 
 - La conciliación de la cubicación quedó desplegada con el PR #282 y publicada

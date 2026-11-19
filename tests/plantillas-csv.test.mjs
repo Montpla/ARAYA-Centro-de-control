@@ -1,3 +1,4 @@
+import * as ganttHtml from "../lib/gantt-html.ts";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -38,6 +39,7 @@ async function loadIngestion() {
     if (specifier === "./pptx-curva-s") return pptxCurvaS;
     if (specifier === "./progress-model") return progressModel;
     if (specifier === "./urbanism-disciplines") return urbanismDisciplines;
+    if (specifier === "./gantt-html") return ganttHtml;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {
@@ -67,6 +69,7 @@ async function loadResolver() {
     if (specifier === "./live-data") return liveData;
     if (specifier === "../app/demo-data") return demoData;
     if (specifier === "./urbanism-disciplines") return urbanismDisciplines;
+    if (specifier === "./gantt-html") return ganttHtml;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {

@@ -31,8 +31,12 @@ import { anchorDeclaredCutoff, clearTrailingMonthlyActualPlaceholders, currentPl
 import {
   technicalPlanCoordinates as planCoordinates,
   visualPlanCoordinates,
+  currentUrbanismMapPoints,
+  masterPlan,
+  type MasterPlanFeature,
 } from "../lib/site-plan-layout";
 import { computedView } from "../lib/computed-view";
+import { GanttSchedulePanel } from "./gantt-schedule-panel";
 import {
   STAT_CARD_FRESHNESS_KEYS,
   readFreshness,
@@ -68,6 +72,7 @@ let initialSuppliers: DashboardBootstrapData["demo"]["suppliers"] = [];
 let timeline: DashboardBootstrapData["demo"]["timeline"] = [];
 let urbanismAreas: DashboardBootstrapData["demo"]["urbanismAreas"] = [];
 let workPackages: DashboardBootstrapData["demo"]["workPackages"] = [];
+let ganttSchedules: DashboardBootstrapData["demo"]["ganttSchedules"] = { buildings: { title: "", cutoff: "", sourceName: "", scope: "", tasks: [] }, urbanism: { title: "", cutoff: "", sourceName: "", scope: "", tasks: [] } };
 
 let advances: DashboardBootstrapData["june"]["advances"] = [];
 let antonelyFinanceSource = {} as DashboardBootstrapData["june"]["antonelyFinanceSource"];
@@ -230,6 +235,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     urbanismAreas,
     workPackages,
   } = bootstrap.demo);
+  ganttSchedules = bootstrap.demo.ganttSchedules;
   ({
     advances,
     antonelyFinanceSource,
@@ -326,6 +332,7 @@ function installDashboardBootstrap(bootstrap: DashboardBootstrapData) {
     liveDataGovernanceSummary(baseDataGovernanceSummary, dataAuthorityMatrix));
 
   liveDataTargets = {
+    ganttSchedules,
     advances,
     antonelyAdvances,
     antonelyBalanceLines,
@@ -1733,24 +1740,6 @@ async function consumeSharedInboxFiles() {
     database.close();
   }
 }
-
-const urbanismMapPoints: Record<string, { x: number; y: number; short: string }> = {
-  "urban-general": { x: 50.5, y: 69.5, short: "URB" },
-  "urban-roads": { x: 49.0, y: 40.0, short: "VIAL" },
-  "urban-parking": { x: 70.0, y: 82.0, short: "P" },
-  "urban-landscape": { x: 23.0, y: 89.0, short: "PAISAJISMO" },
-  "urban-facilities": { x: 50.5, y: 58.5, short: "EQ" },
-  "urban-access": { x: 56.5, y: 88.5, short: "ACCESO" },
-};
-
-const visualUrbanismMapPoints: Record<string, { x: number; y: number; short: string }> = {
-  "urban-general": { x: 50.2, y: 71.4, short: "URB" },
-  "urban-roads": { x: 50.0, y: 37.0, short: "VIAL" },
-  "urban-parking": { x: 65.3, y: 61.4, short: "P" },
-  "urban-landscape": { x: 48.0, y: 46.3, short: "PAISAJISMO" },
-  "urban-facilities": { x: 48.9, y: 58.1, short: "EQ" },
-  "urban-access": { x: 51.5, y: 89.7, short: "ACCESO" },
-};
 
 function ProgressRing({ value }: { value: number }) {
   return (
@@ -3228,12 +3217,15 @@ function SitePlan({
   const [planBuilding, setPlanBuilding] = useState<Building | null>(null);
   const [planMode, setPlanMode] = useState<"visual" | "technical">("visual");
   const [selectedUrbanism, setSelectedUrbanism] = useState<UrbanismArea | null>(null);
+  const [selectedFeature, setSelectedFeature] = useState<MasterPlanFeature | null>(null);
+  const [planLayer, setPlanLayer] = useState<"edificios" | "servicios" | "avance">("edificios");
   const [planZoom, setPlanZoom] = useState(100);
   const [planExpanded, setPlanExpanded] = useState(false);
   const [planProgressFilter, setPlanProgressFilter] = useState<ProgressBandId | "all">("all");
   useEscapeToClose(() => setPlanBuilding(null));
   useEscapeToClose(() => setSelectedUnit(null));
   useEscapeToClose(() => setSelectedUrbanism(null));
+  useEscapeToClose(() => setSelectedFeature(null));
   const allUnits = buildings.flatMap((item) => item.units);
   const blockedUnits = allUnits.filter((unit) => unit.status === "bloqueada").length;
   const mapUrbanismAreas = urbanismAreas;
@@ -3256,7 +3248,7 @@ function SitePlan({
     <section className="panel site-plan-panel">
       <div className="panel-heading site-plan-heading">
         <div>
-          <span className="section-kicker">IMPLANTACIÓN GENERAL · DWG 002</span>
+          <span className="section-kicker">IMPLANTACIÓN GENERAL · MASTER PLAN ACTUALIZADO</span>
           <h3>Edificios, apartamentos y urbanismo</h3>
         </div>
         <div className="plan-mode-switch" aria-label="Vista del plano">
@@ -3313,11 +3305,16 @@ function SitePlan({
         <span className="plan-legend-static is-blocked"><i />Bloqueado · {blockedUnits}</span>
       </div>
       <p className="plan-disclaimer">
-        La implantación visual conserva la organización del plano DWG y mantiene
-        activas las capas de edificios, apartamentos y urbanismo. Están integrados los
-        {buildings.length} edificios y {allUnits.length} apartamentos del modelo vivo.
-        Los porcentajes, estados y colores cambian con cada nueva revisión.
+        Geometría contrastada con el nuevo DWG: 77 edificios, 700 plazas representadas
+        y 20 equipamientos y espacios identificados. Selecciona una capa para consultar
+        edificios, servicios comunes o avances de urbanismo. Los colores de avance
+        proceden de los datos de obra; el plano define la ubicación de cada elemento.
       </p>
+      <div className="plan-layer-switch" role="group" aria-label="Capa interactiva del plano">
+        {([['edificios', 'Edificios y apartamentos'], ['servicios', 'Piscinas, parques y servicios'], ['avance', 'Avance de urbanismo']] as const).map(([id, label]) => (
+          <button type="button" key={id} aria-pressed={planLayer === id} className={planLayer === id ? "active" : ""} onClick={() => setPlanLayer(id)}>{label}</button>
+        ))}
+      </div>
       <div className="plan-touch-toolbar" aria-label="Controles táctiles del plano">
         <button
           type="button"
@@ -3378,24 +3375,23 @@ function SitePlan({
           <div className={`site-plan-image-wrap ${planMode}`}>
             <img
               className="site-plan-image"
-              src={planMode === "visual" ? "/araya-visual-masterplan-v4.png" : "/araya-site-plan-clean.png"}
+              src={planMode === "visual" ? "/araya-masterplan-20261119-visual.svg" : "/araya-masterplan-20261119-tecnico.svg"}
               alt={
                 planMode === "visual"
                   ? "Implantación visual de ARAYA con edificios, apartamentos, viales, estacionamientos y urbanismo"
                   : "Plano técnico de la implantación general de ARAYA"
               }
-              width={1200}
-              height={1958}
+              width={masterPlan.width}
+              height={masterPlan.height}
               loading="eager"
               decoding="async"
             />
             <>
-            {buildings.map((building) => {
+            {planLayer === "edificios" && buildings.map((building) => {
               const point =
-                building.mapCoordinates?.[planMode] ??
                 (planMode === "visual"
                   ? visualPlanCoordinates[building.shortName]
-                  : planCoordinates[building.shortName]);
+                  : planCoordinates[building.shortName]) ?? building.mapCoordinates?.[planMode];
               if (!point) return null;
               const buildingProgressBand = progressBandClass(building.progress);
               const buildingMuted = planProgressFilter !== "all" && planProgressFilter !== buildingProgressBand;
@@ -3421,6 +3417,7 @@ function SitePlan({
                         setPlanExpanded(false);
                         setSelectedUnit(null);
                         setSelectedUrbanism(null);
+                        setSelectedFeature(null);
                         setPlanBuilding(building);
                       }}
                     >
@@ -3450,12 +3447,9 @@ function SitePlan({
                 </div>
               );
             })}
-            {mapUrbanismAreas.map((area) => {
+            {planLayer === "avance" && mapUrbanismAreas.map((area) => {
               const point =
-                area.mapCoordinates?.[planMode] ??
-                (planMode === "visual"
-                  ? visualUrbanismMapPoints[area.id]
-                  : urbanismMapPoints[area.id]);
+                currentUrbanismMapPoints[area.id] ?? area.mapCoordinates?.[planMode];
               if (!point) return null;
               return (
                 <button
@@ -3468,6 +3462,7 @@ function SitePlan({
                     setPlanBuilding(null);
                     setSelectedUnit(null);
                     setSelectedUrbanism(area);
+                    setSelectedFeature(null);
                   }}
                 >
                   <span>{point.short}</span>
@@ -3475,10 +3470,35 @@ function SitePlan({
                 </button>
               );
             })}
+            {planLayer === "servicios" && masterPlan.features.map((feature, index) => (
+              <button type="button" key={feature.id} className={`plan-feature-point feature-${feature.category === "Piscinas" ? "water" : "common"}`}
+                style={{ left: `${feature.x}%`, top: `${feature.y}%` }}
+                title={feature.name} aria-label={`Abrir ${feature.name}`} onClick={() => {
+                  setPlanExpanded(false); setPlanBuilding(null); setSelectedUnit(null); setSelectedUrbanism(null); setSelectedFeature(feature);
+                }}><span>{index + 1}</span><small>{feature.name}</small></button>
+            ))}
             </>
           </div>
         </div>
       </div>
+      <details className="plan-feature-index">
+        <summary>Equipamientos y espacios del nuevo plano · {masterPlan.features.length}</summary>
+        <div>{masterPlan.features.map((feature, index) => (
+          <button type="button" key={feature.id} onClick={() => { setPlanLayer("servicios"); setSelectedFeature(feature); }}>
+            <span>{index + 1}</span><strong>{feature.name}</strong><small>{feature.category}</small>
+          </button>
+        ))}</div>
+        <p>Fuente: {masterPlan.source}. Las fichas describen el plano; el avance específico de cada equipamiento requiere su propio dato de obra.</p>
+      </details>
+      {selectedFeature && (
+        <div className="plan-urbanism-picker" role="dialog" aria-modal="true" aria-label={selectedFeature.name}>
+          <button className="close-button" onClick={() => setSelectedFeature(null)} aria-label="Cerrar">×</button>
+          <span className="section-kicker">{selectedFeature.category}</span>
+          <h3>{selectedFeature.name}</h3><p>{selectedFeature.detail}</p>
+          <p>Ubicación verificada en el master plan actualizado. Avance específico: sin dato publicado para este elemento.</p>
+          <button className="button primary" onClick={() => { setSelectedFeature(null); onNavigate("urbanismo"); }}>Consultar datos de urbanismo</button>
+        </div>
+      )}
       {planBuilding && (
         <div className={`plan-building-picker ${progressBandClass(planBuilding.progress)}`} role="dialog" aria-modal="true">
           <button className="close-button" onClick={() => setPlanBuilding(null)} aria-label="Cerrar">×</button>
@@ -3789,6 +3809,7 @@ function Planning() {
       <section className="panel schedule-card">
         <ProgressChart />
       </section>
+      <GanttSchedulePanel schedules={ganttSchedules} />
       <section className="panel">
         <div className="panel-heading">
           <div>
@@ -5310,14 +5331,14 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
         <section className="financial-detail-stack work-flow-stack">
           <article className="panel">
             <div className="panel-heading">
-              <div><span className="section-kicker">FASE I · CORTE 31/07/2026</span><h3>Flujo de obra real y reprogramado</h3></div>
-              <a className="button secondary" href="/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx">Abrir Excel</a>
+              <div><span className="section-kicker">FASE I · CORTE {reprogrammedFlowAudit.cutoff}</span><h3>Flujo de obra real y reprogramado</h3></div>
+              <a className="button secondary" href={reprogrammedFlowAudit.sourceFileId ? `/api/files?download=${encodeURIComponent(reprogrammedFlowAudit.sourceFileId)}` : "/data-center/julio-2026/araya-flujo-i-reprogramado.xlsx"}>Abrir Excel vigente</a>
             </div>
             <div className="budget-summary-grid compact work-flow-summary">
               <span><small>Alcance total</small><strong>{rd(reprogrammedFlowAudit.reprogrammedTotalDop)}</strong></span>
-              <span><small>Real · dic-25 a jul-26</small><strong>{rd(reprogrammedFlowAudit.actualPeriodDop)}</strong></span>
+              <span><small>Real del periodo al corte</small><strong>{rd(reprogrammedFlowAudit.actualPeriodDop)}</strong></span>
               <span><small>Real acumulado al corte</small><strong>{rd(reprogrammedFlowAudit.actualToCutoffDop)}</strong></span>
-              <span><small>Por ejecutar · ago-26 a jul-27</small><strong>{rd(reprogrammedFlowAudit.remainingForecastDop)}</strong></span>
+              <span><small>Previsión pendiente de ejecutar</small><strong>{rd(reprogrammedFlowAudit.remainingForecastDop)}</strong></span>
             </div>
             <div className="callout">
               <strong>Alcance separado del flujo de caja global</strong>
@@ -5368,17 +5389,17 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
             </div>
             <div className="chart-legend work-flow-legend">
               <span><i className="work-flow-original" />Presupuesto original</span>
-              <span><i className="work-flow-current" />Real hasta julio · reprogramado desde agosto</span>
+              <span><i className="work-flow-current" />Real hasta {reprogrammedFlowMonths.filter((month) => month.status === "actual").at(-1)?.month ?? "el corte"} · previsión en meses posteriores</span>
             </div>
             <div className="callout warn">
-              <strong>Agosto y septiembre concentran la recuperación</strong>
-              <p>La desviación acumulada de {rd(reprogrammedFlowAudit.cumulativeVarianceRedistributedDop)} se añade por mitades: {rd(reprogrammedFlowAudit.augustAdjustmentDop)} en agosto y la misma cantidad en septiembre de 2026.</p>
+              <strong>Redistribución del flujo según el Excel vigente</strong>
+              <p>La previsión recoge la redistribución declarada en el documento. Los meses cerrados se muestran como reales y los futuros como previsión; los anticipos acumulados se presentan por separado del gasto mensual.</p>
             </div>
           </article>
 
           <article className="panel">
             <div className="panel-heading">
-              <div><span className="section-kicker">REAL VS. PRESUPUESTO · DIC-25 A JUL-26</span><h3>Lectura por ámbito</h3></div>
+              <div><span className="section-kicker">REAL VS. PRESUPUESTO · CORTE {reprogrammedFlowAudit.cutoff}</span><h3>Lectura por ámbito</h3></div>
               <span className="data-note">Variación positiva = remanente · negativa = sobregiro</span>
             </div>
             <div className="financial-detail-scroll">
@@ -5397,7 +5418,10 @@ function MetricsView({ metrics, onAdd, currency, latestFinanceEvent }: { metrics
                 ))}
               </div>
             </div>
-            <p className="quality-note">El real de julio de este flujo es {rd(reprogrammedFlowAudit.julyScopedActualDop)}, solo de Urbanismo y Edificios de la Fase I. No incluye terreno, diseño, gerencia, indirectos, inspección, permisos ni gastos financieros, así que no es el flujo de caja completo del proyecto.</p>
+            <p className="quality-note">Este flujo comprende Urbanismo y Edificios de la Fase I. Terreno, diseño, gerencia, indirectos, inspección, permisos y gastos financieros quedan fuera de su alcance.</p>
+            {reprogrammedFlowScopes.some((item) => typeof item.advancesAccumulatedDop === "number") && <details className="flow-advances"><summary>Anticipos acumulados y real con anticipos del resumen</summary>
+              {reprogrammedFlowScopes.map((item) => <p key={item.id}><strong>{item.label}:</strong> anticipos acumulados {rd(item.advancesAccumulatedDop ?? 0)} · real con anticipos según el resumen {rd(item.actualWithAdvancesDop ?? 0)}</p>)}
+            </details>}
           </article>
 
           <article className="panel physical-progress-lock">
@@ -8510,7 +8534,7 @@ function AgentPanel({
             <span>Adjuntar archivo</span>
             <input
               type="file"
-              accept=".xlsx,.xls,.csv,.json,.xml,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
+              accept=".html,.htm,.xlsx,.xls,.csv,.json,.xml,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
               onChange={(event) => setAttachment(event.target.files?.[0] ?? null)}
             />
           </label>
@@ -9268,7 +9292,7 @@ function UploadModal({
             type="file"
             required
             multiple
-            accept=".xlsx,.xls,.csv,.json,.xml,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
+            accept=".html,.htm,.xlsx,.xls,.csv,.json,.xml,.pptx,.ppt,.pdf,.docx,.doc,.mpp,.dwg,.png,.jpg,.jpeg,.zip"
             onChange={(event) => chooseFiles(Array.from(event.target.files ?? []))}
           />
           {previewUrl && (

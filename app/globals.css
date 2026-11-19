@@ -2229,6 +2229,43 @@ button {
   background: #f4f1e8;
 }
 
+.plan-layer-switch { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.gantt-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; margin: 16px 0; font-size: 12px; }
+.gantt-filters label { display: grid; gap: 5px; }
+.gantt-filters select, .gantt-filters input { min-height: 38px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 5px; background: white; }
+.gantt-scope { font-size: 12px; line-height: 1.6; color: #555; }
+.gantt-table-scroll { width: 100%; max-height: 650px; overflow: auto; }
+.gantt-task-table { border-collapse: collapse; min-width: 1450px; width: 100%; font-size: 12px; }
+.gantt-task-table th, .gantt-task-table td { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.gantt-task-table thead th { position: sticky; top: 0; z-index: 2; background: #f5f3ed; }
+.gantt-task-table th:first-child { min-width: 290px; max-width: 350px; }
+.gantt-task-table th > small, .gantt-task-table th > strong { display: block; margin-bottom: 5px; }
+.gantt-task-table details { margin-top: 8px; font-weight: normal; }
+.gantt-task-table details summary { cursor: pointer; color: #49614e; }
+.gantt-task-table dl > div { display: grid; grid-template-columns: 1fr 1.5fr; gap: 8px; margin: 6px 0; }
+.gantt-task-table dd { margin: 0; overflow-wrap: anywhere; }
+.gantt-track { position: relative; width: 600px; height: 36px; background: repeating-linear-gradient(90deg,#f0eee9 0,#f0eee9 1px,transparent 1px,transparent 8.333%); }
+.gantt-track > i { position: absolute; display: block; }
+.gantt-baseline { top: 23px; height: 5px; background: #bbc0c0; }
+.gantt-current { top: 6px; height: 13px; background: #d5e5d7; border: 1px solid #7e9c82; border-radius: 2px; }
+.gantt-current.critical { border-color: #ab6656; }
+.gantt-current > b { display: block; height: 100%; background: #4f7963; }
+.gantt-cutoff { height: 32px; top: 0; width: 1px; background: #ba6247; }
+.plan-layer-switch button { padding: 10px 14px; border: 1px solid var(--line); border-radius: 7px; background: white; cursor: pointer; font-size: 12px; }
+.plan-layer-switch button.active { color: white; border-color: #425c55; background: #425c55; }
+.plan-feature-point { position: absolute; z-index: 4; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; transform: translate(-50%, -50%); border: 2px solid white; border-radius: 50%; color: white; background: #596b49; font-size: 11px; font-weight: 800; cursor: pointer; box-shadow: 0 1px 4px #26332855; }
+.plan-feature-point.feature-water { background: #167a98; }
+.plan-feature-point small { display: none; position: absolute; left: 28px; padding: 5px 8px; border-radius: 4px; color: #25342a; background: #fffef5; white-space: nowrap; font-size: 11px; }
+.plan-feature-point:hover, .plan-feature-point:focus-visible { z-index: 6; outline: 2px solid #283e36; outline-offset: 2px; }
+.plan-feature-point:hover small, .plan-feature-point:focus-visible small { display: block; }
+.plan-feature-index { margin: 18px 0; padding: 14px; border: 1px solid var(--line); border-radius: 9px; font-size: 13px; }
+.plan-feature-index summary { cursor: pointer; font-weight: 700; }
+.plan-feature-index > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; margin-top: 14px; }
+.plan-feature-index button { display: grid; grid-template-columns: 26px 1fr; gap: 3px 8px; padding: 10px; text-align: left; border: 1px solid var(--line); border-radius: 6px; background: white; cursor: pointer; }
+.plan-feature-index button > span { grid-row: span 2; align-self: center; font-weight: 800; color: #49614e; }
+.plan-feature-index button small { color: #666; }
+.plan-feature-index > p { margin-top: 12px; color: #666; font-size: 11px; line-height: 1.5; }
+
 .architectural-note {
   position: absolute;
   z-index: 2;

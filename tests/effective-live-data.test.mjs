@@ -1,3 +1,4 @@
+import * as ganttData from "../lib/gantt-data.ts";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
@@ -116,6 +117,7 @@ async function loadContractCore() {
   }).outputText;
   const compiledModule = { exports: {} };
   const bootstrap = {
+    schedules: { ganttSchedules: ganttData.ganttSchedules },
     operations: {
       projectSnapshot: {
         overallProgress: 18,
@@ -173,6 +175,7 @@ async function loadContractCore() {
   };
   const require = (specifier) => {
     if (specifier === "server-only") return {};
+    if (specifier === "./gantt-data") return ganttData;
     if (specifier === "./dashboard-bootstrap") {
       return { buildDashboardBootstrap: () => bootstrap };
     }
@@ -180,6 +183,7 @@ async function loadContractCore() {
       return {
         LIVE_DATA_ROOTS: [
           "projectSnapshot",
+          "ganttSchedules",
           "apartments",
           "monthlyPlan",
           "buildings",
@@ -903,6 +907,23 @@ test("a legacy discovered section can gain values and visualization without chan
   );
 });
 
+test("varios bloques nuevos se validan en orden sin apoyar un alta en otra rechazada", async () => {
+  const {selectContractSafeUpdates}=await loadContractCore();
+  const block=(id)=>({id,title:"Tema",description:"Detalle",area:"seguridad",evidence:"Informe",confidence:1,sourceName:"Informe.pptx",detectedAt:"2026-10-31T00:00:00.000Z",values:[{label:"Indicador",value:"Dato"}],visualization:"table",unit:"",series:[]});
+  const current={"discoveredSections.0":block("anterior")};
+  const updates=[{key:"discoveredSections.2",valueJson:JSON.stringify(block("segundo"))},{key:"discoveredSections.1",valueJson:JSON.stringify(block("primero"))}];
+  assert.deepEqual(Array.from(selectContractSafeUpdates(updates,current,()=>true),u=>u.key),["discoveredSections.1","discoveredSections.2"]);
+  assert.equal(selectContractSafeUpdates(updates,current,u=>u.key!=="discoveredSections.1").length,0);
+  assert.equal(selectContractSafeUpdates([{key:"discoveredSections.1",valueJson:JSON.stringify(block("anterior"))},updates[0]],current,()=>true).length,0);
+});
+
+test("los nombres cortos de oficios del informe resuelven la disciplina existente", async () => {
+  const resolve=await loadSpatialIdentityResolver();
+  const updates=resolve([{key:"constructionDisciplines.Instalaciones.progress",value:20},{key:"constructionDisciplines.Revestimientos.progress",value:30}],{}, {constructionDisciplines:[{name:"Inst. eléctricas, sanitarias y gas",progress:0},{name:"Revestimientos y cerámica",progress:0}]});
+  assert.equal(updates[0].key,"constructionDisciplines.0.progress");
+  assert.equal(updates[1].key,"constructionDisciplines.1.progress");
+});
+
 test("controlled live append supports repeated buildings, apartments and urbanism without gaps", async () => {
   const {
     assertLiveDataContracts,
@@ -1149,6 +1170,13 @@ test("un dato suelto de apartamento traduce edificio y unidad a la vez", async (
   assert.equal(update.key, "buildings.13.units.0.progress");
 });
 
+test("el alias E del informe señala al edificio existente, sin inventar altas ni índices", async () => {
+  const resolve = await loadSpatialIdentityResolver();
+  const updates=resolve([{key:"buildings.E14.progress",value:62.5},{key:"buildings.E99.progress",value:10}],{});
+  assert.equal(updates[0].key,"buildings.13.progress");
+  assert.equal(updates[1].key,"buildings.E99.progress");
+});
+
 test("una clave que ya viene por posición no se toca", async () => {
   const resolveSpatialIdentityUpdates = await loadSpatialIdentityResolver();
   const [update] = resolveSpatialIdentityUpdates(
@@ -1201,6 +1229,16 @@ test("la consulta de D1 no descarta una corrección sin corte posterior a la gan
   const { deriveEffectiveLiveDataSnapshot } = await loadCore();
   const snapshot = deriveEffectiveLiveDataSnapshot(rows, true);
   assert.equal(snapshot.values["urbanismReportAreas.6.progress"], 20.4);
+});
+
+test("el contrato de los cronogramas completos admite tareas y conserva sus límites de dominio", async () => {
+  const { validateLiveDataContract } = await loadContractCore();
+  const value = { title: "Gantt", sourceName: "gantt.html", cutoff: "2026-10-31", scope: "Proyecto P1", tasks: [{ ...ganttData.ganttTaskTemplate, code: "EDI-1", name: "Ventanería", progress: 50, originalData: "{}" }] };
+  assert.equal(validateLiveDataContract("ganttSchedules.buildings", JSON.stringify(value)).valid, true);
+  value.tasks[0].progress = 101;
+  assert.equal(validateLiveDataContract("ganttSchedules.buildings", JSON.stringify(value)).valid, false);
+  value.tasks[0].progress = 50; value.tasks.push({ ...value.tasks[0] });
+  assert.equal(validateLiveDataContract("ganttSchedules.buildings", JSON.stringify(value)).valid, false, "los códigos de tarea no se duplican");
 });
 
 test("el plan reprogramado de la Curva S se publica mes a mes como campo opcional", async () => {
