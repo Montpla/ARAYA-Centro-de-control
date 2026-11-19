@@ -378,7 +378,7 @@ function curvaReprogramadaSintetica() {
 
 test("la curva reprogramada conserva cuatro series y no sustituye el ejecutado ni el plan operativo", async () => {
   const ingestion = await loadIngestion();
-  const result = ingestion.extractReprogrammedCurve(curvaReprogramadaSintetica(), defaults);
+  const result = ingestion.extractReprogrammedCurve(curvaReprogramadaSintetica(), { ...defaults, area: "planificacion" });
   assert.equal(result.warnings.length, 0);
   assert.equal(result.updates.length, 8);
   const values = new Map(result.updates.map((u) => [u.key, u.value]));
@@ -387,6 +387,7 @@ test("la curva reprogramada conserva cuatro series y no sustituye el ejecutado n
   assert.equal(values.get("monthlyPlan.16.reprogrammedUrbanismProgress"), 20.125);
   assert.equal(values.get("monthlyPlan.16.originalDocumentProgress"), 70);
   assert.ok(result.updates.every((u) => u.cutoff === "2026-10-31"));
+  assert.ok(result.updates.every((u) => u.area === "planificacion"), "el clasificador y las series deben compartir el área para permitir su publicación");
   assert.ok(result.updates.every((u) => !/\.(actual|planned)$/.test(u.key)));
 });
 

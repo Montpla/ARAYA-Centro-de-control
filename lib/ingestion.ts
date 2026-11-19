@@ -691,7 +691,7 @@ export function extractReprogrammedCurve(
   const month = actualTitle?.replace(/^ejecutados?\s+mes\s+/, "").split(/\s+/)[0];
   const matchingDates = month ? dates.filter(({ date }) => date.getUTCMonth() + 1 === Number(monthNumbers[month])) : [];
   const cutoff = matchingDates.length === 1 ? matchingDates[0].date.toISOString().slice(0, 10) : defaults.cutoff;
-  const base = { area: "obra", cutoff, sourceCurrency: defaults.sourceCurrency, sourceName: defaults.sourceName };
+  const base = { area: defaults.area, cutoff, sourceCurrency: defaults.sourceCurrency, sourceName: defaults.sourceName };
   const updates: LiveDataUpdate[] = [];
   for (const { col, index } of dates) {
     const b = percent(buildings[col] ?? "");
