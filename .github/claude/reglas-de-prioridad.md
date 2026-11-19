@@ -83,6 +83,13 @@ No se integran y se avisa al dueño para que pida la corrección a la obra:
 porcentajes por encima de 100 % o negativos, fechas de corte futuras, o un
 documento que se contradice a sí mismo.
 
+## 6. Flujo financiero reprogramado **[en código]**
+
+Para el mismo corte, el Excel del flujo aportado por el dueño prevalece sobre
+el Informe Ejecutivo en los meses, resúmenes y auditoría de ese flujo. Los
+anticipos conservan su alcance separado. No se modifica el original del informe
+para hacer desaparecer diferencias entre documentos.
+
 ## Decisiones del dueño
 
 Cada decisión tomada al responder a una incidencia de carga se añade aquí con

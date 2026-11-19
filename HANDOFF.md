@@ -20,6 +20,14 @@ Zona horaria del usuario: Europe/Madrid
   de edificio E frente a TH. El resumen mensual se conserva como bloque propio
   en Centro de datos; no sustituye la foto ni la serie semanales.
   Se mantienen las validaciones y la prioridad de las fuentes.
+- El diagnóstico posterior confirmó los cuatro originales, las 258 tareas y
+  132 campos financieros sin diferencias. El reproceso del informe detectó
+  colisiones de identidad al aparecer conceptos nuevos y validaciones aisladas
+  que impedían añadir varios bloques seguidos. Se usan identidades por hueco
+  estable y se valida cada alta tras las anteriores aceptadas, sin reutilizar
+  identificadores ni apoyar un dato en otro rechazado. El corte canónico real es
+  `projectSnapshot.declaredCutoff`; se contrasta con el modelo del panel.
+  Este cierre supera typecheck, compilación, lint sin errores y 552 pruebas.
 
 - Nuevo encargo: integrar los dos Gantt HTML, el Informe Ejecutivo definitivo
   v8 y el flujo reprogramado de octubre v4. Esta sección amplía el estado

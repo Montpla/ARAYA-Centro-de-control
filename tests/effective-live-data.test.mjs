@@ -907,6 +907,23 @@ test("a legacy discovered section can gain values and visualization without chan
   );
 });
 
+test("varios bloques nuevos se validan en orden sin apoyar un alta en otra rechazada", async () => {
+  const {selectContractSafeUpdates}=await loadContractCore();
+  const block=(id)=>({id,title:"Tema",description:"Detalle",area:"seguridad",evidence:"Informe",confidence:1,sourceName:"Informe.pptx",detectedAt:"2026-10-31T00:00:00.000Z",values:[{label:"Indicador",value:"Dato"}],visualization:"table",unit:"",series:[]});
+  const current={"discoveredSections.0":block("anterior")};
+  const updates=[{key:"discoveredSections.2",valueJson:JSON.stringify(block("segundo"))},{key:"discoveredSections.1",valueJson:JSON.stringify(block("primero"))}];
+  assert.deepEqual(Array.from(selectContractSafeUpdates(updates,current,()=>true),u=>u.key),["discoveredSections.1","discoveredSections.2"]);
+  assert.equal(selectContractSafeUpdates(updates,current,u=>u.key!=="discoveredSections.1").length,0);
+  assert.equal(selectContractSafeUpdates([{key:"discoveredSections.1",valueJson:JSON.stringify(block("anterior"))},updates[0]],current,()=>true).length,0);
+});
+
+test("los nombres cortos de oficios del informe resuelven la disciplina existente", async () => {
+  const resolve=await loadSpatialIdentityResolver();
+  const updates=resolve([{key:"constructionDisciplines.Instalaciones.progress",value:20},{key:"constructionDisciplines.Revestimientos.progress",value:30}],{}, {constructionDisciplines:[{name:"Inst. eléctricas, sanitarias y gas",progress:0},{name:"Revestimientos y cerámica",progress:0}]});
+  assert.equal(updates[0].key,"constructionDisciplines.0.progress");
+  assert.equal(updates[1].key,"constructionDisciplines.1.progress");
+});
+
 test("controlled live append supports repeated buildings, apartments and urbanism without gaps", async () => {
   const {
     assertLiveDataContracts,
