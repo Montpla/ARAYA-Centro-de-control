@@ -82,35 +82,58 @@ const historyRows = await d1(`SELECT h.id AS historyId, h.event_id AS eventId, h
 
 const day = (value) => String(value ?? "").slice(0, 10);
 
+// Fechas dd-mm-aaaa (o dd/mm/aaaa) escritas en el nombre, en ISO.
+const fechasDelNombre = (name) => [...String(name ?? "").matchAll(/(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/g)]
+  .map(([, d, m, y]) => `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`);
+
 // Corte que el sistema habría puesto mal y el que corresponde.
 const plan = [];
+const pendientes = [];
 for (const file of files) {
-  // Un corte "declarado" igual al día de la carga no lo puso nadie: lo heredó
-  // el derivado de un .mpp convertido ese día. Se trata como no declarado.
   const declarado = String(file.declared ?? "").trim();
-  if (declarado && declarado !== day(file.createdAt)) continue;
+  const now = new Date(String(file.createdAt).replace(" ", "T") + (String(file.createdAt).includes("Z") ? "" : "Z"));
+  const nuevo = detectPeriod(file.name, "", file.description ?? "", Number.isNaN(now.getTime()) ? new Date() : now);
+  // Un corte "declarado" no lo puso nadie cuando (a) es el día de la carga
+  // (lo heredó el derivado de un .mpp convertido ese día) o (b) es otra fecha
+  // del propio nombre distinta de la que elige la regla actual: la regla
+  // antigua tomaba el INICIO del rango ("26-10-2026 al 31-10-2026") y los
+  // derivados (PDF comprimido, reprocesos) la reenviaron como declarada.
+  const heredado = declarado && (
+    declarado === day(file.createdAt) ||
+    (nuevo && declarado !== nuevo && fechasDelNombre(file.name).includes(declarado))
+  );
+  if (declarado && !heredado) continue;
   file.storedDetected = file.detected ?? "";
-  if (declarado) {
+  if (heredado) {
     file.heredado = declarado;
     file.detected = declarado;
   }
-  const now = new Date(String(file.createdAt).replace(" ", "T") + (String(file.createdAt).includes("Z") ? "" : "Z"));
-  const nuevo = detectPeriod(file.name, "", file.description ?? "", Number.isNaN(now.getTime()) ? new Date() : now);
-  if (!nuevo || nuevo === file.detected) continue;
-  plan.push({ file, nuevo });
+  if (!nuevo) continue;
+  pendientes.push({ file, nuevo });
 }
 
-const fileById = new Map(plan.map((item) => [item.file.id, item]));
+const pendientePorId = new Map(pendientes.map((item) => [item.file.id, item]));
 const cambios = { history: [], events: new Map() };
+const conCambios = new Set();
 for (const row of historyRows) {
-  const item = fileById.get(row.sourceFileId);
+  const item = pendientePorId.get(row.sourceFileId);
   if (!item) continue;
-  const viejos = new Set([item.file.detected].filter(Boolean));
-  if (!item.file.detected) viejos.add(day(row.eventCreatedAt));
-  if (viejos.has(row.cutoff)) cambios.history.push({ row, nuevo: item.nuevo });
+  // Cortes que pudo poner el sistema: el periodo guardado y, siempre, el día
+  // de la publicación (la ingesta cae en él cuando no detecta periodo; pasó
+  // con la semana 1 de Seguridad, publicada con corte 18/11 aunque es del 10/10).
+  const viejos = new Set([item.file.detected, item.file.storedDetected, day(row.eventCreatedAt)].filter(Boolean));
+  viejos.delete(item.nuevo);
+  if (viejos.has(row.cutoff)) {
+    cambios.history.push({ row, nuevo: item.nuevo });
+    conCambios.add(row.sourceFileId);
+  }
   if (viejos.has(row.eventCutoff) && row.eventSourceFileId === row.sourceFileId) {
     cambios.events.set(row.eventId, { viejo: row.eventCutoff, nuevo: item.nuevo });
+    conCambios.add(row.sourceFileId);
   }
+}
+for (const item of pendientes) {
+  if (item.nuevo !== item.file.detected || conCambios.has(item.file.id)) plan.push(item);
 }
 
 console.log(`=== ${plan.length} archivo(s) cuyo corte cambia con la regla actual ===`);

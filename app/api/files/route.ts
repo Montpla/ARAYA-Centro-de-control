@@ -393,7 +393,10 @@ function parseByteRange(value: string | null, size: number) {
 
 function isSafeLiveValue(value: unknown, depth = 0): boolean {
   if (depth > 10) return false;
-  if (value === null) return false;
+  // Un null suelto como valor de una clave no es un dato, pero dentro de una
+  // fila sí lo es: safetyWeeklySeries lleva eventsWeek: null cuando el reporte
+  // sólo imprime el acumulado, y rechazarlo descartaba la serie entera.
+  if (value === null) return depth > 0;
   if (typeof value === "number") return Number.isFinite(value);
   if (typeof value === "string") return value.length <= 10_000;
   if (typeof value === "boolean") return true;
