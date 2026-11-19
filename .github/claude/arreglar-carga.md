@@ -80,4 +80,13 @@ corte anterior al ya publicado no debe pisar al vigente.
      caso 1. Si no, escribe
      `{"accion": "sin_accion", "resumen": "<por qué está bien>"}`.
 
+Si la anomalía mezcla las dos cosas (por ejemplo, un retroceso que es una
+corrección legítima y, al investigarlo, encuentras un fallo real en otra
+parte), **arregla el fallo real y usa `"arreglado"`**, explicando en el resumen
+qué parte era legítima. `"dudoso"` es sólo para cuando no has cambiado código.
+Si has hecho commits, abre siempre el PR.
+
+El aviso al móvil sólo muestra unas 400 letras: empieza el resumen por lo
+importante (qué fallaba y qué has hecho).
+
 Escribe siempre `.verificacion/decision.json` antes de terminar.
