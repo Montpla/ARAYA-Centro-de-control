@@ -1767,7 +1767,10 @@ export async function POST(request: Request) {
         unmappedCandidates: [...extraction.unmappedCandidates, {
           label: `Seguridad mensual · ${resumenMensualSeguridad.cutoff.slice(0, 7)}`,
           description: "Indicadores del periodo mensual del Informe Ejecutivo; alcance distinto de la fotografía semanal.",
-          valueJson: JSON.stringify(resumenMensualSeguridad.metrics),
+          valueJson: JSON.stringify(resumenMensualSeguridad.metrics.map((metric) =>
+            metric && typeof metric === "object" && !Array.isArray(metric)
+              ? { Indicador: metric.label, Valor: metric.value, Detalle: metric.detail }
+              : metric)),
           suggestedArea: "seguridad",
           confidence: 1,
           evidence: "Bloque Seguridad y Salud en el Trabajo del Informe Ejecutivo, leído directamente del documento.",
