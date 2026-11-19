@@ -2255,7 +2255,9 @@ button {
 .plan-layer-switch button.active { color: white; border-color: #425c55; background: #425c55; }
 .plan-feature-point { position: absolute; z-index: 4; display: grid; place-items: center; width: 24px; height: 24px; padding: 0; transform: translate(-50%, -50%); border: 2px solid white; border-radius: 50%; color: white; background: #596b49; font-size: 11px; font-weight: 800; cursor: pointer; box-shadow: 0 1px 4px #26332855; }
 .plan-feature-point.feature-water { background: #167a98; }
-.plan-feature-point small { display: none; position: absolute; left: 28px; padding: 5px 8px; border-radius: 4px; color: #25342a; background: #fffef5; white-space: nowrap; font-size: 11px; }
+.site-plan-image-wrap { container-type: inline-size; }
+.plan-feature-point small { display: none; position: absolute; top: 50%; left: 28px; width: max-content; max-width: min(180px, 40vw); max-width: min(180px, calc(50cqw - 28px)); padding: 5px 8px; transform: translateY(-50%); border-radius: 4px; color: #25342a; background: #fffef5; white-space: normal; overflow-wrap: anywhere; text-align: left; font-size: 11px; line-height: 1.35; }
+.plan-feature-point.label-left small { left: auto; right: 28px; }
 .plan-feature-point:hover, .plan-feature-point:focus-visible { z-index: 6; outline: 2px solid #283e36; outline-offset: 2px; }
 .plan-feature-point:hover small, .plan-feature-point:focus-visible small { display: block; }
 .plan-feature-index { margin: 18px 0; padding: 14px; border: 1px solid var(--line); border-radius: 9px; font-size: 13px; }
