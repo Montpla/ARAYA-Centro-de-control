@@ -12,6 +12,8 @@ import { materializeLiveRoot } from "../lib/live-data.ts";
 import { deriveUrbanismMapAreas, reconcileGeneralUrbanism } from "../lib/urbanism-map-progress.ts";
 import { readXlsxSheets } from "../lib/xlsx-reader.ts";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import masterplan from "../lib/masterplan-layout.json" with { type: "json" };
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 
@@ -33,6 +35,20 @@ if (!sessionMatch) {
   process.exit(1);
 }
 const Cookie = `araya_session=${sessionMatch[1]}`;
+
+// Contraste de los fondos publicados: sólo identidad binaria y contadores.
+console.log("=== Geometría del master plan desplegado ===");
+for (const mode of ["visual", "tecnico"]) {
+  const name = `araya-masterplan-20261119-${mode}.svg`;
+  const local = await readFile(new URL(`../public/${name}`, import.meta.url));
+  const response = await fetch(`${PRODUCTION_URL}/${name}`, { headers: { Cookie } });
+  if (!response.ok) throw new Error(`No se pudo contrastar el plano ${mode} (${response.status}).`);
+  const published = new Uint8Array(await response.arrayBuffer());
+  const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  if (hash(local) !== hash(published)) throw new Error(`El plano ${mode} publicado no coincide con la revisión del código.`);
+  console.log(`Plano ${mode}: identidad confirmada · SHA-256 ${hash(published)}`);
+}
+console.log(`Anclas del master plan: ${Object.keys(masterplan.buildings).length} edificios · ${masterplan.features.length} espacios identificados · ${masterplan.parkingCount} plazas representadas.`);
 
 const liveResponse = await fetch(`${PRODUCTION_URL}/api/live-data`, { headers: { Cookie } });
 if (!liveResponse.ok) {
@@ -167,6 +183,14 @@ console.log(`Desgloses publicados: ${desgloses}`);
 const fileResponse = await fetch(`${PRODUCTION_URL}/api/files?limit=200`, { headers: { Cookie } });
 if (fileResponse.ok) {
   const { files = [] } = await fileResponse.json();
+  const drawing = files.find((entry) => !entry.deletedAt && !entry.supersededByFileId && entry.originalName === masterplan.source);
+  if (drawing) {
+    const response = await fetch(`${PRODUCTION_URL}/api/files?download=${encodeURIComponent(drawing.id)}`, { headers: { Cookie } });
+    if (!response.ok) throw new Error(`No se pudo contrastar el DWG original (${response.status}).`);
+    const hash = createHash("sha256").update(new Uint8Array(await response.arrayBuffer())).digest("hex");
+    if (hash !== masterplan.sha256) throw new Error("El DWG archivado no coincide con el original usado para generar el plano.");
+    console.log(`DWG original del master plan: identidad confirmada · SHA-256 ${hash}`);
+  }
   const curve = files.filter((entry) => !entry.deletedAt && !entry.supersededByFileId &&
     entry.extension === "xlsx" && /curva.*rep.*gram/i.test(entry.originalName))
     .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];

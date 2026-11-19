@@ -9,6 +9,35 @@ Zona horaria del usuario: Europe/Madrid
 > anteriores**. Las secciones fechadas más abajo son historial; si contradicen a
 > esta, manda esta.
 
+## Master plan actualizado (19/11/2026)
+
+- Encargo del dueño: adaptar el plano visual e interactivo al DWG
+  `ROA-E00-URB-A101-MASTER_PLAN cambio estaciomientos.dwg`.
+- Se han extraído y contrastado los rótulos de los 77 edificios con los centros
+  de sus bloques arquitectónicos, 700 plazas de aparcamiento y 305 elementos
+  de vegetación. El plano es ortogonal: las anclas antiguas de la imagen en
+  perspectiva ya no sirven para estas vistas.
+- El eje central identifica, de norte a sur, cancha múltiple, salón social,
+  parque infantil, gimnasio, piscina deportiva, edificación auxiliar sin uso
+  rotulado inequívoco, piscina recreativa y parque abierto. También se sitúan
+  zona PET, tanque elevado, comercio, portería, plazoleta, accesos y servicios.
+- Dos fondos SVG trazados desde la geometría del CAD sustituyen las imágenes
+  anteriores en la implantación. El tratamiento visual simplifica las cubiertas
+  a sus envolventes; los trazados técnicos, viales y mobiliario proceden del DWG.
+  Los polígonos de relleno cierran discontinuidades a un decímetro y son sólo
+  tratamiento gráfico; no son un levantamiento para replanteo o medición.
+- Fuente geométrica reproducible: `scripts/data/masterplan-20261119.json` y
+  `scripts/generar-masterplan.py`. Coordenadas y fichas: `lib/masterplan-layout.json`.
+  Hay 20 fichas, sin inventar avance específico para una piscina o servicio.
+- Las capas separan edificios y apartamentos, servicios y avance de urbanismo.
+  Las anclas del nuevo DWG mandan en estas vistas sobre coordenadas antiguas
+  guardadas en datos vivos. Las entidades nuevas conservan su alternativa dinámica.
+- Validación local: typecheck, compilación y 538 pruebas correctas. Se revisan
+  las 77 coordenadas contra sus contornos, las plazas y el orden de los servicios.
+  La publicación se completa por PR, despliegue y carga oficial del original.
+- La curva reprogramada anterior quedó publicada en la revisión 136: 48 valores
+  contrastados con el Excel, 46 cambios y dos ya coincidentes; avance real 38,01 %.
+
 ## Curva reprogramada en Excel (19/11/2026)
 
 - La conciliación de la cubicación quedó desplegada con el PR #282 y publicada
