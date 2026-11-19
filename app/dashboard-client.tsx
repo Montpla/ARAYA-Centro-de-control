@@ -6109,9 +6109,9 @@ const staffGuides = [
     kicker: "USO DIARIO",
     title: "Guía corporativa Bricket Control",
     detail:
-      "Funciones, navegación, permisos, carga documental, cámara, avisos e " +
-      "instalación en móvil, tablet y ordenador.",
-    pages: "7 páginas",
+      "Uso diario, plano actualizado, Gantt, alcance de los avances, permisos " +
+      "e instalación en móvil, tablet y ordenador.",
+    pages: "8 páginas · 19.11.2026",
     url: "/data-center/guias/guia-corporativa-bricket-control-personal-obra.pdf",
     fileName: "guia-corporativa-bricket-control-personal-obra.pdf",
     viewerTitle: "Guía corporativa Bricket Control · personal de obra.pdf",
@@ -6119,11 +6119,11 @@ const staffGuides = [
   {
     id: "actualizacion-mensual",
     kicker: "CADA MES",
-    title: "Actualización del mes: los tres archivos",
+    title: "Actualizar el corte: fuentes y prioridades",
     detail:
-      "Qué tres archivos se suben cada mes (informe de obra, Excel de flujo y " +
-      "plan de Project), qué actualiza cada uno y cómo comprobar que ha entrado.",
-    pages: "3 páginas",
+      "Cubicación, curva Excel, flujo, Project, Gantt e Informe Ejecutivo: " +
+      "qué fuente manda y cómo comprobar su integración.",
+    pages: "4 páginas · 19.11.2026",
     url: "/data-center/guias/guia-actualizacion-mensual-araya.pdf",
     fileName: "guia-actualizacion-mensual-araya.pdf",
     viewerTitle: "Actualización mensual · Centro de Control ARAYA.pdf",
@@ -6133,9 +6133,9 @@ const staffGuides = [
     kicker: "ANTES DE SUBIR",
     title: "Qué pasa con cada archivo",
     detail:
-      "Qué hace el programa con cada formato, por qué a veces un dato no entra " +
-      "y las dos salidas del .mpp de Microsoft Project.",
-    pages: "4 páginas",
+      "Lectura, interpretación y conversión; Gantt HTML, revisión del plano " +
+      "DWG y motivos de datos sin cambios o aislados.",
+    pages: "5 páginas · 19.11.2026",
     url: "/data-center/guias/guia-formatos-araya.pdf",
     fileName: "guia-formatos-araya.pdf",
     viewerTitle: "Guía de formatos · Centro de Control ARAYA.pdf",
@@ -6146,8 +6146,8 @@ const staffGuides = [
     title: "El plan de Project se envía solo",
     detail:
       "Para el equipo que edita el plan en Microsoft Project: cómo dejar que " +
-      "el avance llegue solo al Centro de Control cada vez que se guarda.",
-    pages: "4 páginas",
+      "el plan llegue al Centro de Control, respetando corte y prioridad de fuentes.",
+    pages: "5 páginas · 19.11.2026",
     url: "/data-center/guias/guia-envio-project-araya.pdf",
     fileName: "guia-envio-project-araya.pdf",
     viewerTitle: "Envío automático desde Microsoft Project · Centro de Control ARAYA.pdf",
@@ -6157,9 +6157,9 @@ const staffGuides = [
     kicker: "EQUIPO FINANCIERO",
     title: "Entregar y validar datos financieros",
     detail:
-      "Permisos, controles contables, prioridad de fuentes, moneda, plantillas " +
-      "deterministas y lectura del recibo de publicación.",
-    pages: "3 páginas",
+      "Permisos y controles; flujo real y previsto, anticipos separados, " +
+      "prioridad del Excel y lectura del recibo.",
+    pages: "4 páginas · 19.11.2026",
     url: "/data-center/guias/guia-financiera-araya.pdf",
     fileName: "guia-financiera-araya.pdf",
     viewerTitle: "Guía financiera · Centro de Control ARAYA.pdf",
@@ -6170,8 +6170,8 @@ const staffGuides = [
     title: "Recibir las notificaciones en el móvil y el ordenador",
     detail:
       "Los dos gestos para que los avisos lleguen solos —dar permiso una vez " +
-      "y, en iPhone, instalar la app— y dónde funciona cada aparato.",
-    pages: "3 páginas",
+      "y, en iPhone, instalar la app— y cómo leer Integrado o Revisar carga.",
+    pages: "4 páginas · 19.11.2026",
     url: "/data-center/guias/guia-avisos-araya.pdf",
     fileName: "guia-avisos-araya.pdf",
     viewerTitle: "Avisos en el móvil y el ordenador · Centro de Control ARAYA.pdf",

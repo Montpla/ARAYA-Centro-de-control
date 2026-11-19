@@ -37,6 +37,26 @@ if (!sessionMatch) {
 }
 const Cookie = `araya_session=${sessionMatch[1]}`;
 
+// Las guías se sirven desde R2: desplegar el catálogo no garantiza su contenido.
+// Se contrastan sólo las huellas del PDF, sin registrar datos de sesión.
+console.log("=== Guías publicadas en el Centro de datos ===");
+for (const name of [
+  "guia-corporativa-bricket-control-personal-obra.pdf",
+  "guia-actualizacion-mensual-araya.pdf",
+  "guia-formatos-araya.pdf",
+  "guia-envio-project-araya.pdf",
+  "guia-financiera-araya.pdf",
+  "guia-avisos-araya.pdf",
+]) {
+  const local = await readFile(new URL(`../historical/data-center/guias/${name}`, import.meta.url));
+  const response = await fetch(`${PRODUCTION_URL}/data-center/guias/${name}`, { headers: { Cookie } });
+  if (!response.ok) throw new Error(`No se pudo contrastar la guía ${name} (${response.status}).`);
+  const published = new Uint8Array(await response.arrayBuffer());
+  const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
+  if (hash(local) !== hash(published)) throw new Error(`La guía ${name} publicada no coincide con la revisión del código.`);
+  console.log(`Guía ${name}: identidad confirmada · SHA-256 ${hash(published)}`);
+}
+
 // Contraste de los fondos publicados: sólo identidad binaria y contadores.
 console.log("=== Geometría del master plan desplegado ===");
 for (const mode of ["visual", "tecnico"]) {

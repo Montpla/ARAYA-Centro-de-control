@@ -10,6 +10,7 @@ The PDF is written to ``output/pdf/guia_corporativa_bricket_control_personal_obr
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
 from typing import Iterable, Sequence
 
 from reportlab.graphics.barcode import qr
@@ -27,6 +28,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / "public"
 OUTPUT = ROOT / "output" / "pdf" / "guia_corporativa_bricket_control_personal_obra.pdf"
 APP_URL = "https://araya-centro-control.grupobricket.workers.dev/"
+GUIDE_EDITION = "19.11.2026"
+PUBLISHED = ROOT / "historical" / "data-center" / "guias" / "guia-corporativa-bricket-control-personal-obra.pdf"
 
 PAGE_W, PAGE_H = A4
 MARGIN_X = 42
@@ -232,10 +235,45 @@ def draw_page_frame(c: canvas.Canvas, page_no: int, section: str) -> None:
     c.line(MARGIN_X, 29, PAGE_W - MARGIN_X, 29)
     c.setFillColor(MUTED)
     c.setFont(font_name("Body"), 6.8)
-    c.drawString(MARGIN_X, 17, "ARAYA PUNTA CANA | GRUPO BRICKET | GUIA INTERNA")
+    c.drawString(MARGIN_X, 17, f"ARAYA PUNTA CANA | GRUPO BRICKET | GUIA INTERNA | {GUIDE_EDITION}")
     number = f"{page_no:02d}"
     c.setFont(font_name("Body-Bold"), 7.2)
     c.drawString(PAGE_W - MARGIN_X - text_width(number, "Body-Bold", 7.2), 17, number)
+
+
+def draw_reference_page(c: canvas.Canvas, page_no: int, title: str, subtitle: str,
+                        sections: Sequence[tuple[str, str]], note: str) -> None:
+    """Página de consulta con tarjetas ajustadas al texto, sin recortes."""
+    draw_page_frame(c, page_no, "Fuentes y alcance")
+    y = draw_section_title(c, "EDICIÓN " + GUIDE_EDITION, title, subtitle) - 20
+    width = PAGE_W - 2 * MARGIN_X
+    for heading, body in sections:
+        lines = wrap_lines(body, "Body", 9.5, width - 36)
+        height = 53 + len(lines) * 13.5
+        if y - height < BOTTOM + 68:
+            raise ValueError("El contenido de la guía requiere otra página.")
+        rounded_rect(c, MARGIN_X, y - height, width, height, white, LINE, 11)
+        c.setFillColor(ORANGE)
+        c.roundRect(MARGIN_X, y - height, 4, height, 2, fill=1, stroke=0)
+        c.setFont(font_name("Display-Bold"), 13)
+        c.setFillColor(INK)
+        c.drawString(MARGIN_X + 18, y - 26, heading)
+        draw_wrapped(c, body, MARGIN_X + 18, y - 46, width - 36,
+                     size=9.5, leading=13.5, color=MUTED)
+        y -= height + 12
+    draw_wrapped(c, note, MARGIN_X, BOTTOM + 44, width,
+                 font="Body-Bold", size=8.6, leading=12, color=SAGE)
+
+
+def draw_masterplan_preview(c: canvas.Canvas, x: float, y: float, width: float, height: float) -> None:
+    """La miniatura se deriva del mismo SVG vigente que utiliza el programa."""
+    import fitz
+    preview = ROOT / "tmp" / "pdfs" / "masterplan-guia.png"
+    preview.parent.mkdir(parents=True, exist_ok=True)
+    with fitz.open(PUBLIC / "araya-masterplan-20261119-visual.svg") as document:
+        scale = 600 / document[0].rect.width
+        document[0].get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False).save(preview)
+    draw_contain(c, preview, x, y, width, height)
 
 
 def draw_contain(
@@ -379,7 +417,7 @@ def cover_page(c: canvas.Canvas) -> None:
 
     c.setFillColor(MUTED)
     c.setFont(font_name("Body"), 7.5)
-    c.drawString(44, 68, "EDICIÓN 22.08.2026")
+    c.drawString(44, 68, "EDICIÓN " + GUIDE_EDITION)
     c.setFillColor(white)
     c.setFont(font_name("Body-Bold"), 7.2)
     c.drawRightString(PAGE_W - 37, 32, "USO INTERNO | ARAYA PUNTA CANA")
@@ -494,7 +532,7 @@ def page_core(c: canvas.Canvas) -> None:
         (
             "02",
             "Planificación",
-            "Curva S, avance físico, plan contra ejecutado, paquetes desviados, ruta crítica y previsión de finalización.",
+            "Curva S y Gantt de edificaciones y urbanismo: filtros, línea base, calendario vigente, recursos y dependencias.",
         ),
         (
             "03",
@@ -509,7 +547,7 @@ def page_core(c: canvas.Canvas) -> None:
         (
             "05",
             "Apartamentos",
-            "Estado por color, porcentaje, superestructura, albañilería, instalaciones, acabados y datos pendientes.",
+            "Porcentajes y colores derivados del edificio/Project; no acreditan mediciones individuales por vivienda.",
         ),
         (
             "06",
@@ -527,9 +565,8 @@ def page_core(c: canvas.Canvas) -> None:
     preview_w = PAGE_W - MARGIN_X - preview_x
     preview_h = 374
     rounded_rect(c, preview_x, preview_y, preview_w, preview_h, CREAM, LINE, 13)
-    draw_contain(
+    draw_masterplan_preview(
         c,
-        PUBLIC / "araya-visual-masterplan-v4.png",
         preview_x + 12,
         preview_y + 58,
         preview_w - 24,
@@ -748,7 +785,7 @@ def draw_install_column(
         for line in lines:
             c.drawString(x + 43, local_y, line)
             local_y -= 10.7
-        step_y = local_y - 14
+        step_y = local_y - 20
 
 
 def page_mobile_install(c: canvas.Canvas) -> None:
@@ -858,7 +895,7 @@ def page_desktop_support(c: canvas.Canvas) -> None:
             "Pulsa «Instalar app» en la barra superior, o el icono Instalar de la barra de direcciones.",
             "Confirma «Instalar Bricket Control».",
             "Queda con su icono propio y se abre en su ventana, como un programa más.",
-            "En Safari (Mac): menú Archivo → Añadir al Dock.",
+            "En Safari (Mac): menú Archivo  /  Añadir al Dock.",
         ],
         MARGIN_X + 15,
         563,
@@ -921,6 +958,16 @@ def page_desktop_support(c: canvas.Canvas) -> None:
     )
 
 
+def page_current_scope(c: canvas.Canvas) -> None:
+    draw_reference_page(c, 8, "Qué dato estás consultando",
+        "El plano reúne geometría, avances publicados y cálculos derivados. Comprueba siempre el alcance y la fuente.", [
+        ("Edificios y apartamentos", "En la comprobación del 19/11/2026 hay 77 edificios y 462 apartamentos representados. Sólo 26 edificios tienen avance global publicado. Los otros 51 conservan valores iniciales: un 0 % inicial no es un cero medido."),
+        ("Porcentaje medido o derivado", "La cubicación aporta 234 desgloses por edificio y oficio, no por vivienda. Los porcentajes de apartamentos se heredan o ajustan desde el edificio/Project. No hay mediciones individuales publicadas por apartamento."),
+        ("Servicios del nuevo plano", "En Implantación elige edificios y apartamentos, servicios o avance de urbanismo. Hay 20 servicios identificados, incluidas piscinas, parques, zona de mascotas y tanque elevado. Las fichas de servicios no reciben el avance global de urbanismo como si fuera propio."),
+        ("Seguridad y planificación", "El resumen mensual de Seguridad se consulta como bloque propio y no sustituye la foto ni la serie semanal. Los Gantt conservan sus metas parciales; esas fechas no cambian automáticamente el horizonte general del proyecto."),
+    ], "La cubicación manda en el avance físico. No atribuyas una medición de edificio a una vivienda.")
+
+
 def build_pdf() -> Path:
     register_fonts()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
@@ -938,12 +985,15 @@ def build_pdf() -> Path:
         page_workflow,
         page_mobile_install,
         page_desktop_support,
+        page_current_scope,
     ]
     for index, page in enumerate(pages):
         page(c)
         if index < len(pages) - 1:
             c.showPage()
     c.save()
+    PUBLISHED.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(OUTPUT, PUBLISHED)
     return OUTPUT
 
 

@@ -16,6 +16,7 @@ from reportlab.pdfgen import canvas
 
 from generate_staff_guide_pdf import (
     BLUE_PALE,
+    GUIDE_EDITION,
     BOTTOM,
     CREAM,
     INK,
@@ -34,6 +35,7 @@ from generate_staff_guide_pdf import (
     draw_bullets,
     draw_contain,
     draw_page_frame,
+    draw_reference_page,
     draw_section_title,
     draw_wrapped,
     font_name,
@@ -116,7 +118,7 @@ def cover(c: canvas.Canvas) -> None:
     c.setFont(font_name("Body"), 8)
     c.drawString(MARGIN_X, 96, "Guía interna para administración, finanzas y dirección")
     c.setFillColor(MUTED)
-    c.drawString(MARGIN_X, 80, "3 páginas  ·  edición 22.08.2026")
+    c.drawString(MARGIN_X, 80, "4 páginas  ·  edición " + GUIDE_EDITION)
 
 
 def draw_role(c: canvas.Canvas, x: float, y: float, width: float, title: str, body: str, accent, fill) -> None:
@@ -249,7 +251,7 @@ def page_controles(c: canvas.Canvas) -> None:
     y -= 20
     draw_wrapped(
         c,
-        "Centro de datos → Descargar plantilla mensual: Balance fideicomiso, "
+        "Centro de datos  /  Descargar plantilla mensual: Balance fideicomiso, "
         "Resultados fideicomiso y Flujo mensual. Rellena sólo la columna valor; "
         "las filas vacías no borran nada.",
         MARGIN_X,
@@ -268,6 +270,16 @@ def page_controles(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X, BOTTOM + 16, "Ante una incidencia, comparte el número de revisión; nunca envíes cifras por fuera del expediente.")
 
 
+def page_flujo(c: canvas.Canvas) -> None:
+    draw_reference_page(c, 4, "Leer el flujo reprogramado",
+        "Distingue gasto realizado, previsión pendiente y anticipos. No mezcles importes con alcances distintos.", [
+        ("Meses reales y previsión", "El corte lo fija el periodo ejecutado del documento. Los meses posteriores se muestran como previsión, no como gasto real. El flujo mantiene Urbanismo, Edificios y su total; una previsión futura no adelanta el corte real."),
+        ("Anticipos acumulados", "Los anticipos acumulados se presentan separados del gasto mensual. El total que los incluye conserva ese alcance: no se vuelve a sumar al real de cada mes ni se compara como si fuera sólo gasto del periodo."),
+        ("Prioridad del Excel y original vigente", "Para el mismo corte, el Excel del flujo prevalece sobre el Informe Ejecutivo. Abre el Excel vigente desde el flujo y contrasta el recibo. Una diferencia entre documentos se conserva con su fuente; no se corrige a mano para forzar coincidencias."),
+        ("Comas, puntos y números sin separador", "Se conserva el valor numérico nativo del Excel. En texto se reconocen los formatos locales y, en porcentajes, la coma decimal. No añadas decimales supuestos a un entero ni elimines una rectificación sólo porque tenga signo negativo."),
+    ], "Sin cambios también es un resultado correcto cuando el dato ya coincide o manda otra fuente verificada.")
+
+
 def build_pdf() -> Path:
     register_fonts()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
@@ -276,7 +288,7 @@ def build_pdf() -> Path:
     c.setAuthor("Grupo Bricket | ARAYA Punta Cana")
     c.setSubject("Entrega, validación y publicación de información financiera")
     c.setKeywords("Bricket Control, ARAYA, finanzas, balance, flujo, recibo")
-    pages = [cover, page_entrega, page_controles]
+    pages = [cover, page_entrega, page_controles, page_flujo]
     for index, page in enumerate(pages):
         page(c)
         if index < len(pages) - 1:

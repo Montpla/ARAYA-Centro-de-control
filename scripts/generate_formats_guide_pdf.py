@@ -32,6 +32,7 @@ from reportlab.pdfgen import canvas
 
 from generate_staff_guide_pdf import (
     BLUE_PALE,
+    GUIDE_EDITION,
     BOTTOM,
     CREAM,
     INK,
@@ -51,6 +52,7 @@ from generate_staff_guide_pdf import (
     draw_bullets,
     draw_contain,
     draw_page_frame,
+    draw_reference_page,
     draw_section_title,
     draw_wrapped,
     font_name,
@@ -170,7 +172,7 @@ def cover(c: canvas.Canvas) -> None:
     c.setFont(font_name("Body"), 8)
     c.drawString(MARGIN_X, 96, "Guía interna para el personal de obra y oficina")
     c.setFillColor(MUTED)
-    c.drawString(MARGIN_X, 80, "4 páginas  ·  4 minutos de lectura")
+    c.drawString(MARGIN_X, 80, "5 páginas  ·  edición " + GUIDE_EDITION)
 
 
 def page_resultados(c: canvas.Canvas) -> None:
@@ -189,14 +191,11 @@ def page_resultados(c: canvas.Canvas) -> None:
             "ACTUALIZA EL PANEL",
             SAGE,
             SAGE_PALE,
-            [".csv", ".json", ".xml", ".xlsx", ".xls", ".docx", ".pptx", ".pdf", ".zip"],
-            "Las cifras se sacan del archivo directamente, celda a celda o "
-            "fila a fila. No interviene ninguna interpretación: lo que llega "
-            "al panel es lo que estaba escrito. De Word y PowerPoint se leen "
-            "las tablas, y del informe de obra tambien los indicadores de "
-            "seguridad y los hallazgos de campo, que no van en tabla; del "
-            "PDF, el texto, incluida la matriz de obligaciones del prestamo "
-            "IFC; del ZIP, lo que lleve dentro.",
+            [".csv", ".json", ".xml", ".xlsx", ".html", ".docx", ".pptx", ".pdf", ".zip"],
+            "Los lectores extraen celdas, tablas y datos compatibles. En el "
+            "Gantt HTML se lee sólo su bloque JSON, sin ejecutar el archivo. "
+            "En Word, PowerPoint y PDF, la lectura asistida completa lo que "
+            "el lector directo no cubre. Cada dato conserva su fuente y alcance.",
             152,
         ),
         (
@@ -214,13 +213,14 @@ def page_resultados(c: canvas.Canvas) -> None:
         ),
         (
             "Se convierte",
-            "ACTUALIZA AL TERMINAR",
+            "SE PROCESA AL TERMINAR",
             NAVY,
             BLUE_PALE,
-            [".mpp", ".dwg"],
+            [".mpp", ".dwg", ".xls"],
             "El original se guarda primero. Después, un proceso seguro genera "
-            "un XML de Project o una vista PNG del plano, lo enlaza al original "
-            "y lo vuelve a leer. No hay que convertir ni subir otra copia.",
+            "un XML de Project, una vista PNG del DWG o un XLSX del Excel "
+            "antiguo, y lo enlaza al original. Los datos compatibles se procesan "
+            "después; una vista de plano no acredita la recolocación de sus puntos.",
             134,
         ),
     ]
@@ -313,9 +313,10 @@ def page_mpp(c: canvas.Canvas) -> None:
         (
             "AUTOCAD",
             "DWG a vista PNG",
-            "Comprobación cada hora",
+            "Conversión en segundo plano",
             "LibreDWG genera el dibujo y una vista PNG de alta resolución. "
-            "Se abre en móvil o tableta y puede pasar por lectura visual.",
+            "Se abre como vista del original. No recoloca por sí sola los "
+            "edificios o servicios del plano interactivo.",
             "El .dwg nunca se sustituye ni se expone: la imagen es un derivado "
             "privado y queda identificada como vista automática.",
             NAVY,
@@ -392,9 +393,9 @@ def page_mpp(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X + 18, y - 24, "SI EL CORTE ES URGENTE")
     draw_wrapped(
         c,
-        "En Usuarios / Actualizar porcentajes a mano puedes publicar un avance "
-        "puntual mientras termina el MPP. Queda con autor, fecha e histórico; "
-        "no es necesario volver a subir el archivo.",
+        "No utilices Usuarios / Actualizar porcentajes a mano para suplir una "
+        "fuente que aún se procesa. Revisa el expediente y solicita al "
+        "administrador que resuelva el diagnóstico conservando la fuente.",
         MARGIN_X + 18,
         y - 42,
         CONTENT_W - 36,
@@ -447,7 +448,7 @@ def page_detalles(c: canvas.Canvas) -> None:
         ),
         (
             "Nombra el edificio",
-            "Usa el código —TH-14, Edificio 14, Ed. 7— y no el número de "
+            "Usa el código -TH-14, Edificio 14, Ed. 7- y no el número de "
             "fila. Un nombre que no corresponde a ningún edificio se descarta "
             "y se avisa, en vez de escribir la cifra en el equivocado.",
         ),
@@ -510,10 +511,10 @@ def page_detalles(c: canvas.Canvas) -> None:
             "comprobación posterior.",
             "Si es MPP o DWG, el mensaje indica que la conversión sigue en "
             "segundo plano y el plazo normal de cada formato.",
-            "Mira la implantación: los colores y los porcentajes cambian en "
-            "menos de cinco segundos, en todas las pantallas a la vez.",
+            "Mira la implantación y la capa seleccionada. Si el dato ya "
+            "coincidía o manda otra fuente, es correcto que el color no cambie.",
             "Si algo no cuadra, cada cifra guarda de qué archivo salió, quién "
-            "lo subió y cuándo — y una publicación se puede deshacer.",
+            "lo subió y cuándo - y una publicación se puede deshacer.",
             "Para balances, resultados y flujo usa las plantillas del Centro de "
             "datos: entran por lector directo y no necesitan interpretación IA.",
         ],
@@ -555,6 +556,16 @@ def page_detalles(c: canvas.Canvas) -> None:
     )
 
 
+def page_gantt_plano(c: canvas.Canvas) -> None:
+    draw_reference_page(c, 5, "Gantt, plano y dato medido",
+        "Que un archivo se pueda abrir no significa que cualquier cifra o geometría sustituya a lo ya verificado.", [
+        ("Gantt HTML", "Sube los Gantt de edificaciones y urbanismo. En Planificación puedes filtrar tareas y consultar calendario vigente, línea base, materiales, recursos y dependencias. Sus avances son de tarea o frente, no mediciones de apartamentos."),
+        ("Revisión de un plano nuevo", "La conversión DWG conserva el original y ofrece una vista. Para comprobar una adaptación del plano interactivo, revisa ubicación de edificios, piscinas y servicios. Si la distribución ha cambiado y los puntos no coinciden, pide revisión al administrador."),
+        ("Edificio, oficio y apartamento", "La cubicación del corte tiene prioridad en el avance físico. Un desglose por edificio y oficio no identifica una vivienda. Los porcentajes y colores derivados del edificio/Project no deben presentarse como mediciones individuales."),
+        ("Lectura completa y resultado", "Las hojas de Excel se recorren completas; un Gantt incompatible no se publica parcialmente. Lee publicados, sin cambios y aislados en el recibo. Un valor igual, un corte anterior o una fuente de menor prioridad pueden dejar el panel sin cambios correctamente."),
+    ], "Comprueba fuente, fecha y alcance. No fuerces otra cifra ni vuelvas a subir copias para vencer una validación.")
+
+
 def build_pdf() -> Path:
     register_fonts()
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
@@ -564,7 +575,7 @@ def build_pdf() -> Path:
     c.setSubject("Qué hace el Centro de Control con cada formato de archivo")
     c.setKeywords("Bricket Control, ARAYA, formatos, mpp, Project, obra, datos")
 
-    pages = [cover, page_resultados, page_mpp, page_detalles]
+    pages = [cover, page_resultados, page_mpp, page_detalles, page_gantt_plano]
     for index, page in enumerate(pages):
         page(c)
         if index < len(pages) - 1:

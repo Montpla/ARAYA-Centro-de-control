@@ -9,6 +9,168 @@ Zona horaria del usuario: Europe/Madrid
 > anteriores**. Las secciones fechadas más abajo son historial; si contradicen a
 > esta, manda esta.
 
+## Estado canónico para continuar con otro asistente (19/11/2026)
+
+Este bloque sustituye las indicaciones de trabajo pendiente de las secciones
+históricas inferiores. La integración de documentos y la corrección de etiquetas
+ya están publicadas y verificadas. No hay que repetir las cargas para continuar.
+Lee `AGENTS.md` entero y `CONTINUAR.md` antes de trabajar. El historial antiguo
+contiene cifras económicas de otros agentes: no lo vuelques en registros ni chat.
+
+### Publicación y datos vigentes
+
+- Producción: <https://araya-centro-control.grupobricket.workers.dev>.
+- Último cambio funcional desplegado: PR #292, commit
+  `f3aeec484661df3daff99ed4e0d55ebc6ceba489`. Los PR #282, #283, #286, #287,
+  #288, #290 y #291 contienen las integraciones anteriores; #285 quedó fusionado
+  posteriormente y añadió una regresión de la curva.
+- Última revisión de datos comprobada: **141**. Corte de obra: **31/10/2026**.
+  Avance físico certificado: **38,01 %**; plan reprogramado del corte:
+  **39,80016690026052 %**; urbanismo: **31,89 %**.
+- Se verificaron cuatro originales del último lote, 258 tareas completas de
+  Gantt y 132 campos financieros de 20 meses sin diferencias. En esa comprobación
+  no había propuestas ni discrepancias pendientes. Es una foto del 19/11/2026;
+  un asistente posterior debe consultar producción si necesita un estado nuevo.
+
+### Archivos integrados durante esta conversación
+
+| Original | Resultado vigente |
+| --- | --- |
+| `Cubicacion_11_Araya_Oct.xlsx` | Revisión 135: avances de 26 edificios, 234 desgloses propios por edificio/oficio, 9 oficios globales y 11 capítulos de urbanismo contrastados. |
+| `Curva repogramada Araya.xlsx` | Revisión 136: 48 valores de planificación contrastados; 46 cambios y dos coincidencias. No sustituye el ejecutado certificado. |
+| `ROA-E00-URB-A101-MASTER_PLAN cambio estaciomientos.dwg` | PR #287: plano visual y técnico ortogonales, 77 anclas, 700 plazas, 305 elementos de vegetación y 20 servicios identificados. Original archivado y huella verificada. |
+| `gantt_31-10- corte Edificaciones.html` | Revisión 138: 86 tareas, con fechas, línea base, materiales, recursos y dependencias. |
+| `Gantt_Urbanismo_Araya_corte-31-oct-2026.html` | Revisión 137: 172 tareas con jerarquía y calendario propio. |
+| `Informe_Ejecutivo_ARAYA_Octubre_Definitivo_v8.pptx` | Revisión 141: seis cambios nuevos; original de 33 diapositivas, 13 gráficos y 13 libros incrustados conservado. Verificación correcta. |
+| `ARAYA_Flujo_I_reprogramado_Oct2026_v4.xlsx` | Revisión 140: 65 cambios y 67 coincidencias; reproceso final con los 132 datos ya coincidentes, sin revisión duplicada. Ocho hojas y 1.380 fórmulas contrastadas. |
+
+- Los dos Gantt se consultan en Planificación y conservan su alcance agregado.
+  Sólo se lee su bloque JSON; no se ejecuta el HTML recibido.
+- El flujo contiene once meses reales y nueve de previsión. Los anticipos
+  acumulados permanecen separados del gasto mensual. El enlace de descarga abre
+  el Excel vigente, no la copia antigua de julio.
+- Seguridad mensual del informe está publicada como tabla propia de cinco
+  indicadores en `discoveredSections.10`. La foto y la serie semanales conservan
+  su alcance. Los bloques nuevos se identifican por hueco estable y se validan
+  tras las altas anteriores aceptadas; una rechazada no sirve de apoyo a otra.
+- Dos gráficos del PowerPoint difieren de sus libros internos. No se modificó
+  el original ni se utilizaron esas diferencias para pisar fuentes prioritarias.
+- Se conservan los valores numéricos nativos del Excel; la coma porcentual es
+  decimal y no se inventan separadores ausentes. Las metas parciales de los Gantt
+  no sustituyen automáticamente el horizonte general del proyecto.
+
+### Edificios y apartamentos: límite fundamental de los datos
+
+Auditoría de producción del 19/11/2026, revisión 141:
+
+- Están representados los **77 edificios** y **462 apartamentos**; todas las
+  anclas de edificios están en el nuevo plano.
+- **26 edificios** tienen avance global publicado. Los **51 restantes**
+  (códigos 19 a 69) conservan valores iniciales: su 0 % no es una medición
+  certificada de que no haya obra.
+- Los 234 desgloses son **por edificio y oficio**, no por vivienda.
+- Hay **cero claves publicadas propias de apartamentos**. Sus porcentajes y
+  colores se derivan de fases del edificio/Project. En la auditoría, 84
+  apartamentos recibían además el ajuste de alineación con el avance del edificio.
+- `lib/unit-progress.ts` contiene `syncUnitsWithBuildingPhases` y
+  `alignUnitsWithBuildingProgress`; son cálculos de presentación y agregación,
+  no mediciones individuales. No afirmar que cada apartamento está verificado.
+- Una procedencia anterior puede mantenerse cuando un valor ya coincidía:
+  la auditoría encontró 25 avances globales con procedencia de la cubicación
+  de octubre y uno con procedencia de julio. No publicar otra cifra por el mero
+  hecho de que la procedencia sea antigua; contrastar antes el original.
+- El usuario preguntó expresamente por este desglose y se le explicó esta
+  limitación. No ha aportado todavía mediciones individualizadas por vivienda.
+
+### Plano, etiquetas y colores
+
+- `lib/masterplan-layout.json` y `lib/site-plan-layout.ts` definen geometría y
+  anclas. Los dos fondos son `public/araya-masterplan-20261119-visual.svg` y
+  `public/araya-masterplan-20261119-tecnico.svg`. La geometría se reproduce con
+  `scripts/generar-masterplan.py` y su archivo de datos.
+- `lib/progress-palette.ts` comparte la escala de color de edificios y
+  apartamentos. El plano usa `building.progress` y `unitOverallProgress`.
+- PR #292 corrigió los rótulos del tanque elevado y la zona de mascotas:
+  se abren hacia el interior, parten el texto y adaptan su ancho a la imagen.
+  Las 240 comprobaciones de bordes dieron resultado correcto; antes fallaban 46.
+- Se inspeccionaron ambas etiquetas en navegador. Los estilos publicados
+  coincidían por huella con la compilación verificada.
+
+### Reglas y código que debe consultar el siguiente asistente
+
+- Avance físico: cubicación, Excel de avance, Project y, por último, presentación.
+  Un corte anterior no pisa uno posterior. Ver `.github/claude/reglas-de-prioridad.md`.
+- Plan operativo: Excel maestro de gráficos. Curva reprogramada: el Excel
+  aportado prevalece sobre la presentación del mismo corte. Flujo financiero:
+  el Excel del flujo prevalece sobre el PowerPoint del mismo periodo.
+- `lib/ingestion.ts`, `lib/gantt-html.ts`, `lib/gantt-data.ts`: lectores y Gantt.
+- `lib/narrative-update-scope.ts`: separación mensual/semanal y normalización.
+  La clave real del corte es `projectSnapshot.declaredCutoff`.
+- `lib/ingestion-change-set.ts` y `lib/live-data-contract.ts`: identidades de
+  bloques, validación ordenada y prohibición de reutilizar identidades.
+- `lib/spatial-live-data.ts`, `lib/unit-progress.ts` y `app/dashboard-client.tsx`:
+  derivación de porcentajes, colores y sincronización de las vistas.
+- Preferir el grafo MCP para descubrir código. Proyecto local indexado:
+  `araya-auditoria-20261119`; reindexar si está ausente o desactualizado.
+- No volcar módulos de datos financieros completos: contienen valores históricos.
+  Consultar tipos, claves, contadores y comparaciones en memoria.
+
+### Evidencias que siguen disponibles en GitHub Actions
+
+- [Diagnóstico de originales, tareas y flujo](https://github.com/Montpla/ARAYA-Centro-de-control/actions/runs/44573576550): cuatro originales, 258 tareas y 132 campos coincidentes.
+- [Verificación final del informe](https://github.com/Montpla/ARAYA-Centro-de-control/actions/runs/44573570062): resultado correcto, revisión 141.
+- [Confirmación final del Excel](https://github.com/Montpla/ARAYA-Centro-de-control/actions/runs/44573563530): 132 datos ya coincidentes.
+- [Despliegue de la corrección de etiquetas](https://github.com/Montpla/ARAYA-Centro-de-control/actions/runs/44581512919): correcto.
+- [Auditoría de edificios y apartamentos](https://github.com/Montpla/ARAYA-Centro-de-control/actions/runs/44582526016): lectura sin modificar producción; confirma los límites anteriores.
+- Última validación funcional: typecheck, compilación y **553 pruebas** correctas;
+  lint sin errores y 16 avisos preexistentes. Las ramas temporales de transporte
+  y diagnóstico se retiraron. Los originales están archivados en el Centro de
+  Control y no se añadieron a `main`.
+
+### Seis guías actualizadas: edición 19.11.2026
+
+El usuario encargó expresamente actualizar las seis guías y guardar después
+todo para continuar desde otros LLM. Esta entrega sustituye la revisión pendiente
+que figuraba antes: las seis guías están regeneradas y su catálogo actualizado.
+
+| Guía | Páginas | Contenido revisado |
+| --- | --- | --- |
+| Corporativa | 8 | Vista del plano vigente, Gantt, 77 edificios y 462 apartamentos; 26 avances publicados y 51 valores iniciales. Desgloses por oficio y porcentajes derivados; Seguridad mensual separada de la semanal. |
+| Actualización mensual | 4 | Cubicación prioritaria, flujo y curvas Excel, Project, Gantt e Informe Ejecutivo. Cargar documentos no equivale a cerrar el periodo. |
+| Formatos | 5 | Gantt HTML sin ejecución; conversión MPP, DWG y XLS. Convertir un DWG no recoloca automáticamente el plano interactivo. No suplir cargas pendientes con cambios manuales. |
+| Envío Project | 5 | Fechas y fases del plan, recibo y prioridad de fuentes. La recepción no garantiza cambiar un avance certificado ni crear mediciones por apartamento. |
+| Financiera | 4 | Real frente a previsión, anticipos separados, prioridad y descarga del Excel vigente. Comas, puntos y números nativos sin inventar decimales. |
+| Avisos | 4 | Resultados «Integrado» y «Revisar carga», procesamiento y motivos correctos de «sin cambios». |
+
+- PDF publicados: `historical/data-center/guias/`; copias de salida:
+  `output/pdf/`. Las rutas de descarga se conservan y el catálogo muestra la
+  edición y el número real de páginas.
+- Fuentes: `scripts/generate_staff_guide_pdf.py` (marca y corporativa),
+  `generate_monthly_update_guide_pdf.py`, `generate_formats_guide_pdf.py`,
+  `generate_macro_guide_pdf.py`, `generate_financial_guide_pdf.py` y
+  `generate_notifications_guide_pdf.py`, todos dentro de `scripts/`.
+- Regeneración: instalar `reportlab` y `PyMuPDF`, y ejecutar con Python cada
+  script desde la raíz del repositorio. El generador corporativo toma la vista
+  del SVG vigente. Cada script actualiza su salida y su copia publicada.
+- Revisión visual: 30 páginas renderizadas; sin texto fuera de página ni
+  glifos nulos. Mantener la revisión visual si se vuelve a generar un PDF.
+- `tests/guias-vigentes.test.mjs` abre los seis PDF con PDF.js y contrasta
+  páginas, edición, catálogo y las afirmaciones principales. La validación
+  completa de esta entrega suma **559 pruebas correctas**, tipos y compilación;
+  lint sin errores y 16 avisos preexistentes.
+- Publicación por PR, CI `verificar` y `deploy.yml`. El diagnóstico oficial
+  `comprobar-cargas.yml` con `detalle=0` contrasta las seis huellas SHA-256
+  de `/data-center/guias/` contra los PDF del repositorio. Consultar su última
+  ejecución correcta antes de afirmar un estado de producción posterior.
+- Esta actualización documental no requiere volver a publicar las fuentes
+  de octubre ni modificar datos vivos a mano. Las limitaciones de apartamentos
+  y edificios sin medición siguen vigentes.
+
+## Historial de esta sesión
+
+Las secciones inferiores conservan el proceso de trabajo. Sus referencias a
+publicaciones futuras ya completadas no son tareas pendientes del estado actual.
+
 ## Etiquetas de los servicios del plano (19/11/2026)
 
 - El tanque elevado y la zona de mascotas abrían su rótulo hacia el borde
