@@ -73,6 +73,12 @@ for (const nombre of nombres) {
   form.append("area", "auto");
   form.append("source", "agent");
   form.append("processNow", "true");
+  if (nombre === "ROA-E00-URB-A101-MASTER_PLAN cambio estaciomientos (vista verificada).png") {
+    form.set("area", "diseno");
+    form.set("derivedFromFileId", "5e08bada-e11c-4e82-ae7e-75acf6be67cb");
+    form.set("automationKind", "dwg_to_png");
+    form.set("description", "Vista técnica verificada del master plan actualizado; geometría y anclas contrastadas con el DWG original.");
+  }
   if (process.env.REPROCESO === "true") form.append("reprocess", "true");
 
   console.log(`→ Subiendo "${nombre}" (${bytes.length} bytes)...`);
