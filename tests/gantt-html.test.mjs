@@ -20,7 +20,7 @@ test("lee el bloque de datos completo sin ejecutar el HTML y conserva el detalle
 test("urbanismo conserva jerarquía, fechas vigentes y línea base diferenciadas", () => {
   const result = readGanttHtml(html({ corte: "2026-10-31", reinicio: "2026-11-02", meta: "2027-05-24", limite: "2027-05-10", rows: [{ name: "Piscina", grp: "ELEMENTOS URBANOS", lvl: 1, pct: .2, plan: .8, ini: "2026-11-02", fin: "2027-03-01", oini: "2026-06-01", ofin: "2026-10-01" }] }), "Gantt urbanismo.html");
   assert.equal(result.kind, "urbanism");
-  assert.equal(result.schedule.tasks[0].plannedLabel, "80.00 %");
+  assert.equal(result.schedule.tasks[0].plannedLabel, "80 %");
   assert.equal(result.schedule.tasks[0].baselineFinish, "2026-10-01");
   assert.equal(result.schedule.tasks[0].finish, "2027-03-01");
   assert.equal(result.schedule.tasks[0].level, 1);
