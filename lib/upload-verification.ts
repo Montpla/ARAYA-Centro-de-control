@@ -1,3 +1,5 @@
+import { physicalProgressRank } from "./source-precedence.ts";
+
 // Comprobación de una carga recién procesada: ¿entró bien en el Centro de
 // Control o hay algo que revisar? La lanza GitHub Actions
 // (.github/workflows/verificar-carga.yml) en cuanto se sube un archivo, para
@@ -54,7 +56,11 @@ export type VerificationResult = {
 
 // Motivos de descarte que son el comportamiento correcto, no una pérdida: un
 // documento más antiguo no debe pisar el dato vigente.
-const BENIGN_DISCARD_REASONS = ["su corte es anterior al ya publicado"];
+const BENIGN_DISCARD_REASONS = [
+  "su corte es anterior al ya publicado",
+  // Reglas de prioridad entre fuentes (lib/source-precedence.ts).
+  "una fuente con más prioridad ya fijó este dato",
+];
 
 // Etapas en las que la carga aún se está procesando.
 const IN_PROGRESS_STAGES = new Set(["recibido", "extraccion_en_curso", "en_cola", "procesando"]);
@@ -152,13 +158,15 @@ export function evaluateUploadVerification(input: VerificationInput): Verificati
     // edificios. Si una cubicación corrige a la baja un valor que puso otra
     // fuente (p. ej. un informe ejecutivo que colocó cifras en la fila
     // equivocada), es una corrección esperada, no un fallo de lectura.
-    const authorityCorrection = isCubicacion(file.originalName) &&
-      item.beforeSource !== undefined && !isCubicacion(item.beforeSource);
+    // Generalizado con las reglas de prioridad: cualquier fuente de más
+    // prioridad que corrige a otra de menos.
+    const authorityCorrection = item.beforeSource !== undefined &&
+      physicalProgressRank(file.originalName) > physicalProgressRank(item.beforeSource);
     checks.push({
       id: "retroceso",
       severity: drop > REGRESSION_ANOMALY_POINTS && !authorityCorrection ? "anomalia" : "aviso",
       detail: authorityCorrection
-        ? `${item.key} baja de ${round(item.before)}% (${item.beforeSource}) a ${round(item.after)}%: la cubicación corrige un valor de otra fuente.`
+        ? `${item.key} baja de ${round(item.before)}% (${item.beforeSource}) a ${round(item.after)}%: ${isCubicacion(file.originalName) ? "la cubicación" : "una fuente con más prioridad"} corrige un valor de otra fuente.`
         : `${item.key} baja de ${round(item.before)}% a ${round(item.after)}%. Puede ser una corrección legítima o una lectura equivocada.`,
     });
   }

@@ -97,7 +97,7 @@ for (const issue of incidencias) {
   const id = String(issue.body ?? "").match(/\*\*Identificador:\*\* `([^`]+)`/)?.[1];
   if (!id) continue;
   const comentarios = await github(`/issues/${issue.number}/comments?per_page=100`);
-  const concluyo = comentarios.some((c) => /Claude (lo ha|propuso)/.test(c.body ?? ""));
+  const concluyo = comentarios.some((c) => /Claude (lo ha|propuso|necesita)/.test(c.body ?? ""));
   if (concluyo) continue;
   const reintentos = comentarios.filter((c) => (c.body ?? "").startsWith(MARCA)).length;
   const ultimo = Date.parse(comentarios.at(-1)?.created_at ?? issue.created_at);
