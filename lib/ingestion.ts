@@ -1,6 +1,8 @@
 import { LiveDataUpdate, LiveDataValue, isLiveDataKey, namingToken } from "./live-data";
 import { buildingCodeFromTaskName, extractProjectXmlUpdates, isProjectXml } from "./project-xml";
 import { readXlsxSheets, readZipEntries, rowsToRecords } from "./xlsx-reader";
+import { urbanismDisciplineInText, urbanismDisciplineLabel, findUrbanismDisciplineIndex } from "./urbanism-disciplines";
+import { readGanttHtml } from "./gantt-html";
 import { readOfficeTables, readPptxSlideShapes } from "./ooxml-tables";
 import { CURVA_S_MONTH_COUNT, curvaSUpdates, readPptxCurvaS } from "./pptx-curva-s";
 import { findBuildingProgress, findFiduciaryBalanceSheet, readPdfText } from "./pdf-text";
@@ -129,7 +131,7 @@ const documentRules = [
   {
     id: "cronograma",
     label: "Cronograma y planificación",
-    keywords: ["cronograma", "planificacion", "programacion", "mpp", "project", "linea base", "curva s"],
+    keywords: ["cronograma", "gantt", "planificacion", "programacion", "mpp", "project", "linea base", "curva s"],
   },
   {
     id: "ventas_cobranza",
@@ -242,6 +244,7 @@ function periodFromText(value: string, now: Date) {
 }
 
 function extractionMode(extension: string) {
+  if (extension === "html" || extension === "htm") return { id: "gantt_directo", label: "Gantt HTML leído desde sus datos estructurados" };
   if (extension === "csv" || extension === "json") {
     return { id: "estructurada_automatica", label: "Extracción estructurada automática" };
   }
@@ -505,9 +508,17 @@ function detectedBuildingProgressScope(
 //
 // Caso ambiguo: «1,234» se lee 1234 (formato de la oficina) y «1.234» se lee
 // 1,234 (formato de máquina y de la oficina).
-export function parseLocalizedNumber(raw: string): number | null {
+export function parseLocalizedNumber(raw: string, options: { decimalSeparator?: "," | "." } = {}): number | null {
+  const percentage = /%/.test(String(raw ?? ""));
   let text = String(raw ?? "").replace(/[%\s]/g, "").replace(/^\$|^RD\$|^US\$/i, "");
   if (!text) return null;
+  // Las celdas numéricas de XLSX también pueden guardar notación científica.
+  // Un entero sin separadores conserva su escala: nunca se inventa una coma.
+  if (/^[+-]?\d+(?:\.\d+)?[eE][+-]?\d+$/.test(text)) {
+    const value = Number(text);
+    return Number.isFinite(value) ? value : null;
+  }
+  if (/^\([\d.,]+\)$/.test(text)) text = `-${text.slice(1, -1)}`;
   const negative = /^-/.test(text);
   text = text.replace(/^[-+]/, "");
   if (!/^[\d.,]+$/.test(text)) return null;
@@ -515,11 +526,17 @@ export function parseLocalizedNumber(raw: string): number | null {
   const lastDot = text.lastIndexOf(".");
   let normalized: string;
   if (lastComma >= 0 && lastDot >= 0) {
+    const decimal = lastComma > lastDot ? "," : ".";
+    const integer = text.slice(0, Math.max(lastComma, lastDot));
+    const fraction = text.slice(Math.max(lastComma, lastDot) + 1);
+    const grouped = decimal === "," ? /^\d{1,3}(\.\d{3})+$/ : /^\d{1,3}(,\d{3})+$/;
+    if (!grouped.test(integer) || !/^\d+$/.test(fraction)) return null;
     normalized = lastComma > lastDot
       ? text.replace(/\./g, "").replace(",", ".")
       : text.replace(/,/g, "");
   } else if (lastComma >= 0) {
-    normalized = /^\d{1,3}(,\d{3})+$/.test(text) ? text.replace(/,/g, "") : text.replace(",", ".");
+    const commaDecimal = options.decimalSeparator === "," || percentage || /^0,/.test(text);
+    normalized = !commaDecimal && /^\d{1,3}(,\d{3})+$/.test(text) ? text.replace(/,/g, "") : text.replace(",", ".");
   } else if (lastDot >= 0 && text.indexOf(".") !== lastDot) {
     normalized = /^\d{1,3}(\.\d{3})+$/.test(text) ? text.replace(/\./g, "") : "";
   } else {
@@ -626,6 +643,77 @@ function extractCurvaSMonthlyProgress(
     updates,
     summary: `Curva S actualizada: ${meses} meses de plan operativo y ejecutado real leídos del Excel maestro.`,
     warnings,
+  };
+}
+
+/** Curva reprogramada con edificios, urbanismo y conjunto ponderado. */
+export function extractReprogrammedCurve(
+  filas: Array<Record<string, string>>,
+  defaults: ExtractionDefaults,
+): StructuredExtraction | null {
+  const start = filas.findIndex((row) => Object.values(row).some((v) => /^reprogramad[oa]$/.test(normalizarCabecera(v))));
+  if (start < 0) return null;
+  const labelCol = Object.entries(filas[start]).find(([, v]) => /^reprogramad[oa]$/.test(normalizarCabecera(v)))![0];
+  const findRow = (label: string, from: number, end: number) => filas.slice(from, end).find((row) => normalizarCabecera(row[labelCol] ?? "") === label);
+  const buildings = findRow("edificios", start + 1, start + 5);
+  const urbanism = findRow("urbanismo", start + 1, start + 5);
+  const combined = findRow("conjunto", start + 1, start + 5);
+  if (!buildings || !urbanism || !combined) return null;
+  const original = findRow("original", start + 1, filas.length);
+  const dates = filas.slice(Math.max(0, start - 4), start).reverse().map((row) =>
+    Object.entries(row).flatMap(([col, value]) => {
+      const date = excelSerialToDate(Number(value));
+      return date ? [{ col, date, index: (date.getUTCFullYear() - 2025) * 12 + date.getUTCMonth() - 5 }] : [];
+    }),
+  ).find((entries) => entries.length >= 2);
+  if (!dates) return null;
+  const invalid = (reason: string): StructuredExtraction => ({ updates: [], summary: "Curva reprogramada identificada, pendiente de corrección.", warnings: [reason] });
+  if (dates.some((entry, index) => entry.index < 0 || entry.index >= CURVA_S_MONTH_COUNT || (index > 0 && entry.index <= dates[index - 1].index))) {
+    return invalid("La curva reprogramada contiene meses repetidos, desordenados o ajenos al calendario del panel.");
+  }
+  const percent = (raw: string) => {
+    const value = parseLocalizedNumber(raw, { decimalSeparator: "," });
+    if (value === null) return null;
+    const result = /%/.test(raw) || value > 1 ? value : value * 100;
+    return Number.isFinite(result) && result >= 0 && result <= 100 ? result : null;
+  };
+  const weight = (row: Record<string, string>) => {
+    const entries = Object.entries(row);
+    const before = entries.slice(0, entries.findIndex(([col]) => col === labelCol));
+    return before.length === 1 ? percent(before[0][1]) : null;
+  };
+  const buildingWeight = weight(buildings);
+  const urbanismWeight = weight(urbanism);
+  if (buildingWeight === null || urbanismWeight === null || Math.abs(buildingWeight + urbanismWeight - 100) > 0.000001) {
+    return invalid("Las ponderaciones de edificios y urbanismo no suman el cien por ciento.");
+  }
+  // El mes explícito de ejecutados fecha el documento; los meses futuros
+  // describen planificación y nunca adelantan el corte del avance real.
+  const actualTitle = filas.flatMap((row) => Object.values(row)).map(normalizarCabecera).find((v) => /^ejecutados?\s+mes\s+/.test(v));
+  const month = actualTitle?.replace(/^ejecutados?\s+mes\s+/, "").split(/\s+/)[0];
+  const matchingDates = month ? dates.filter(({ date }) => date.getUTCMonth() + 1 === Number(monthNumbers[month])) : [];
+  const cutoff = matchingDates.length === 1 ? matchingDates[0].date.toISOString().slice(0, 10) : defaults.cutoff;
+  const base = { area: defaults.area, cutoff, sourceCurrency: defaults.sourceCurrency, sourceName: defaults.sourceName };
+  const updates: LiveDataUpdate[] = [];
+  for (const { col, index } of dates) {
+    const b = percent(buildings[col] ?? "");
+    const u = percent(urbanism[col] ?? "");
+    const c = percent(combined[col] ?? "");
+    const o = original ? percent(original[col] ?? "") : null;
+    if (b === null || u === null || c === null || (original && o === null)) {
+      return invalid("Falta un porcentaje válido en una serie de la curva reprogramada; no se publica una lectura parcial.");
+    }
+    if (Math.abs(c - (b * buildingWeight + u * urbanismWeight) / 100) > 0.01) {
+      return invalid("El conjunto reprogramado no coincide con las ponderaciones de edificios y urbanismo.");
+    }
+    for (const [field, value] of [["reprogrammed", c], ["reprogrammedBuildingsProgress", b], ["reprogrammedUrbanismProgress", u], ...(o === null ? [] : [["originalDocumentProgress", o]])] as Array<[string, number]>) {
+      updates.push({ key: `monthlyPlan.${index}.${field}`, value, ...base });
+    }
+  }
+  return {
+    updates,
+    summary: `Curva reprogramada: ${dates.length} meses de edificios, urbanismo y conjunto ponderado${original ? ", con la serie original del documento" : ""}. El bloque de ejecutados queda como referencia en el original; el avance real conserva la prioridad de la cubicación.`,
+    warnings: [],
   };
 }
 
@@ -908,7 +996,7 @@ function extractCubicacionCoverProgress(
     const label = row[buildingColumn] ?? "";
     const normalizedLabel = normalizarCabecera(label);
     const code = buildingCodeFromTaskName(label);
-    const rawProgress = numeroDeCelda(row[progressColumn] ?? "");
+    const rawProgress = parseLocalizedNumber(row[progressColumn] ?? "", { decimalSeparator: "," });
     if (rawProgress === null || rawProgress < 0) continue;
     const progress = rawProgress <= 1 ? rawProgress * 100 : rawProgress;
     if (progress > 100) continue;
@@ -1029,9 +1117,9 @@ const CUBICACION_DISCIPLINE_TOKENS: ReadonlyArray<{ token: RegExp; canonicalName
 // Excel: por debajo es redondeo y partidas sin oficio (preliminares).
 const CUBICACION_SELF_CHECK_POINTS = 1;
 
-function extractCubicacionDisciplineProgress(
+export function extractCubicacionDisciplineProgress(
   filas: Array<Record<string, string>>,
-  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string },
+  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string; knownBuildingTokens?: Set<string> },
 ): StructuredExtraction | null {
   let partidaColumn = "";
   let totalColumn = "";
@@ -1060,6 +1148,8 @@ function extractCubicacionDisciplineProgress(
 
   const budgetByDiscipline = new Map<string, number>();
   const accumulatedByDiscipline = new Map<string, number>();
+  const byBuilding = new Map<string, Map<string, { budget: number; accumulated: number }>>();
+  let currentBuilding = "";
   let currentDiscipline = "";
   let partidaRowCount = 0;
   // Total del capítulo de edificios que trae el propio Excel: sirve para
@@ -1069,6 +1159,10 @@ function extractCubicacionDisciplineProgress(
 
   for (const row of filas) {
     const label = (row[partidaColumn] ?? "").trim();
+    const description = row[descripcionColumn] ?? "";
+    if (/^edificio\s+\d+/i.test(description.trim())) {
+      currentBuilding = buildingCodeFromTaskName(description) ?? "";
+    }
     if (!label) continue;
     if (chapterBudget === null && descripcionColumn &&
       /^capitulo:?\s*edificios$/.test(normalizarCabecera(row[descripcionColumn] ?? ""))) {
@@ -1093,9 +1187,21 @@ function extractCubicacionDisciplineProgress(
     if (!currentDiscipline) continue;
     const budget = numeroDeCelda(row[totalColumn] ?? "");
     const accumulated = numeroDeCelda(row[montoAcumuladoColumn] ?? "");
-    if (budget === null || budget <= 0 || accumulated === null || accumulated < 0) continue;
+    // Las rectificaciones firmadas del detalle participan en la suma. Se
+    // valida el acumulado del oficio, no el signo de cada partida aislada.
+    if (budget === null || accumulated === null) continue;
     budgetByDiscipline.set(currentDiscipline, (budgetByDiscipline.get(currentDiscipline) ?? 0) + budget);
     accumulatedByDiscipline.set(currentDiscipline, (accumulatedByDiscipline.get(currentDiscipline) ?? 0) + accumulated);
+    if (currentBuilding && (!defaults.knownBuildingTokens || defaults.knownBuildingTokens.has(
+      currentBuilding.replace(/^TH-/i, "").replace(/^0+(?=\d)/, ""),
+    ))) {
+      const disciplines = byBuilding.get(currentBuilding) ?? new Map<string, { budget: number; accumulated: number }>();
+      const amounts = disciplines.get(currentDiscipline) ?? { budget: 0, accumulated: 0 };
+      amounts.budget += budget;
+      amounts.accumulated += accumulated;
+      disciplines.set(currentDiscipline, amounts);
+      byBuilding.set(currentBuilding, disciplines);
+    }
     partidaRowCount += 1;
   }
   if (!partidaRowCount) return null;
@@ -1126,10 +1232,15 @@ function extractCubicacionDisciplineProgress(
     sourceName: defaults.sourceName,
   } as const;
   const updates: LiveDataUpdate[] = [];
+  const warnings: string[] = [];
   for (const [name, budget] of budgetByDiscipline) {
     if (budget <= 0) continue;
     const accumulated = accumulatedByDiscipline.get(name) ?? 0;
-    const progress = Math.min(100, Math.max(0, (accumulated / budget) * 100));
+    const progress = Math.round((accumulated / budget) * 10_000) / 100;
+    if (!Number.isFinite(progress) || progress < 0 || progress > 100) {
+      warnings.push(`El acumulado de ${name} queda fuera del intervalo de avance; se conserva el diagnóstico sin recortarlo.`);
+      continue;
+    }
     updates.push({
       // El punto de "Inst." partiría la clave en un segmento de más: las
       // claves vivas se separan por ".", y el nombre canónico de esa
@@ -1140,13 +1251,93 @@ function extractCubicacionDisciplineProgress(
       ...baseUpdate,
     });
   }
-  if (!updates.length) return null;
+  for (const [code, disciplines] of byBuilding) {
+    const values: Array<{ name: string; progress: number }> = [];
+    let valid = true;
+    for (const [name, amounts] of disciplines) {
+      if (amounts.budget <= 0) { valid = false; break; }
+      // La suma de partidas redondeadas puede sobrepasar el cierre por
+      // milésimas de punto. Validar con la misma precisión de los oficios
+      // publicados; un exceso que alcance una centésima sigue rechazándose.
+      const progress = Math.round(amounts.accumulated / amounts.budget * 10_000) / 100;
+      if (!Number.isFinite(progress) || progress < 0 || progress > 100) { valid = false; break; }
+      values.push({ name, progress });
+    }
+    if (!valid || !values.length) {
+      warnings.push(`No se publica el desglose de oficios de ${code}: contiene un acumulado no válido.`);
+      continue;
+    }
+    // Una lista por edificio mantiene la publicación atómica bajo el límite
+    // de cambios; no se atribuye este avance a apartamentos individuales.
+    updates.push({ key: `buildings.${code}.constructionDisciplines`, value: values, ...baseUpdate });
+  }
+  if (!updates.length && !warnings.length) return null;
 
   return {
     updates,
-    summary: `${updates.length} oficio(s) de construcción actualizados desde el detalle de partidas de la cubicación.`,
-    warnings: [],
+    summary: `${updates.filter((update) => update.key.startsWith("constructionDisciplines.")).length} oficio(s) de construcción actualizados desde el detalle de partidas de la cubicación; ${updates.filter((update) => update.key.startsWith("buildings.")).length} edificios con desglose propio.`,
+    warnings,
   };
+}
+
+/** Capítulos del urbanismo: cociente acumulado, sin usar el % del periodo. */
+export function extractCubicacionUrbanismProgress(
+  filas: Array<Record<string, string>>,
+  defaults: {
+    cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string;
+    currentUrbanismReportAreas?: ReadonlyArray<{ name: string; progress: number }>;
+  },
+): StructuredExtraction | null {
+  const header = filas.slice(0, 60).find((row) =>
+    Object.values(row).some((value) => /^n[°ºo]?\s*partida\.?$/.test(normalizarCabecera(value))) &&
+    Object.values(row).filter((value) => /^monto$/.test(normalizarCabecera(value))).length >= 2,
+  );
+  if (!header) return null;
+  const entries = Object.entries(header);
+  const description = entries.find(([, value]) => /^descripcion/.test(normalizarCabecera(value)))?.[0];
+  const budgetColumn = entries.find(([, value]) => /^total$/.test(normalizarCabecera(value)))?.[0];
+  const amountColumns = entries.filter(([, value]) => /^monto$/.test(normalizarCabecera(value)));
+  const accumulatedColumn = amountColumns[amountColumns.length - 1]?.[0];
+  if (!description || !budgetColumn || !accumulatedColumn) return null;
+  const updates: LiveDataUpdate[] = [];
+  const warnings: string[] = [];
+  const seen = new Set<string>();
+  const current = defaults.currentUrbanismReportAreas ? [...defaults.currentUrbanismReportAreas] : null;
+  let inUrbanism = false;
+  for (const row of filas) {
+    const name = normalizarCabecera(row[description] ?? "");
+    if (/^capitulo:?\s*edificios$|^edificio\s+\d+/.test(name)) break;
+    if (/^urbanismo$/.test(name)) { inUrbanism = true; continue; }
+    if (!inUrbanism) continue;
+    const id = urbanismDisciplineInText(name);
+    if (!id || seen.has(id)) continue;
+    // Sólo encabezados de capítulo, no partidas cuyo texto mencione un oficio.
+    const firstColumn = entries.find(([, value]) => /^n[°ºo]?\s*partida\.?$/.test(normalizarCabecera(value)))?.[0];
+    if (!firstColumn || /^\d+\.?$/.test((row[firstColumn] ?? "").trim())) continue;
+    const budget = parseLocalizedNumber(row[budgetColumn] ?? "");
+    const accumulated = parseLocalizedNumber(row[accumulatedColumn] ?? "");
+    if (budget === null || budget <= 0 || accumulated === null) continue;
+    const progress = accumulated / budget * 100;
+    if (!Number.isFinite(progress) || progress < 0 || progress > 100) {
+      warnings.push(`El acumulado de urbanismo ${urbanismDisciplineLabel(id)} no es un porcentaje válido.`);
+      continue;
+    }
+    seen.add(id);
+    const label = urbanismDisciplineLabel(id);
+    const base = { area: "obra", cutoff: defaults.cutoff, sourceCurrency: defaults.sourceCurrency, sourceName: defaults.sourceName };
+    const index = current ? findUrbanismDisciplineIndex(current, label) : -1;
+    if (current && index < 0) {
+      updates.push({ key: `urbanismReportAreas.${current.length}`, value: { name: label, progress }, ...base });
+      current.push({ name: label, progress });
+    } else {
+      updates.push({ key: `urbanismReportAreas.${label}.progress`, value: progress, ...base });
+    }
+    // La ficha espacial y el desglose reciben también las correcciones a la
+    // baja: su conciliación histórica conserva el mayor de ambos valores.
+    const spatial = id === "vialidad" ? "urban-roads" : id === "paisajismo" ? "urban-landscape" : null;
+    if (spatial) updates.push({ key: `urbanismAreas.${spatial}.progress`, value: progress, ...base });
+  }
+  return updates.length ? { updates, warnings, summary: `${seen.size} capítulos de urbanismo actualizados desde la cubicación.` } : null;
 }
 
 /**
@@ -1454,9 +1645,9 @@ function importeDeCelda(valor: string): number | null {
  * temporal del flujo (FLOW_MONTH_ORDER) y se publican los importes de ese mes.
  * No toca los totales por ámbito ni la auditoría, que se revisan aparte.
  */
-function extractReprogrammedFlowUpdates(
+export function extractReprogrammedFlowUpdates(
   hojas: Array<Array<Record<string, string>>>,
-  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string },
+  defaults: { area: string; cutoff: string; sourceCurrency: "DOP" | "USD"; sourceName: string; sourceFileId?: string },
 ): StructuredExtraction | null {
   for (const filas of hojas) {
     let cabeceraIndice = -1;
@@ -1512,9 +1703,85 @@ function extractReprogrammedFlowUpdates(
     }
 
     if (!meses) return null;
+    // La hoja de comparación sólo trae meses reales. La hoja de
+    // reprogramación conserva la previsión futura de cada alcance.
+    const lastActual = Math.max(...updates.map((update) => Number(update.key.split(".")[1])));
+    const sourceCutoff = new Date(Date.UTC(2025, 12 + lastActual, 0)).toISOString().slice(0, 10);
+    for (const update of updates) update.cutoff = sourceCutoff;
+    const forecasts = new Map<string, Map<string, { original: number; current: number }>>();
+    const scopeTotals = new Map<string, Record<string, number>>();
+    for (const sheet of hojas) {
+      let scope = ""; let monthColumn = ""; let originalColumn = ""; let currentColumn = "";
+      for (const row of sheet) {
+        const entries = Object.entries(row);
+        const heading = entries.map(([, value]) => normalizarCabecera(value)).find((value) => value === "urbanismo" || value === "edificios");
+        if (heading) { scope = heading; monthColumn = ""; originalColumn = ""; currentColumn = ""; }
+        if (scope) {
+          const label = normalizarCabecera(row.A ?? ""); const value = importeDeCelda(row.B ?? "");
+          const field = label.startsWith("total proyeccion") ? "projectBudgetDop" : label.startsWith("acumulado real anterior") ? "priorActualDop" : label.startsWith("real total acumulado") ? "actualToCutoffDop" : label.startsWith("restante a distribuir") ? "remainingForecastDop" : "";
+          if (field && value !== null) {
+            const totals = scopeTotals.get(scope) ?? {}; totals[field] = value; scopeTotals.set(scope, totals);
+          }
+        }
+        const originalHeader = entries.find(([, value]) => normalizarCabecera(value) === "presupuesto original");
+        const currentHeader = entries.find(([, value]) => normalizarCabecera(value) === "presupuesto reprogramado");
+        if (originalHeader && currentHeader && scope) {
+          monthColumn = entries.find(([, value]) => normalizarCabecera(value) === "mes")?.[0] ?? "";
+          originalColumn = originalHeader[0]; currentColumn = currentHeader[0]; continue;
+        }
+        if (!scope || !monthColumn) continue;
+        const month = mesDeFlujo(row[monthColumn] ?? "");
+        if (!month || FLOW_MONTH_ORDER.indexOf(month) <= lastActual) continue;
+        const original = importeDeCelda(row[originalColumn] ?? "");
+        const current = importeDeCelda(row[currentColumn] ?? "");
+        if (original === null || current === null || original < 0 || current < 0) continue;
+        const scopes = forecasts.get(month) ?? new Map<string, { original: number; current: number }>();
+        scopes.set(scope, { original, current }); forecasts.set(month, scopes);
+      }
+    }
+    let forecastMonths = 0;
+    for (const [month, scopes] of forecasts) {
+      const urbanism = scopes.get("urbanismo"); const buildings = scopes.get("edificios");
+      if (!urbanism || !buildings) continue;
+      const index = FLOW_MONTH_ORDER.indexOf(month);
+      const current = urbanism.current + buildings.current; const original = urbanism.original + buildings.original;
+      const base = { area: defaults.area, cutoff: sourceCutoff, sourceCurrency: defaults.sourceCurrency, sourceName: defaults.sourceName };
+      for (const [field, value] of [["status", "forecast"], ["currentDop", current], ["originalDop", original], ["varianceDop", current - original], ["urbanismDop", urbanism.current], ["buildingsDop", buildings.current]] as Array<[string, string | number]>) {
+        updates.push({ key: `reprogrammedFlowMonths.${index}.${field}`, value, ...base });
+      }
+      forecastMonths += 1;
+    }
+    // El resumen distingue el real del periodo y los anticipos acumulados.
+    // No se incorporan cuentas ajenas al alcance Urbanismo/Edificios.
+    for (const sheet of hojas) {
+      const header = sheet.findIndex((row) => normalizarCabecera(row.B ?? "") === "presupuestado" && normalizarCabecera(row.C ?? "") === "real" && normalizarCabecera(row.F ?? "").includes("anticipos acumulados"));
+      if (header < 0) continue;
+      const scopes: Array<Record<string, LiveDataValue>> = [];
+      for (const [token, id, label] of [["urbanismo", "urbanism", "Urbanismo"], ["edificios", "buildings", "Edificios"]]) {
+        const row = sheet.slice(header + 1).find((item) => normalizarCabecera(item.A ?? "").startsWith(token));
+        const totals = scopeTotals.get(token);
+        if (!row || !totals || ["projectBudgetDop", "priorActualDop", "actualToCutoffDop", "remainingForecastDop"].some((key) => totals[key] === undefined)) continue;
+        const fields = ["budgetPeriodDop", "actualPeriodDop", "varianceDop", "varianceRatio", "advancesAccumulatedDop", "actualWithAdvancesDop"];
+        const columns = ["B", "C", "D", "E", "F", "G"];
+        const values = columns.map((column) => importeDeCelda(row[column] ?? ""));
+        if (values.some((value) => value === null)) continue;
+        const value = { id, label, ...totals, ...Object.fromEntries(fields.map((field, index) => [field, values[index]!])) };
+        scopes.push(value);
+      }
+      if (scopes.length !== 2) continue;
+      const total: Record<string, LiveDataValue> = { id: "total", label: "Conjunto" };
+      for (const field of Object.keys(scopes[0]).filter((key) => key !== "id" && key !== "label" && key !== "varianceRatio")) total[field] = Number(scopes[0][field]) + Number(scopes[1][field]);
+      total.varianceRatio = Number(total.budgetPeriodDop) === 0 ? 0 : Number(total.varianceDop) / Number(total.budgetPeriodDop);
+      const base = { area: defaults.area, cutoff: sourceCutoff, sourceCurrency: defaults.sourceCurrency, sourceName: defaults.sourceName };
+      if (Math.abs(Number(total.actualToCutoffDop) + Number(total.remainingForecastDop) - Number(total.projectBudgetDop)) <= .01) {
+        scopes.push(total);
+        updates.push({ key: "reprogrammedFlowScopes", value: scopes, ...base });
+        for (const [field, value] of [["cutoff", sourceCutoff], ["workbookSheetCount", hojas.length], ["originalTotalDop", total.projectBudgetDop], ["reprogrammedTotalDop", Number(total.actualToCutoffDop) + Number(total.remainingForecastDop)], ["totalCheckDifferenceDop", Number(total.actualToCutoffDop) + Number(total.remainingForecastDop) - Number(total.projectBudgetDop)], ["actualPeriodDop", total.actualPeriodDop], ["actualToCutoffDop", total.actualToCutoffDop], ["remainingForecastDop", total.remainingForecastDop]] as Array<[string, LiveDataValue]>) updates.push({ key: `reprogrammedFlowAudit.${field}`, value, ...base });
+      }
+    }
     return {
       updates,
-      summary: `${meses} meses del flujo reprogramado actualizados desde el Excel de finanzas.`,
+      summary: `${meses} meses reales y ${forecastMonths} meses de previsión del flujo reprogramado actualizados desde el Excel de finanzas. Los anticipos acumulados conservan su alcance y no se añaden al gasto mensual.`,
       warnings: [],
     };
   }
@@ -1859,7 +2126,7 @@ export async function extractStructuredUpdates(
     area: string;
     cutoff: string;
     sourceCurrency: "DOP" | "USD";
-    sourceName: string;
+    sourceName: string; sourceFileId?: string;
     // Los edificios que existen ahora mismo, para no dar de alta uno inventado
     // a partir de una tarea mal rotulada del plan.
     knownBuildingTokens?: Set<string>;
@@ -1874,6 +2141,17 @@ export async function extractStructuredUpdates(
     currentCubicacionCaratula?: ReadonlyArray<{ label: string; montoDop: number; cutoff: string }>;
   },
 ): Promise<StructuredExtraction> {
+  if (extension === "html" || extension === "htm") {
+    try {
+      const result = readGanttHtml(new TextDecoder("utf-8").decode(bytes), defaults.sourceName);
+      return result ? {
+        updates: [{ key: `ganttSchedules.${result.kind}`, value: result.schedule, area: defaults.area, cutoff: result.schedule.cutoff, sourceName: defaults.sourceName, sourceCurrency: defaults.sourceCurrency }],
+        summary: `${result.schedule.tasks.length} tareas del ${result.schedule.title} incorporadas con corte ${result.schedule.cutoff}. Su avance se conserva con el alcance del cronograma.`, warnings: [],
+      } : { updates: [], summary: "HTML archivado sin bloque Gantt reconocido.", warnings: ["No se encontró un bloque de datos Gantt compatible."] };
+    } catch {
+      return { updates: [], summary: "El Gantt no se publica parcialmente.", warnings: ["El bloque Gantt contiene una estructura, fecha o porcentaje no válido."] };
+    }
+  }
   if (!["csv", "json", "xml", "xlsx", "docx", "pptx", "zip", "pdf"].includes(extension)) {
     return {
       updates: [],
@@ -2203,6 +2481,11 @@ export async function extractStructuredUpdates(
         }
       }
 
+      const reprogramada = extractReprogrammedCurve(filas, defaults);
+      if (reprogramada) {
+        results.push(reprogramada);
+        continue;
+      }
       const curvaS = extractCurvaSMonthlyProgress(filas, defaults);
       if (curvaS) {
         results.push(curvaS);
@@ -2222,6 +2505,8 @@ export async function extractStructuredUpdates(
       // filas de partida bajo un encabezado de oficio, sin columna de
       // avance por edificio- podría, si no se reconoce primero, colarse por
       // extractSheetProgress/extractMatrixProgress y leerse mal.
+      const urbanismoCubicacion = extractCubicacionUrbanismProgress(filas, defaults);
+      if (urbanismoCubicacion) results.push(urbanismoCubicacion);
       const disciplinas = extractCubicacionDisciplineProgress(filas, defaults);
       if (disciplinas) {
         results.push(disciplinas);
@@ -2265,7 +2550,14 @@ export async function extractStructuredUpdates(
     // panel. Se prueba sobre el libro entero porque la tabla suele ir en una
     // hoja posterior a los detalles.
     const flujo = extractReprogrammedFlowUpdates(hojas, defaults);
-    if (flujo) results.push(flujo);
+    if (flujo) {
+      if (defaults.sourceFileId) flujo.updates.push({ key: "reprogrammedFlowAudit.sourceFileId", value: defaults.sourceFileId, area: defaults.area, cutoff: flujo.updates[0]?.cutoff ?? defaults.cutoff, sourceName: defaults.sourceName, sourceCurrency: defaults.sourceCurrency });
+      flujo.updates.push({ key: "reprogrammedFlowAudit.sourceName", value: defaults.sourceName, area: defaults.area, cutoff: flujo.updates[0]?.cutoff ?? defaults.cutoff, sourceName: defaults.sourceName, sourceCurrency: defaults.sourceCurrency });
+      const xmlSheets = await readZipEntries(bytes, (name) => /^xl\/worksheets\/sheet\d+\.xml$/i.test(name));
+      const formulaCount = xmlSheets.reduce((count, entry) => count + [...new TextDecoder().decode(entry.data).matchAll(/<f(?:\s[^>]*)?>/g)].length, 0);
+      flujo.updates.push({ key: "reprogrammedFlowAudit.formulaCount", value: formulaCount, area: defaults.area, cutoff: defaults.cutoff, sourceName: defaults.sourceName, sourceCurrency: defaults.sourceCurrency });
+      results.push(flujo);
+    }
 
     if (results.length) {
       // La primera lectura fiable de una clave manda; las hojas de resumen

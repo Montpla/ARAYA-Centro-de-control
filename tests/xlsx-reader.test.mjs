@@ -1,3 +1,4 @@
+import * as ganttHtml from "../lib/gantt-html.ts";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -8,6 +9,7 @@ import * as projectXml from "../lib/project-xml.ts";
 import * as xlsxReader from "../lib/xlsx-reader.ts";
 import * as pdfText from "../lib/pdf-text.ts";
 import * as progressModel from "../lib/progress-model.ts";
+import * as urbanismDisciplines from "../lib/urbanism-disciplines.ts";
 
 // Las hojas de prueba se generan con scripts/generar-fixtures-xlsx.py y tienen
 // la forma de las reales: un título de la oficina encima, la cabecera más
@@ -39,6 +41,8 @@ async function loadIngestion() {
     if (specifier === "./pdf-text") return pdfText;
     if (specifier === "./pptx-curva-s") return pptxCurvaS;
     if (specifier === "./progress-model") return progressModel;
+    if (specifier === "./urbanism-disciplines") return urbanismDisciplines;
+    if (specifier === "./gantt-html") return ganttHtml;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {
@@ -345,6 +349,137 @@ test("el lector de Excel lee hojas de más de 5.000 filas", () => {
   assert.ok(xlsxReader.XLSX_MAX_ROWS >= 20_000);
 });
 
+test("distingue coma decimal de agrupación y no inventa separadores ausentes", async () => {
+  const ingestion = await loadIngestion();
+  assert.equal(ingestion.parseLocalizedNumber("31,891%"), 31.891);
+  assert.equal(ingestion.parseLocalizedNumber("31,891", { decimalSeparator: "," }), 31.891);
+  assert.equal(ingestion.parseLocalizedNumber("0,318"), 0.318);
+  assert.equal(ingestion.parseLocalizedNumber("31891"), 31891);
+  assert.equal(ingestion.parseLocalizedNumber("3.1891e-1"), 0.31891);
+  assert.equal(ingestion.parseLocalizedNumber("(2,5)"), -2.5);
+  assert.equal(ingestion.parseLocalizedNumber("1,23,4.5"), null);
+  assert.equal(ingestion.parseLocalizedNumber("1.23.4,5"), null);
+});
+
+const cabeceraDetalle = { A: "N° Partida.", B: "Descripción de partida:", F: "Total", H: "MONTO", K: "MONTO" };
+
+function curvaReprogramadaSintetica() {
+  const serial = (date) => String((Date.parse(date) - Date.UTC(1899, 11, 30)) / 86_400_000);
+  return [
+    { B: "Concepto", D: serial("2026-09-30"), E: serial("2026-10-31") },
+    { B: "Reprogramado" },
+    { A: "0.6", B: "Edificios", D: "0.2", E: "40,125%" },
+    { A: "0,4", B: "Urbanismo", D: "0.1", E: "20,125%" },
+    { B: "Conjunto", D: "0.16", E: "32,125%" },
+    { B: "EJECUTADOS MES OCTUBRE" },
+    { B: "Edificios", D: "0.1" }, { B: "Urbanismo", D: "0.1" }, { B: "Conjunto", D: "0.1" },
+    { B: "Original", D: "0.5", E: "0.7" },
+    { D: "0.9", E: "0.99" },
+  ];
+}
+
+test("la curva reprogramada conserva cuatro series y no sustituye el ejecutado ni el plan operativo", async () => {
+  const ingestion = await loadIngestion();
+  const result = ingestion.extractReprogrammedCurve(curvaReprogramadaSintetica(), { ...defaults, area: "planificacion" });
+  assert.equal(result.warnings.length, 0);
+  assert.equal(result.updates.length, 8);
+  const values = new Map(result.updates.map((u) => [u.key, u.value]));
+  assert.equal(values.get("monthlyPlan.16.reprogrammed"), 32.125);
+  assert.equal(values.get("monthlyPlan.16.reprogrammedBuildingsProgress"), 40.125);
+  assert.equal(values.get("monthlyPlan.16.reprogrammedUrbanismProgress"), 20.125);
+  assert.equal(values.get("monthlyPlan.16.originalDocumentProgress"), 70);
+  assert.ok(result.updates.every((u) => u.cutoff === "2026-10-31"));
+  assert.ok(result.updates.every((u) => u.area === "planificacion"), "el clasificador y las series deben compartir el área para permitir su publicación");
+  assert.ok(result.updates.every((u) => !/\.(actual|planned)$/.test(u.key)));
+});
+
+test("la curva reprogramada hereda el área del archivo para no ser descartada por área distinta", async () => {
+  const ingestion = await loadIngestion();
+  const result = ingestion.extractReprogrammedCurve(curvaReprogramadaSintetica(), { ...defaults, area: "planificacion" });
+  assert.ok(result.updates.length > 0);
+  assert.ok(result.updates.every((u) => u.area === "planificacion"));
+});
+
+test("la curva reprogramada rechaza ponderaciones, meses y series inconsistentes sin publicar parcialmente", async () => {
+  const ingestion = await loadIngestion();
+  for (const mutate of [
+    (rows) => { rows[2].A = "0.7"; },
+    (rows) => { rows[4].E = "0.8"; },
+    (rows) => { delete rows[3].E; },
+    (rows) => { rows[2].E = "101%"; },
+    (rows) => { rows[0].E = rows[0].D; },
+  ]) {
+    const rows = curvaReprogramadaSintetica(); mutate(rows);
+    const result = ingestion.extractReprogrammedCurve(rows, defaults);
+    assert.equal(result.updates.length, 0);
+    assert.ok(result.warnings.length > 0);
+  }
+});
+
+test("los ajustes negativos concilian el oficio y su desglose por edificio", async () => {
+  const ingestion = await loadIngestion();
+  // Pesos sintéticos normalizados: no contienen datos económicos de la obra.
+  const result = ingestion.extractCubicacionDisciplineProgress([
+    cabeceraDetalle,
+    { A: "CAP", B: "CAPITULO: EDIFICIOS", F: "5", K: "2.5" },
+    { A: "ARAYA-E01", B: "EDIFICIO 1" },
+    { A: "SUPERESTRUCTURA." },
+    { A: "1", F: "4", K: "3" },
+    { A: "2.", F: "1", K: "-0.5" },
+  ], { ...defaults, knownBuildingTokens: new Set(["1"]) });
+  assert.equal(result.warnings.length, 0);
+  assert.equal(result.updates.find((u) => u.key === "constructionDisciplines.Superestructura.progress").value, 50);
+  const detail = result.updates.find((u) => u.key === "buildings.TH-01.constructionDisciplines");
+  assert.equal(detail.value.length, 1);
+  assert.equal(detail.value[0].name, "Superestructura");
+  assert.equal(detail.value[0].progress, 50);
+  assert.ok(!result.updates.some((u) => /\.units\./.test(u.key)));
+});
+
+test("un acumulado inválido se avisa y nunca se recorta al cien por ciento", async () => {
+  const ingestion = await loadIngestion();
+  const result = ingestion.extractCubicacionDisciplineProgress([
+    cabeceraDetalle, { A: "SUPERESTRUCTURA." }, { A: "1", F: "1", K: "2" },
+  ], defaults);
+  assert.equal(result.updates.length, 0);
+  assert.ok(result.warnings.some((text) => /fuera del intervalo/.test(text)));
+});
+
+test("el cierre de partidas respeta las centésimas sin ocultar un exceso visible", async () => {
+  const ingestion = await loadIngestion();
+  for (const [acumulado, valido] of [["1.000011725", true], ["1.0001", false]]) {
+    const result = ingestion.extractCubicacionDisciplineProgress([
+      cabeceraDetalle, { B: "EDIFICIO 1" }, { A: "INFRAESTRUCTURA." },
+      { A: "1", F: "1", K: acumulado },
+    ], { ...defaults, knownBuildingTokens: new Set(["1"]) });
+    const detalle = result.updates.find((u) => u.key === "buildings.TH-01.constructionDisciplines");
+    assert.equal(Boolean(detalle), valido);
+    if (valido) assert.equal(detalle.value[0].progress, 100);
+    else assert.ok(result.warnings.length > 0);
+  }
+});
+
+test("urbanismo toma el acumulado por nombre y mantiene la corrección del plano", async () => {
+  const ingestion = await loadIngestion();
+  const result = ingestion.extractCubicacionUrbanismProgress([
+    cabeceraDetalle,
+    { A: "URB", B: "URBANISMO" },
+    { A: "OP", B: "OBRAS PRELIMINARES", F: "1", K: "1" },
+    { A: "VIAL", B: "VIALIDAD", F: "4", K: "1", I: "449,26%" },
+    { A: "PAIS", B: "PAISAJISMO", F: "10", K: "1,25" },
+    { A: "1", B: "Partida de instalaciones de gas", F: "1", K: "1" },
+    { A: "CAP", B: "CAPITULO: EDIFICIOS", F: "1", K: "1" },
+  ], { ...defaults, currentUrbanismReportAreas: [{ name: "Paisajismo", progress: 80 }, { name: "Vialidad", progress: 80 }] });
+  const byKey = new Map(result.updates.map((u) => [u.key, u.value]));
+  assert.equal(byKey.get("urbanismReportAreas.VIALIDAD.progress"), 25);
+  assert.equal(byKey.get("urbanismReportAreas.PAISAJISMO.progress"), 12.5);
+  assert.equal(byKey.get("urbanismAreas.urban-roads.progress"), 25);
+  assert.equal(byKey.get("urbanismAreas.urban-landscape.progress"), 12.5);
+  assert.equal(byKey.get("urbanismReportAreas.2").name, "OBRAS PRELIMINARES");
+  assert.equal(byKey.get("urbanismReportAreas.2").progress, 100);
+  assert.ok(!result.updates.some((u) => /GAS/.test(u.key)));
+});
+
 test("una celda vacía-con-estilo no le roba el valor a la celda siguiente", async () => {
   // Bug real encontrado con "Costo Ago-26.xlsx": el patrón `<c r="X" s="1"/>`
   // -una celda vacía pero con estilo, la forma real en que Excel escribe una
@@ -465,6 +600,24 @@ test("el monto certificado no se roba la carátula de avance físico que sigue e
   ]));
   assert.equal(porClave.get("buildings.TH-76.progress")?.value, 8);
   assert.equal(porClave.get("buildings.TH-77.progress")?.value, 9);
+});
+
+test("el flujo incorpora la previsión futura de ambos ámbitos y no mezcla meses cerrados", async () => {
+  const ingestion = await loadIngestion();
+  // Pesos normalizados para comprobar la agregación, ajenos a cifras de la obra.
+  const result = ingestion.extractReprogrammedFlowUpdates([
+    [{ A: "Mes", B: "Total Real", C: "Urb Real", D: "Edi Real", E: "Total Presupuestado" }, { A: "Oct-26", B: "3", C: "1", D: "2", E: "4" }],
+    [{ A: "URBANISMO" }, { A: "Mes", B: "Presupuesto Original", C: "Presupuesto Reprogramado" }, { A: "Oct-26", B: "8", C: "9" }, { A: "Nov-26", B: "4", C: "5" },
+      { A: "EDIFICIOS" }, { A: "Mes", B: "Presupuesto Original", C: "Presupuesto Reprogramado" }, { A: "Nov-26", B: "6", C: "8" }],
+  ], defaults);
+  const values = new Map(result.updates.map((u) => [u.key, u.value]));
+  assert.equal(values.get("reprogrammedFlowMonths.10.status"), "actual");
+  assert.equal(values.get("reprogrammedFlowMonths.10.currentDop"), 3);
+  assert.equal(values.get("reprogrammedFlowMonths.11.status"), "forecast");
+  assert.equal(values.get("reprogrammedFlowMonths.11.currentDop"), 13);
+  assert.equal(values.get("reprogrammedFlowMonths.11.originalDop"), 10);
+  assert.equal(values.get("reprogrammedFlowMonths.11.varianceDop"), 3);
+  assert.ok(result.updates.every((u) => u.cutoff === "2026-10-31"));
 });
 
 test("el Excel de finanzas actualiza el flujo reprogramado mes a mes", async () => {

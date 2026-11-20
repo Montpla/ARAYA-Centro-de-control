@@ -14,6 +14,8 @@ const source = await readFile("lib/ingestion.ts", "utf8");
 // uno existente— dejara el import intacto, y el fallo aparecía como un volcado
 // de base64 ilegible en vez de decir qué faltaba.
 const sustitutos = {
+  "./gantt-html": "const readGanttHtml = () => null;",
+  "./urbanism-disciplines": "const urbanismDisciplineInText = () => null; const urbanismDisciplineLabel = (id) => id; const findUrbanismDisciplineIndex = () => -1;",
   "./live-data": "const isLiveDataKey = () => true;",
   "./ooxml-tables": [
     "const readOfficeTables = async () => [];",

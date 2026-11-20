@@ -24,15 +24,17 @@ test("aparece en los accesos con una sola entrada", () => {
   assert.equal((lista.match(/guia-actualizacion-mensual-araya\.pdf/g) ?? []).length, 2, "url y fileName");
 });
 
-test("cubre los tres archivos del mes y lo que actualiza cada uno", () => {
-  // Los tres formatos que cierran el mes: informe (obra), Excel (finanzas) y
-  // plan de Project (cronograma). Si falta uno, el mes queda a medias.
+test("cubre las fuentes del corte y distingue el avance certificado del derivado", () => {
+  assert.match(generador, /Cubicación del corte/);
   assert.match(generador, /Informe Ejecutivo/);
   assert.match(generador, /Excel de flujo reprogramado/);
   assert.match(generador, /Plan de Project/);
   assert.match(generador, /Curva S/);
   assert.match(generador, /Flujo mensual de finanzas/);
   assert.match(generador, /cronograma/);
+  assert.match(generador, /Gantt HTML/);
+  assert.match(generador, /no son mediciones por apartamento/);
+  assert.doesNotMatch(generador, /Tres archivos y el mes queda cerrado/);
 });
 
 test("deja claro que publica por bloques y entrega un recibo", () => {

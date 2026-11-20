@@ -96,6 +96,11 @@ type DynamicSectionSlot = {
   existingId: string;
 };
 
+/** La identidad nueva depende del hueco global; el orden de lectura puede cambiar. */
+export function dynamicSectionSlotId(sourceFileId: string, slot: DynamicSectionSlot) {
+  return slot.existingId || `descubierto-${sourceFileId}-${slot.key.split(".").at(-1)}`;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

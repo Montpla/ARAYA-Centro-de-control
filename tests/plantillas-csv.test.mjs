@@ -1,3 +1,4 @@
+import * as ganttHtml from "../lib/gantt-html.ts";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
@@ -5,11 +6,11 @@ import vm from "node:vm";
 import ts from "typescript";
 import * as demoData from "../app/demo-data.ts";
 import * as liveData from "../lib/live-data.ts";
-import * as urbanismDisciplines from "../lib/urbanism-disciplines.ts";
 import * as projectXml from "../lib/project-xml.ts";
 import * as xlsxReader from "../lib/xlsx-reader.ts";
 import * as pdfText from "../lib/pdf-text.ts";
 import * as progressModel from "../lib/progress-model.ts";
+import * as urbanismDisciplines from "../lib/urbanism-disciplines.ts";
 
 // A diferencia de tests/ingestion-classifier.test.mjs, aquí se carga el
 // isLiveDataKey de verdad en vez de sustituirlo por () => true: la validación
@@ -37,6 +38,8 @@ async function loadIngestion() {
     if (specifier === "./pdf-text") return pdfText;
     if (specifier === "./pptx-curva-s") return pptxCurvaS;
     if (specifier === "./progress-model") return progressModel;
+    if (specifier === "./urbanism-disciplines") return urbanismDisciplines;
+    if (specifier === "./gantt-html") return ganttHtml;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {
@@ -66,6 +69,7 @@ async function loadResolver() {
     if (specifier === "./live-data") return liveData;
     if (specifier === "../app/demo-data") return demoData;
     if (specifier === "./urbanism-disciplines") return urbanismDisciplines;
+    if (specifier === "./gantt-html") return ganttHtml;
     throw new Error(`Import inesperado: ${specifier}`);
   };
   vm.runInNewContext(output, {

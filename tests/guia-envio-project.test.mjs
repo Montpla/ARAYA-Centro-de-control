@@ -38,7 +38,7 @@ test("los pasos de la guía coinciden con lo que pide el macro", () => {
 test("deja claro que el token es central y revocable", () => {
   // El punto que responde la duda de «¿lo instala cada uno o se despliega?»:
   // el macro es local, el token se controla desde el panel.
-  assert.match(generador, /Usuarios y accesos → Cargas automáticas/);
+  assert.match(generador, /Usuarios y accesos\s*\/\s*Cargas automáticas/);
   assert.match(generador, /revoca/);
   assert.match(generador, /no se instala solo desde el centro de control/i);
 });

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { buildDashboardBootstrap } from "./dashboard-bootstrap";
+import { ganttTaskTemplate } from "./gantt-data";
 import {
   LIVE_DATA_ROOTS,
   LiveDataMap,
@@ -27,6 +28,8 @@ const APPENDABLE_ARRAY_PATHS = new Set([
   "urbanismReportAreas",
 ]);
 const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
+  "reprogrammedFlowAudit": { sourceFileId: "", sourceName: "" },
+  "reprogrammedFlowScopes.*": { advancesAccumulatedDop: 0, actualWithAdvancesDop: 0 },
   "discoveredSections.*": {
     // Legacy blocks did not carry visualization metadata. A later report may
     // upgrade the same stable section without changing its identity.
@@ -42,11 +45,15 @@ const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
     // Avance por fase del plan de obra. Un edificio dado de alta por un
     // informe no lo trae: llega después con el primer plan de Project.
     phases: [{ id: "", name: "", progress: 0 }],
+    constructionDisciplines: [{ name: "", progress: 0 }],
   },
   "monthlyPlan.*": {
     // Plan reprogramado: sólo existe desde el mes de la reprogramación y lo
     // publica el Informe Ejecutivo desde su gráfico de Curva S.
     reprogrammed: 0,
+    reprogrammedBuildingsProgress: 0,
+    reprogrammedUrbanismProgress: 0,
+    originalDocumentProgress: 0,
   },
   "urbanismAreas.*": {
     mapCoordinates: {
@@ -57,6 +64,8 @@ const OPTIONAL_OBJECT_FIELDS: Record<string, Record<string, unknown>> = {
 };
 
 const EMPTY_ARRAY_ITEM_TEMPLATES: Record<string, unknown> = {
+  "ganttSchedules.buildings.tasks": ganttTaskTemplate,
+  "ganttSchedules.urbanism.tasks": ganttTaskTemplate,
   // Empty legacy arrays may grow when a later weekly/monthly report adds the
   // missing detail to the same discovered concept.
   "discoveredSections.*.values": { label: "", value: "" },
@@ -88,6 +97,7 @@ export function getContractRootsSnapshot(): LiveDataMap {
 }
 
 function fallbackArrayItem(path: string) {
+  if (/^ganttSchedules\.(buildings|urbanism)\.tasks$/.test(path)) return ganttTaskTemplate;
   // Los bloques descubiertos empiezan sin ningún elemento, así que no hay de
   // dónde deducir su forma cuando llega el primero. Esta plantilla es la que
   // permite que el contenedor crezca solo desde vacío: sin ella, el primer
@@ -546,6 +556,21 @@ export function assertLiveDataContracts(
     workingValues[update.key] = JSON.parse(update.valueJson) as LiveDataValue;
   }
   return workingValues;
+}
+
+/** Conserva sólo datos seguros y valida cada alta después de las anteriores. */
+export function selectContractSafeUpdates<T extends { key: string; valueJson: string }>(
+  updates: T[], currentValues: LiveDataMap,
+  eligible: (update: T, workingValues: LiveDataMap) => boolean,
+) {
+  const workingValues: LiveDataMap = { ...currentValues };
+  const accepted: T[] = [];
+  for (const update of [...updates].sort((left,right) => compareContractKeys(left.key,right.key))) {
+    if (!eligible(update,workingValues) || !validateLiveDataContract(update.key,update.valueJson,workingValues).valid) continue;
+    accepted.push(update);
+    workingValues[update.key] = JSON.parse(update.valueJson) as LiveDataValue;
+  }
+  return accepted;
 }
 
 /** Automatic extraction remains path-only, but shares the same central rule. */

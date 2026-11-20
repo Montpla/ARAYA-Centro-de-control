@@ -50,6 +50,7 @@ import {
 } from "../../../lib/ingestion-agent";
 import {
   partitionChangedLiveUpdates,
+  dynamicSectionSlotId,
   planDynamicSectionSlots,
   resolveNormalizedUpdateConfidences,
 } from "../../../lib/ingestion-change-set";
@@ -89,10 +90,11 @@ import {
   selectLivePointValues,
   upsertDocumentProposalRows,
 } from "../../../lib/d1-json-bulk";
-import { assertLiveDataContracts, getContractRootsSnapshot, validateLiveDataContract } from "../../../lib/live-data-contract";
+import { assertLiveDataContracts, getContractRootsSnapshot, selectContractSafeUpdates, validateLiveDataContract } from "../../../lib/live-data-contract";
 import { normalizeLiveDataUpdates, publishLiveDataUpdates } from "../../../lib/publish-live-data";
 import { publicationKeyConflict } from "../../../lib/live-data-publication-recovery";
 import { readEffectiveLiveData } from "../../../lib/effective-live-data";
+import { complementaryNarrativeUpdateAllowed, executiveSafetySummary, prepareNarrativeUpdate } from "../../../lib/narrative-update-scope";
 import { resolveSpatialIdentityUpdates } from "../../../lib/spatial-identity-upsert";
 import { nothingExtractedMessage } from "../../../lib/upload-messages";
 import { triggerMppConversion } from "../../../lib/mpp-conversion-trigger";
@@ -117,6 +119,8 @@ const EXTRACTION_LEASE_MS = 5 * 60 * 1_000;
 const BACKGROUND_PROCESSING_HEADER = "x-araya-background-processing";
 const BACKGROUND_PROCESSING_ATTEMPTS = 3;
 const allowedExtensions = new Set([
+  "html",
+  "htm",
   "csv",
   "doc",
   "docx",
@@ -1513,6 +1517,7 @@ export async function POST(request: Request) {
     // menor. Ver extractProjectXmlUpdates.
     const currentLiveData = await readEffectiveLiveData(true);
     const deterministicExtraction = await extractStructuredUpdates(bytes, extension, {
+      sourceFileId: id,
       area: classification.area,
       cutoff: effectiveCutoff,
       sourceCurrency: sourceCurrency === "USD" ? "USD" : "DOP",
@@ -1724,7 +1729,8 @@ export async function POST(request: Request) {
         const complemento = iaExtraction.updates
           .map((update, indice) => ({ update, confianza: iaExtraction.updateConfidences[indice] ?? iaExtraction.confidence }))
           .filter(({ update, confianza }) =>
-            !complementoChocaConLector(update.key) && Number.isFinite(confianza) && confianza > 0);
+            !complementoChocaConLector(update.key) && Number.isFinite(confianza) && confianza > 0 &&
+            complementaryNarrativeUpdateAllowed(update.key, candidate.name, clavesDeterministas));
         extraction = {
           ...iaExtraction,
           updates: [...deterministicExtraction.updates, ...complemento.map(({ update }) => update)],
@@ -1749,6 +1755,29 @@ export async function POST(request: Request) {
         ],
       };
     }
+    const resumenMensualSeguridad = executiveSafetySummary(extraction.updates, candidate.name);
+    if (resumenMensualSeguridad) {
+      // Los indicadores del mes se muestran como bloque documental propio.
+      // La foto y la serie semanales siguen perteneciendo al reporte semanal.
+      const retained = extraction.updates.map((update, index) => ({ update, confidence: extraction.updateConfidences[index] ?? extraction.confidence }))
+        .filter(({ update }) => update.key !== "safetyMetrics");
+      extraction = {
+        ...extraction,
+        updates: retained.map(({ update }) => update),
+        updateConfidences: retained.map(({ confidence }) => confidence),
+        unmappedCandidates: [...extraction.unmappedCandidates, {
+          label: `Seguridad mensual · ${resumenMensualSeguridad.cutoff.slice(0, 7)}`,
+          description: "Indicadores del periodo mensual del Informe Ejecutivo; alcance distinto de la fotografía semanal.",
+          valueJson: JSON.stringify(resumenMensualSeguridad.metrics.map((metric) =>
+            metric && typeof metric === "object" && !Array.isArray(metric)
+              ? { label: metric.label, value: `${metric.value} · ${metric.detail || "Dato del periodo mensual"}` }
+              : metric)),
+          suggestedArea: "seguridad",
+          confidence: 1,
+          evidence: "Bloque Seguridad y Salud en el Trabajo del Informe Ejecutivo, leído directamente del documento.",
+        }],
+      };
+    }
     agentModel = extraction.model;
     agentPromptVersion = extraction.promptVersion;
     agentIterations = extraction.agentIterations;
@@ -1764,7 +1793,7 @@ export async function POST(request: Request) {
     // traducción tropezara con una entrada rara, se sigue con las claves tal
     // cual en vez de tumbar toda la ingesta: la normalización posterior ya
     // descarta dato a dato lo que no encaje.
-    let identityResolvedUpdates = extraction.updates;
+    let identityResolvedUpdates = extraction.updates.map(prepareNarrativeUpdate);
     // Una cubicación puede traer importes en la carátula y el avance físico de
     // varios edificios en otra hoja. El lector devuelve el alcance que vio y
     // aquí se comprueba que cada edificio nombrado haya generado al menos su
@@ -1793,12 +1822,12 @@ export async function POST(request: Request) {
     if (currentLiveData) {
       try {
         identityResolvedUpdates = resolveSpatialIdentityUpdates(
-          extraction.updates,
+          identityResolvedUpdates,
           currentLiveData.values,
           getContractRootsSnapshot(),
         );
       } catch {
-        identityResolvedUpdates = extraction.updates;
+        identityResolvedUpdates = extraction.updates.map(prepareNarrativeUpdate);
       }
     }
     // Un bloque que la lectura descubre y para el que no existe ningún campo ya
@@ -1843,7 +1872,7 @@ export async function POST(request: Request) {
           return {
             key: slot.key,
             value: buildDynamicSectionBlock({
-              id: `descubierto-${id}-${posicion}`,
+              id: dynamicSectionSlotId(id, slot),
               existingId: slot.existingId,
               title: candidato.label,
               description: candidato.description,
@@ -2239,14 +2268,21 @@ export async function POST(request: Request) {
         ...extraction,
         warnings: [
           ...extraction.warnings,
-          `${lowerPriorityKeySet.size} dato(s) de avance físico ya los fijó una fuente con más prioridad (${fuente}) para este periodo y se conservan: ${[...lowerPriorityKeySet].slice(0, 5).join(", ")}${lowerPriorityKeySet.size > 5 ? "…" : ""}.`,
+          `${lowerPriorityKeySet.size} dato(s) ya los fijó una fuente con más prioridad (${fuente}) para este periodo y se conservan: ${[...lowerPriorityKeySet].slice(0, 5).join(", ")}${lowerPriorityKeySet.size > 5 ? "…" : ""}.`,
         ],
       };
     }
-    const updateIsAutoPublishable = (update: ReturnType<typeof normalizeLiveDataUpdates>[number]) =>
+    const updateIsAutoPublishable = (update: ReturnType<typeof normalizeLiveDataUpdates>[number], contractValues = liveValues) =>
       !staleCutoffKeySet.has(update.key) &&
       !lowerPriorityKeySet.has(update.key) &&
       (update.area === resolvedArea ||
+        // El resumen ejecutivo contiene Seguridad aunque su área mayoritaria
+        // sea Planificación. La clave canónica y todas las guardas de abajo
+        // siguen siendo obligatorias.
+        (update.area === "seguridad" && (
+          /^safety(?:Metrics|Findings|FindingTracking|WeeklySeries)(?:\.|$)/.test(update.key) ||
+          (/^discoveredSections\.\d+$/.test(update.key) && JSON.parse(update.valueJson).area === "seguridad")
+        )) ||
         // El archivo en conjunto no se pudo etiquetar, pero este dato puntual
         // sí trae su propia área (la que detectó la extracción, no la del
         // archivo). El resto de condiciones de abajo —acceso financiero,
@@ -2273,7 +2309,7 @@ export async function POST(request: Request) {
       !unsafeAgentKeys.has(update.key) &&
       (confidenceByKey.get(update.key) ?? 0) > 0 &&
       isSafeAutomaticStructuredUpdate(update) &&
-      individualUpdateContractIsSafe(update, liveValues);
+      individualUpdateContractIsSafe(update, contractValues);
     // Si todo el lote encaja (además, como lote atómico en el contrato), se
     // publica entero —cero cambio de comportamiento cuando todo cuadra—. Si no,
     // se publican los datos que individualmente son seguros y el resto se
@@ -2281,12 +2317,12 @@ export async function POST(request: Request) {
     const wholeBatchSafe = batchPreconditions &&
       extractionConfidenceIsSafe &&
       agentValidation.safe &&
-      normalizedUpdates.every(updateIsAutoPublishable) &&
+      normalizedUpdates.every((update) => updateIsAutoPublishable(update)) &&
       automaticContractIsSafe(normalizedUpdates, liveValues);
     const autoPublishable = wholeBatchSafe
       ? normalizedUpdates
       : batchPreconditions
-        ? normalizedUpdates.filter(updateIsAutoPublishable)
+        ? selectContractSafeUpdates(normalizedUpdates, liveValues, updateIsAutoPublishable)
         : [];
     // Por qué se queda fuera cada dato descartado. Antes sólo se contaban
     // ("2 entradas no válidas se aislaron") y no había forma de saber si se

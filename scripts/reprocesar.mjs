@@ -63,7 +63,7 @@ const { files = [] } = await filesResponse.json();
 
 // Se eligen los archivos cuyo nombre contiene el filtro (por defecto "jul") y
 // que no están eliminados; sólo los formatos que la ingesta procesa.
-const procesables = new Set(["pptx", "docx", "pdf", "xlsx", "xls", "csv", "xml", "zip", "json"]);
+const procesables = new Set(["html", "htm", "pptx", "docx", "pdf", "xlsx", "xls", "csv", "xml", "zip", "json"]);
 const permitidos = FORMATOS.length ? new Set(FORMATOS) : procesables;
 const objetivo = files.filter((f) => {
   const ext = String(f.extension).toLowerCase();

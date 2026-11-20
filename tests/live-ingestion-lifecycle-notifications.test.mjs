@@ -118,7 +118,7 @@ test("multiformat ingestion publishes valid facts and closes isolated diagnostic
     // publicación, así que se descarta por antepasada/descendiente, no sólo por
     // clave idéntica.
     /clave\.startsWith\(`\$\{aiKey\}\.`\) \|\|\s*aiKey\.startsWith\(`\$\{clave\}\.`\)/,
-    /\.filter\(\(\{ update, confianza \}\) =>\s*!complementoChocaConLector\(update\.key\) && Number\.isFinite\(confianza\) && confianza > 0\)/,
+    /\.filter\(\(\{ update, confianza \}\) =>\s*!complementoChocaConLector\(update\.key\) && Number\.isFinite\(confianza\) && confianza > 0 &&\s*complementaryNarrativeUpdateAllowed\(update\.key, candidate\.name, clavesDeterministas\)\)/,
     /apiKey: process\.env\.OPENAI_API_KEY \?\? ["']["']/,
     /extractionMode: extraction\.model === ["']deterministic["'][\s\S]*?["']openai_responses["']/,
     /automaticPublicationRequested &&/,
@@ -135,7 +135,7 @@ test("multiformat ingestion publishes valid facts and closes isolated diagnostic
     /partitionChangedLiveUpdates\(/,
     /const batchPreconditions =/,
     /const updateIsAutoPublishable = /,
-    /normalizedUpdates\.filter\(updateIsAutoPublishable\)/,
+    /selectContractSafeUpdates\(normalizedUpdates, liveValues, updateIsAutoPublishable\)/,
     /status: ["']descartado_automatico["']/,
     /publishLiveDataUpdates\(/,
     /reviewClosure: \{[\s\S]*?mode: ["']insert["'][\s\S]*?completedAction: ["']aprobado_automatico["']/,
@@ -176,7 +176,8 @@ test("upload quarantine, idempotent resume and automatic runtime contracts fail 
     // Se le pasan además las colecciones de partida para poder traducir a
     // posición el nombre de una entidad en cualquier lista, no sólo en las
     // espaciales: las económicas no tienen id y sólo se distinguen por nombre.
-    /resolveSpatialIdentityUpdates\(\s*extraction\.updates,\s*currentLiveData\.values,\s*getContractRootsSnapshot\(\),?\s*\)/,
+    /let identityResolvedUpdates = extraction\.updates\.map\(prepareNarrativeUpdate\);/,
+    /resolveSpatialIdentityUpdates\(\s*identityResolvedUpdates,\s*currentLiveData\.values,\s*getContractRootsSnapshot\(\),?\s*\)/,
     /const liveValues = currentLiveData\?\.values \?\? \{\}/,
     /automaticContractIsSafe\(normalizedUpdates, liveValues\)/,
     /individualUpdateContractIsSafe\(update, liveValues\)/,
@@ -769,11 +770,11 @@ test("un dato financiero se publica aunque el área del archivo sea otra", () =>
   const start = filesRoute.indexOf("const updateIsAutoPublishable = (update");
   assert.ok(start >= 0, "no se encontró updateIsAutoPublishable en la ruta");
   const markerEnd = filesRoute.indexOf(
-    "individualUpdateContractIsSafe(update, liveValues);",
+    "individualUpdateContractIsSafe(update, contractValues);",
     start,
   );
   assert.ok(markerEnd >= 0, "no se encontró el final de updateIsAutoPublishable");
-  const rawSnippet = filesRoute.slice(start, markerEnd + "individualUpdateContractIsSafe(update, liveValues);".length);
+  const rawSnippet = filesRoute.slice(start, markerEnd + "individualUpdateContractIsSafe(update, contractValues);".length);
   // El snippet trae anotaciones de tipo (el parámetro de la arrow function);
   // new Function sólo entiende JS, así que se transpila igual que el resto
   // de los módulos que esta suite evalúa directamente.
@@ -839,4 +840,11 @@ test("un dato financiero se publica aunque el área del archivo sea otra", () =>
 
   // El dato obra de siempre, con su área, sigue publicándose igual.
   assert.equal(build()({ key: "buildings.TH-9.progress", area: "obra" }), true);
+  const informe=build({resolvedArea:"planificacion",confidenceByKey:new Map([["safetyMetrics",1]])});
+  assert.equal(informe({key:"safetyMetrics",area:"seguridad"}),true);
+  assert.equal(informe({key:"safetyMetrics",area:"finanzas"}),false);
+  assert.equal(build({resolvedArea:"planificacion"})({key:"buildings.TH-9.progress",area:"seguridad"}),false);
+  const resumen=build({resolvedArea:"planificacion",confidenceByKey:new Map([["discoveredSections.3",1]])});
+  assert.equal(resumen({key:"discoveredSections.3",area:"seguridad",valueJson:'{"area":"seguridad"}'}),true);
+  assert.equal(resumen({key:"discoveredSections.3",area:"seguridad",valueJson:'{"area":"finanzas"}'}),false);
 });

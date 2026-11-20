@@ -24,13 +24,13 @@ test("dashboard includes the complete project-control navigation and site plan",
   }
   assert.match(source, /Nuevo proveedor/);
   assert.match(source, /Añadir métrica/);
-  assert.match(source, /IMPLANTACIÓN GENERAL · DWG 002/);
+  assert.match(source, /IMPLANTACIÓN GENERAL · MASTER PLAN ACTUALIZADO/);
   assert.match(source, /462 apartamentos/);
-  assert.match(source, /araya-site-plan-clean\.png/);
+  assert.match(source, /araya-masterplan-20261119-tecnico\.svg/);
   assert.match(source, /planCoordinates/);
   assert.match(source, /Abrir documento/);
   assert.match(source, /Descargar/);
-  assert.match(source, /araya-visual-masterplan-v4\.png/);
+  assert.match(source, /araya-masterplan-20261119-visual\.svg/);
   assert.match(source, /Plano visual interactivo/);
   assert.match(source, /Plano técnico/);
   assert.match(source, /progress-line planned/);
@@ -169,25 +169,55 @@ test("los 77 edificios tienen coordenadas en ambos planos y seis apartamentos li
   assert.ok(nuevos.every((building) => building.progress === 0));
   assert.ok(nuevos.flatMap((building) => building.units).every((unit) => unit.progress === 0 && unit.status === "pendiente"));
 
-  // La fila superior está en perspectiva: no puede volver a simplificarse a
-  // una única altura porque los rótulos se desplazarían respecto a las cubiertas.
-  const topRow = ["37", "38", "39", "40", "41", "42", "43", "44", "45"]
-    .map((code) => layout.visualPlanCoordinates[code].y);
-  assert.equal(new Set(topRow).size, topRow.length);
-  assert.ok(topRow.every((height, index) => index === 0 || height < topRow[index - 1]));
-
-  // Anclas contrastadas contra los centros de cubierta de la imagen maestra
-  // (982 × 1602 px). Protegen los extremos de la perspectiva, donde una fila
-  // aproximada produce el mayor desplazamiento visual.
-  assert.deepEqual(layout.visualPlanCoordinates["37"], { x: 18.74, y: 10.11 });
-  assert.deepEqual(layout.visualPlanCoordinates["45"], { x: 87.42, y: 6.55 });
-  assert.deepEqual(layout.visualPlanCoordinates["46"], { x: 82.89, y: 16.01 });
-  assert.deepEqual(layout.visualPlanCoordinates["69"], { x: 81.36, y: 44.85 });
+  // El nuevo plano es ortogonal: contrastamos las 77 anclas con sus bloques
+  // de CAD, en vez de conservar las antiguas alturas de una imagen en perspectiva.
+  const cad = JSON.parse(await readFile("scripts/data/masterplan-20261119.json", "utf8"));
+  const [x0, y0, x1, y1] = cad.bounds;
+  const width = (y1 - y0) * cad.scale + 2 * cad.padding;
+  const height = (x1 - x0) * cad.scale + 2 * cad.padding;
+  assert.equal(new Set(cad.buildings.map((item) => item.code)).size, 77);
+  for (const building of cad.buildings) {
+    const [bx0, by0, bx1, by1] = building.bounds;
+    const expected = {
+      x: Number(((((by0 + by1) / 2 - y0) * cad.scale + cad.padding) / width * 100).toFixed(5)),
+      y: Number(((((bx0 + bx1) / 2 - x0) * cad.scale + cad.padding) / height * 100).toFixed(5)),
+    };
+    assert.deepEqual(layout.visualPlanCoordinates[building.code], expected, `ancla de TH-${building.code}`);
+    assert.deepEqual(layout.technicalPlanCoordinates[building.code], expected);
+    assert.ok(building.labelDistance < 6, "el código debe corresponder al rótulo vecino del DWG");
+  }
 
   // La ficha debe conservar su centro visual sobre el ancla. Una proyecciÃ³n
   // rotateX y sombras extrusionadas desplazaban el dibujo hacia abajo al
   // ampliar el plano en mÃ³vil o tableta, aunque el punto matemÃ¡tico fuese exacto.
   assert.doesNotMatch(styles, /rotateX\(/);
+});
+
+test("el nuevo master plan conserva sus plazas y distingue las dos piscinas y los servicios", async () => {
+  const cad = JSON.parse(await readFile("scripts/data/masterplan-20261119.json", "utf8"));
+  const layout = JSON.parse(await readFile("lib/masterplan-layout.json", "utf8"));
+  assert.equal(cad.parking.length, 700);
+  assert.equal(new Set(cad.parking.map((bounds) => bounds.join(","))).size, 700);
+  assert.equal(cad.trees.length, 305);
+  assert.equal(layout.sha256, cad.sha256);
+  assert.equal(layout.features.length, 20);
+  assert.equal(new Set(layout.features.map((feature) => feature.id)).size, 20);
+  const byId = Object.fromEntries(layout.features.map((feature) => [feature.id, feature]));
+  assert.ok(byId.cancha.y < byId["salon-social"].y);
+  assert.ok(byId["salon-social"].y < byId["gimnasio"].y);
+  assert.ok(byId["gimnasio"].y < byId["piscina-deportiva"].y);
+  assert.ok(byId["piscina-deportiva"].y < byId["piscina-recreativa"].y);
+  assert.ok(byId["piscina-recreativa"].y < byId["parque-abierto"].y);
+  for (const feature of layout.features) {
+    assert.ok(feature.x > 0 && feature.x < 100 && feature.y > 0 && feature.y < 100);
+    assert.equal("progress" in feature, false, "la geometría no inventa un avance específico");
+  }
+  for (const mode of ["visual", "tecnico"]) {
+    const svg = await readFile(`public/araya-masterplan-20261119-${mode}.svg`, "utf8");
+    assert.match(svg, new RegExp(`viewBox="0 0 ${layout.width} ${layout.height}"`));
+    assert.equal((svg.match(/>TH-\d{2}<\/text>/g) ?? []).length, 77);
+    assert.doesNotMatch(svg, /<script|javascript:|<foreignObject/i);
+  }
 });
 
 test("la promoción de demostración ya no forma parte del Centro de Control", async () => {
@@ -445,7 +475,7 @@ test("spatial views derive live colors and accept new mapped buildings and urban
   assert.match(dashboard, /building\.mapCoordinates\?\.\[planMode\]/);
   assert.match(dashboard, /area\.mapCoordinates\?\.\[planMode\]/);
   assert.match(dashboard, /synchronizeDerivedDashboardState/);
-  assert.match(dashboard, /Los porcentajes, estados y colores cambian/);
+  assert.match(dashboard, /Los colores de avance/);
   assert.match(data, /mapCoordinates\?:/);
 });
 

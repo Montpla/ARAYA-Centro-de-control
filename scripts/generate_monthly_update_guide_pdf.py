@@ -1,8 +1,7 @@
-"""Genera la guía de actualización mensual: los tres archivos del mes.
+"""Genera la guía mensual de fuentes, prioridad y comprobación del corte.
 
-Cada mes, el Centro de Control se pone al día con tres archivos: el Informe
-Ejecutivo (obra), el Excel de flujo reprogramado (finanzas) y el plan de
-Project (cronograma). No hay que tocar cifras a mano: se suben y el panel
+Cada corte reúne cubicación, Excel de flujo, curva, cronogramas e informe.
+No hay que tocar cifras a mano: se suben los originales y el panel
 publica cada bloque seguro; si detecta una diferencia la aísla en el recibo.
 Esta guía dice qué archivo mueve qué, y cómo
 comprobar en diez segundos que ha entrado.
@@ -28,6 +27,7 @@ from reportlab.pdfgen import canvas
 
 from generate_staff_guide_pdf import (
     BLUE_PALE,
+    GUIDE_EDITION,
     BOTTOM,
     CREAM,
     INK,
@@ -46,6 +46,7 @@ from generate_staff_guide_pdf import (
     draw_bullets,
     draw_contain,
     draw_page_frame,
+    draw_reference_page,
     draw_section_title,
     draw_wrapped,
     font_name,
@@ -87,10 +88,9 @@ def cover(c: canvas.Canvas) -> None:
 
     draw_wrapped(
         c,
-        "Cada mes, el Centro de Control se pone al día con tres archivos. Los "
-        "subes y el panel —cifras, colores, gráficas y avisos— se actualiza "
-        "solo. Antes de publicar comprueba formato, periodo, moneda y coherencia; "
-        "si algo no cuadra, lo explica sin frenar el resto. Esta guía dice cuál mueve qué.",
+        "Cada corte reúne fuentes de obra, finanzas y planificación. El panel "
+        "publica los datos seguros respetando periodo, alcance y prioridad. "
+        "Esta guía explica qué documento alimenta cada vista y cómo comprobarlo.",
         MARGIN_X,
         PAGE_H - 312,
         CONTENT_W * 0.66,
@@ -106,7 +106,7 @@ def cover(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X + 22, box_y + 104, "LA REGLA CORTA")
     draw_wrapped(
         c,
-        "Tres archivos y el mes queda cerrado, sin tocar una sola cifra.",
+        "Primero, fuente y corte. Después, comprobación del panel.",
         MARGIN_X + 22,
         box_y + 82,
         CONTENT_W - 44,
@@ -117,8 +117,8 @@ def cover(c: canvas.Canvas) -> None:
     )
     draw_wrapped(
         c,
-        "Informe Ejecutivo (obra) · Excel de flujo (finanzas) · plan de Project "
-        "guardado como XML (cronograma). El orden da igual.",
+        "La cubicación manda en el avance físico. Los Excel de curva y flujo "
+        "conservan su prioridad; cronogramas e informe completan sus ámbitos.",
         MARGIN_X + 22,
         box_y + 40,
         CONTENT_W - 44,
@@ -131,7 +131,7 @@ def cover(c: canvas.Canvas) -> None:
     c.setFont(font_name("Body"), 8)
     c.drawString(MARGIN_X, 96, "Guía interna para el personal de obra y oficina")
     c.setFillColor(MUTED)
-    c.drawString(MARGIN_X, 80, "3 páginas  ·  3 minutos de lectura")
+    c.drawString(MARGIN_X, 80, "4 páginas  ·  edición " + GUIDE_EDITION)
 
 
 def draw_archivo(
@@ -184,9 +184,9 @@ def draw_archivo(
     draw_wrapped(
         c,
         "  " + "  ·  ".join(mueve),
-        x + 62 + text_width("ACTUALIZA:", "Body-Bold", 7.4),
+        x + 67 + text_width("ACTUALIZA:", "Body-Bold", 7.4),
         after - 2,
-        CONTENT_W - 62 - 22 - text_width("ACTUALIZA:", "Body-Bold", 7.4),
+        CONTENT_W - 67 - 22 - text_width("ACTUALIZA:", "Body-Bold", 7.4),
         size=8.6,
         leading=11,
         color=INK,
@@ -194,24 +194,24 @@ def draw_archivo(
 
 
 def page_archivos(c: canvas.Canvas) -> None:
-    draw_page_frame(c, 2, "Los tres archivos")
+    draw_page_frame(c, 2, "Fuentes que mandan")
     y = draw_section_title(
         c,
         "CADA MES",
-        "Los tres archivos del mes",
-        "Cada uno alimenta una parte del panel. Se suben desde Cargar archivo, "
-        "en cualquier orden.",
+        "Las fuentes del corte",
+        "Sube los originales desde Cargar archivo. Un documento complementario "
+        "no sustituye una fuente de mayor prioridad del mismo periodo.",
     )
 
     y -= 18
     archivos = [
         (
             "1",
-            "Informe Ejecutivo",
-            ".pptx",
-            "El PowerPoint del corte. De su tabla de avance por edificio y oficio "
-            "(la cubicación) sale el avance físico de cada edificio y apartamento.",
-            ["Avance por edificio", "Global", "Edificios en marcha", "Curva S"],
+            "Cubicación del corte",
+            ".xlsx",
+            "Fuente prioritaria del avance físico por edificio y oficio, del "
+            "conjunto y de urbanismo. Sus desgloses no son mediciones por apartamento.",
+            ["Avance por edificio", "Oficios", "Urbanismo", "Ejecutado de Curva S"],
             118,
             ORANGE,
             RED_PALE,
@@ -220,8 +220,8 @@ def page_archivos(c: canvas.Canvas) -> None:
             "2",
             "Excel de flujo reprogramado",
             ".xlsx",
-            "El libro de finanzas de la Fase I. De su hoja de comparación mensual "
-            "sale el flujo real de cada mes (Urbanismo, Edificios y total).",
+            "Compara meses reales y previsiones de Urbanismo, Edificios y total. "
+            "La reprogramación completa los meses futuros; los anticipos se separan del gasto mensual.",
             ["Flujo mensual de finanzas", "Real vs. presupuesto"],
             110,
             SAGE,
@@ -229,11 +229,11 @@ def page_archivos(c: canvas.Canvas) -> None:
         ),
         (
             "3",
-            "Plan de Project",
-            ".xml",
-            "El plan del cronograma. XML entra directamente. También puedes "
-            "subir el .mpp: queda guardado y se convierte automáticamente a XML.",
-            ["% de cronograma", "Fecha de fin", "Avance del plan por edificio"],
+            "Curva S en Excel",
+            ".xlsx",
+            "El maestro de gráficos fija el plan operativo. El Excel de curva "
+            "reprogramada aporta su comparación y sus series por alcance, sin cambiar el ejecutado certificado.",
+            ["Curva S", "Plan operativo", "Detalle reprogramado"],
             118,
             NAVY,
             BLUE_PALE,
@@ -263,12 +263,21 @@ def page_archivos(c: canvas.Canvas) -> None:
     )
 
 
+def page_complementos(c: canvas.Canvas) -> None:
+    draw_reference_page(c, 3, "Cronogramas e informe",
+        "Cada documento mantiene su alcance. Una fecha parcial o un porcentaje de tarea no son el avance certificado de todo el proyecto.", [
+        ("Plan de Project", "Sube XML directamente o el MPP para su conversión automática. Aporta cronograma, fases y fechas cuando existen en el plan. Un corte anterior o una fuente de menor prioridad no pisa el avance certificado vigente."),
+        ("Gantt HTML de edificaciones y urbanismo", "Los dos Gantt se consultan en Planificación: filtra tareas y compara fechas vigentes con la línea base. Conservan materiales, recursos y dependencias. El HTML no se ejecuta; sólo se lee su bloque de datos compatible."),
+        ("Informe Ejecutivo", "Conserva tablas, comentarios y evidencias del corte. Seguridad mensual aparece como bloque propio, separado de la foto y serie semanales. Si el informe difiere de la cubicación o del Excel prioritario, se conserva esa fuente verificada."),
+    ], "Porcentajes de apartamentos derivados del edificio/Project no equivalen a mediciones individuales.")
+
+
 def page_comprobar(c: canvas.Canvas) -> None:
-    draw_page_frame(c, 3, "Comprobar y avisos")
+    draw_page_frame(c, 4, "Comprobar y avisos")
     y = draw_section_title(
         c,
-        "EN DIEZ SEGUNDOS",
-        "Comprobar que el mes ha entrado",
+        "TRAS EL PROCESAMIENTO",
+        "Comprobar el corte",
         "Al terminar cada subida, el mensaje dice cuántos datos se actualizaron. "
         "Si quieres verlo en el panel, mira estas tres cosas.",
     )
@@ -277,12 +286,9 @@ def page_comprobar(c: canvas.Canvas) -> None:
     y = draw_bullets(
         c,
         [
-            "El corte cambia a la fecha del mes nuevo (arriba, en el resumen del "
-            "proyecto).",
-            "El avance físico y la Curva S se mueven; los colores del plano "
-            "cambian en los edificios que avanzaron.",
-            "En finanzas, la barra del mes nuevo aparece como “Real” en "
-            "el flujo reprogramado.",
+            "Comprueba la fecha del documento, la revisión y el resultado del recibo. Subir un archivo no cierra automáticamente el periodo.",
+            "Revisa Planificación y los colores del plano. En la comprobación del 19/11/2026, 26 edificios tenían avance publicado y otros 51 conservaban valores iniciales, no mediciones certificadas.",
+            "En Finanzas distingue Real y previsión. Comprueba el alcance de los anticipos y abre el Excel vigente desde el flujo.",
         ],
         MARGIN_X,
         y,
@@ -299,10 +305,10 @@ def page_comprobar(c: canvas.Canvas) -> None:
     y -= 20
     y = draw_wrapped(
         c,
-        "Si una cifra concreta no cambia, casi siempre es porque el dato no "
-        "nombra su edificio, o porque es el mismo valor que ya había (no hay "
-        "nada que mover). El original siempre se guarda, con tu nombre y la "
-        "fecha; nunca se pierde. El detalle está en la guía de formatos.",
+        "Sin cambios puede significar que el valor ya coincidía, que el corte "
+        "es anterior o que manda otra fuente. Lee el motivo: no fuerces una "
+        "subida de porcentaje. Si queda algo aislado, abre su diagnóstico y "
+        "conserva el original; el detalle está en la guía de formatos.",
         MARGIN_X,
         y,
         CONTENT_W,
@@ -337,7 +343,7 @@ def page_comprobar(c: canvas.Canvas) -> None:
     c.drawString(MARGIN_X + 18, y - 24, "SI SÓLO TE QUEDAS CON UNA COSA")
     draw_wrapped(
         c,
-        "Subes los tres archivos y lees su recibo: publicados, aislados y vistas "
+        "Sube las fuentes del corte y lee su recibo: publicados, aislados y vistas "
         "comprobadas. No vuelvas a subir el original si algo queda observado; "
         "abre el diagnóstico del expediente.",
         MARGIN_X + 18,
@@ -366,10 +372,10 @@ def build_pdf() -> Path:
     c = canvas.Canvas(str(OUTPUT), pagesize=(PAGE_W, PAGE_H), pageCompression=1)
     c.setTitle("Guía de actualización mensual - Centro de Control ARAYA")
     c.setAuthor("Grupo Bricket | ARAYA Punta Cana")
-    c.setSubject("Los tres archivos que actualizan el panel cada mes")
+    c.setSubject("Fuentes, prioridades y comprobación de la actualización mensual")
     c.setKeywords("Bricket Control, ARAYA, actualización mensual, informe, flujo, Project")
 
-    pages = [cover, page_archivos, page_comprobar]
+    pages = [cover, page_archivos, page_complementos, page_comprobar]
     for index, page in enumerate(pages):
         page(c)
         if index < len(pages) - 1:
