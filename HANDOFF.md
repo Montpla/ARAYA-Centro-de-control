@@ -1,6 +1,6 @@
 # ARAYA Centro de Control — Estado de continuidad
 
-Actualizado: 19/11/2026
+Actualizado: 25/11/2026
 Zona horaria del usuario: Europe/Madrid
 
 > **Para cualquier asistente (Claude, ChatGPT/Codex, Gemini, Copilot, Cursor…):**
@@ -9,7 +9,93 @@ Zona horaria del usuario: Europe/Madrid
 > anteriores**. Las secciones fechadas más abajo son historial; si contradicen a
 > esta, manda esta.
 
-## Estado canónico para continuar con otro asistente (19/11/2026)
+## Estado canónico para continuar con otro asistente (25/11/2026)
+
+Este bloque es el estado vigente y **sustituye** al canónico del 19/11/2026
+(que queda debajo como historial). Lo que cambió el 25/11 manda sobre lo
+anterior, en especial la regla del avance global.
+
+### Datos vigentes en producción (revisión 142, corte 31/10/2026)
+
+- Avance global y ejecutado de la Curva S en octubre: **32,06 %** (Excel de la
+  curva reprogramada). Plan reprogramado del corte: **39,80 %**; desvío
+  **−7,74 pp**. Urbanismo: **31,89 %** (cubicación).
+- Edificios con el avance de la cubicación nº 11 (p. ej. TH-75 33,60 %, TH-03
+  79,31 %), comprobado en un navegador real contra producción.
+- Seguridad: el último reporte registrado es la **Semana 4 (26–31/10/2026)**,
+  230 personas. No hay reportes de noviembre. La pestaña de Seguridad muestra
+  ahora el reporte de origen, su corte y su fecha de publicación.
+- Incidencias abiertas: sólo #278 (fallo puntual de la conversión .xls por la
+  instalación de LibreOffice en el runner; no hay .xls pendientes).
+
+### Norma vigente de fuentes (decisión del 25/11/2026, «tiene que ser como se ha hecho ahora»)
+
+- **Avance global y ejecutado de la Curva S:** sólo del Excel de la curva
+  reprogramada, bloque «EJECUTADOS MES …», fila «Conjunto» (el mes lo da el
+  título, aunque el valor esté en otra columna o la cabecera empiece después).
+  `lib/ingestion.ts` → `extractReprogrammedCurve`; prioridad en
+  `lib/source-precedence.ts` (`CURVE_ACTUAL_KEY`, rango 50).
+- **La cubicación nunca** publica `projectSnapshot.overallProgress` ni
+  `monthlyPlan.N.actual`, tampoco en un mes nuevo; su total ponderado sólo se
+  cita en el resumen de la carga. Sigue mandando en edificios, oficios por
+  edificio y urbanismo.
+- Si la Curva S se queda atrás del corte, la verificación da un **aviso**
+  («falta subir el Excel de la curva del mes»), no una anomalía: no es un fallo
+  de código y no debe lanzar el arreglo automático.
+- Anotado en `.github/claude/reglas-de-prioridad.md` (regla 4 y decisiones).
+  Sustituye la decisión del 18/11 («la cubicación manda en el avance físico»)
+  sólo para el avance global y la Curva S.
+
+### Qué se arregló el 25/11/2026 (PR #294–#298)
+
+- **#296 · Edificios que no se actualizaban «nunca»:** el panel enlaza
+  `projectSnapshot.buildings = buildings` (y `urbanismAreas`). En cada sondeo de
+  5 s, `applyLiveValuesToTargets` restauraba el resumen desde su copia base y,
+  por el enlace, devolvía los edificios a los valores de Project de julio. Ahora
+  no se reescribe una raíz enlazada dentro de otra (`lib/live-data.ts`,
+  prueba `tests/live-roots-aliasing.test.mjs`).
+- **#296 / #297 · Curva S** con el ejecutado del Excel de la curva y blindaje
+  para cargas futuras (ver norma arriba). Se reprocesó la curva → revisión 142.
+- **#294 · Seguridad:** la pestaña dice con qué reporte trabaja
+  (`lib/safety-source.ts`); la cabecera y los accidentes ya no están escritos a
+  mano. «Repetido» al subir = el mismo archivo ya registrado (huella idéntica).
+- **#295 · Sincronización:** un fallo al aplicar una revisión se registra en
+  consola (`[araya-sync]`) en vez de deshacerse en silencio.
+- **#298 · Privacidad:** `scripts/diagnosticar-xlsx.py` (reprocesar con
+  `debug=1`) volcaba importes en el registro de Actions; ahora los enmascara.
+  El registro afectado (ejecución 45712574496) se borró.
+
+### Diagnósticos nuevos (comprobar-cargas.yml, sólo lectura, sin importes)
+
+- `detalle=seguridad` (`scripts/ver-seguridad-curva.mjs`): reportes de Seguridad
+  registrados, origen de cada dato de Seguridad y de la Curva S, y porcentajes
+  del Excel de la curva vigente.
+- `detalle=navegador` (`scripts/ver-panel-navegador.mjs`): abre producción en el
+  Chrome del runner (Ubuntu 26.04, sin instalar Playwright: `playwright-core` +
+  `google-chrome`) y lista lo que pinta la vista de edificios, el estado real
+  de sincronización y los errores de la página. Úsalo cuando «los datos están
+  publicados pero el panel enseña otra cosa».
+
+### Pendiente o a vigilar
+
+- Confirmar con la primera carga real de noviembre (cubicación, Excel de la
+  curva y reporte de Seguridad) que todo entra como se describe arriba.
+- Septiembre (`monthlyPlan.15.actual` = 29,38 %) sigue saliendo del Informe
+  Ejecutivo v5: el Excel de la curva sólo trae el ejecutado de octubre.
+- Urbanismo: la cubicación da 31,89 % y el Excel de la curva 28,9 %; hoy manda
+  la cubicación. Si la oficina quiere el de la curva, es un cambio de regla.
+- «Horas-persona» de Seguridad vale 49.00 en el reporte de la Semana 4: valor
+  raro, pendiente de que la oficina confirme la cifra.
+- Las seis guías PDF (edición 19.11.2026) pueden describir todavía la regla
+  anterior del avance global (cubicación); revisarlas y regenerarlas si se
+  pide.
+- Las tareas programadas de Claude del dueño («Vigilar workflow Convertir DWG»
+  y «Revisión de pendientes») están **pausadas** a petición suya; la
+  verificación automática de cada carga en GitHub sigue activa.
+- La sesión en la nube no tiene Claude en Chrome; para ver el panel se usa
+  `detalle=navegador`.
+
+## Estado canónico para continuar con otro asistente (19/11/2026) — historial
 
 Este bloque sustituye las indicaciones de trabajo pendiente de las secciones
 históricas inferiores. La integración de documentos y la corrección de etiquetas

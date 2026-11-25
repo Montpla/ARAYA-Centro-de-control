@@ -129,7 +129,9 @@ GitHub: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `DEPLOY_VERIFY_EMAIL`,
 
 ## Decisiones del negocio vigentes
 
-Ver `.github/claude/reglas-de-prioridad.md`. Lo esencial: el avance físico lo mandan
-la **cubicación** y los **edificios** (por encima de Project y del Informe
-Ejecutivo); un corte anterior nunca pisa uno posterior; la foto de Seguridad es la
-del reporte semanal más reciente.
+Ver `.github/claude/reglas-de-prioridad.md`. Lo esencial: el **avance global y el
+ejecutado de la Curva S** los fija el **Excel de la curva reprogramada** («EJECUTADOS
+MES …»), nunca la cubicación (25/11/2026); la **cubicación** manda en edificios,
+oficios y urbanismo (por encima de Project y del Informe Ejecutivo); un corte
+anterior nunca pisa uno posterior; la foto de Seguridad es la del reporte semanal
+más reciente.
