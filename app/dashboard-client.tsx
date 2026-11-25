@@ -37,6 +37,7 @@ import {
 } from "../lib/site-plan-layout";
 import { computedView } from "../lib/computed-view";
 import { GanttSchedulePanel } from "./gantt-schedule-panel";
+import { describeSafetySource } from "../lib/safety-source";
 import {
   STAT_CARD_FRESHNESS_KEYS,
   readFreshness,
@@ -4514,15 +4515,20 @@ function UrbanismView() {
 function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; canAccessFinance: boolean }) {
   const [section, setSection] = useState<"seguridad" | "permisos" | "financiacion" | "cumplimiento">("seguridad");
   const workspace = useContext(WorkspaceDetailContext);
+  const provenance = useContext(ProvenanceContext);
+  // Con qué reporte trabaja el panel: la oficina necesita verlo para saber si
+  // el último archivo que subió es el que manda (ver lib/safety-source.ts).
+  const safetySource = describeSafetySource(provenance.safetyMetrics);
+  const accidents = safetyMetrics.find((metric) => /accidente/i.test(metric.label))?.value;
   return (
     <div className="view-stack">
       <section className="data-view-intro">
-        <div><span className="section-kicker">CONTROL TRANSVERSAL · JUNIO 2026</span><h2>Seguridad, permisos y gestiones</h2></div>
+        <div><span className="section-kicker">CONTROL TRANSVERSAL{safetySource.periodLabel ? ` · ${safetySource.periodLabel.toUpperCase()}` : ""}</span><h2>Seguridad, permisos y gestiones</h2></div>
         <p>Abre cada bloque para consultar indicadores, trámites y procesos de financiación.</p>
       </section>
       <section className="report-tabs">
         {[
-          { id: "seguridad", label: "Seguridad y salud", detail: "0 accidentes" },
+          { id: "seguridad", label: "Seguridad y salud", detail: accidents !== undefined ? `${accidents} accidentes` : "Sin reporte" },
           { id: "permisos", label: "Permisos", detail: "8 aprobados · 1 en proceso" },
           ...(canAccessFinance ? [
             { id: "financiacion", label: "Financiación", detail: "6 procesos" },
@@ -4537,6 +4543,9 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
 
       {section === "seguridad" && (
         <>
+          <p className="governance-note safety-source-note" data-safety-source>
+            {safetySource.sentence}
+          </p>
           <section className="safety-grid">
             {safetyMetrics.map((metric) => (
               <button
@@ -4549,7 +4558,11 @@ function ControlView({ currency, canAccessFinance }: { currency: CurrencyCode; c
                   title: metric.label,
                   summary: metric.detail,
                   status: "partial",
-                  metrics: [{ label: "Valor reportado", value: metric.value }],
+                  metrics: [
+                    { label: "Valor reportado", value: metric.value },
+                    ...(safetySource.sourceName ? [{ label: "Reporte de origen", value: safetySource.sourceName }] : []),
+                    ...(safetySource.cutoffLabel ? [{ label: "Corte", value: safetySource.cutoffLabel }] : []),
+                  ],
                   sourceIds: ["source-june-works"],
                   pendingFields: ["Evidencia", "Responsable", "Fecha", "Acción correctiva"],
                   actions: [{ label: "Abrir Centro de datos", view: "fuentes" }],
