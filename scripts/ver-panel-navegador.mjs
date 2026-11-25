@@ -32,7 +32,7 @@ const page = await context.newPage();
 const errores = [];
 page.on("pageerror", (error) => errores.push(`pageerror: ${String(error.message).slice(0, 400)}`));
 page.on("console", (message) => {
-  if (message.type() === "error" || message.type() === "warning") errores.push(`${message.type()}: ${message.text().slice(0, 400)}`);
+  if (message.type() === "error" || message.type() === "warning") errores.push(`${message.type()}: ${message.text().slice(0, 1500)}`);
 });
 
 await page.goto(`${PRODUCTION_URL}/?view=edificios`, { waitUntil: "load", timeout: 60_000 });
@@ -40,6 +40,8 @@ await page.waitForTimeout(12_000);
 
 const sincronizacion = await page.locator("text=/sincroniza|sin conexión|offline|no disponible/i").first().textContent().catch(() => "(no encontrado)");
 console.log(`Estado mostrado: ${String(sincronizacion).trim().slice(0, 200)}`);
+const estadoReal = await page.locator(".live-data-ribbon").first().getAttribute("class").catch(() => "(sin cinta)");
+console.log(`Estado real de la sincronización (clase): ${estadoReal}`);
 const pestañas = await page.locator(".building-tabs button").evaluateAll((botones) =>
   botones.map((boton) => boton.textContent.replace(/\s+/g, " ").trim()));
 console.log(`\n=== Vista de edificios (${pestañas.length}) ===`);
