@@ -35,7 +35,7 @@ page.on("console", (message) => {
   if (message.type() === "error" || message.type() === "warning") errores.push(`${message.type()}: ${message.text().slice(0, 400)}`);
 });
 
-await page.goto(`${PRODUCTION_URL}/?view=edificios`, { waitUntil: "networkidle" });
+await page.goto(`${PRODUCTION_URL}/?view=edificios`, { waitUntil: "load", timeout: 60_000 });
 await page.waitForTimeout(12_000);
 
 const sincronizacion = await page.locator("text=/sincroniza|sin conexión|offline|no disponible/i").first().textContent().catch(() => "(no encontrado)");
