@@ -66,6 +66,10 @@ export function blockedByHigherPrioritySource(input: {
   liveSource?: string | null;
   liveCutoff?: string | null;
 }) {
+  // La cubicación nunca fija el ejecutado de la Curva S ni el avance global,
+  // tampoco en un mes nuevo: lo fija el Excel de la curva (norma de la
+  // oficina, 25/11/2026). Cubre también lecturas asistidas de una cubicación.
+  if (CURVE_ACTUAL_KEY.test(input.key) && /cubicaci[oó]n/i.test(String(input.incomingSource ?? ""))) return true;
   const planning = PLANNING_CURVE_KEY.test(input.key);
   const financialFlow = FINANCIAL_FLOW_KEY.test(input.key);
   if (!PHYSICAL_PROGRESS_KEY.test(input.key) && !planning && !financialFlow) return false;

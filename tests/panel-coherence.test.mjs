@@ -24,9 +24,12 @@ test("una Curva S que no llega al avance del resumen es una anomalía", () => {
   assert.equal(checks[0].severity, "anomalia");
 });
 
-test("una Curva S que se queda en un mes anterior al corte es una anomalía", () => {
+test("una Curva S que se queda en un mes anterior al corte avisa de que falta el Excel de la curva", () => {
+  // Falta un documento, no hay un fallo de código que arreglar solo.
   const checks = evaluatePanelCoherence({ ...real, cutoff: "2026-11-30" });
-  assert.ok(checks.some((check) => check.id === "curva_atrasada" && check.severity === "anomalia"));
+  const atrasada = checks.find((check) => check.id === "curva_atrasada");
+  assert.equal(atrasada.severity, "aviso");
+  assert.match(atrasada.detail, /falta subir el Excel de la curva reprogramada/);
 });
 
 test("un edificio sin avance válido no se puede colorear: anomalía", () => {

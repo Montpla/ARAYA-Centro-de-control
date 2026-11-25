@@ -85,3 +85,11 @@ test("el ejecutado de la Curva S lo manda el Excel de la curva; los edificios, l
   assert.ok(physicalProgressRank(curva, "monthlyPlan.16.actual") > physicalProgressRank(cubicacion, "monthlyPlan.16.actual"));
   assert.ok(physicalProgressRank(curva, "buildings.22.progress") < physicalProgressRank(cubicacion, "buildings.22.progress"));
 });
+
+test("la cubicación no fija el ejecutado de la Curva S ni en un mes nuevo; los edificios sí", () => {
+  const cubicacion = "Cubicacion_12_Araya_Nov.xlsx";
+  assert.equal(blockedByHigherPrioritySource({ key: "monthlyPlan.17.actual", incomingSource: cubicacion, incomingCutoff: "2026-11-30", liveSource: "01 GRAFICOS ARAYA FASE II COMPLETO MODIFICADO AGOSTO.xlsx", liveCutoff: "2026-08-31" }), true);
+  assert.equal(blockedByHigherPrioritySource({ key: "projectSnapshot.overallProgress", incomingSource: cubicacion, incomingCutoff: "2026-11-30", liveSource: "Curva repogramada Araya.xlsx", liveCutoff: "2026-10-31" }), true);
+  assert.equal(blockedByHigherPrioritySource({ key: "buildings.22.progress", incomingSource: cubicacion, incomingCutoff: "2026-11-30", liveSource: "Cubicacion_11_Araya_Oct.xlsx", liveCutoff: "2026-10-31" }), false);
+  assert.equal(blockedByHigherPrioritySource({ key: "monthlyPlan.17.actual", incomingSource: "Curva reprogramada Araya Nov.xlsx", incomingCutoff: "2026-11-30", liveSource: "Curva repogramada Araya.xlsx", liveCutoff: "2026-10-31" }), false);
+});
