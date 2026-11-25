@@ -5,7 +5,7 @@
 // base en vez del de la cubicación). Imprime errores de la página, el estado
 // de sincronización y los porcentajes de la vista de edificios. Sin importes.
 
-import { chromium } from "playwright";
+import { chromium } from "playwright-core";
 
 const PRODUCTION_URL = "https://araya-centro-control.grupobricket.workers.dev";
 const email = process.env.DEPLOY_VERIFY_EMAIL;
@@ -25,7 +25,7 @@ if (!session) {
   process.exit(1);
 }
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH, args: ["--headless=new", "--no-sandbox"] });
 const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
 await context.addCookies([{ name: "araya_session", value: session[1], url: PRODUCTION_URL }]);
 const page = await context.newPage();
