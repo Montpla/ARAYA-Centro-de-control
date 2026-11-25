@@ -86,9 +86,11 @@ anterior, en especial la regla del avance global.
   la cubicación. Si la oficina quiere el de la curva, es un cambio de regla.
 - «Horas-persona» de Seguridad vale 49.00 en el reporte de la Semana 4: valor
   raro, pendiente de que la oficina confirme la cifra.
-- Las seis guías PDF (edición 19.11.2026) pueden describir todavía la regla
-  anterior del avance global (cubicación); revisarlas y regenerarlas si se
-  pide.
+- Las seis guías PDF están en la **edición 25.11.2026** con la norma nueva de
+  la curva (mensual, formatos, Project, corporativa y avisos). Se regeneran
+  también en Linux sin descuadres: Liberation Sans (medidas de Arial) y
+  Gelasio (medidas de Georgia, OFL, en `scripts/fonts/`); en Windows siguen
+  Arial Nova y Georgia Pro. Requisitos: `reportlab` y `PyMuPDF`.
 - Las tareas programadas de Claude del dueño («Vigilar workflow Convertir DWG»
   y «Revisión de pendientes») están **pausadas** a petición suya; la
   verificación automática de cada carga en GitHub sigue activa.

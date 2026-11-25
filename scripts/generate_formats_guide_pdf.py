@@ -561,7 +561,7 @@ def page_gantt_plano(c: canvas.Canvas) -> None:
         "Que un archivo se pueda abrir no significa que cualquier cifra o geometría sustituya a lo ya verificado.", [
         ("Gantt HTML", "Sube los Gantt de edificaciones y urbanismo. En Planificación puedes filtrar tareas y consultar calendario vigente, línea base, materiales, recursos y dependencias. Sus avances son de tarea o frente, no mediciones de apartamentos."),
         ("Revisión de un plano nuevo", "La conversión DWG conserva el original y ofrece una vista. Para comprobar una adaptación del plano interactivo, revisa ubicación de edificios, piscinas y servicios. Si la distribución ha cambiado y los puntos no coinciden, pide revisión al administrador."),
-        ("Edificio, oficio y apartamento", "La cubicación del corte tiene prioridad en el avance físico. Un desglose por edificio y oficio no identifica una vivienda. Los porcentajes y colores derivados del edificio/Project no deben presentarse como mediciones individuales."),
+        ("Edificio, oficio y apartamento", "La cubicación manda en edificios y oficios; el avance global y la Curva S, el Excel de la curva. Un desglose por edificio y oficio no identifica una vivienda. Los porcentajes y colores derivados del edificio/Project no deben presentarse como mediciones individuales."),
         ("Lectura completa y resultado", "Las hojas de Excel se recorren completas; un Gantt incompatible no se publica parcialmente. Lee publicados, sin cambios y aislados en el recibo. Un valor igual, un corte anterior o una fuente de menor prioridad pueden dejar el panel sin cambios correctamente."),
     ], "Comprueba fuente, fecha y alcance. No fuerces otra cifra ni vuelvas a subir copias para vencer una validación.")
 

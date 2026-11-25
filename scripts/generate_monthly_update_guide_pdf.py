@@ -117,8 +117,8 @@ def cover(c: canvas.Canvas) -> None:
     )
     draw_wrapped(
         c,
-        "La cubicación manda en el avance físico. Los Excel de curva y flujo "
-        "conservan su prioridad; cronogramas e informe completan sus ámbitos.",
+        "El Excel de la curva fija el avance global y la Curva S; la cubicación, "
+        "edificios, oficios y urbanismo. Cronogramas e informe completan sus ámbitos.",
         MARGIN_X + 22,
         box_y + 40,
         CONTENT_W - 44,
@@ -209,9 +209,9 @@ def page_archivos(c: canvas.Canvas) -> None:
             "1",
             "Cubicación del corte",
             ".xlsx",
-            "Fuente prioritaria del avance físico por edificio y oficio, del "
-            "conjunto y de urbanismo. Sus desgloses no son mediciones por apartamento.",
-            ["Avance por edificio", "Oficios", "Urbanismo", "Ejecutado de Curva S"],
+            "Fuente prioritaria del avance por edificio y oficio y de urbanismo. "
+            "No fija la Curva S ni el avance global. Sus desgloses no son mediciones por apartamento.",
+            ["Avance por edificio", "Oficios", "Urbanismo"],
             118,
             ORANGE,
             RED_PALE,
@@ -231,9 +231,9 @@ def page_archivos(c: canvas.Canvas) -> None:
             "3",
             "Curva S en Excel",
             ".xlsx",
-            "El maestro de gráficos fija el plan operativo. El Excel de curva "
-            "reprogramada aporta su comparación y sus series por alcance, sin cambiar el ejecutado certificado.",
-            ["Curva S", "Plan operativo", "Detalle reprogramado"],
+            "El maestro fija el plan operativo. El Excel de curva reprogramada fija el plan "
+            "reprogramado y, con su bloque «Ejecutados mes», el ejecutado y el avance global.",
+            ["Curva S", "Ejecutado y avance global", "Plan reprogramado"],
             118,
             NAVY,
             BLUE_PALE,

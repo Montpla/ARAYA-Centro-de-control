@@ -356,7 +356,7 @@ def page_alcance(c: canvas.Canvas) -> None:
     draw_reference_page(c, 5, "Qué actualiza el plan",
         "Enviar, procesar y publicar son pasos distintos. Comprueba el recibo antes de dar el plan por incorporado.", [
         ("Cronograma y fechas", "Project aporta tareas, fases, porcentajes y fechas que existan en el plan. El XML conserva su jerarquía; el MPP se convierte antes. La previsión de fin requiere fechas reales del propio plan, no una estimación añadida al subirlo."),
-        ("Fuente prioritaria y corte", "Para el mismo periodo, la cubicación y el Excel de avance prevalecen sobre Project en el avance físico. Un corte anterior no pisa uno posterior. Sin cambios puede indicar una coincidencia o que se conserva la fuente prioritaria."),
+        ("Fuente prioritaria y corte", "Para el mismo periodo, la cubicación y el Excel de avance prevalecen sobre Project en edificios; el avance global lo fija el Excel de la curva. Un corte anterior no pisa uno posterior. Sin cambios puede indicar una coincidencia o que se conserva la fuente prioritaria."),
         ("Apartamentos", "Las fases medidas en el edificio pueden alimentar porcentajes derivados de sus apartamentos. Eso no crea mediciones individuales por vivienda. Conserva el alcance original y no certifiques un apartamento a partir del porcentaje global del edificio."),
         ("Gantt HTML e incidencias", "Los Gantt HTML de edificaciones y urbanismo se cargan como documentos propios y se consultan en Planificación. Si el envío falla, conserva el plan y el recibo; pide revisión del expediente antes de generar copias o cambiar porcentajes a mano."),
     ], "Las credenciales se administran desde el programa. No incluyas una credencial real en una guía, captura o mensaje.")
