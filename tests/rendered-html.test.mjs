@@ -38,7 +38,7 @@ test("dashboard includes the complete project-control navigation and site plan",
   assert.match(source, /FICHA INDIVIDUAL DE APARTAMENTO/);
   assert.match(source, /CAPAS OPERATIVAS DEL PLANO/);
   assert.match(source, /INFORME COMERCIAL · CORTE \{juneReport\.collections\.cutoff\}/);
-  assert.match(source, /CONTROL TRANSVERSAL · JUNIO 2026/);
+  assert.match(source, /CONTROL TRANSVERSAL\{safetySource\.periodLabel/);
   assert.match(source, /INFORME FINANCIERO · \{financePeriodLabel\}/);
 });
 
