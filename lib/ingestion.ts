@@ -717,15 +717,29 @@ export function extractReprogrammedCurve(
   // de la fila «Conjunto» y se fecha con el mes del título.
   let executed: number | null = null;
   const titleIndex = filas.findIndex((row) => Object.values(row).some((v) => /^ejecutados?\s+mes\s+/.test(normalizarCabecera(v))));
-  if (titleIndex >= 0 && matchingDates.length === 1) {
+  // El mes del título se fecha con la cabecera; si la cabecera ya empieza
+  // después (la curva sólo proyecta meses futuros), se sitúa en el mes del
+  // título anterior más cercano a la primera fecha.
+  let executedIndex = matchingDates.length === 1 ? matchingDates[0].index : -1;
+  const titleMonth = month ? Number(monthNumbers[month]) : NaN;
+  if (executedIndex < 0 && Number.isFinite(titleMonth)) {
+    const first = dates[0];
+    let candidate = (first.date.getUTCFullYear() - 2025) * 12 + titleMonth - 6;
+    if (candidate > first.index) candidate -= 12;
+    if (candidate >= 0 && candidate < CURVA_S_MONTH_COUNT) executedIndex = candidate;
+  }
+  const executedCutoff = executedIndex >= 0
+    ? new Date(Date.UTC(2025, 6 + executedIndex, 0)).toISOString().slice(0, 10)
+    : cutoff;
+  if (titleIndex >= 0 && executedIndex >= 0) {
     const combinedActual = findRow("conjunto", titleIndex + 1, titleIndex + 5);
     const candidates = combinedActual
       ? Object.entries(combinedActual).filter(([col]) => col !== labelCol).map(([, raw]) => percent(raw)).filter((value): value is number => value !== null)
       : [];
     if (candidates.length === 1) {
       executed = Math.round(candidates[0] * 100) / 100;
-      updates.push({ key: `monthlyPlan.${matchingDates[0].index}.actual`, value: executed, ...base });
-      updates.push({ key: "projectSnapshot.overallProgress", value: executed, ...base });
+      updates.push({ key: `monthlyPlan.${executedIndex}.actual`, value: executed, ...base, cutoff: executedCutoff });
+      updates.push({ key: "projectSnapshot.overallProgress", value: executed, ...base, cutoff: executedCutoff });
     }
   }
   return {
@@ -1064,27 +1078,17 @@ function extractCubicacionCoverProgress(
   // libro. Nunca se promedian porcentajes simples entre edificios.
   const overallProgress = declaredOverall ??
     (measuredRows > 0 && totalBudget > 0 ? (totalAccumulated / totalBudget) * 100 : null);
-  if (overallProgress !== null) {
-    const value = Math.round(overallProgress * 100) / 100;
-    updates.push({ key: "projectSnapshot.overallProgress", value, ...baseUpdate });
-    // La cubicación manda en el avance físico (decisión de dirección,
-    // 18/11/2026: la Nº11 de octubre da 38,01 % frente al 32,06 % del Informe
-    // Ejecutivo). El resumen toma el avance del último "Ejecutado Real" de la
-    // Curva S, así que se escribe también en el mes de su corte; si no, la
-    // cabecera, la curva y el desvío seguían en la cifra del Informe. Sin un
-    // periodo propio (el corte es el día de carga) no se sabe a qué mes
-    // pertenece y la curva no se toca.
-    const cutoffMatch = /^(\d{4})-(\d{2})/.exec(defaults.cutoff ?? "");
-    const isUploadDay = defaults.cutoff === new Date().toISOString().slice(0, 10);
-    const monthIndex = cutoffMatch ? (Number(cutoffMatch[1]) - 2025) * 12 + (Number(cutoffMatch[2]) - 6) : -1;
-    if (!isUploadDay && monthIndex >= 0 && monthIndex < CURVA_S_MONTH_COUNT) {
-      updates.push({ key: `monthlyPlan.${monthIndex}.actual`, value, ...baseUpdate });
-    }
-  }
-
+  // Norma vigente (oficina de obra, 25/11/2026): el avance global y el
+  // ejecutado de la Curva S salen del Excel de la curva reprogramada
+  // («EJECUTADOS MES …»), nunca de la cubicación. La cubicación publica
+  // edificios, oficios y urbanismo; su total ponderado sólo se cita en el
+  // resumen para poder contrastarlo con la curva.
+  const overallNote = overallProgress !== null
+    ? ` Total ponderado de la cubicación: ${Math.round(overallProgress * 100) / 100} % (referencia; el avance global lo fija el Excel de la curva).`
+    : "";
   return {
     updates,
-    summary: `${buildingCodes.length} edificios, urbanismo y avance fisico total actualizados desde la caratula de la cubicacion.`,
+    summary: `${buildingCodes.length} edificios y urbanismo actualizados desde la caratula de la cubicacion.${overallNote}`,
     warnings: [],
     expectedBuildingCodes: [...new Set(buildingCodes)],
   };
