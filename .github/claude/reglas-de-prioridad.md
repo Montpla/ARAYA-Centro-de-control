@@ -75,7 +75,13 @@ Decisión del dueño: «deben mandar los edificios y la cubicación».
 - Una presentación no sustituye el plan operativo del Excel maestro. Para el
   mismo corte, la curva reprogramada del Excel aportado prevalece sobre la
   presentación; una presentación de un corte posterior puede adelantarlo.
-- Ejecutado: según la regla 1 (la cubicación del mes manda).
+- Ejecutado: el del Excel de la curva reprogramada (bloque «EJECUTADOS MES …», fila
+  «Conjunto»), que fija también el avance global del resumen **[en código:
+  `lib/source-precedence.ts`, `CURVE_ACTUAL_KEY`]**. Decisión de la oficina de obra
+  trasladada por el dueño el 25/11/2026: «la curva debe agarrarla del archivo
+  donde está la curva, no de la cubicación». La cubicación sigue mandando en
+  edificios, oficios y urbanismo, y sólo fija el ejecutado de un mes que la
+  curva todavía no ha cubierto.
 
 ## 5. Documentos con errores de origen
 
@@ -102,3 +108,6 @@ la fecha, la incidencia y la regla resultante.
   las celdas numéricas nativas del XLSX; en texto porcentual, la coma es decimal.
   No deducir decimales ausentes ni eliminar partidas de rectificación por su signo.
   Los desgloses por edificio conservan ese alcance; no implican avance por vivienda.
+- 25/11/2026, oficina de obra (audios trasladados por el dueño): el ejecutado de la
+  Curva S y el avance global salen del Excel de la curva reprogramada (octubre:
+  32,06 % del conjunto); los edificios siguen la cubicación (edificio 75: 33,60 %).

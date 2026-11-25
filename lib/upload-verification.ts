@@ -168,7 +168,7 @@ export function evaluateUploadVerification(input: VerificationInput): Verificati
     // Generalizado con las reglas de prioridad: cualquier fuente de más
     // prioridad que corrige a otra de menos.
     const authorityCorrection = item.beforeSource !== undefined &&
-      physicalProgressRank(file.originalName) > physicalProgressRank(item.beforeSource);
+      physicalProgressRank(file.originalName, item.key) > physicalProgressRank(item.beforeSource, item.key);
     checks.push({
       id: "retroceso",
       severity: drop > REGRESSION_ANOMALY_POINTS && !authorityCorrection ? "anomalia" : "aviso",

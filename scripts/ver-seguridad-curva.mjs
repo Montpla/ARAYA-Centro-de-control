@@ -86,3 +86,24 @@ try {
 } catch (error) {
   console.log(`(sin /api/control-room: ${error.message})`);
 }
+
+// Contenido de la curva reprogramada vigente: sólo etiquetas, fechas y
+// porcentajes (las celdas mayores que 100 se ocultan por si fueran importes).
+const { readXlsxSheets } = await import("../lib/xlsx-reader.ts");
+const curva = files.filter((f) => !f.deletedAt && !f.supersededByFileId && f.extension === "xlsx" && /curva.*rep.*gram/i.test(f.originalName))
+  .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+if (curva) {
+  const respuesta = await fetch(`${PRODUCTION_URL}/api/files?download=${encodeURIComponent(curva.id)}`, { headers: { Cookie } });
+  const hojas = await readXlsxSheets(await respuesta.arrayBuffer());
+  for (const [h, filas] of hojas.entries()) {
+  console.log(`\n=== ${curva.originalName} · hoja ${h + 1}: filas con texto o porcentajes ===`);
+  for (const [i, fila] of filas.slice(0, 80).entries()) {
+    const celdas = Object.entries(fila).map(([col, valor]) => {
+      const n = Number(valor);
+      if (valor !== "" && Number.isFinite(n) && Math.abs(n) > 100 && !(n > 40000 && n < 50000)) return `${col}=#`;
+      return `${col}=${String(valor).slice(0, 30)}`;
+    });
+    if (celdas.length) console.log(`${i}: ${celdas.join(" | ")}`);
+  }
+  }
+}

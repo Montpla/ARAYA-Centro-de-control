@@ -47,6 +47,16 @@ const pestañas = await page.locator(".building-tabs button").evaluateAll((boton
 console.log(`\n=== Vista de edificios (${pestañas.length}) ===`);
 console.log(pestañas.join(" · "));
 
+// Pulsar un edificio obliga a repintar la vista: si entonces cambian los
+// porcentajes, los datos vivos estaban aplicados pero la vista no se refrescó.
+await page.locator(".building-tabs button").nth(22).click().catch(() => undefined);
+await page.waitForTimeout(1500);
+const trasPulsar = await page.locator(".building-tabs button").evaluateAll((botones) =>
+  botones.slice(0, 26).map((boton) => boton.textContent.replace(/\s+/g, " ").trim()));
+console.log(`\nTras pulsar un edificio: ${trasPulsar.join(" · ")}`);
+const detalle = await page.locator(".building-detail .inline-stats").first().textContent().catch(() => "");
+console.log(`Detalle del edificio pulsado: ${String(detalle).replace(/\s+/g, " ").trim()}`);
+
 const vivos = await page.evaluate(async () => {
   const respuesta = await fetch("/api/live-data", { cache: "no-store" });
   const datos = await respuesta.json();

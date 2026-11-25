@@ -499,7 +499,11 @@ export function materializeLiveRoot<T>(
   return result;
 }
 
-function replaceMutable(target: unknown, next: unknown) {
+// `roots` son los objetos raíz del panel (edificios, resumen…). Una raíz puede
+// quedar enlazada dentro de otra (el panel hace projectSnapshot.buildings =
+// buildings); al restaurar la que la contiene no hay que reescribirla con la
+// copia base, o los edificios volvían a sus valores de Project cada 5 s.
+function replaceMutable(target: unknown, next: unknown, roots: ReadonlySet<object> = new Set()) {
   if (Array.isArray(target) && Array.isArray(next)) {
     const nextValues = denseOwnArrayValues(next);
     const nextIdentities = nextValues.map(stableArrayIdentity);
@@ -526,7 +530,7 @@ function replaceMutable(target: unknown, next: unknown) {
         typeof value === "object" &&
         Array.isArray(current) === Array.isArray(value)
       ) {
-        replaceMutable(current, value);
+        if (!roots.has(current as object)) replaceMutable(current, value, roots);
         return current;
       }
       return cloneValue(value);
@@ -549,6 +553,10 @@ function replaceMutable(target: unknown, next: unknown) {
     });
     Object.entries(nextObject).forEach(([key, value]) => {
       const current = mutableTarget[key];
+      if (current !== null && typeof current === "object" && roots.has(current as object)) {
+        // Otra raíz enlazada aquí: se gobierna sola y se conserva el enlace.
+        return;
+      }
       if (
         current !== null &&
         value !== null &&
@@ -556,7 +564,7 @@ function replaceMutable(target: unknown, next: unknown) {
         typeof value === "object" &&
         Array.isArray(current) === Array.isArray(value)
       ) {
-        replaceMutable(current, value);
+        replaceMutable(current, value, roots);
       } else {
         mutableTarget[key] = cloneValue(value);
       }
@@ -582,13 +590,21 @@ export function applyLiveValuesToTargets(
   });
 
   try {
-    prepared.forEach(({ target, next }) => replaceMutable(target, next));
+    const roots = new Set(prepared.map(({ target }) => target));
+    prepared.forEach(({ target, next }) => {
+      const others = new Set([...roots].filter((root) => root !== target));
+      replaceMutable(target, next, others);
+    });
     synchronize?.();
   } catch (error) {
     // Ninguna revisión puede quedar aplicada a medias: si falla una
     // derivación o una raíz, se restauran todas las raíces del ciclo y se
     // recalculan los derivados desde ese estado anterior.
-    prepared.forEach(({ target, previous }) => replaceMutable(target, previous));
+    const roots = new Set(prepared.map(({ target }) => target));
+    prepared.forEach(({ target, previous }) => {
+      const others = new Set([...roots].filter((root) => root !== target));
+      replaceMutable(target, previous, others);
+    });
     try {
       synchronize?.();
     } catch {
