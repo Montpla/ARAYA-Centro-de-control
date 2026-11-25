@@ -74,3 +74,14 @@ test("la publicación aparta el dato con un motivo que la verificación da por b
   const verification = await readFile("lib/upload-verification.ts", "utf8");
   assert.match(verification, /"una fuente con más prioridad ya fijó este dato"/);
 });
+
+test("el ejecutado de la Curva S lo manda el Excel de la curva; los edificios, la cubicación", () => {
+  const curva = "Curva repogramada Araya.xlsx";
+  const cubicacion = "Cubicacion_11_Araya_Oct.xlsx";
+  const base = { liveCutoff: "2026-10-31", incomingCutoff: "2026-10-31" };
+  assert.equal(blockedByHigherPrioritySource({ ...base, key: "monthlyPlan.16.actual", incomingSource: cubicacion, liveSource: curva }), true);
+  assert.equal(blockedByHigherPrioritySource({ ...base, key: "projectSnapshot.overallProgress", incomingSource: cubicacion, liveSource: curva }), true);
+  assert.equal(blockedByHigherPrioritySource({ ...base, key: "monthlyPlan.16.actual", incomingSource: curva, liveSource: cubicacion }), false);
+  assert.ok(physicalProgressRank(curva, "monthlyPlan.16.actual") > physicalProgressRank(cubicacion, "monthlyPlan.16.actual"));
+  assert.ok(physicalProgressRank(curva, "buildings.22.progress") < physicalProgressRank(cubicacion, "buildings.22.progress"));
+});

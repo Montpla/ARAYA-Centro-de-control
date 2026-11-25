@@ -22,9 +22,20 @@ const PHYSICAL_PROGRESS_SOURCES: SourceRule[] = [
 
 export const PHYSICAL_PROGRESS_KEY = /^(buildings\.[^.]+\.(progress|constructionDisciplines(?:\.\d+\.progress)?)|buildings\.[^.]+\.units\.[^.]+\.(progress|disciplines\.[^.]+)|constructionDisciplines\.[^.]+\.progress|urbanismAreas\.[^.]+\.progress|urbanismReportAreas\.[^.]+(?:\.progress)?|projectSnapshot\.(overallProgress|urbanismProgress|activeBuildingsProgress)|monthlyPlan\.\d+\.actual)$/;
 
-/** Prioridad de un documento para el avance físico (0 si no tiene regla). */
-export function physicalProgressRank(sourceName: string) {
+// Decisión de la oficina de obra, trasladada por el dueño (25/11/2026): el
+// ejecutado de la Curva S —y con él el avance global del resumen— sale del
+// Excel de la curva («EJECUTADOS MES …»), no de la cubicación. La cubicación
+// sigue mandando en edificios, oficios y urbanismo.
+export const CURVE_ACTUAL_KEY = /^(monthlyPlan\.\d+\.actual|projectSnapshot\.overallProgress)$/;
+const CURVE_FILE = /curva.*rep.*gram.*\.xlsx\b/i;
+
+/**
+ * Prioridad de un documento para el avance físico (0 si no tiene regla).
+ * Con `key`, aplica además las excepciones por dato (el ejecutado de la curva).
+ */
+export function physicalProgressRank(sourceName: string, key?: string) {
   const name = String(sourceName ?? "");
+  if (key && CURVE_ACTUAL_KEY.test(key) && CURVE_FILE.test(name)) return 50;
   return PHYSICAL_PROGRESS_SOURCES.find((rule) => rule.pattern.test(name))?.rank ?? 0;
 }
 
@@ -60,8 +71,8 @@ export function blockedByHigherPrioritySource(input: {
   if (!PHYSICAL_PROGRESS_KEY.test(input.key) && !planning && !financialFlow) return false;
   const liveSource = String(input.liveSource ?? "");
   if (!liveSource || liveSource === input.incomingSource) return false;
-  const liveRank = financialFlow ? financialFlowRank(liveSource) : planning ? planningRank(liveSource, input.key) : physicalProgressRank(liveSource);
-  const incomingRank = financialFlow ? financialFlowRank(input.incomingSource) : planning ? planningRank(input.incomingSource, input.key) : physicalProgressRank(input.incomingSource);
+  const liveRank = financialFlow ? financialFlowRank(liveSource) : planning ? planningRank(liveSource, input.key) : physicalProgressRank(liveSource, input.key);
+  const incomingRank = financialFlow ? financialFlowRank(input.incomingSource) : planning ? planningRank(input.incomingSource, input.key) : physicalProgressRank(input.incomingSource, input.key);
   if (liveRank <= incomingRank) return false;
   // La serie «Original» de un informe no sustituye la línea base operativa
   // del Excel maestro, aunque el informe se publique en un mes posterior.

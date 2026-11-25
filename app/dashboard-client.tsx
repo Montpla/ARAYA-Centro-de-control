@@ -9988,7 +9988,10 @@ export function DashboardClient({
           refreshedAt: liveData.refreshedAt ?? new Date().toISOString(),
           latestEvent: liveData.latestEvent ?? null,
         });
-      } catch {
+      } catch (error) {
+        // Sin este registro, un fallo al aplicar una revisión deshacía todo
+        // el ciclo en silencio y el panel seguía con los valores base.
+        console.error("[araya-sync] No se pudo aplicar la revisión viva", error);
         if (active) {
           setLiveSync((current) => ({ ...current, status: "offline" }));
         }

@@ -710,9 +710,27 @@ export function extractReprogrammedCurve(
       updates.push({ key: `monthlyPlan.${index}.${field}`, value, ...base });
     }
   }
+  // «EJECUTADOS MES OCTUBRE»: el avance real del conjunto en ese mes. La
+  // oficina de obra decidió (25/11/2026) que el ejecutado de la Curva S salga
+  // de aquí y no de la cubicación (ver lib/source-precedence.ts). El valor
+  // puede estar en cualquier columna del bloque: se toma el único porcentaje
+  // de la fila «Conjunto» y se fecha con el mes del título.
+  let executed: number | null = null;
+  const titleIndex = filas.findIndex((row) => Object.values(row).some((v) => /^ejecutados?\s+mes\s+/.test(normalizarCabecera(v))));
+  if (titleIndex >= 0 && matchingDates.length === 1) {
+    const combinedActual = findRow("conjunto", titleIndex + 1, titleIndex + 5);
+    const candidates = combinedActual
+      ? Object.entries(combinedActual).filter(([col]) => col !== labelCol).map(([, raw]) => percent(raw)).filter((value): value is number => value !== null)
+      : [];
+    if (candidates.length === 1) {
+      executed = Math.round(candidates[0] * 100) / 100;
+      updates.push({ key: `monthlyPlan.${matchingDates[0].index}.actual`, value: executed, ...base });
+      updates.push({ key: "projectSnapshot.overallProgress", value: executed, ...base });
+    }
+  }
   return {
     updates,
-    summary: `Curva reprogramada: ${dates.length} meses de edificios, urbanismo y conjunto ponderado${original ? ", con la serie original del documento" : ""}. El bloque de ejecutados queda como referencia en el original; el avance real conserva la prioridad de la cubicación.`,
+    summary: `Curva reprogramada: ${dates.length} meses de edificios, urbanismo y conjunto ponderado${original ? ", con la serie original del documento" : ""}.${executed !== null ? ` Ejecutado real del conjunto en ${month}: ${executed} %, que fija el avance de la Curva S; edificios, oficios y urbanismo siguen la cubicación.` : " Sin bloque de ejecutados legible: el avance real no cambia."}`,
     warnings: [],
   };
 }
