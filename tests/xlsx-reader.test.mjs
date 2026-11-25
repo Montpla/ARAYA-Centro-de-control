@@ -208,7 +208,7 @@ test("un avance único y explícito del alcance actualiza TH-76 y TH-77", async 
   assert.match(resultado.summary, /2 edificios actualizados/);
 });
 
-test("la carátula de cubicación actualiza edificios, urbanismo y total ponderado", async () => {
+test("la carátula de cubicación actualiza edificios y urbanismo, pero no la Curva S ni el avance global", async () => {
   const ingestion = await loadIngestion();
   const resultado = await ingestion.extractStructuredUpdates(
     await leerFixture("cubicacion-caratula-acumulado.xlsx"),
@@ -225,11 +225,11 @@ test("la carátula de cubicación actualiza edificios, urbanismo y total pondera
   assert.equal(porClave.get("buildings.TH-77.progress").value, 9);
   assert.equal(porClave.get("urbanismAreas.0.progress").value, 25);
   assert.equal(porClave.get("projectSnapshot.urbanismProgress").value, 25);
-  assert.equal(porClave.get("projectSnapshot.overallProgress").value, 14);
-  assert.equal(porClave.get("projectSnapshot.overallProgress").area, "obra");
-  // La cubicación manda en el avance físico: también es el ejecutado de la
-  // Curva S en el mes de su corte (julio 2026 = índice 13).
-  assert.equal(porClave.get("monthlyPlan.13.actual").value, 14);
+  // Norma de la oficina (25/11/2026): el avance global y el ejecutado de la
+  // Curva S los fija el Excel de la curva; la cubicación sólo los cita.
+  assert.ok(!porClave.has("projectSnapshot.overallProgress"));
+  assert.ok(!resultado.updates.some((update) => /^monthlyPlan\.\d+\.actual$/.test(update.key)));
+  assert.match(resultado.summary, /Total ponderado de la cubicación: 14 %/);
   assert.deepEqual([...resultado.expectedBuildingCodes].sort(), ["TH-76", "TH-77"]);
 });
 
@@ -245,7 +245,7 @@ test("una cubicación sin periodo propio no toca la Curva S", async () => {
       knownBuildingTokens: new Set(["76", "77"]),
     },
   );
-  assert.ok(resultado.updates.some((update) => update.key === "projectSnapshot.overallProgress"));
+  assert.ok(!resultado.updates.some((update) => update.key === "projectSnapshot.overallProgress"));
   assert.ok(!resultado.updates.some((update) => update.key.startsWith("monthlyPlan.")));
 });
 
@@ -692,4 +692,39 @@ test("un edificio que no existe no entra desde una tabla", async () => {
     { ...defaults, knownBuildingTokens: new Set(["14"]) },
   );
   assert.equal(resultado.updates.length, 1, "sólo TH-14, porque TH-03 no está en la lista");
+});
+
+// Disposición real del Excel de octubre: el ejecutado del conjunto está en la
+// columna del mes anterior y el título dice «OCTUBRE»; manda el título.
+function curvaConDisposicionReal({ primeraFecha = "2026-09-30" } = {}) {
+  const serial = (date) => String((Date.parse(date) - Date.UTC(1899, 11, 30)) / 86_400_000);
+  const segunda = new Date(Date.parse(primeraFecha) + 31 * 86_400_000).toISOString().slice(0, 10);
+  return [
+    { B: "Concepto", D: serial(primeraFecha), E: serial(segunda) },
+    { B: "Reprogramado" },
+    { A: "0.6861", B: "Edificios", D: "0.3581", E: "0.4329" },
+    { A: "0.3139", B: "Urbanismo", D: "0.2681", E: "0.3216" },
+    { B: "Conjunto", D: String(0.3581 * 0.6861 + 0.2681 * 0.3139), E: String(0.4329 * 0.6861 + 0.3216 * 0.3139) },
+    { B: "EJECUTADOS MES OCTUBRE" },
+    { B: "Edificios", D: "0.335" }, { B: "Urbanismo", D: "0.289" }, { B: "Conjunto", D: "0.3205606" },
+    { C: "Brecha", D: "0.0774" },
+  ];
+}
+
+test("el ejecutado de la curva se fecha con el mes de su título (disposición real de octubre)", async () => {
+  const ingestion = await loadIngestion();
+  const result = ingestion.extractReprogrammedCurve(curvaConDisposicionReal(), { ...defaults, area: "planificacion", sourceName: "Curva repogramada Araya.xlsx" });
+  const values = new Map(result.updates.map((u) => [u.key, u]));
+  assert.equal(values.get("monthlyPlan.16.actual").value, 32.06);
+  assert.equal(values.get("monthlyPlan.16.actual").cutoff, "2026-10-31");
+  assert.equal(values.get("projectSnapshot.overallProgress").value, 32.06);
+  assert.ok(!values.has("monthlyPlan.15.actual"));
+});
+
+test("el ejecutado se lee aunque la cabecera empiece después de su mes", async () => {
+  const ingestion = await loadIngestion();
+  const result = ingestion.extractReprogrammedCurve(curvaConDisposicionReal({ primeraFecha: "2026-11-30" }), { ...defaults, area: "planificacion", sourceName: "Curva reprogramada Araya Nov.xlsx" });
+  const values = new Map(result.updates.map((u) => [u.key, u]));
+  assert.equal(values.get("monthlyPlan.16.actual").value, 32.06);
+  assert.equal(values.get("monthlyPlan.16.actual").cutoff, "2026-10-31");
 });

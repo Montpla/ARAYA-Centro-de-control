@@ -80,8 +80,10 @@ Decisión del dueño: «deben mandar los edificios y la cubicación».
   `lib/source-precedence.ts`, `CURVE_ACTUAL_KEY`]**. Decisión de la oficina de obra
   trasladada por el dueño el 25/11/2026: «la curva debe agarrarla del archivo
   donde está la curva, no de la cubicación». La cubicación sigue mandando en
-  edificios, oficios y urbanismo, y sólo fija el ejecutado de un mes que la
-  curva todavía no ha cubierto.
+  edificios, oficios y urbanismo y **nunca** fija el ejecutado ni el avance
+  global, tampoco en un mes nuevo (su total ponderado sólo se cita en el
+  resumen de la carga). Si falta el Excel de la curva de un mes, la
+  verificación avisa de que falta ese archivo; no es un fallo que arreglar.
 
 ## 5. Documentos con errores de origen
 

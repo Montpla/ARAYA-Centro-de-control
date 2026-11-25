@@ -64,8 +64,10 @@ export function evaluatePanelCoherence(input: CoherenceInput): CoherenceCheck[] 
   if (/^\d{4}-\d{2}$/.test(cutoffMonth) && /^\d{4}-\d{2}$/.test(curveMonth) && curveMonth < cutoffMonth) {
     checks.push({
       id: "curva_atrasada",
-      severity: "anomalia",
-      detail: `La Curva S se quedó en ${curveMonth} y el corte vigente es ${cutoffMonth}: falta el ejecutado del último mes.`,
+      // Falta un documento, no hay un fallo de código: el ejecutado lo fija el
+      // Excel de la curva reprogramada del mes (norma del 25/11/2026).
+      severity: "aviso",
+      detail: `La Curva S se quedó en ${curveMonth} y el corte vigente es ${cutoffMonth}: falta subir el Excel de la curva reprogramada de ese mes, que fija el ejecutado.`,
     });
   }
 
