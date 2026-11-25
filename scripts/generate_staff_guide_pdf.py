@@ -28,7 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PUBLIC = ROOT / "public"
 OUTPUT = ROOT / "output" / "pdf" / "guia_corporativa_bricket_control_personal_obra.pdf"
 APP_URL = "https://araya-centro-control.grupobricket.workers.dev/"
-GUIDE_EDITION = "19.11.2026"
+GUIDE_EDITION = "25.11.2026"
 PUBLISHED = ROOT / "historical" / "data-center" / "guias" / "guia-corporativa-bricket-control-personal-obra.pdf"
 
 PAGE_W, PAGE_H = A4
@@ -59,21 +59,28 @@ def register_fonts() -> None:
         "Body": [
             Path(r"C:\Windows\Fonts\ArialNova.ttf"),
             Path(r"C:\Windows\Fonts\arial.ttf"),
+            # Linux: Liberation Sans tiene las medidas de Arial, así el texto cabe
+            # igual que en la edición generada en Windows.
+            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
             Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
         ],
         "Body-Bold": [
             Path(r"C:\Windows\Fonts\ArialNova-Bold.ttf"),
             Path(r"C:\Windows\Fonts\arialbd.ttf"),
+            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
             Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
         ],
         "Display": [
             Path(r"C:\Windows\Fonts\GeorgiaPro-Regular.ttf"),
             Path(r"C:\Windows\Fonts\georgia.ttf"),
+            # Gelasio (OFL, en scripts/fonts) tiene las medidas de Georgia.
+            Path(__file__).resolve().parent / "fonts" / "Gelasio-Regular.ttf",
             Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"),
         ],
         "Display-Bold": [
             Path(r"C:\Windows\Fonts\GeorgiaPro-Bold.ttf"),
             Path(r"C:\Windows\Fonts\georgiab.ttf"),
+            Path(__file__).resolve().parent / "fonts" / "Gelasio-Bold.ttf",
             Path("/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"),
         ],
     }
@@ -965,7 +972,7 @@ def page_current_scope(c: canvas.Canvas) -> None:
         ("Porcentaje medido o derivado", "La cubicación aporta 234 desgloses por edificio y oficio, no por vivienda. Los porcentajes de apartamentos se heredan o ajustan desde el edificio/Project. No hay mediciones individuales publicadas por apartamento."),
         ("Servicios del nuevo plano", "En Implantación elige edificios y apartamentos, servicios o avance de urbanismo. Hay 20 servicios identificados, incluidas piscinas, parques, zona de mascotas y tanque elevado. Las fichas de servicios no reciben el avance global de urbanismo como si fuera propio."),
         ("Seguridad y planificación", "El resumen mensual de Seguridad se consulta como bloque propio y no sustituye la foto ni la serie semanal. Los Gantt conservan sus metas parciales; esas fechas no cambian automáticamente el horizonte general del proyecto."),
-    ], "La cubicación manda en el avance físico. No atribuyas una medición de edificio a una vivienda.")
+    ], "Edificios y oficios: cubicación. Avance global y Curva S: Excel de la curva. Ninguno mide viviendas.")
 
 
 def build_pdf() -> Path:

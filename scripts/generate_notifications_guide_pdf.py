@@ -361,7 +361,7 @@ def page_resultados(c: canvas.Canvas) -> None:
         ("Integrado", "La carga ha terminado de procesarse y la comprobación ha confirmado su integración. Abre el recibo para ver qué cambió. También puede quedar sincronizada sin cambios si los datos ya coincidían."),
         ("Revisar carga", "Abre el aviso y el diagnóstico del archivo. Puede haber un fallo de lectura, un dato aislado o una diferencia entre fuentes. Conserva el original y la revisión; el administrador puede revisar el expediente por el circuito previsto."),
         ("Procesamiento y reintentos", "Una conversión o una lectura asistida puede seguir en segundo plano. No cierres el caso por no ver un cambio inmediato ni repitas la subida. El expediente conserva su estado, los intentos y el resultado de la comprobación."),
-        ("Qué significa que una cifra no cambie", "Un corte antiguo, una fuente con menor prioridad o un valor ya coincidente pueden dejar el dato vigente intacto. Los avisos no deben incluir importes económicos ni credenciales; consulta siempre el detalle dentro del programa."),
+        ("Qué significa que una cifra no cambie", "Un corte antiguo, una fuente con menor prioridad o un valor ya coincidente dejan el dato intacto. La cubicación no mueve la Curva S: hace falta el Excel de la curva del mes. Los avisos no deben incluir importes económicos ni credenciales; consulta siempre el detalle dentro del programa."),
     ], "Si el diagnóstico se corrige, vuelve a consultar el resultado de la verificación del mismo expediente.")
 
 
