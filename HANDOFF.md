@@ -46,7 +46,7 @@ anterior, en especial la regla del avance global.
   Sustituye la decisión del 18/11 («la cubicación manda en el avance físico»)
   sólo para el avance global y la Curva S.
 
-### Qué se arregló el 25/11/2026 (PR #294–#298)
+### Qué se arregló el 25/11/2026 (PR #294–#300)
 
 - **#296 · Edificios que no se actualizaban «nunca»:** el panel enlaza
   `projectSnapshot.buildings = buildings` (y `urbanismAreas`). En cada sondeo de
@@ -64,6 +64,13 @@ anterior, en especial la regla del avance global.
 - **#298 · Privacidad:** `scripts/diagnosticar-xlsx.py` (reprocesar con
   `debug=1`) volcaba importes en el registro de Actions; ahora los enmascara.
   El registro afectado (ejecución 45712574496) se borró.
+
+- **#299 · Traspaso** con este bloque canónico; **#300 · Guías** en la edición
+  25.11.2026 con la norma de la curva (las seis huellas SHA-256 publicadas
+  coinciden con el repositorio, comprobado con `comprobar-cargas.yml`).
+- Validación al cerrar el día: typecheck, compilación, **568 pruebas** correctas
+  y lint sin errores (16 avisos preexistentes). Producción: revisión 142,
+  avance 32,06 %, plan 39,80 %, desvío −7,74 pp.
 
 ### Diagnósticos nuevos (comprobar-cargas.yml, sólo lectura, sin importes)
 
