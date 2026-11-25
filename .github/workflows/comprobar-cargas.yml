@@ -99,6 +99,15 @@ jobs:
           DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
           DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
         run: node scripts/ver-seguridad-curva.mjs
+      - name: Panel en un navegador real (edificios y errores de la página)
+        if: ${{ inputs.detalle == 'navegador' }}
+        env:
+          DEPLOY_VERIFY_EMAIL: ${{ secrets.DEPLOY_VERIFY_EMAIL }}
+          DEPLOY_VERIFY_PIN: ${{ secrets.DEPLOY_VERIFY_PIN }}
+        run: |
+          npx --yes playwright@1.56.1 install --with-deps chromium >/dev/null
+          npm install --no-save playwright@1.56.1 >/dev/null
+          node scripts/ver-panel-navegador.mjs
       - name: Urbanismo y zonas en la última presentación
         if: ${{ inputs.detalle == 'presentacion' }}
         env:
