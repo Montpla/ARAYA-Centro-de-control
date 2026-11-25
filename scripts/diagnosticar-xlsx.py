@@ -47,6 +47,28 @@ def shared_strings(archive: zipfile.ZipFile) -> list[str]:
     return [text(item) for item in root.findall(f"{{{MAIN}}}si")]
 
 
+# Un registro de Actions no es sitio para importes. Cualquier número cuyo valor
+# absoluto pase de 100 (o de 1000 si parece un año o una fecha de Excel) se
+# sustituye por «#»; los porcentajes, cantidades pequeñas y fechas de Excel se
+# conservan porque son los que hacen falta para adaptar un lector.
+NUMBER = re.compile(r"(?<![A-Za-z$\d.])[-+]?\d[\d,]*(?:\.\d+)?(?:[eE][-+]?\d+)?")
+
+
+def mask_amounts(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        token = match.group(0)
+        try:
+            number = float(token.replace(",", ""))
+        except ValueError:
+            return token
+        if abs(number) <= 100 or (36526 <= number <= 73050 and float(number).is_integer()):
+            return token
+        if 1900 <= number <= 2100 and float(number).is_integer():
+            return token
+        return "#"
+    return NUMBER.sub(replace, value)
+
+
 def cell_value(cell: ET.Element, shared: list[str]) -> str:
     kind = cell.attrib.get("t", "")
     if kind == "inlineStr":
@@ -88,7 +110,7 @@ def inspect(path: Path) -> None:
                 number = int(row.attrib.get("r", len(rows) + 1))
                 values = []
                 for cell in row.findall(f"{{{MAIN}}}c"):
-                    value = cell_value(cell, shared)
+                    value = mask_amounts(cell_value(cell, shared))
                     if value:
                         values.append((cell.attrib.get("r", "?"), value[:160]))
                 rows.append((number, values))
