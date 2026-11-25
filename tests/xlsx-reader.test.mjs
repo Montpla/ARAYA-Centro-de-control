@@ -378,11 +378,11 @@ function curvaReprogramadaSintetica() {
   ];
 }
 
-test("la curva reprogramada conserva cuatro series y no sustituye el ejecutado ni el plan operativo", async () => {
+test("la curva reprogramada conserva cuatro series, toma su ejecutado del mes y no sustituye el plan operativo", async () => {
   const ingestion = await loadIngestion();
   const result = ingestion.extractReprogrammedCurve(curvaReprogramadaSintetica(), { ...defaults, area: "planificacion" });
   assert.equal(result.warnings.length, 0);
-  assert.equal(result.updates.length, 8);
+  assert.equal(result.updates.length, 10);
   const values = new Map(result.updates.map((u) => [u.key, u.value]));
   assert.equal(values.get("monthlyPlan.16.reprogrammed"), 32.125);
   assert.equal(values.get("monthlyPlan.16.reprogrammedBuildingsProgress"), 40.125);
@@ -390,7 +390,13 @@ test("la curva reprogramada conserva cuatro series y no sustituye el ejecutado n
   assert.equal(values.get("monthlyPlan.16.originalDocumentProgress"), 70);
   assert.ok(result.updates.every((u) => u.cutoff === "2026-10-31"));
   assert.ok(result.updates.every((u) => u.area === "planificacion"), "el clasificador y las series deben compartir el área para permitir su publicación");
-  assert.ok(result.updates.every((u) => !/\.(actual|planned)$/.test(u.key)));
+  assert.ok(result.updates.every((u) => !/\.planned$/.test(u.key)));
+  // Decisión de la oficina (25/11/2026): el ejecutado de la Curva S sale del
+  // bloque «EJECUTADOS MES OCTUBRE» de este Excel, fechado en octubre.
+  assert.equal(values.get("monthlyPlan.16.actual"), 10);
+  assert.equal(values.get("projectSnapshot.overallProgress"), 10);
+  assert.ok(!result.updates.some((u) => /^monthlyPlan\.15\.actual$/.test(u.key)));
+  assert.match(result.summary, /Ejecutado real del conjunto en octubre: 10 %/);
 });
 
 test("la curva reprogramada hereda el área del archivo para no ser descartada por área distinta", async () => {
